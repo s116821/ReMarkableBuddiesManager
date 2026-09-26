@@ -1,0 +1,46 @@
+name: Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    outputs:
+      application: ${{ steps.policy.outputs.application }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: policy
+        run: python release/policy.py
+  publish:
+    name: Tag then build exact Manager source
+    needs: policy
+    if: needs.policy.outputs.application == 'true' && github.ref == 'refs/heads/main' && github.repository == 's116821/RemarkableBuddiesManager'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: manager-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/release-tools
+      - name: Install browser test runtime without building application
+        run: npx --yes --package=@playwright/test@1.63.0 playwright install chromium
+      - name: Recover pending tags then publish exact source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python release/coordinator.py publish --branch main
