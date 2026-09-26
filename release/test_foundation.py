@@ -27,6 +27,11 @@ class FoundationTests(unittest.TestCase):
             git(docs, 'add', '.')
             git(docs, 'commit', '-m', 'Initial commit')
             self.assertIsNone(release.plan(docs, 'main'))
+            (docs / 'src').mkdir()
+            (docs / 'src/app.ts').write_text('first application')
+            git(docs, 'add', '.')
+            git(docs, 'commit', '-m', 'feat(REM-21): first application')
+            self.assertEqual(release.plan(docs, 'main', CLIFF), release.Release('v0.1.0', git(docs, 'rev-parse', 'HEAD')))
 
     def test_major_publication_gate(self):
         for tag in ('v1.0.0', 'v2.0.0', 'v0.01.0', 'not-a-tag'):
