@@ -69,8 +69,13 @@ def plan(repo, main="origin/main", cliff="git-cliff"):
         checkout = Path(temp) / "source"
         git(repo, "worktree", "add", "--detach", str(checkout), sha)
         try:
+            # A new public repository may start with GitHub's non-conventional
+            # README-only "Initial commit". It was already proven irrelevant
+            # above; restrict the initial bump input to the first app commit.
+            parents = git(repo, "rev-list", "--parents", "-n", "1", sha).split()
+            initial_range = [f"{sha}^..{sha}"] if baseline is None and len(parents) > 1 else []
             tag = subprocess.check_output(
-                [cliff, "--config", str(CONFIG), "--bumped-version", "--unreleased", "--use-branch-tags"],
+                [cliff, "--config", str(CONFIG), "--bumped-version", "--unreleased", "--use-branch-tags", *initial_range],
                 cwd=checkout, text=True, encoding="utf-8").strip()
         finally:
             git(repo, "worktree", "remove", str(checkout))
