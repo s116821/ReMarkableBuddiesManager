@@ -53,6 +53,8 @@ const executablePath = packaged
 const app = await electron.launch({ executablePath, args: packaged ? [] : ['.'], env: { ...process.env, MANAGER_TEST: '1' } });
 try {
   const page = await app.firstWindow();
+  // Xvfb's compositor needs a mapped window; this is a virtual CI display.
+  if (process.platform === 'linux') await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
   await verify(page, 'Desktop');
   if (packaged) assert.equal(await app.evaluate(({ app }) => app.getVersion()), info.version);
   const prefs = await app.evaluate(({ BrowserWindow }) => {

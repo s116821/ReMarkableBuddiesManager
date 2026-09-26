@@ -13,7 +13,7 @@ export function buildInfo(repo = process.cwd(), env = process.env) {
     if (git('rev-parse', `${tag}^{commit}`) !== sha || env.MANAGER_RELEASE_SHA !== sha) throw new Error('Official tag/SHA mismatch');
     return { version: tag.slice(1), sha, tag, official: true };
   }
-  return { version: `0.0.0-dev.${sha.slice(0, 12)}${dirty ? '.dirty' : ''}`, sha, tag: null, official: false };
+  return { version: `0.0.0-dev-${sha.slice(0, 12)}${dirty ? '-dirty' : ''}`, sha, tag: null, official: false };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
