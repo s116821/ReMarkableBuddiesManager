@@ -50,7 +50,8 @@ if (!packaged) {
 const executablePath = packaged
   ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`)
   : undefined;
-const app = await electron.launch({ executablePath, args: packaged ? [] : ['.'], env: { ...process.env, MANAGER_TEST: '1' } });
+const args = [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])];
+const app = await electron.launch({ executablePath, args, env: { ...process.env, MANAGER_TEST: '1' } });
 try {
   const page = await app.firstWindow();
   // Xvfb's compositor needs a mapped window; this is a virtual CI display.
