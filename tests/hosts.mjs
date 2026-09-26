@@ -1,6 +1,6 @@
 import { chromium, _electron as electron } from '@playwright/test';
 import { createServer } from 'node:http';
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -19,7 +19,7 @@ async function verify(page, host) {
   assert.equal(await page.getByText('Coming in a later release', { exact: true }).count(), 3);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
-  await page.screenshot({ path: `test-results/${host.toLowerCase()}${packaged ? '-packaged' : ''}.png`, fullPage: true });
+  if (host === 'Browser') await page.screenshot({ path: 'test-results/browser.png', fullPage: true });
   assert.deepEqual(errors, []);
 }
 
@@ -60,5 +60,11 @@ try {
     return { sandbox: p.sandbox, contextIsolation: p.contextIsolation, nodeIntegration: p.nodeIntegration };
   });
   assert.deepEqual(prefs, { sandbox: true, contextIsolation: true, nodeIntegration: false });
+  const png = await app.evaluate(async ({ BrowserWindow }) => {
+    const capture = await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+    if (capture.isEmpty()) throw new Error('Desktop capture is empty');
+    return capture.toPNG().toString('base64');
+  });
+  await writeFile(`test-results/desktop${packaged ? '-packaged' : ''}.png`, Buffer.from(png, 'base64'));
 } finally { await app.close(); }
 console.log(`Verified ${packaged ? 'packaged desktop' : 'browser, responsive browser and Electron'}; version ${info.version}`);

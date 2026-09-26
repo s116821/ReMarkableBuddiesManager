@@ -13,7 +13,9 @@ cpSync('LICENSE', 'out/staging/LICENSE');
 const paths = await packager({
   dir: 'out/staging', out: 'out/packages', name: 'ReMarkableBuddiesManager',
   platform, arch: 'x64', overwrite: true, prune: false,
-  appVersion: info.version, buildVersion: info.version,
+  // Windows numeric resources cannot contain semver prerelease identifiers.
+  // Runtime/package.json retain the full dev identity; official values agree.
+  appVersion: info.version.split('-')[0], buildVersion: info.version.split('-')[0],
   electronVersion: '44.4.5', asar: true,
 });
 console.log(JSON.stringify(paths));

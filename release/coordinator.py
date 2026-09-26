@@ -181,6 +181,8 @@ class GitHub:
 def verify_packages(directory, release):
     manifest = json.loads((directory / "provenance.json").read_text())
     verify_identity(manifest, release)
+    if {path.name for path in directory.iterdir()} != set(manifest['packages']) | {'provenance.json'}:
+        raise ValueError('Unexpected or missing release assets')
     for name, digest in manifest["packages"].items():
         if sha256(directory / name) != digest:
             raise ValueError(f"Package checksum mismatch: {name}")
