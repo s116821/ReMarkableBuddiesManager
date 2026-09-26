@@ -1,0 +1,28 @@
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      # Metadata only: do not check out or execute code from the pull request.
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          requireScope: true
+      - name: Summary-only PR body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.pull_request.body || '').replace(/\r/g, '').trim();
+            const lines = body.split('\n');
+            if (lines.shift() !== '# Summary' || !lines.some(line => /^- \S/.test(line)) || lines.some(line => line.trim() && !/^(?:- \S|  \S)/.test(line))) {
+              core.setFailed('Use exactly # Summary followed by concise bullets. Put detailed evidence in PR comments.');
+            }

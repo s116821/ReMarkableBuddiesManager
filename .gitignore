@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+.angular/
+src/build-info.json
+electron/build-info.json
+__pycache__/
+*.pyc
+test-results/

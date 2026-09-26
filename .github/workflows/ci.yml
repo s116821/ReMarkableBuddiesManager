@@ -1,0 +1,74 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  policy:
+    name: Release policy
+    runs-on: ubuntu-latest
+    outputs:
+      application: ${{ steps.policy.outputs.application }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: policy
+        run: python release/policy.py
+  check:
+    name: Foundation (${{ matrix.os }})
+    needs: policy
+    if: always()
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Require successful policy check
+        shell: bash
+        env:
+          POLICY_RESULT: ${{ needs.policy.result }}
+        run: test "$POLICY_RESULT" = success
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-python@v5
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/release-tools
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+      - name: Install and check source
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm test
+          npm run test:release
+          npm run build
+          npx playwright install --with-deps chromium
+          npm run package
+      - name: Browser and desktop checks (Linux)
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Linux'
+        run: |
+          xvfb-run -a npm run test:hosts
+          xvfb-run -a npm run test:package
+      - name: Browser and desktop checks (Windows)
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
+        run: |
+          npm run test:hosts
+          npm run test:package
