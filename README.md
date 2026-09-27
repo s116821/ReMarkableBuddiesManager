@@ -34,8 +34,8 @@ npm run test:package
 On headless Linux, run `npm run check` and `npm run test:package` under `xvfb-run -a`.
 Portable package checks support Windows x64 and Linux x64. macOS packaging,
 signing/notarization and automatic desktop updating are not delivered here.
-For release fixtures, install Python 3.12 and git-cliff 2.14.2, run
-`npm ci --prefix release`, then `npm run test:release`.
+For release fixtures, follow the public [release guide](release/README.md):
+Python 3.12, Node 24, GitVersion 6.8.2 and pinned upstream Action distributions.
 All fixture tags/remotes are temporary and local. CI checks both supported hosts.
 
 ## Contribute and release
@@ -54,6 +54,8 @@ This implementation belongs to central change `manager-foundation` and capabilit
 [`manager-foundation`](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-foundation).
 Link coordinated Docs and code PRs with exact revisions; no duplicate spec tree here.
 
-Release machinery is adapted from GPLv3 ReMarkableBuddies at
+Build/package helpers are adapted from GPLv3 ReMarkableBuddies at
 `33db26add721cea6c0121ad769a54d06ae600b4e`. This repository uses GPL-3.0-only;
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
+
+Releases use upstream Actions and GitVersion, independently of Rust. The `action-driven-releases` central change replaces the former Python coordinator; custom code only builds/packages/verifies application artifacts.
