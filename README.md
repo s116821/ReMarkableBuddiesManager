@@ -59,3 +59,16 @@ Build/package helpers are adapted from GPLv3 ReMarkableBuddies at
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
 
 Releases use upstream Actions and GitVersion, independently of Rust. The `action-driven-releases` central change replaces the former Python coordinator; custom code only builds/packages/verifies application artifacts.
+
+### REM-46 qualification remains open
+
+GitVersion 6.8.2 does not yet pass the same-second ancestry regression in
+`release/test_versioning_equal_dates.py`. In a linear baseline/feature/fix history
+with equal commit timestamps, it calculates `0.2.0` for the fix instead of
+`0.2.1`; after the later commit is tagged `v0.2.1`, an earlier detached feature
+job calculates `0.2.2` instead of `0.2.0`. The actual Windows and Linux binaries
+both reproduce this. The ordinary history fixture can pass when invocation time
+separates commits; that is insufficient qualification. Keep this change in draft
+until an upstream-owned remedy passes both fixtures and independent review.
+No production tag, release, or native application qualification follows from
+these isolated tests.
