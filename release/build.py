@@ -90,13 +90,20 @@ def archive_package(source, destination, *, linux=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--source", type=Path)
+    parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--tag", required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     if not TAG.fullmatch(args.tag) or not re.fullmatch(r"[0-9a-f]{40}", args.sha):
         parser.error("An exact stable tag and source SHA are required")
+    if args.verify_only:
+        verify_packages(args.output.resolve(), Release(args.tag, args.sha))
+        print(f"Verified package inventory: {args.tag} at {args.sha}")
+        return
+    if args.source is None:
+        parser.error("--source is required when building")
     repo = args.source.resolve()
     if git(repo, "rev-parse", "HEAD") != args.sha or git(repo, "rev-parse", f"refs/tags/{args.tag}^{{commit}}") != args.sha:
         parser.error("Checkout/tag do not match the verified source SHA")
