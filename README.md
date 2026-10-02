@@ -34,8 +34,8 @@ npm run test:package
 On headless Linux, run `npm run check` and `npm run test:package` under `xvfb-run -a`.
 Portable package checks support Windows x64 and Linux x64. macOS packaging,
 signing/notarization and automatic desktop updating are not delivered here.
-For release fixtures, install Python 3.12 and git-cliff 2.14.2, run
-`npm ci --prefix release`, then `npm run test:release`.
+For release fixtures, follow the public [release guide](release/README.md):
+Python 3.12, Node 24, GitVersion 6.8.2 and pinned upstream Action distributions.
 All fixture tags/remotes are temporary and local. CI checks both supported hosts.
 
 ## Contribute and release
@@ -54,6 +54,21 @@ This implementation belongs to central change `manager-foundation` and capabilit
 [`manager-foundation`](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-foundation).
 Link coordinated Docs and code PRs with exact revisions; no duplicate spec tree here.
 
-Release machinery is adapted from GPLv3 ReMarkableBuddies at
+Build/package helpers are adapted from GPLv3 ReMarkableBuddies at
 `33db26add721cea6c0121ad769a54d06ae600b4e`. This repository uses GPL-3.0-only;
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
+
+Releases use upstream Actions and GitVersion, independently of Rust. The `action-driven-releases` central change replaces the former Python coordinator; custom code only builds/packages/verifies application artifacts.
+
+### REM-46 qualification remains open
+
+GitVersion 6.8.2 does not yet pass the same-second ancestry regression in
+`release/test_versioning_equal_dates.py`. In a linear baseline/feature/fix history
+with equal commit timestamps, it calculates `0.2.0` for the fix instead of
+`0.2.1`; after the later commit is tagged `v0.2.1`, an earlier detached feature
+job calculates `0.2.2` instead of `0.2.0`. The actual Windows and Linux binaries
+both reproduce this. The ordinary history fixture can pass when invocation time
+separates commits; that is insufficient qualification. Keep this change in draft
+until an upstream-owned remedy passes both fixtures and independent review.
+No production tag, release, or native application qualification follows from
+these isolated tests.
