@@ -3,6 +3,7 @@ const path = require('node:path');
 const GUIDE = 'https://github.com/s116821/RemarkableBuddiesDocs';
 
 app.setName('ReMarkableBuddies Manager');
+if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_PROFILE) app.setPath('userData', process.env.MANAGER_TEST_PROFILE);
 app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);

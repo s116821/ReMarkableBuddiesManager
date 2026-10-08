@@ -1,8 +1,10 @@
 # ReMarkableBuddies Manager
 
 One Angular UI for the browser and Electron desktop. This **foundation preview**
-shows an unconfigured tablet connection. Installation, release discovery, updates,
-configuration and data management are future REM-41/REM-42 work; no tablet is accessed.
+shows an unconfigured tablet connection and read-only official stable release
+discovery with a saved source preference. Installation, qualified update offers,
+configuration and data management remain REM-41/REM-42 work; no tablet is accessed.
+See [release-source preview and Tailwind conventions](docs/release-source.md).
 
 Start with the public [ecosystem Docs hub](https://github.com/s116821/RemarkableBuddiesDocs)
 and [Manager foundation guide](https://github.com/s116821/RemarkableBuddiesDocs/blob/main/docs/manager-foundation.md).
