@@ -18,3 +18,13 @@ Do not archive unfinished work or equate foundation delivery with REM-41/42.
 Keep the renderer sandboxed; expose narrow host capabilities only. Never add a
 Buddy admin API. Git tags remain the version authority. Do not create 1.0 tags
 before REM-35. No tablet operations are needed for foundation changes.
+
+## Documentation layout
+
+Put documentation under `docs/`, including reusable technical findings, research,
+reference and tool guides. Genuine OpenSpec change-specific artifacts stay in the
+standard `openspec/` structure in the repository that owns that workflow. Root
+README/CONTRIBUTING/AGENTS, license/security files and conventional tool-discovery
+files (GitHub templates, skills) are exceptions. Test data remains fixtures, not
+documentation by default. Preserve evidence/provenance and link canonical bodies;
+do not sweep unrelated historical archives or private task outputs.
