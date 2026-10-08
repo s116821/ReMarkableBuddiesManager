@@ -12,6 +12,7 @@ import tarfile
 
 ROOT = Path("/fixtures")
 APK = "/tool/apk"
+EMULATOR = "/tool/emulator"
 COMMIT = "1" * 40  # Synthetic package provenance, never a Buddy source identity.
 
 
@@ -52,7 +53,8 @@ def command(args, expected=0, refusal=None):
     before = snapshot() if phase == "observe" else None
     env = {"PATH": "/usr/bin:/bin", "APK_CONFIG": "/fixtures/meta/etc/apk/config", "HOME": "/tmp",
            "LC_ALL": "C", "TMPDIR": "/tmp"}
-    common = [APK, "--root", "/fixtures/meta", "--install-root", "/fixtures/payload",
+    prefix = [EMULATOR, APK] if len(sys.argv) == 4 else [APK]
+    common = prefix + ["--root", "/fixtures/meta", "--install-root", "/fixtures/payload",
               "--no-network", "--no-cache", "--no-logfile",
               "--repositories-file", "/fixtures/meta/etc/apk/repositories"]
     # Explicit keys prevent inherited system-key fallback; paths are relative to metadata --root.
@@ -203,11 +205,17 @@ def observe():
             "read_only_mount": True, "network": "none", "scripts_executed": False}
 
 
-if __name__ == "__main__":
-    if len(sys.argv) != 3 or sha(Path(APK)) != sys.argv[2]:
+def validate_execution(args):
+    if len(args) not in {3, 4} or sha(Path(APK)) != args[2]:
         raise ValueError("Exact supplied apk binary digest required")
-    if sys.argv[1] not in {"generate", "observe"}:
+    if len(args) == 4 and sha(Path(EMULATOR)) != args[3]:
+        raise ValueError("Exact supplied emulator digest required")
+    if args[1] not in {"generate", "observe"}:
         raise ValueError("Unsupported fixture phase")
+
+
+if __name__ == "__main__":
+    validate_execution(sys.argv)
     try:
         print(json.dumps(generate() if sys.argv[1] == "generate" else observe()))
     except ValueError as error:

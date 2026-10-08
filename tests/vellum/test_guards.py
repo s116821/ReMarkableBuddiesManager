@@ -1,5 +1,6 @@
 """Safety-boundary regressions; these do not replace the actual-tool qualification."""
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +20,83 @@ fixture, qualify = module("fixture"), module("qualify")
 
 
 class Guards(unittest.TestCase):
+    def test_inconsistent_cli_modes_refuse_before_docker(self):
+        cases = [["--build-receipt", "build", "--source-archive", "archive", "--emulator", "qemu"],
+                 ["--build-receipt", "build"], ["--published-asset-receipt", "asset"],
+                 ["--published-asset-receipt", "asset", "--emulator", "qemu", "--source-archive", "archive"],
+                 ["--build-receipt", "build", "--published-asset-receipt", "asset"]]
+        for args in cases:
+            with patch.object(sys, "argv", ["qualify", "--apk", "apk", "--output", "out", *args]), \
+                    patch.object(qualify.subprocess, "run") as inspect, \
+                    patch.object(qualify.subprocess, "Popen") as launch, \
+                    patch.object(sys, "stderr"), self.assertRaises(SystemExit) as error:
+                qualify.main()
+            self.assertEqual(error.exception.code, 2)
+            inspect.assert_not_called()
+            launch.assert_not_called()
+
+    def test_container_refuses_emulator_hash_before_tool_execution(self):
+        with patch.object(fixture, "sha", side_effect=["1" * 64, "0" * 64]), \
+                patch.object(fixture.subprocess, "run") as tool, \
+                self.assertRaisesRegex(ValueError, "emulator digest"):
+            fixture.validate_execution(["fixture", "generate", "1" * 64, "2" * 64])
+        tool.assert_not_called()
+
+    def test_published_identity_refuses_wrong_asset_emulator_and_source_claim(self):
+        receipt = {"evidence_class": "published-asset-emulated", "repository": "vellum-dev/apk-tools",
+                   "release_id": 285324426, "release_tag": "v3.0.3", "release_immutable": False,
+                   "architecture": "armv7", "asset_id": 354274748, "asset_name": "apk-armv7",
+                   "github_digest": "sha256:" + qualify.PUBLISHED["armv7"][1],
+                   "binary_sha256": qualify.PUBLISHED["armv7"][1],
+                   "emulator_sha256": qualify.PUBLISHED["armv7"][2], "emulator_version": "8.2.2",
+                   "attributed_workflow_run": 21912939175, "attributed_source_revision": qualify.SOURCE}
+        with patch.object(qualify, "digest", side_effect=qualify.PUBLISHED["armv7"][1:]):
+            self.assertEqual(qualify.validate_published(receipt, Path("apk"), Path("qemu"))["architecture"], "armv7")
+        for wrong in [receipt | {"asset_id": 1}, receipt | {"architecture": "x86_64"},
+                      receipt | {"architecture": "aarch64"},
+                      receipt | {"archive_git_blobs_and_modes_verified": 417}]:
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "receipt").write_text(json.dumps(wrong))
+                (root / "apk").write_bytes(b"dummy")
+                (root / "qemu").write_bytes(b"dummy")
+                with patch.object(sys, "argv", ["qualify", "--apk", str(root / "apk"),
+                                      "--published-asset-receipt", str(root / "receipt"),
+                                      "--emulator", str(root / "qemu"), "--output", str(root / "out")]), \
+                        patch.object(qualify.subprocess, "run") as inspect, \
+                        patch.object(qualify.subprocess, "Popen") as launch, self.assertRaises(ValueError):
+                    qualify.main()
+            inspect.assert_not_called()
+            launch.assert_not_called()
+        for hashes in [("0" * 64, receipt["emulator_sha256"]), (receipt["binary_sha256"], "0" * 64)]:
+            with patch.object(qualify, "digest", side_effect=hashes), self.assertRaisesRegex(ValueError, "digest mismatch"):
+                qualify.validate_published(receipt, Path("apk"), Path("qemu"))
+
+    def test_source_gate_still_requires_417_entries(self):
+        receipt = {"source_revision": qualify.SOURCE, "upstream_version": "3.0.3",
+                   "binary_sha256": "1" * 64, "source_archive_sha256": "2" * 64,
+                   "build_options": ["static"], "dependencies": {"gcc": "test"},
+                   "archive_git_blobs_and_modes_verified": 416}
+        with patch.object(qualify, "digest", side_effect=["1" * 64, "2" * 64]), \
+                self.assertRaisesRegex(ValueError, "blob/mode"):
+            qualify.validate_source(receipt, Path("apk"), Path("archive"))
+
+    def test_emulated_prefix_is_fixed_and_emulator_mount_is_readonly(self):
+        process = Mock(returncode=0)
+        process.communicate.return_value = (b"{}", b"")
+        with patch.object(qualify.subprocess, "Popen", return_value=process) as start:
+            qualify.run_container("sha256:" + "1" * 64, [], "observe", "2" * 64,
+                                  emulator=(Path("fixed-qemu"), "3" * 64))
+        command = start.call_args.args[0]
+        self.assertIn("type=bind,source=fixed-qemu,target=/tool/emulator,readonly", command)
+        self.assertEqual(command[-1], "3" * 64)
+        result = Mock(returncode=0, stdout=b"", stderr=b"")
+        with patch.object(sys, "argv", ["fixture", "observe", "2" * 64, "3" * 64]), \
+                patch.object(fixture, "snapshot", return_value={}), \
+                patch.object(fixture.subprocess, "run", return_value=result) as tool:
+            fixture.command(["version", "-t", "1", "2"])
+        self.assertEqual(tool.call_args.args[0][:2], ["/tool/emulator", "/tool/apk"])
+
     def test_linux_uses_effective_owner_for_both_phases_without_widening_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
