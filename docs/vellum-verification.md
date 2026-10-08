@@ -63,7 +63,77 @@ evidence, not a signed official provenance or a guarantee of the compiler's beha
 Outputs must be new; prior evidence is preserved. CI does not silently run or claim
 this opt-in actual-tool harness when the tool/image is unavailable.
 
-## Observed contract and limits
+## Published ARM assets under explicit emulation
+
+Central owning change: `manager-published-arm-apk`. This separate opt-in mode tests
+unchanged published bytes with the same 13 fixtures; it does not reinterpret them
+as a local source build. The original mode still requires all 417 verified source
+entries. No asset or emulator is bundled, downloaded or installed by the runner.
+
+The pinned mutable upstream v3.0.3 release is ID 285324426. ARMv7 asset ID 354274748
+has SHA-256 `2fa969001cd8fbc8fa373b7c3dfcc99f858ceb516306d35d1b037c09861ac94a`;
+AArch64 asset ID 354274751 has SHA-256
+`dab5b2b615cae41fd90a99fc6bdca87d26d04c0755440bded6b4832547c09cf7`.
+Download explicitly from the public release and independently hash the bytes.
+The successful source workflow supports attribution to the branch commit above,
+not signed publisher/source attestation; the upstream tag differs. The runner's
+pins identify the tested bytes, not an accepted production signing-key policy.
+
+Supply a separately obtained regular static QEMU 8.2.2 executable. Supported
+emulator SHA-256 values are `a971ead7b78ecb0c10c47be9f8bb7402c0be1fc0bca958c1deed72c56aa417bb`
+for qemu-arm and `4b7300c73beff4d34ce396db5b0db516e5590ece7215ac9c1e85e5f203781190`
+for qemu-aarch64. These were observed at `/usr/local/bin/qemu-arm` in existing image
+`sha256:ad36c99fa4d211ae7a2d9b1e02d13b41d9616f61bd355315bd5e72315a38e6bb` and
+`/usr/local/bin/qemu-aarch64` in existing image
+`sha256:081cfe92ac8a928ce698b25bf65d8e51a37f6eaa85bb44cedf9bb84db5c078da`.
+Use actual dereferenced files, not the images' symlink aliases. Public users may
+obtain matching runtime/image bytes through their own recorded developer setup;
+absence of these exact tools means this mode is unavailable, not a test pass.
+No global binfmt registration or privileged container is required.
+
+Prepare a new local JSON receipt, using actual values for one architecture:
+
+```json
+{
+  "evidence_class": "published-asset-emulated",
+  "repository": "vellum-dev/apk-tools",
+  "release_id": 285324426,
+  "release_tag": "v3.0.3",
+  "release_immutable": false,
+  "architecture": "armv7",
+  "asset_id": 354274748,
+  "asset_name": "apk-armv7",
+  "github_digest": "sha256:2fa969001cd8fbc8fa373b7c3dfcc99f858ceb516306d35d1b037c09861ac94a",
+  "binary_sha256": "2fa969001cd8fbc8fa373b7c3dfcc99f858ceb516306d35d1b037c09861ac94a",
+  "emulator_sha256": "a971ead7b78ecb0c10c47be9f8bb7402c0be1fc0bca958c1deed72c56aa417bb",
+  "emulator_version": "8.2.2",
+  "attributed_workflow_run": 21912939175,
+  "attributed_source_revision": "ee31d275c7a2b7486e6de481ffe624b1de46d131",
+  "runtime_image_id": "sha256:YOUR_ACTUAL_64_HEX_IMAGE_ID"
+}
+```
+
+The runtime image needs Python3.12+ and OpenSSL. The qualified source-build fixture
+image can be reused with both external static executables mounted read-only. This
+developer-supplied receipt records unsigned attribution; it does not authenticate
+a publisher/compiler. Do not add source-build fields or a fabricated 417-entry count.
+For AArch64 change architecture, asset ID/name and both digests to the values above.
+
+```text
+python tests/vellum/qualify.py --apk ARM_ASSET --published-asset-receipt ASSET_RECEIPT --emulator STATIC_QEMU --output test-results/NEW_ARM_QUALIFICATION.json
+```
+
+This mode forbids `--source-archive`; source-build mode forbids `--emulator`.
+The runner and container verify tool/emulator bytes and invoke only fixed paths.
+Both phases retain Linux effective-owner binding and all existing isolation flags.
+The output distinguishes emulated published assets and records safe identities.
+Synthetic x86_64 installed metadata tests parser behavior, not ARM compatibility.
+No native CPU/kernel/firmware, SSH shell, real package trust or installation result
+follows. No Docker/QEMU dependency is added to the Manager product or renderer.
+Any later asset/emulator redistribution needs matching license/notices/source review;
+exact static-linked upstream dependency license inventory remains unestablished here.
+
+## Shared fixture contract and limits
 
 Two containers separate fixture generation from observation. Private signing keys
 exist only in generation tmpfs and are removed before it exits; host temporary
