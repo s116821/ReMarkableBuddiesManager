@@ -2,9 +2,11 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import uuid
 
@@ -31,6 +33,12 @@ def run_container(image, mounts, phase, apk_hash, timeout=120):
                "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
                "--env", "APK_CONFIG=/fixtures/meta/etc/apk/config",
                "--env", "PYTHONDONTWRITEBYTECODE=1"]
+    if sys.platform == "linux":
+        # Private host directories stay mode 0700; cap-drop ALL cannot bypass ownership.
+        uid, gid = os.geteuid(), os.getegid()
+        if any(type(value) is not int or value < 0 for value in (uid, gid)):
+            raise ValueError("Host effective UID/GID must be nonnegative integers")
+        command += ["--user", f"{uid}:{gid}"]
     for source, target, readonly in [*mounts, (script, "/harness/fixture.py", True)]:
         command += ["--mount", f"type=bind,source={source},target={target}" + (",readonly" if readonly else "")]
     command += ["--entrypoint", "python3", image, "/harness/fixture.py", phase, apk_hash]

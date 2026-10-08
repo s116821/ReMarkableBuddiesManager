@@ -19,6 +19,34 @@ fixture, qualify = module("fixture"), module("qualify")
 
 
 class Guards(unittest.TestCase):
+    def test_linux_uses_effective_owner_for_both_phases_without_widening_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            before = directory.stat().st_mode
+            for phase in ("generate", "observe"):
+                process = Mock(returncode=0)
+                process.communicate.return_value = (b"{}", b"")
+                with patch.object(qualify.sys, "platform", "linux"), \
+                        patch.object(qualify.os, "geteuid", return_value=1234, create=True), \
+                        patch.object(qualify.os, "getegid", return_value=5678, create=True), \
+                        patch.object(qualify.subprocess, "Popen", return_value=process) as start:
+                    qualify.run_container("sha256:" + "1" * 64,
+                                          [(directory, "/fixtures", phase == "observe")], phase, "2" * 64)
+                command = start.call_args.args[0]
+                self.assertEqual(command[command.index("--user") + 1], "1234:5678")
+                self.assertEqual(command[command.index("--cap-drop") + 1], "ALL")
+                self.assertIn("--read-only", command)
+                self.assertEqual(command[command.index("--network") + 1], "none")
+                self.assertEqual(directory.stat().st_mode, before)
+
+    def test_windows_does_not_request_posix_identity(self):
+        process = Mock(returncode=0)
+        process.communicate.return_value = (b"{}", b"")
+        with patch.object(qualify.sys, "platform", "win32"), \
+                patch.object(qualify.subprocess, "Popen", return_value=process) as start:
+            qualify.run_container("sha256:" + "1" * 64, [], "observe", "2" * 64)
+        self.assertNotIn("--user", start.call_args.args[0])
+
     def test_mutation_command_rejected_before_process(self):
         with patch.object(sys, "argv", ["fixture", "observe"]), patch.object(fixture.subprocess, "run") as run:
             with self.assertRaisesRegex(ValueError, "Unapproved"):

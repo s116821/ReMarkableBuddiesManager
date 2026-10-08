@@ -67,7 +67,13 @@ this opt-in actual-tool harness when the tool/image is unavailable.
 
 Two containers separate fixture generation from observation. Private signing keys
 exist only in generation tmpfs and are removed before it exits; host temporary
-fixtures contain public keys only and are removed on completion. Observation mounts
+fixtures contain public keys only and are removed on completion.
+On native Linux, both containers use the invoking process's effective UID/GID so
+the private mode-0700 fixture directory remains accessible with all capabilities
+dropped. This identity is derived by the runner, never supplied by a caller. Windows
+Docker Desktop keeps its existing mount ownership behavior. Tool and harness files
+must be readable/executable by that identity; no permissions are widened by the runner.
+Observation mounts
 fixtures and tool read-only, disables networking, drops capabilities and inherits
 neither host APK_CONFIG nor system trusted keys. It explicitly uses isolated metadata
 and payload roots. Inventories include files, directories, modes and symlink targets;
