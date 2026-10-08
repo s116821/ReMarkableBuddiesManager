@@ -5,6 +5,8 @@ shows an unconfigured tablet connection and read-only official stable release
 discovery with a saved source preference. Installation, qualified update offers,
 configuration and data management remain REM-41/REM-42 work; no tablet is accessed.
 See [release-source preview and Tailwind conventions](docs/release-source.md).
+Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
+Its synthetic host evidence does not enable installation or qualify a tablet.
 
 Start with the public [ecosystem Docs hub](https://github.com/s116821/RemarkableBuddiesDocs)
 and [Manager foundation guide](https://github.com/s116821/RemarkableBuddiesDocs/blob/main/docs/manager-foundation.md).
