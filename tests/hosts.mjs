@@ -12,11 +12,33 @@ await mkdir('test-results', { recursive: true });
 async function verify(page, host) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  let tag = 'v0.3.0';
+  await page.route('https://api.github.com/repos/s116821/ReMarkableBuddies/releases/latest', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Accept,X-GitHub-Api-Version' }, json: {
+    tag_name: tag, draft: false, prerelease: false,
+    html_url: `https://github.com/s116821/ReMarkableBuddies/releases/tag/${tag}`,
+    published_at: '2026-10-08T12:00:00Z', assets: [],
+  } }));
+  await page.reload();
   await page.getByRole('heading', { name: 'A home for your Buddies.' }).waitFor();
   assert.equal(await page.getByRole('heading', { name: 'Not configured', exact: true }).count(), 1);
   assert.equal(await page.getByText(`${host} edition`, { exact: true }).count(), 1);
   assert.equal(await page.getByTestId('version').textContent(), info.version);
   assert.equal(await page.getByText('Coming in a later release', { exact: true }).count(), 3);
+  await page.getByTestId('official-version').filter({ hasText: tag }).waitFor();
+  assert.equal(await page.getByTestId('installed-version').textContent(), 'Unknown — tablet not connected');
+  assert.equal(await page.getByTestId('eligible-version').textContent(), 'Qualified available version: unavailable');
+  assert.equal(await page.getByRole('button', { name: 'Install unavailable', exact: true }).isDisabled(), true);
+  assert.equal(await page.locator('#release-source option[value=community]').isDisabled(), true);
+  tag = 'v0.4.0'; await page.getByRole('button', { name: 'Refresh releases' }).click();
+  await page.getByTestId('official-version').filter({ hasText: tag }).waitFor();
+  await page.evaluate(() => localStorage.setItem('remarkable-buddies-manager.release-source', 'community'));
+  await page.reload();
+  assert.equal(await page.locator('#release-source').inputValue(), 'community');
+  await page.locator('#release-source').selectOption('official'); await page.reload();
+  assert.equal(await page.locator('#release-source').inputValue(), 'official');
+  await page.getByTestId('official-version').filter({ hasText: tag }).waitFor();
+  // Generated Tailwind utilities, not merely class strings, style both hosts.
+  assert.equal(await page.getByRole('button', { name: 'Refresh releases' }).evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(34, 77, 64)');
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
   if (host === 'Browser') await page.screenshot({ path: 'test-results/browser.png', fullPage: true });
@@ -51,7 +73,9 @@ const executablePath = packaged
   ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`)
   : undefined;
 const args = [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])];
-const app = await electron.launch({ executablePath, args, env: { ...process.env, MANAGER_TEST: '1' } });
+const testProfile = path.resolve(`test-results/desktop-profile-${Date.now()}`);
+await mkdir(testProfile, { recursive: true });
+const app = await electron.launch({ executablePath, args, env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_PROFILE: testProfile } });
 try {
   const page = await app.firstWindow();
   // Xvfb's compositor needs a mapped window; this is a virtual CI display.
@@ -63,9 +87,11 @@ try {
     return { sandbox: p.sandbox, contextIsolation: p.contextIsolation, nodeIntegration: p.nodeIntegration };
   });
   assert.deepEqual(prefs, { sandbox: true, contextIsolation: true, nodeIntegration: false });
+  assert.equal(await app.evaluate(({ app }) => app.getPath('userData')), testProfile);
   // Optional visual evidence: some headless compositors cannot capture a hidden
   // surface. DOM, runtime identity and isolation assertions above are mandatory.
   if (process.env.MANAGER_CAPTURE === '1') {
+    await page.locator('section[aria-labelledby="release-title"]').evaluate(el => el.scrollIntoView({ block: 'start' }));
     const png = await app.evaluate(async ({ BrowserWindow }) => {
       const capture = await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
       if (capture.isEmpty()) throw new Error('Desktop capture is empty');
