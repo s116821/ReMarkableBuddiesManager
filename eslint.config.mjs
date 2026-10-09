@@ -7,5 +7,5 @@ export default tseslint.config(
   { files: ['src/**/*.ts'], extends: [...tseslint.configs.recommended, ...angular.configs.tsRecommended], processor: angular.processInlineTemplates },
   { files: ['src/**/*.html'], extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility] },
   { files: ['**/*.mjs', '**/*.cjs'], languageOptions: { globals: globals.node }, rules: { 'no-unused-vars': 'error', 'no-undef': 'error' } },
-  { files: ['tests/hosts.mjs'], languageOptions: { globals: globals.browser } }
+  { files: ['tests/hosts.mjs', 'tests/wired-hosts.mjs'], languageOptions: { globals: globals.browser } }
 );

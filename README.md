@@ -1,9 +1,10 @@
 # ReMarkableBuddies Manager
 
 One Angular UI for the browser and Electron desktop. This **foundation preview**
-shows an unconfigured tablet connection and read-only official stable release
-discovery with a saved source preference. Installation, qualified update offers,
-configuration and data management remain REM-41/REM-42 work; no tablet is accessed.
+offers explicitly configured Linux USB/SSH read-only tablet observation and
+official stable release discovery with a saved source preference. Installation, qualified update offers,
+configuration and data management remain REM-41/REM-42 work.
+See [wired observation setup and limits](docs/wired-observation.md).
 See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
@@ -33,6 +34,8 @@ npx playwright install --with-deps chromium
 npm run check
 npm run package
 npm run test:package
+npm run test:wired-hosts
+npm run test:wired-hosts -- --packaged
 ```
 
 On headless Linux, run `npm run check` and `npm run test:package` under `xvfb-run -a`.
@@ -54,8 +57,9 @@ blocked until the separately reviewed REM-35 release gate.
 
 All requirements, active OpenSpec changes, archives and workflow skills live only
 in [RemarkableBuddiesDocs](https://github.com/s116821/RemarkableBuddiesDocs).
-This implementation belongs to central change `manager-foundation` and capability
-[`manager-foundation`](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-foundation).
+Canonical [foundation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-foundation)
+and [wired observation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-wired-observation)
+contracts describe these completed bounded capabilities.
 Link coordinated Docs and code PRs with exact revisions; no duplicate spec tree here.
 
 Release machinery is adapted from GPLv3 ReMarkableBuddies at

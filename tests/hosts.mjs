@@ -136,6 +136,10 @@ async function verifyStyles(page, host) {
   await page.keyboard.press('Shift+Tab');
   await verifyFocus(page.locator('.ui-skip'));
   await page.keyboard.press('Tab'); // brand
+  await page.keyboard.press('Tab'); // read tablet state
+  await verifyFocus(page.getByRole('button', { name: 'Read tablet state' }));
+  await page.keyboard.press('Tab'); // disconnect
+  await verifyFocus(page.getByRole('button', { name: 'Disconnect', exact: true }));
   await page.keyboard.press('Tab'); // refresh
   assert.equal(await refresh.evaluate(el => el === document.activeElement), true);
   await verifyFocus(refresh);
@@ -168,6 +172,8 @@ if (!packaged) {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.screenshot({ path: 'test-results/browser-mobile.png', fullPage: true });
       await page.locator('#release-source').focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Shift+Tab');

@@ -6,7 +6,25 @@
   <p class="text-lg text-muted">Manage Reader and Writer from one place.<br>This foundation preview is the first step.</p>
   <section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
     <div class="grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-boundary bg-paper font-serif text-muted" aria-hidden="true"><span>rM</span></div>
-    <div><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">Not configured</h2><p>Tablet connection is not available in this preview.<br>No device has been connected or changed.</p></div>
+    <div class="min-w-0 flex-1" aria-live="polite"><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">{{ connectionLabels[connection().status] }}</h2>
+      <p>Connect the tablet by USB and read its state. Installation remains unavailable.</p>
+      <div class="mt-3 flex flex-wrap gap-3">
+        <button class="ui-button ui-button-primary" type="button" (click)="connectTablet()" [disabled]="connection().status === 'checking'">Read tablet state</button>
+        <button class="ui-button ui-button-secondary" type="button" (click)="disconnectTablet()">Disconnect</button>
+      </div>
+      @if (connection().status === 'unconfigured') { <p class="mt-3 text-sm text-muted">Set up the local host connection first. Browser users open the Manager served by the local helper; SSH credentials stay on that host. See the project guide.</p> }
+      @if (connection().status !== 'unconfigured' && connection().status !== 'checking' && connection().status !== 'observed') { <p class="ui-error mt-3" role="alert">No current tablet observation. Check the USB cable, host setup and tablet trust, then explicitly read again.</p> }
+      @if (connection().observation; as tablet) {
+        <dl class="mt-3 grid gap-3 sm:grid-cols-2">
+          <div><dt class="ui-eyebrow">Observed model</dt><dd class="break-words" data-testid="tablet-model">{{ tablet.model ?? 'Unknown' }}</dd></div>
+          <div><dt class="ui-eyebrow">Firmware</dt><dd class="break-words">{{ tablet.firmware ?? 'Unknown' }}</dd></div>
+          <div><dt class="ui-eyebrow">Architecture</dt><dd>{{ tablet.architecture ?? 'Unknown' }}</dd></div>
+          <div><dt class="ui-eyebrow">Buddy service</dt><dd>{{ tablet.service.LoadState ?? 'Unknown' }} / {{ tablet.service.ActiveState ?? 'Unknown' }}</dd></div>
+        </dl>
+        @if (tablet.firmware_conflict) { <p class="ui-warning" role="alert">Firmware files disagree; compatibility is unknown.</p> }
+        <p class="break-words text-sm text-muted">Observed at {{ connection().checkedAt }}. Compatibility, installed version and provenance remain unverified.</p>
+      }
+    </div>
     <span class="rounded-full border border-boundary px-3 py-2 text-xs">Foundation preview</span>
   </section>
   <section class="ui-panel my-6" aria-labelledby="release-title">
@@ -23,7 +41,7 @@
     @if (release().preference === 'community') { <p class="ui-warning">Your saved Community preference is retained, but that source is unavailable. Choose Official stable to change it.</p> }
     @if (release().persistenceError) { <p role="alert" class="ui-error">Source preference storage is unavailable. Changes may not survive a restart.</p> }
     <dl class="my-5 grid gap-4 sm:grid-cols-3">
-      <div><dt class="ui-eyebrow">Installed Buddy</dt><dd class="mt-1" data-testid="installed-version">Unknown — tablet not connected</dd></div>
+      <div><dt class="ui-eyebrow">Installed Buddy</dt><dd class="mt-1" data-testid="installed-version">{{ connection().observation ? 'Unknown — installed provenance not verified' : 'Unknown — tablet not connected' }}</dd></div>
       <div><dt class="ui-eyebrow">Official stable candidate</dt><dd class="mt-1" data-testid="official-version">{{ release().candidate?.tag ?? (release().status === 'missing' ? 'No published stable release' : 'Not checked') }}</dd></div>
       <div><dt class="ui-eyebrow">Community available</dt><dd class="mt-1">Unlisted / unavailable</dd></div>
     </dl>
