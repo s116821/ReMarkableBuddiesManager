@@ -50,6 +50,11 @@ jobs:
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
         with:
           python-version: '3.12'
+      - name: Windows native API and adapter checks
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
+        run: |
+          python -m pip install -r host/requirements.txt
+          python -m unittest discover -s tests/wired -v
       - uses: ./.github/actions/release-tools
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
       - name: Install and check source
@@ -73,11 +78,6 @@ jobs:
           xvfb-run -a npm run test:package
           xvfb-run -a npm run test:wired-hosts
           xvfb-run -a npm run test:wired-hosts -- --packaged
-      - name: Windows native API and adapter checks
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
-        run: |
-          python -m pip install -r host/requirements.txt
-          python -m unittest discover -s tests/wired -v
       - name: Browser and desktop checks (Windows)
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
         run: |

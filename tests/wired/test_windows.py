@@ -142,14 +142,27 @@ class WindowsNative(unittest.TestCase):
         token = s.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
         try: user = s.GetTokenInformation(token, s.TokenUser)[0]
         finally: token.Close()
-        with tempfile.TemporaryDirectory() as root:
-            # Hosted TEMP can contain an8.3 alias, which the product intentionally refuses.
-            root = Path(root).resolve()
-            p = root/'config'; p.write_bytes(b'private')
+        import pywintypes, win32file
+        with tempfile.TemporaryDirectory() as temp:
+            # Stamp ownership at creation; do not require takeover privilege on runner fixtures.
+            root = Path(temp).resolve()/'private'
+            acl = s.ACL(); acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, user)
+            descriptor = s.SECURITY_DESCRIPTOR()
+            descriptor.SetSecurityDescriptorOwner(user, False)
+            descriptor.SetSecurityDescriptorDacl(True, acl, False)
+            attributes = pywintypes.SECURITY_ATTRIBUTES()
+            attributes.SECURITY_DESCRIPTOR = descriptor
+            win32file.CreateDirectory(str(root), attributes)
+            p = root/'config'
+            handle = win32file.CreateFile(str(p), win32con.GENERIC_WRITE, 0, attributes,
+                win32con.CREATE_NEW, win32con.FILE_ATTRIBUTE_NORMAL, None)
+            try: win32file.WriteFile(handle, b'private')
+            finally: handle.Close()
             for item in (str(root), str(p)):
-                acl = s.ACL(); acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, user)
-                s.SetNamedSecurityInfo(item, s.SE_FILE_OBJECT, s.OWNER_SECURITY_INFORMATION | s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, user, None, acl, None)
+                s.SetNamedSecurityInfo(item, s.SE_FILE_OBJECT,
+                    s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
+                self.assertEqual(s.GetNamedSecurityInfo(item, s.SE_FILE_OBJECT, s.OWNER_SECURITY_INFORMATION).GetSecurityDescriptorOwner(), user)
             self.assertEqual(w.private_bytes(p, parent_private=True), b'private')
             acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_GENERIC_READ, s.ConvertStringSidToSid('S-1-1-0'))
-            s.SetNamedSecurityInfo(str(p), s.SE_FILE_OBJECT, s.OWNER_SECURITY_INFORMATION | s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, user, None, acl, None)
+            s.SetNamedSecurityInfo(str(p), s.SE_FILE_OBJECT, s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
             with self.assertRaises(o.Refusal): w.private_bytes(p, parent_private=True)
