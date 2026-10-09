@@ -74,6 +74,17 @@ class WindowsFixtures(unittest.TestCase):
             w.observe(CONFIG, o)
         dial.assert_not_called(); notices.close.assert_called_once()
 
+    def test_utf16_instance_capacity_includes_terminator_before_native_copy(self):
+        self.assertEqual(len(w.encoded_instance('A' * 199)), 400)
+        self.assertEqual(len(w.encoded_instance('A' + '\U0001f600' * 99)), 400)
+        for value in ('A' * 200, '\U0001f600' * 100, 'USB\\VID_04B3&PID_4010\\' + '\U0001f600' * 170, 'bad\0id', '\ud800'):
+            with self.subTest(length=len(value)), self.assertRaises(o.Refusal): w.encoded_instance(value)
+        # Constructor must refuse before opening IP APIs or copying native memory.
+        windows = Mock()
+        with patch.object(w.C, 'memmove') as copy, self.assertRaises(o.Refusal):
+            w.Notifications(windows, dict(CONFIG, usb_instance='\U0001f600' * 170))
+        copy.assert_not_called(); self.assertEqual(windows.mock_calls, [])
+
     def test_abi_layout_and_ipv4(self):
         self.assertEqual(ctypes.sizeof(w.Address), 28)
         self.assertEqual(ctypes.sizeof(w.Prefix), 32)

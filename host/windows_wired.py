@@ -83,7 +83,7 @@ def private_bytes(path, parent_private=False, maximum=16384):
                 raise Refusal('unconfigured')
             handle = win32file.CreateFile(str(item), win32con.READ_CONTROL | (0 if directory else win32con.GENERIC_READ),
                 win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE if directory else 0, None,
-                win32con.OPEN_EXISTING, win32con.FILE_FLAG_OPEN_REPARSE_POINT | win32con.FILE_FLAG_BACKUP_SEMANTICS, None)
+                win32con.OPEN_EXISTING, win32file.FILE_FLAG_OPEN_REPARSE_POINT | win32con.FILE_FLAG_BACKUP_SEMANTICS, None)
             handles.append(handle)
             info = win32file.GetFileInformationByHandle(handle)
             if info[0] & win32con.FILE_ATTRIBUTE_REPARSE_POINT:
@@ -112,6 +112,16 @@ def private_bytes(path, parent_private=False, maximum=16384):
             handle.Close()
 
 
+def encoded_instance(instance):
+    try:
+        encoded = instance.encode('utf-16-le') + b'\0\0'
+    except (AttributeError, UnicodeError):
+        raise Refusal('unconfigured') from None
+    if not instance or '\0' in instance or len(encoded) > C.sizeof(U16 * 200):
+        raise Refusal('unconfigured')
+    return encoded
+
+
 def load_config(path):
     config = json.loads(private_bytes(path, parent_private=True))
     fields = {'contract_version', 'interface_guid', 'usb_instance', 'usb_vendor', 'usb_product',
@@ -122,6 +132,7 @@ def load_config(path):
     for name in ('usb_vendor', 'usb_product'):
         if not re.fullmatch('[0-9a-f]{4}', config[name]):
             raise Refusal('unconfigured')
+    encoded_instance(config['usb_instance'])
     if not re.fullmatch(r'USB\\VID_[0-9A-F]{4}&PID_[0-9A-F]{4}\\[^\x00\r\n]{1,170}', config['usb_instance']):
         raise Refusal('unconfigured')
     if not re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}', config['host_key_sha256']):
@@ -242,6 +253,7 @@ def bound_socket(config, snapshot):
 class Notifications:
     """Invalidate conservatively on any IPv4 change, including rapid remove/readd."""
     def __init__(self, windows, config):
+        instance = encoded_instance(config['usb_instance'])  # bounds include UTF-16 terminator, before APIs/copy
         self.changed = threading.Event()
         self.sock = None
         self.lock = threading.Lock()
@@ -263,7 +275,6 @@ class Notifications:
                 self.invalidate()
                 return 0
             callback = callback_type(changed)
-            instance = config['usb_instance'].encode('utf-16-le')
             filter_ = DeviceFilter(size=C.sizeof(DeviceFilter), kind=2)
             C.memmove(C.addressof(filter_) + DeviceFilter.instance.offset, instance, len(instance))
             handle = C.c_void_p()
