@@ -9,16 +9,26 @@ const root = path.resolve('dist/manager/browser');
 const info = JSON.parse(await readFile('electron/build-info.json', 'utf8'));
 await mkdir('test-results', { recursive: true });
 
-async function verify(page, host) {
-  const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
+async function installFixture(context) {
   let tag = 'v0.3.0';
-  await page.route('https://api.github.com/repos/s116821/ReMarkableBuddies/releases/latest', route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Accept,X-GitHub-Api-Version' }, json: {
+  let initialRequests = 0;
+  await context.route('**/*', route => {
+    const url = route.request().url();
+    if (url.startsWith('file:') || url.startsWith('http://127.0.0.1:')) return route.continue();
+    return route.abort();
+  });
+  await context.route('https://api.github.com/repos/s116821/ReMarkableBuddies/releases/latest', route => { initialRequests++; return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Accept,X-GitHub-Api-Version' }, json: {
     tag_name: tag, draft: false, prerelease: false,
     html_url: `https://github.com/s116821/ReMarkableBuddies/releases/tag/${tag}`,
     published_at: '2026-10-08T12:00:00Z', assets: [],
-  } }));
-  await page.reload();
+  } }); });
+  return { initial: () => initialRequests, promote: () => { tag = 'v0.4.0'; } };
+}
+
+async function verify(page, host, fixture) {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  let tag = 'v0.3.0';
   await page.getByRole('heading', { name: 'A home for your Buddies.' }).waitFor();
   assert.equal(await page.getByRole('heading', { name: 'Not configured', exact: true }).count(), 1);
   assert.equal(await page.getByText(`${host} edition`, { exact: true }).count(), 1);
@@ -29,7 +39,8 @@ async function verify(page, host) {
   assert.equal(await page.getByTestId('eligible-version').textContent(), 'Qualified available version: unavailable');
   assert.equal(await page.getByRole('button', { name: 'Install unavailable', exact: true }).isDisabled(), true);
   assert.equal(await page.locator('#release-source option[value=community]').isDisabled(), true);
-  tag = 'v0.4.0'; await page.getByRole('button', { name: 'Refresh releases' }).click();
+  assert.equal(fixture.initial(), 1);
+  fixture.promote(); tag = 'v0.4.0'; await page.getByRole('button', { name: 'Refresh releases' }).click();
   await page.getByTestId('official-version').filter({ hasText: tag }).waitFor();
   await page.evaluate(() => localStorage.setItem('remarkable-buddies-manager.release-source', 'community'));
   await page.reload();
@@ -58,9 +69,11 @@ if (!packaged) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+    const fixture = await installFixture(context);
+    const page = await context.newPage();
     await page.goto(`http://127.0.0.1:${server.address().port}/preview/`);
-    await verify(page, 'Browser');
+    await verify(page, 'Browser', fixture);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: 'test-results/browser-mobile.png', fullPage: true });
@@ -75,12 +88,18 @@ const executablePath = packaged
 const args = [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])];
 const testProfile = path.resolve(`test-results/desktop-profile-${Date.now()}`);
 await mkdir(testProfile, { recursive: true });
-const app = await electron.launch({ executablePath, args, env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_PROFILE: testProfile } });
+const app = await electron.launch({ executablePath, args, env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: testProfile } });
 try {
   const page = await app.firstWindow();
+  await page.waitForLoadState('domcontentloaded');
+  assert.equal(page.url(), 'about:blank');
+  const fixture = await installFixture(app.context());
+  await app.evaluate(async ({ app, BrowserWindow }) => {
+    await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`);
+  });
   // Xvfb's compositor needs a mapped window; this is a virtual CI display.
   if (process.platform === 'linux') await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
-  await verify(page, 'Desktop');
+  await verify(page, 'Desktop', fixture);
   if (packaged) assert.equal(await app.evaluate(({ app }) => app.getVersion()), info.version);
   const prefs = await app.evaluate(({ BrowserWindow }) => {
     const p = BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();
