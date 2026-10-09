@@ -29,6 +29,7 @@ async function verify(page, expected) {
   } else await page.getByRole('heading', { name: 'Host transport unavailable' }).waitFor();
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 1000 });
+    await page.mouse.move(0, 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await page.getByRole('button', { name: 'Read tablet state' }).evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(34, 77, 64)');
   }
