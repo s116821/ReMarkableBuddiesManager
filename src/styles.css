@@ -1,41 +1,35 @@
 @import "tailwindcss";
+
+/* One CSS-first theme for the shared browser and Electron renderer. */
 @theme {
   --color-forest: #224d40;
   --color-paper: #f5f5ef;
   --color-ink: #18332f;
+  --color-surface: #ffffff;
+  --color-muted: #57534e;
+  --color-boundary: #78716c;
+  --color-divider: #d6d3d1;
+  --color-warning: #78350f;
+  --color-danger: #991b1b;
+  --color-focus: #b45309;
   --font-sans: 'Segoe UI', system-ui, sans-serif;
 }
 @layer base {
   body { @apply m-0 bg-paper font-sans text-ink; }
   a { @apply text-forest underline-offset-4; }
-  :focus-visible { @apply outline-3 outline-offset-4 outline-amber-700; }
+  :focus-visible { @apply outline-3 outline-offset-4 outline-focus; }
   h2 { @apply my-3 text-xl font-semibold; }
   p { @apply my-2 leading-relaxed; }
+  code { @apply break-all text-xs; }
 }
 @layer components {
-  header, footer { @apply flex flex-wrap items-center justify-between gap-4 border-stone-300 px-7 py-6; }
-  header { @apply border-b; }
-  footer { @apply flex-col items-start border-t text-xs text-stone-600 sm:flex-row; }
-  .brand { @apply flex flex-wrap items-center gap-3 font-semibold text-ink no-underline; }
-  .mark { @apply rounded bg-forest px-3 py-1 font-serif text-white; }
-  .muted, .host { @apply font-normal text-stone-600; }
-  .host { @apply text-sm; }
-  main { @apply mx-auto my-10 max-w-6xl px-7 sm:my-14; }
-  .eyebrow { @apply text-xs font-bold tracking-widest text-stone-600; }
-  h1 { @apply my-4 font-serif text-4xl font-normal tracking-tight sm:text-6xl; }
-  .intro { @apply text-lg text-stone-600; }
-  .connection { @apply my-6 flex flex-wrap items-center gap-6 rounded-xl border border-stone-300 bg-green-50 p-6; }
-  .device { @apply grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-stone-400 bg-paper font-serif text-stone-500; }
-  .badge { @apply rounded-full border border-stone-400 px-3 py-2 text-xs; }
-  .cards { @apply grid gap-5 md:grid-cols-3; }
-  .cards section { @apply rounded-xl border border-stone-300 bg-white p-6; }
-  .cards p { @apply text-sm text-stone-600; }
-  .number { @apply font-mono text-xs text-stone-500; }
-  .cards h2 { @apply mt-5; }
-  .cards .pending { @apply mt-6 text-xs text-amber-900; }
-  aside { @apply mt-8 border-t border-stone-300 pt-5; }
-  aside h2 { @apply text-base; }
-  aside p, aside a { @apply text-sm text-stone-600; }
-  code { @apply break-all text-xs; }
-  .skip { @apply absolute top-[-100px] left-4 bg-white p-2 focus:top-2; }
+  .ui-panel { @apply rounded-xl border border-divider bg-surface p-6; }
+  .ui-button { @apply rounded-md px-4 py-2 font-semibold disabled:cursor-not-allowed; }
+  .ui-button-primary { @apply bg-forest text-white enabled:hover:bg-ink disabled:cursor-wait disabled:opacity-60; }
+  .ui-button-secondary { @apply border border-boundary text-muted enabled:hover:bg-paper; }
+  .ui-field { @apply mt-2 w-full rounded-md border border-boundary bg-surface p-3 sm:w-auto; }
+  .ui-eyebrow { @apply text-xs font-bold tracking-widest text-muted; }
+  .ui-error { @apply border-l-4 border-danger pl-3 text-sm text-danger; }
+  .ui-warning { @apply text-sm text-warning; }
+  .ui-skip { @apply absolute -top-24 left-4 z-10 rounded bg-surface p-2 focus:top-2; }
 }

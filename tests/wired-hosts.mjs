@@ -27,6 +27,11 @@ async function verify(page, expected) {
     assert.equal(await page.getByTestId('installed-version').textContent(), 'Unknown — installed provenance not verified');
     assert.equal(await page.getByRole('button', { name: 'Install unavailable' }).isDisabled(), true);
   } else await page.getByRole('heading', { name: 'Host transport unavailable' }).waitFor();
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.equal(await page.getByRole('button', { name: 'Read tablet state' }).evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(34, 77, 64)');
+  }
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await page.getByRole('heading', { name: 'Disconnected', exact: true }).waitFor();
   assert.equal(await page.getByTestId('tablet-model').count(), 0);

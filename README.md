@@ -5,7 +5,7 @@ offers explicitly configured Linux USB/SSH read-only tablet observation and
 official stable release discovery with a saved source preference. Installation, qualified update offers,
 configuration and data management remain REM-41/REM-42 work.
 See [wired observation setup and limits](docs/wired-observation.md).
-See [release-source preview and Tailwind conventions](docs/release-source.md).
+See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
 

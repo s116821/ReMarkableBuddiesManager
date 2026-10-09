@@ -15,12 +15,14 @@
     "test": "node --test tests/*.test.mjs",
     "test:hosts": "node tests/hosts.mjs",
     "test:release": "python -m unittest discover -s release -v",
-    "check": "npm run lint && npm test && npm run build && npm run test:hosts",
+    "check": "npm run lint && npm test && npm run test:styles && npm run build && npm run test:hosts",
     "desktop": "npm run build && electron .",
     "package": "node scripts/package.mjs",
     "test:package": "node tests/hosts.mjs --packaged",
     "wired:browser": "node scripts/wired-browser.mjs",
-    "test:wired-hosts": "node tests/wired-hosts.mjs"
+    "test:wired-hosts": "node tests/wired-hosts.mjs",
+    "build:development": "node scripts/version.mjs && ng build --configuration development --output-path test-results/development",
+    "test:styles": "npm run build:development && node tests/hosts.mjs --development"
   },
   "dependencies": {
     "@angular/common": "22.2.0",
