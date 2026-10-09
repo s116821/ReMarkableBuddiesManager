@@ -191,9 +191,12 @@ const testProfile = path.resolve(`test-results/desktop-profile-${Date.now()}`);
 await mkdir(testProfile, { recursive: true });
 const app = await electron.launch({ executablePath, args, env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: testProfile } });
 try {
-  const fixture = await installFixture(app.context());
+  // firstWindow waits for the blank renderer's DOM-ready event. Context routes
+  // installed before Electron exposes its first page can miss that target in Xvfb.
   const page = await app.firstWindow();
+  await page.waitForLoadState('domcontentloaded');
   assert.equal(page.url(), 'about:blank', 'Electron must defer UI startup until interception is ready');
+  const fixture = await installFixture(app.context());
   assert.equal(fixture.requests, 0);
   await app.evaluate(async ({ app, BrowserWindow }) => {
     await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`);

@@ -52,7 +52,8 @@ Checks use deterministic intercepted release metadata and errors, no tablet/live
 release calls. Context interception and an external-request deny guard are installed
 before browser navigation. Electron tests defer UI loading under the two explicit
 `MANAGER_TEST=1` and `MANAGER_TEST_DEFER_LOAD=1` flags until interception is ready;
-normal launches load immediately. Both hosts assert that the first load receives
+The driver waits for the blank window's DOM-ready event before registering
+interception, so the Electron target is already exposed. Normal launches load immediately. Both hosts assert that the first load receives
 exactly one fixture request before any refresh/reload. They assert computed token/control/panel styles, one/three-column
 layout and no overflow at 390/1280px, computed text contrast, keyboard focus,
 focus thickness within one physical pixel of the intended 3 CSS pixels at the
