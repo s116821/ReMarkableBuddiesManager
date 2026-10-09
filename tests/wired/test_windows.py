@@ -105,20 +105,26 @@ class WindowsNative(unittest.TestCase):
         windows = w.Windows()
         with self.assertRaises(o.Refusal): windows.ancestry(CONFIG['usb_instance'])
         # IP notification ABI/control; selected nonexistent PnP registration may refuse.
-        n = w.Notifications(windows, CONFIG)
+        with self.assertRaises(o.Refusal): w.Notifications(windows, CONFIG)
+        # Register a present root devnode as an OS API control, never a tablet claim.
+        node, instance = w.U32(), ctypes.create_unicode_buffer(200)
+        self.assertEqual(windows.locate(ctypes.byref(node), None, 0), 0)
+        self.assertEqual(windows.device_id(node, instance, 200, 0), 0)
+        n = w.Notifications(windows, dict(CONFIG, usb_instance=instance.value))
         n.close(); n.close()
 
     def test_actual_private_acl_accepts_owner_only_and_rejects_broad_grant(self):
         import win32api, win32con, win32security as s
+        import ntsecuritycon
         token = s.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
         try: user = s.GetTokenInformation(token, s.TokenUser)[0]
         finally: token.Close()
         with tempfile.TemporaryDirectory() as root:
             p = Path(root)/'config'; p.write_bytes(b'private')
             for item in (root, str(p)):
-                acl = s.ACL(); acl.AddAccessAllowedAce(s.ACL_REVISION, win32con.FILE_ALL_ACCESS, user)
+                acl = s.ACL(); acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, user)
                 s.SetNamedSecurityInfo(item, s.SE_FILE_OBJECT, s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
             self.assertEqual(w.private_bytes(p, parent_private=True), b'private')
-            acl.AddAccessAllowedAce(s.ACL_REVISION, win32con.FILE_GENERIC_READ, s.ConvertStringSidToSid('S-1-1-0'))
+            acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_GENERIC_READ, s.ConvertStringSidToSid('S-1-1-0'))
             s.SetNamedSecurityInfo(str(p), s.SE_FILE_OBJECT, s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
             with self.assertRaises(o.Refusal): w.private_bytes(p, parent_private=True)
