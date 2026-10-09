@@ -116,7 +116,19 @@ class WindowsNative(unittest.TestCase):
         windows = w.Windows()
         with self.assertRaises(o.Refusal): windows.ancestry(CONFIG['usb_instance'])
         # IP notification ABI/control; selected nonexistent PnP registration may refuse.
-        with self.assertRaises(o.Refusal): w.Notifications(windows, CONFIG)
+        cancelled, real_api = [], w.api
+        def tracked(dll, name, args, result=w.U32):
+            function = real_api(dll, name, args, result)
+            if name == 'CancelMibChangeNotify2':
+                def cancel(handle):
+                    cancelled.append(handle.value)
+                    return function(handle)
+                return cancel
+            return function
+        with patch.object(w, 'api', side_effect=tracked), self.assertRaises(o.Refusal): w.Notifications(windows, CONFIG)
+        self.assertEqual(len(cancelled), 3)
+        self.assertEqual(len(set(cancelled)), 3)
+        self.assertTrue(all(cancelled))
         # Register a present root devnode as an OS API control, never a tablet claim.
         node, instance = w.U32(), ctypes.create_unicode_buffer(200)
         self.assertEqual(windows.locate(ctypes.byref(node), None, 0), 0)
@@ -131,11 +143,13 @@ class WindowsNative(unittest.TestCase):
         try: user = s.GetTokenInformation(token, s.TokenUser)[0]
         finally: token.Close()
         with tempfile.TemporaryDirectory() as root:
-            p = Path(root)/'config'; p.write_bytes(b'private')
-            for item in (root, str(p)):
+            # Hosted TEMP can contain an8.3 alias, which the product intentionally refuses.
+            root = Path(root).resolve()
+            p = root/'config'; p.write_bytes(b'private')
+            for item in (str(root), str(p)):
                 acl = s.ACL(); acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_ALL_ACCESS, user)
-                s.SetNamedSecurityInfo(item, s.SE_FILE_OBJECT, s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
+                s.SetNamedSecurityInfo(item, s.SE_FILE_OBJECT, s.OWNER_SECURITY_INFORMATION | s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, user, None, acl, None)
             self.assertEqual(w.private_bytes(p, parent_private=True), b'private')
             acl.AddAccessAllowedAce(s.ACL_REVISION, ntsecuritycon.FILE_GENERIC_READ, s.ConvertStringSidToSid('S-1-1-0'))
-            s.SetNamedSecurityInfo(str(p), s.SE_FILE_OBJECT, s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
+            s.SetNamedSecurityInfo(str(p), s.SE_FILE_OBJECT, s.OWNER_SECURITY_INFORMATION | s.DACL_SECURITY_INFORMATION | s.PROTECTED_DACL_SECURITY_INFORMATION, user, None, acl, None)
             with self.assertRaises(o.Refusal): w.private_bytes(p, parent_private=True)
