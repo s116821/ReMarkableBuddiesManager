@@ -13,12 +13,9 @@ Community is unavailable until actual listing (delayed REM-55). A saved unavaila
 policy is retained; changing policy never changes packages/data. Storage faults are
 visible. Browser storage belongs to its origin; desktop storage to its app profile.
 
-Tailwind uses Angular's supported PostCSS plugin. Shared tokens and shell components
-live in `src/styles.css`; screens use literal utility classes. Preserve responsive,
-keyboard, focus, error and disabled states in shared templates. Do not add host-specific
-CSS or dynamically assembled utilities. Run lint, tests, production build and both
-host checks. Central change `manager-release-source` is paired with this increment;
-full REM-41/42 installation/data gates remain open.
+Shared UI styling follows [Tailwind integration and contribution conventions](styling.md).
+Central change `manager-release-source` owns release semantics; `manager-shared-tailwind`
+owns shared styling. Full REM-41/42 installation/data gates remain open.
 
 References: [GitHub release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release),
 [Tailwind Angular integration](https://tailwindcss.com/docs/installation/framework-guides/angular),

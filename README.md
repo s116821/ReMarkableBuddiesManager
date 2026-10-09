@@ -4,7 +4,7 @@ One Angular UI for the browser and Electron desktop. This **foundation preview**
 shows an unconfigured tablet connection and read-only official stable release
 discovery with a saved source preference. Installation, qualified update offers,
 configuration and data management remain REM-41/REM-42 work; no tablet is accessed.
-See [release-source preview and Tailwind conventions](docs/release-source.md).
+See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
 

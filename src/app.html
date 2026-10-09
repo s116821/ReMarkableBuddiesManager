@@ -1,52 +1,52 @@
-<a class="skip" href="#main">Skip to content</a>
-<header><a class="brand" href="#main"><span class="mark" aria-hidden="true">R</span> ReMarkableBuddies <span class="muted">/ Manager</span></a><span class="host">{{ host.kind === 'desktop' ? 'Desktop' : 'Browser' }} edition</span></header>
-<main id="main">
-  <p class="eyebrow">YOUR TABLET, YOUR TOOLS</p>
-  <h1>A home for your Buddies.</h1>
-  <p class="intro">Manage Reader and Writer from one place.<br>This foundation preview is the first step.</p>
-  <section class="connection" aria-labelledby="connection-title">
-    <div class="device" aria-hidden="true"><span>rM</span></div>
-    <div><p class="eyebrow">TABLET CONNECTION</p><h2 id="connection-title">Not configured</h2><p>Tablet connection is not available in this preview.<br>No device has been connected or changed.</p></div>
-    <span class="badge">Foundation preview</span>
+<a class="ui-skip" href="#main">Skip to content</a>
+<header class="flex flex-wrap items-center justify-between gap-4 border-b border-divider px-7 py-6"><a class="flex flex-wrap items-center gap-3 font-semibold text-ink no-underline" href="#main"><span class="rounded bg-forest px-3 py-1 font-serif text-white" aria-hidden="true">R</span> ReMarkableBuddies <span class="font-normal text-muted">/ Manager</span></a><span class="text-sm font-normal text-muted">{{ host.kind === 'desktop' ? 'Desktop' : 'Browser' }} edition</span></header>
+<main id="main" class="mx-auto my-10 max-w-6xl px-7 sm:my-14">
+  <p class="ui-eyebrow">YOUR TABLET, YOUR TOOLS</p>
+  <h1 class="my-4 font-serif text-4xl font-normal tracking-tight sm:text-6xl">A home for your Buddies.</h1>
+  <p class="text-lg text-muted">Manage Reader and Writer from one place.<br>This foundation preview is the first step.</p>
+  <section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
+    <div class="grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-boundary bg-paper font-serif text-muted" aria-hidden="true"><span>rM</span></div>
+    <div><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">Not configured</h2><p>Tablet connection is not available in this preview.<br>No device has been connected or changed.</p></div>
+    <span class="rounded-full border border-boundary px-3 py-2 text-xs">Foundation preview</span>
   </section>
-  <section class="my-6 rounded-xl border border-stone-300 bg-white p-6" aria-labelledby="release-title">
+  <section class="ui-panel my-6" aria-labelledby="release-title">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <h2 id="release-title">Buddy releases</h2>
-      <button class="rounded-md bg-forest px-4 py-2 text-white disabled:cursor-wait disabled:opacity-60" type="button" (click)="refresh()" [disabled]="release().status === 'checking'">Refresh releases</button>
+      <button class="ui-button ui-button-primary" type="button" (click)="refresh()" [disabled]="release().status === 'checking'">Refresh releases</button>
     </div>
     <label class="mt-4 block font-semibold" for="release-source">Preferred update source</label>
-    <select class="mt-2 w-full rounded-md border border-stone-400 bg-white p-3 sm:w-auto" id="release-source" [value]="release().preference" (change)="chooseOfficial()" aria-describedby="source-explanation">
+    <select class="ui-field" id="release-source" [value]="release().preference" (change)="chooseOfficial()" aria-describedby="source-explanation">
       <option value="official">Official stable (default)</option>
       <option value="community" disabled>Community catalog — unavailable</option>
     </select>
-    <p id="source-explanation" class="text-sm text-stone-600">Community availability has not been verified. Choosing a source does not install, reinstall or downgrade Buddy.</p>
-    @if (release().preference === 'community') { <p class="text-sm text-amber-900">Your saved Community preference is retained, but that source is unavailable. Choose Official stable to change it.</p> }
-    @if (release().persistenceError) { <p role="alert" class="text-sm text-red-800">Source preference storage is unavailable. Changes may not survive a restart.</p> }
+    <p id="source-explanation" class="text-sm text-muted">Community availability has not been verified. Choosing a source does not install, reinstall or downgrade Buddy.</p>
+    @if (release().preference === 'community') { <p class="ui-warning">Your saved Community preference is retained, but that source is unavailable. Choose Official stable to change it.</p> }
+    @if (release().persistenceError) { <p role="alert" class="ui-error">Source preference storage is unavailable. Changes may not survive a restart.</p> }
     <dl class="my-5 grid gap-4 sm:grid-cols-3">
-      <div><dt class="eyebrow">Installed Buddy</dt><dd class="mt-1" data-testid="installed-version">Unknown — tablet not connected</dd></div>
-      <div><dt class="eyebrow">Official stable candidate</dt><dd class="mt-1" data-testid="official-version">{{ release().candidate?.tag ?? (release().status === 'missing' ? 'No published stable release' : 'Not checked') }}</dd></div>
-      <div><dt class="eyebrow">Community available</dt><dd class="mt-1">Unlisted / unavailable</dd></div>
+      <div><dt class="ui-eyebrow">Installed Buddy</dt><dd class="mt-1" data-testid="installed-version">Unknown — tablet not connected</dd></div>
+      <div><dt class="ui-eyebrow">Official stable candidate</dt><dd class="mt-1" data-testid="official-version">{{ release().candidate?.tag ?? (release().status === 'missing' ? 'No published stable release' : 'Not checked') }}</dd></div>
+      <div><dt class="ui-eyebrow">Community available</dt><dd class="mt-1">Unlisted / unavailable</dd></div>
     </dl>
     <div aria-live="polite">
       @if (release().status === 'checking') { <p>Checking official releases…</p> }
-      @if (release().error) { <p class="text-red-800">{{ release().error }}</p> }
+      @if (release().error) { <p class="ui-error">{{ release().error }}</p> }
       @if (release().retryAt) { <p class="text-sm">Checks pause until {{ release().retryAt }}. Refresh also honors this delay.</p> }
       @if (release().stale) { <p>Displayed candidate is from a previous successful check.</p> }
-      @if (release().checkedAt) { <p class="text-xs text-stone-600">Last successful check: {{ release().checkedAt }}</p> }
+      @if (release().checkedAt) { <p class="text-xs text-muted">Last successful check: {{ release().checkedAt }}</p> }
       @if (release().candidate && !release().candidate?.assetsPublished) { <p>Release assets are incomplete or unpublished.</p> }
     </div>
     <div class="rounded-lg bg-stone-100 p-4">
       <p class="font-semibold" data-testid="eligible-version">Qualified available version: unavailable</p>
       <p class="text-sm">Release metadata does not prove installation eligibility.</p>
       <ul class="ml-5 list-disc text-sm">@for (blocker of blockers; track blocker) { <li>{{ blocker }}</li> }</ul>
-      <button class="mt-3 rounded-md border border-stone-400 px-4 py-2 text-stone-500 disabled:cursor-not-allowed" type="button" disabled>Install unavailable</button>
+      <button class="ui-button ui-button-secondary mt-3" type="button" disabled>Install unavailable</button>
     </div>
   </section>
-  <div class="cards">
-    <section aria-labelledby="install-title"><span class="number">01</span><h2 id="install-title">Install &amp; update</h2><p>Get official Reader and Writer releases, with safe updates that preserve your work.</p><p class="pending">Coming in a later release</p></section>
-    <section aria-labelledby="configure-title"><span class="number">02</span><h2 id="configure-title">Make it yours</h2><p>Choose your backends and preferences across Reader and Writer.</p><p class="pending">Coming in a later release</p></section>
-    <section aria-labelledby="data-title"><span class="number">03</span><h2 id="data-title">Care for your data</h2><p>Review and manage the conversations and source evidence owned by your Buddies.</p><p class="pending">Coming in a later release</p></section>
+  <div class="grid gap-5 md:grid-cols-3">
+    <section class="ui-panel" aria-labelledby="install-title"><span class="font-mono text-xs text-muted">01</span><h2 class="mt-5" id="install-title">Install &amp; update</h2><p class="text-sm text-muted">Get official Reader and Writer releases, with safe updates that preserve your work.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
+    <section class="ui-panel" aria-labelledby="configure-title"><span class="font-mono text-xs text-muted">02</span><h2 class="mt-5" id="configure-title">Make it yours</h2><p class="text-sm text-muted">Choose your backends and preferences across Reader and Writer.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
+    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Review and manage the conversations and source evidence owned by your Buddies.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
   </div>
-  <aside><h2>Built to work together</h2><p>Manager and the tablet application update independently. Your tablet version will appear once a connection is available.</p><a href="https://github.com/s116821/RemarkableBuddiesDocs" target="_blank" rel="noopener noreferrer">Read the project guide <span aria-hidden="true">↗</span></a></aside>
+  <aside class="mt-8 border-t border-divider pt-5 text-sm text-muted"><h2 class="text-base">Built to work together</h2><p>Manager and the tablet application update independently. Your tablet version will appear once a connection is available.</p><a href="https://github.com/s116821/RemarkableBuddiesDocs" target="_blank" rel="noopener noreferrer">Read the project guide <span aria-hidden="true">↗</span></a></aside>
 </main>
-<footer><span>ReMarkableBuddies Manager <code data-testid="version">{{ version }}</code></span><span>Tablet version: unknown</span></footer>
+<footer class="flex flex-col flex-wrap items-start justify-between gap-4 border-t border-divider px-7 py-6 text-xs text-muted sm:flex-row"><span>ReMarkableBuddies Manager <code data-testid="version">{{ version }}</code></span><span>Tablet version: unknown</span></footer>
