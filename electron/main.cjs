@@ -17,6 +17,11 @@ app.whenReady().then(() => {
     if (url === GUIDE) void shell.openExternal(GUIDE);
     return { action: 'deny' };
   });
-  void window.loadFile(path.join(__dirname, '../dist/manager/browser/index.html'));
+  // Host tests install interception on a blank renderer before starting Angular.
+  if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_DEFER_LOAD === '1') {
+    void window.loadURL('about:blank');
+  } else {
+    void window.loadFile(path.join(__dirname, '../dist/manager/browser/index.html'));
+  }
 });
 app.on('window-all-closed', () => app.quit());

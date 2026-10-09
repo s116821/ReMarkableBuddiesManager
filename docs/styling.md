@@ -49,9 +49,14 @@ Run `npm run check`, `npm run package`, then `npm run test:package` (headless Li
 requires `xvfb-run -a` for Electron). `check` includes `test:styles`, which builds
 and renders development browser CSS, plus the production browser/Electron checks.
 Checks use deterministic intercepted release metadata and errors, no tablet/live
-release calls. They assert computed token/control/panel styles, one/three-column
+release calls. Context interception and an external-request deny guard are installed
+before browser navigation. Electron tests defer UI loading under the two explicit
+`MANAGER_TEST=1` and `MANAGER_TEST_DEFER_LOAD=1` flags until interception is ready;
+normal launches load immediately. Both hosts assert that the first load receives
+exactly one fixture request before any refresh/reload. They assert computed token/control/panel styles, one/three-column
 layout and no overflow at 390/1280px, computed text contrast, keyboard focus,
-pending disabled appearance and error presentation while preserving host isolation.
+focus thickness within one physical pixel of the intended 3 CSS pixels at the
+actual display DPR (including browser DPR 1 and 1.25), pending disabled appearance and error presentation while preserving host isolation.
 Packaged checks exercise the actual native executable, not only an unpackaged shell.
 CI runs development and production checks on Windows and Linux; local Linux evidence
 must not be described as a Windows pass before its independent result is observed.
