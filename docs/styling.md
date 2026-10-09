@@ -2,7 +2,7 @@
 
 The browser and Electron load the same Angular template and generated stylesheet.
 Do not add host-specific styles or a second UI. This increment implements central
-change `manager-shared-tailwind` (REM-54); release discovery/source semantics and
+[canonical capability `manager-shared-tailwind`](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-shared-tailwind) (REM-54); release discovery/source semantics and
 unavailable installation remain unchanged.
 
 ## Upstream integration and reproducibility
