@@ -125,5 +125,5 @@ Transport uses [Paramiko](https://www.paramiko.org/) 5.0.0 rather than implement
 SSH. Device state conventions and connection/cancellation prior art were reviewed
 in [reManager](https://github.com/rmitchellscott/reManager) at
 `b3047fbf12ad51193c5ff05563d2d7d677638c95`; its trust defaults are not adopted.
-The central active contract is
-[manager-wired-observation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/changes/manager-wired-observation).
+The central canonical contract is
+[manager-wired-observation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-wired-observation).

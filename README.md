@@ -57,9 +57,9 @@ blocked until the separately reviewed REM-35 release gate.
 
 All requirements, active OpenSpec changes, archives and workflow skills live only
 in [RemarkableBuddiesDocs](https://github.com/s116821/RemarkableBuddiesDocs).
-The foundation belongs to central capability `manager-foundation`; wired observation
-is coordinated through active central change `manager-wired-observation` and capability
-[`manager-foundation`](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-foundation).
+Canonical [foundation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-foundation)
+and [wired observation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-wired-observation)
+contracts describe these completed bounded capabilities.
 Link coordinated Docs and code PRs with exact revisions; no duplicate spec tree here.
 
 Release machinery is adapted from GPLv3 ReMarkableBuddies at
