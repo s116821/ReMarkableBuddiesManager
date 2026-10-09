@@ -80,6 +80,7 @@ class ObserverTests(unittest.TestCase):
             with self.subTest(route=route), self.assertRaises(o.Refusal):
                 o.validate_route(route, 'usb0', '10.11.99.2')
 
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
     def test_socket_binds_device_and_source_before_fixed_connect(self):
         sock = Mock()
         sock.getsockopt.return_value = b'usb0\0'
@@ -96,6 +97,7 @@ class ObserverTests(unittest.TestCase):
             o.bound_socket({'interface': 'usb0', 'source_address': '10.11.99.2'})
         sock.close.assert_called_once()
 
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
     def test_protected_config_refuses_mode_symlink_and_extra_fields(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'config.json'
@@ -183,6 +185,7 @@ class ObserverTests(unittest.TestCase):
                     server.close()
                     client.close()
 
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
     def test_usb_ancestry_generation_and_route_fixture_refusals(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
