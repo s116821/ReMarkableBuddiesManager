@@ -59,16 +59,19 @@ jobs:
           npm run lint
           npm test
           npm run test:release
+          npm run build:development
           npm run build
           npx playwright install --with-deps chromium
           npm run package
       - name: Browser and desktop checks (Linux)
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Linux'
         run: |
+          node tests/hosts.mjs --development
           xvfb-run -a npm run test:hosts
           xvfb-run -a npm run test:package
       - name: Browser and desktop checks (Windows)
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
         run: |
+          node tests/hosts.mjs --development
           npm run test:hosts
           npm run test:package
