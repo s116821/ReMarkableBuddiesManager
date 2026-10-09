@@ -307,16 +307,21 @@ def observe(config, shared):
     windows = Windows()
     notices = Notifications(windows, config)  # registration precedes baseline/dial
     try:
-        baseline = windows.snapshot(config)
+        baseline = []
         def snapshot(_):
             if notices.changed.is_set():
                 raise Refusal('cable-lost')
             value = windows.snapshot(config)
             if notices.changed.is_set():
                 raise Refusal('cable-lost')
+            if not baseline:
+                baseline.append(value)
             return value
         def dial(_):
-            sock = bound_socket(config, baseline)
+            current = snapshot(config)
+            if current != baseline[0]:
+                raise Refusal('cable-lost')
+            sock = bound_socket(config, current)
             notices.attach(sock)
             return sock
         return shared.observe(config, snapshot=snapshot, dial=dial, notices=notices)

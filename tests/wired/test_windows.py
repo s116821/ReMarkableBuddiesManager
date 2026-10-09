@@ -66,6 +66,14 @@ class WindowsFixtures(unittest.TestCase):
         with self.assertRaises(OSError): n.recv(1)
         with self.assertRaises(o.Refusal): n.attach(Mock())
 
+    def test_pre_dial_generation_change_never_connects_or_authenticates(self):
+        windows = Mock()
+        windows.snapshot.side_effect = [{'index': 7}, {'index': 8}]
+        notices = Mock(); notices.changed.is_set.return_value = False
+        with patch.object(w, 'Windows', return_value=windows), patch.object(w, 'Notifications', return_value=notices), patch.object(w, 'bound_socket') as dial, self.assertRaises(o.Refusal):
+            w.observe(CONFIG, o)
+        dial.assert_not_called(); notices.close.assert_called_once()
+
     def test_abi_layout_and_ipv4(self):
         self.assertEqual(ctypes.sizeof(w.Address), 28)
         self.assertEqual(ctypes.sizeof(w.Prefix), 32)
