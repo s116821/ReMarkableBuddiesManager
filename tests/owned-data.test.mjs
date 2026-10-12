@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, chmod, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { parseOwnedReport } from '../host/owned-report.mjs';
@@ -50,9 +50,8 @@ test('controller drops cancelled late and changed-session reports, then preserve
 test('actual host subprocess bounds/sanitizes report and refuses changed identity before renderer handoff', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'manager-inspection-host-'));
   try {
-    const runtime = path.join(root, 'runtime');
+    const runtime = process.execPath;
     const script = path.join(root, 'fixture.mjs');
-    await writeFile(runtime, `#!${process.execPath}\nimport(process.argv[2]);\n`); await chmod(runtime, 0o700);
     const observer = new WiredObserver({ platform: 'linux', config: path.join(root, 'config'), python: runtime, script });
     const observed = { contract_version: 1, status: 'observed', observation: tablet };
     const publish = async (report, changed = false) => writeFile(script, `console.log(JSON.stringify(process.argv.includes('inspect-owned') ? ${JSON.stringify({ ...inspection(report), observation: changed ? { ...tablet, connection_id: 'b'.repeat(64) } : tablet })} : ${JSON.stringify(observed)}));`);
@@ -71,4 +70,18 @@ test('actual host subprocess bounds/sanitizes report and refuses changed identit
     assert.equal((await observer.inspectOwned()).status, 'observation-unavailable');
     observer.cancel();
   } finally { await rm(root, { recursive: true }); }
+});
+
+test('parser consumes actual immutable Main CLI reports, preserving complete versus incomplete inventory', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const reports = JSON.parse(await readFile(new URL('./fixtures/main-6b-owned-reports.json', import.meta.url), 'utf8'));
+  for (const [status, report] of Object.entries(reports)) {
+    const parsed = parseOwnedReport(report);
+    assert.equal(parsed.status, status);
+    assert.equal(parsed.complete_apparent_bytes === null, status !== 'complete');
+  }
+  assert.deepEqual(Object.keys(reports.complete.observed_domains).sort(), ['conversation', 'export-association', 'handwriting', 'source', 'subject-memory']);
+  assert.equal(reports.partial.cache_inspected, false);
+  assert.equal(reports.busy.issues['busy-writer'], 1);
+  assert.equal(reports.unavailable.issues['configuration-unavailable'], 1);
 });
