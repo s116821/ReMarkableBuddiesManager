@@ -67,7 +67,7 @@ try {
     await verify(page, process.platform === 'linux' ? 'observed' : 'unsupported-host');
     const host = await page.evaluate(() => ({ contract: window.managerHost.contract_version, keys: Object.keys(window.managerHost) }));
     assert.equal(host.contract, 1);
-    assert.deepEqual(host.keys.sort(), ['cancel', 'contract_version', 'kind', 'observe', 'transport']);
+    assert.deepEqual(host.keys.sort(), ['cancel', 'contract_version', 'inspectOwned', 'kind', 'observe', 'transport']);
   } finally { await app.close(); }
 }
 await rm(root, { recursive: true });

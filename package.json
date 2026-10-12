@@ -22,7 +22,8 @@
     "wired:browser": "node scripts/wired-browser.mjs",
     "test:wired-hosts": "node tests/wired-hosts.mjs",
     "build:development": "node scripts/version.mjs && ng build --configuration development --output-path test-results/development",
-    "test:styles": "npm run build:development && node tests/hosts.mjs --development"
+    "test:styles": "npm run build:development && node tests/hosts.mjs --development",
+    "test:owned-hosts": "node tests/owned-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

@@ -73,6 +73,8 @@ jobs:
           xvfb-run -a npm run test:package
           xvfb-run -a npm run test:wired-hosts
           xvfb-run -a npm run test:wired-hosts -- --packaged
+          xvfb-run -a npm run test:owned-hosts
+          xvfb-run -a npm run test:owned-hosts -- --packaged
       - name: Browser and desktop checks (Windows)
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
         run: |
@@ -81,3 +83,5 @@ jobs:
           npm run test:package
           npm run test:wired-hosts
           npm run test:wired-hosts -- --packaged
+          npm run test:owned-hosts
+          npm run test:owned-hosts -- --packaged
