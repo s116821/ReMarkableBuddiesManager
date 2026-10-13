@@ -63,6 +63,7 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run lint
+          python -m unittest discover -s tests/vellum -p test_real_fixture.py -v
           npm test
           npm run test:release
           npm run build:development
