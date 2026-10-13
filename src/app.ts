@@ -1,5 +1,7 @@
 import { Component, ChangeDetectionStrategy, OnDestroy, signal, computed } from '@angular/core';
-import { currentHost } from './host';
+import { currentHost, unsupportedDrive } from './host';
+import { DriveController } from './drive-auth';
+import { unavailableDrive as unsupportedDriveState } from '../host/drive-protocol.mjs';
 import { ConnectionController, CONNECTION_LABELS } from './observation';
 import { OwnedDataController } from './owned-data';
 import { resolveDeviceProfile } from './device-profile';
@@ -12,6 +14,14 @@ import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 })
 export class App implements OnDestroy {
   readonly host = currentHost();
+  readonly drive = signal(unsupportedDriveState());
+  readonly driveConsent = signal<string | null>(null);
+  private readonly driveController = new DriveController(this.host.driveAuth ?? unsupportedDrive, (state, url) => { this.drive.set(state); this.driveConsent.set(url); });
+  readonly driveLabels: Record<string, string> = {
+    unconfigured: 'Google Drive setup required', disconnected: 'Not signed in', connecting: 'Waiting for Google sign-in…', cached: 'Saved account — connection not checked',
+    connected: 'Google Drive connected', checking: 'Checking Google Drive…', cancelled: 'Sign-in or check cancelled', expired: 'Sign-in expired', denied: 'Sign-in declined',
+    'authorization-failed': 'Sign-in or account check failed', unavailable: 'Google Drive connection unavailable', revoking: 'Removing Google access…', 'revocation-unconfirmed': 'Google access removal could not be confirmed',
+  };
   readonly version = buildInfo.version;
   readonly officialBuild = buildInfo.official;
   readonly connectionLabels = CONNECTION_LABELS;
@@ -44,7 +54,7 @@ export class App implements OnDestroy {
   readonly release = signal(this.releases.state);
   private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
   readonly managerRelease = signal(this.managerReleases.state);
-  constructor() { this.releases.start(); this.managerReleases.start(); }
+  constructor() { this.releases.start(); this.managerReleases.start(); void this.driveController.load(); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
@@ -55,8 +65,16 @@ export class App implements OnDestroy {
     if (this.connection().observation !== tablet || !this.profile().inspection) return;
     await this.ownedController.inspect(this.host, tablet);
   }
+  signInDrive() { void this.driveController.begin(); }
+  checkDrive() { void this.driveController.action('check'); }
+  cancelDrive() { void this.driveController.action('cancel'); }
+  disconnectDrive() { void this.driveController.action('disconnect'); }
+  revokeDrive() {
+    const account = this.drive().account?.label;
+    if (account && window.confirm(`Remove Google access for ${account}? This may stop Drive access in other copies of this Google app. Your backups will not be deleted.`)) void this.driveController.action('revoke');
+  }
   refresh() { void this.releases.refresh(); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); }
+  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); }
 }
