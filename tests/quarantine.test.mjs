@@ -86,6 +86,10 @@ for (const [name, change, code] of [
   ['foreign asset URL', s => { s.assets[0].url = 'https://example.org/asset'; }, 'invalid-assets'],
   ['missing completion', s => { s.release.body = ''; }, 'invalid-completion'],
   ['duplicate completion', s => { s.release.body += s.release.body; }, 'invalid-completion'],
+  ['comma-joined package key cannot substitute exact members', s => {
+    s.record.packages = { [PACKAGE_NAMES.toSorted().join()]: 'a'.repeat(64) };
+    s.release.body = `<!-- reader-buddy-complete:${JSON.stringify(s.record)} -->`;
+  }, 'invalid-completion'],
   ['oversized metadata-declared package', s => { s.assets[0].size = 512 * 1024 * 1024 + 1; }, 'invalid-assets'],
   ['aggregate declared size', s => { s.assets[0].size = s.assets[1].size = 500 * 1024 * 1024; }, 'aggregate-limit'],
   ['moved annotated tag', s => { s.moveTag = true; }, 'invalid-completion'],
