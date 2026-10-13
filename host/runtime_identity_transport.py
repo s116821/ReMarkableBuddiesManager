@@ -10,7 +10,7 @@ import wired_observer as shared
 
 BINARY = '/opt/bin/reader-buddy'
 COMMAND = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin /opt/bin/reader-buddy --version'
-LINE = re.compile(rb'(?:reader-buddy|remarkable-reader-buddy) (v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?(?:\+[0-9A-Za-z][0-9A-Za-z.-]*)?)\r?\n')
+LINE = re.compile(rb'(?:reader-buddy|remarkable-reader-buddy) ((?:v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?(?:\+[0-9A-Za-z][0-9A-Za-z.-]*)?|dev\.(?:unknown|v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+-g[0-9a-f]{7,40})?(?:-dirty)?|[0-9a-f]{7,40}(?:-dirty)?)))\r?\n')
 
 
 def report(status, version=None):

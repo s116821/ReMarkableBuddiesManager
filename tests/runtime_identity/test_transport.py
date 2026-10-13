@@ -47,6 +47,12 @@ class BinaryFiles(Files):
 class Identity(unittest.TestCase):
     def test_exact_cli_lines_and_executable_metadata_guard(self):
         self.assertIsNotNone(r.LINE.fullmatch(b'remarkable-reader-buddy 0.1.4\n'))
+        fixtures=json.loads((ROOT/'tests/fixtures/runtime-version-lines.json').read_text())
+        for line in fixtures['lines']:
+            self.assertEqual(r.LINE.fullmatch(line.encode())[1].decode(),line.split(' ',1)[1].rstrip('\n'))
+        for token in ['dev.anything','dev.unknown-dirty','dev.v0.2.0-73-gNOTHEX','dev./secret','dev.'+'a'*97]:
+            match=r.LINE.fullmatch(('remarkable-reader-buddy '+token+'\n').encode())
+            self.assertTrue(match is None or len(match[1])>96)
         for line in [b'other 0.1.4\n',b'reader-buddy 0.1.4\nSECRET\n',b'reader-buddy PRIVATE_SENTINEL\n',b'reader-buddy 0.1.4\x00\n']:self.assertIsNone(r.LINE.fullmatch(line))
         transport=Mock()
         with patch.object(r.shared,'inspect',return_value={'boot_id':'22222222-2222-2222-2222-222222222222'}):
@@ -54,7 +60,7 @@ class Identity(unittest.TestCase):
         transport.open_session.assert_not_called()
     @unittest.skipUnless(sys.platform=='linux','Owned POSIX socket/private-key fixture; no native Windows claim')
     def test_actual_ssh_positive_missing_unsafe_malformed_unsupported_and_changed_binary(self):
-        cases=[(b'reader-buddy 0.1.4-dev-synthetic\n',0,'normal','reported'),(b'PRIVATE_STDOUT_SENTINEL',0,'normal','unsupported'),(b'',2,'normal','unsupported'),(b'',0,'missing','missing'),(b'',0,'unsafe','unsafe'),(b'',0,'unsafe-parent','unsafe'),(b'reader-buddy 0.1.4\n',0,'changed',None)]
+        cases=[(b'remarkable-reader-buddy dev.v0.2.0-73-g6254092\n',0,'normal','reported'),(b'remarkable-reader-buddy dev.unknown\n',0,'normal','reported'),(b'reader-buddy 0.1.4-dev-synthetic\n',0,'normal','reported'),(b'PRIVATE_STDOUT_SENTINEL',0,'normal','unsupported'),(b'',2,'normal','unsupported'),(b'',0,'missing','missing'),(b'',0,'unsafe','unsafe'),(b'',0,'unsafe-parent','unsafe'),(b'reader-buddy 0.1.4\n',0,'changed',None)]
         for line,code,mode,expected in cases:
             with self.subTest(mode=mode,status=expected),tempfile.TemporaryDirectory() as folder:
                 key=paramiko.RSAKey.generate(2048);p=Path(folder)/'identity';key.write_private_key_file(str(p));p.chmod(0o600)

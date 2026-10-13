@@ -21,7 +21,11 @@ credential or environment values. Missing/unsafe/unsupported binaries refuse;
 there is no fallback search or alternate executable.
 
 One supported `reader-buddy`/`remarkable-reader-buddy` version line with a bounded
-96-byte ASCII version token is accepted. Output is512 bytes, discarded stderr4096
+96-byte ASCII version token is accepted. Alongside release-shaped tokens, the pinned
+build.rs produces dev.unknown or dev.<Git describe>: a semantic v-tag with optional
+commit-count/g-hex suffix, or a7–40hex abbreviated/full commit, optionally dirty.
+The captured clean pinned development output is dev.v0.2.0-73-g6254092; dev. is
+not a generic permission for arbitrary text. These values remain self-reported. Output is512 bytes, discarded stderr4096
 bytes and command4seconds. The private Python child is12seconds, host13seconds,
 stdin4096 and host observation envelope8192bytes. Malformed/extra/control output
 is not echoed; stale/cancelled/changed identity clears the displayed value and needs

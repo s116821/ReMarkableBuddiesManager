@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { RuntimeIdentityController } from '../src/runtime-identity.ts';
@@ -34,4 +34,10 @@ test('actual helper fixed runtime action refuses extra command/path and remote o
  const send=(body,h=headers)=>fetch(helper.origin+'/manager-host',{method:'POST',headers:h,body:JSON.stringify(body)});
  assert.equal((await send({action:'inspect-runtime',path:'/arbitrary'})).status,400);assert.equal((await send({action:'inspect-runtime'},{...headers,Origin:'https://untrusted.invalid'})).status,403);assert.equal(calls,0);
  assert.equal((await send({action:'inspect-runtime'})).status,200);assert.equal(calls,1);
+});
+
+test('actual pinned CLI development output and bounded Git describe forms remain unqualified',async()=>{
+ const fixtures=JSON.parse(await readFile(new URL('./fixtures/runtime-version-lines.json',import.meta.url),'utf8'));
+ for(const line of fixtures.lines){const token=line.slice('remarkable-reader-buddy '.length,-1);const v=parseRuntimeIdentity({...identity(),binary_version:token});assert.equal(v.binary_version,token);assert.equal(v.running_version,null);assert.equal(v.installation_eligible,false);const c=new RuntimeIdentityController(()=>{});await c.inspect({inspectRuntime:async()=>reply(v)},tablet);assert.equal(c.state.report.binary_version,token);}
+ for(const binary_version of ['dev.anything','dev.unknown-dirty','dev.v0.2.0-73-gNOTHEX','dev.6254092\nPRIVATE_SENTINEL','dev.'+'a'.repeat(97),'dev./secret','dev.v0.2.0 extra'])assert.throws(()=>parseRuntimeIdentity({...identity(),binary_version}));
 });
