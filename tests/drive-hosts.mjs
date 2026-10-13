@@ -51,6 +51,9 @@ const executablePath = packaged ? path.resolve(`out/packages/ReMarkableBuddiesMa
 const app = await electron.launch({ executablePath, args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...process.env,
   MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: root, MANAGER_DRIVE_AUTH_ROOT: path.join(root, 'missing'), MANAGER_DRIVE_PYTHON: process.env.MANAGER_DRIVE_PYTHON ?? (process.platform === 'linux' ? '/usr/bin/python3' : process.env.MANAGER_WIRED_PYTHON) } });
 try {
+  // CI needs a visible native surface for Electron screenshot capture.
+  // MANAGER_TEST otherwise creates a hidden window for IPC-only tests.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
   await page.getByTestId('drive-status').filter({ hasText: 'Google Drive setup required' }).waitFor();
