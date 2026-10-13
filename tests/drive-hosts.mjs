@@ -1,5 +1,5 @@
 import { chromium, _electron as electron } from '@playwright/test';
-import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ async function isolate(context, origin) {
     return route.abort();
   });
 }
-async function verify(page, publish, host) {
+async function verify(page, publish, host, capture = () => page.screenshot({ path: `test-results/drive-${host}.png`, fullPage: true })) {
   const status = page.getByTestId('drive-status');
   await status.filter({ hasText: 'Not signed in' }).waitFor();
   const sign = page.getByRole('button', { name: 'Sign in to Google Drive', exact: true });
@@ -29,7 +29,7 @@ async function verify(page, publish, host) {
   assert.equal(await page.getByTestId('drive-account').textContent(), 'fixture@example.invalid');
   await page.getByText(/Backup browsing and tablet restore are not available yet/).waitFor();
   for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
-  await page.locator('#drive-title').scrollIntoViewIfNeeded(); await page.screenshot({ path: `test-results/drive-${host}.png`, fullPage: true });
+  await page.locator('#drive-title').scrollIntoViewIfNeeded(); await capture();
   page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Remove Google access…', exact: true }).click(); assert.equal(await status.textContent(), 'Google Drive connected');
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Remove Google access…', exact: true }).click(); await status.filter({ hasText: 'removal could not be confirmed' }).waitFor();
   await page.getByRole('button', { name: 'Disconnect this Manager', exact: true }).click(); await status.filter({ hasText: 'Not signed in' }).waitFor();
@@ -51,9 +51,6 @@ const executablePath = packaged ? path.resolve(`out/packages/ReMarkableBuddiesMa
 const app = await electron.launch({ executablePath, args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...process.env,
   MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: root, MANAGER_DRIVE_AUTH_ROOT: path.join(root, 'missing'), MANAGER_DRIVE_PYTHON: process.env.MANAGER_DRIVE_PYTHON ?? (process.platform === 'linux' ? '/usr/bin/python3' : process.env.MANAGER_WIRED_PYTHON) } });
 try {
-  // CI needs a visible native surface for Electron screenshot capture.
-  // MANAGER_TEST otherwise creates a hidden window for IPC-only tests.
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
   await page.getByTestId('drive-status').filter({ hasText: 'Google Drive setup required' }).waitFor();
@@ -69,5 +66,15 @@ try {
     ipcMain.handle('manager:drive:revoke', (_event, id) => { if (id !== '1'.repeat(64)) throw new Error('fixture confirmation refused'); return globalThis.driveFixture = { ...globalThis.driveFixture, status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; });
     ipcMain.handle('manager:drive:check', () => globalThis.driveFixture);
   });
-  await page.reload(); await verify(page, value => app.evaluate((_electron, value) => { globalThis.driveFixture = value; }, value), packaged ? 'desktop-packaged-IPC' : 'desktop-IPC');
+  const host = packaged ? 'desktop-packaged-IPC' : 'desktop-IPC';
+  await page.reload(); await verify(page, value => app.evaluate((_electron, value) => { globalThis.driveFixture = value; }, value), host, async () => {
+    // Match the existing desktop evidence path: capture a hidden native window
+    // with Electron's supported stayAwake API, not Chromium's full-page capture.
+    const png = await app.evaluate(async ({ BrowserWindow }) => {
+      const image = await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+      if (image.isEmpty()) throw new Error('Drive desktop capture is empty');
+      return image.toPNG().toString('base64');
+    });
+    await writeFile(`test-results/drive-${host}.png`, Buffer.from(png, 'base64'));
+  });
 } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
