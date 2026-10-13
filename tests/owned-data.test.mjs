@@ -26,9 +26,12 @@ test('versioned report preserves incomplete/omitted/shared accounting and refuse
 test('central profile never admits unknown/conflicting observation or claims installation', () => {
   const state = { status: 'observed', observation: tablet, checkedAt: null };
   assert.equal(resolveDeviceProfile(state).inspection, true);
+  assert.equal(resolveDeviceProfile(state).personalizationProbe, true);
+  assert.equal(resolveDeviceProfile(state).personalizationReportSupport, 'probe-required');
   assert.equal(resolveDeviceProfile(state).installation, false);
   for (const patch of [{ firmware_conflict: true }, { architecture: null }, { firmware: null }, { model: null }]) {
     assert.equal(resolveDeviceProfile({ ...state, observation: { ...tablet, ...patch } }).inspection, false);
+    assert.equal(resolveDeviceProfile({ ...state, observation: { ...tablet, ...patch } }).personalizationProbe, false);
   }
   assert.equal(resolveDeviceProfile({ ...state, status: 'checking' }).inspection, false);
 });

@@ -294,9 +294,11 @@ def inspect_owned(transport):
         channel.close()
 
 
-def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspect, notices=None):
+def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspect, notices=None, expected_connection=None):
     import paramiko
     baseline = snapshot(config)
+    if expected_connection is not None and hashlib.sha256(json.dumps(baseline, sort_keys=True).encode()).hexdigest() != expected_connection:
+        raise Refusal('cable-lost')
     sock = dial(config)
     try:
         if snapshot(config) != baseline:

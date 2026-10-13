@@ -1,12 +1,15 @@
+import type { PersonalizationRequest } from '../host/personalization.mjs';
+import type { PersonalizationAdapter, PersonalizationResult } from './personalization';
 import type { DriveAdapter } from './drive-auth';
 import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/drive-protocol.mjs';
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly driveAuth?: DriveAdapter;
+  readonly personalization?: PersonalizationAdapter['personalization'];
   readonly contract_version: 1;
   readonly kind: 'browser' | 'desktop';
-  readonly transport: 'not-configured' | 'wired-read-only';
+  readonly transport: 'not-configured' | 'wired-maintenance';
 }
 declare global { interface Window { managerHost?: ManagerHost } }
 async function helper(action: 'observe' | 'cancel' | 'inspect-owned'): Promise<ObservationResult | InspectionResult> {
@@ -34,6 +37,12 @@ export const unsupportedDrive: DriveAdapter = { status: async () => unavailableD
   check: async () => unavailableDrive(), cancel: async () => unavailableDrive(), disconnect: async () => unavailableDrive(), revoke: async () => unavailableDrive() };
 export function currentHost(): ManagerHost {
   return window.managerHost ?? Object.freeze({ driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    personalization: async (request: PersonalizationRequest) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Personalization helper unavailable');
+      const response = await fetch('/manager-personalization', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
+      if (!response.ok) throw new Error('Personalization unavailable');
+      return await response.json() as PersonalizationResult;
+    },
     inspectOwned: () => helper('inspect-owned') as Promise<InspectionResult>,
     observe: () => helper('observe') as Promise<ObservationResult>, cancel: () => helper('cancel') as Promise<ObservationResult> });
 }

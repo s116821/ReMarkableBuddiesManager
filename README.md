@@ -72,3 +72,5 @@ Link coordinated Docs and code PRs with exact revisions; no duplicate spec tree 
 Release machinery is adapted from GPLv3 ReMarkableBuddies at
 `33db26add721cea6c0121ad769a54d06ae600b4e`. This repository uses GPL-3.0-only;
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
+
+Personalization inspect/edit/save/disable/clear and saved-versus-active limits: [editor guide](docs/personalization.md).

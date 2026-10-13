@@ -3,6 +3,8 @@ import { currentHost, unsupportedDrive } from './host';
 import { DriveController } from './drive-auth';
 import { unavailableDrive as unsupportedDriveState } from '../host/drive-protocol.mjs';
 import { ConnectionController, CONNECTION_LABELS } from './observation';
+import { PersonalizationController, validText, editText, rawOffset } from './personalization';
+import type { PersonalizationOperation } from '../host/personalization.mjs';
 import { OwnedDataController } from './owned-data';
 import { resolveDeviceProfile } from './device-profile';
 import buildInfo from './build-info.json';
@@ -27,7 +29,13 @@ export class App implements OnDestroy {
   readonly connectionLabels = CONNECTION_LABELS;
   private readonly ownedController = new OwnedDataController(state => this.owned.set(state));
   readonly owned = signal(this.ownedController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.ownedController.clear(); this.connection.set(state); });
+  readonly personalizationText = signal('');
+  readonly personalizationEnabled = signal(false);
+  private readonly personalizationController = new PersonalizationController(state => { this.personalization.set(state); if (state.report?.personalization) { this.personalizationText.set(state.report.personalization.text); this.personalizationEnabled.set(state.report.personalization.enabled); } });
+  readonly personalization = signal(this.personalizationController.state);
+  readonly personalizationValid = computed(() => validText(this.personalizationText()));
+  readonly personalizationBytes = computed(() => new TextEncoder().encode(this.personalizationText()).length);
+  private readonly connectionController = new ConnectionController(this.host, state => { this.ownedController.clear(); this.personalizationController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -65,6 +73,22 @@ export class App implements OnDestroy {
     if (this.connection().observation !== tablet || !this.profile().inspection) return;
     await this.ownedController.inspect(this.host, tablet);
   }
+  async personalize(operation: PersonalizationOperation) {
+    const tablet = this.connection().observation;
+    if (!tablet || !this.profile().personalizationProbe || !this.host.personalization || this.personalization().busy) return;
+    const submittedText = this.personalizationText(), submittedEnabled = this.personalizationEnabled();
+    await this.connectionController.pause();
+    if (this.connection().observation !== tablet || !this.profile().personalizationProbe) return;
+    await this.personalizationController.run({ personalization: request => this.host.personalization!(request) }, tablet, operation, submittedText, submittedEnabled);
+  }
+  editPersonalization(event: Event) { this.personalizationText.set(editText(this.personalizationText(), (event.target as HTMLTextAreaElement).value)); }
+  pastePersonalization(event: ClipboardEvent) {
+    if (!event.clipboardData) return;
+    const field = event.target as HTMLTextAreaElement, original = this.personalizationText();
+    const next = original.slice(0, rawOffset(original, field.selectionStart)) + event.clipboardData.getData('text/plain') + original.slice(rawOffset(original, field.selectionEnd));
+    event.preventDefault(); this.personalizationText.set(next); field.value = next.replace(/\r\n?/g, '\n');
+  }
+  togglePersonalization(event: Event) { this.personalizationEnabled.set((event.target as HTMLInputElement).checked); }
   signInDrive() { void this.driveController.begin(); }
   checkDrive() { void this.driveController.action('check'); }
   cancelDrive() { void this.driveController.action('cancel'); }
@@ -76,5 +100,5 @@ export class App implements OnDestroy {
   refresh() { void this.releases.refresh(); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); }
+  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); }
 }
