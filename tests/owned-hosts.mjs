@@ -77,14 +77,24 @@ await chmod(runtime, 0o700);
 const packaged = process.argv.includes('--packaged');
 const executablePath = packaged ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`) : undefined;
 const app = await electron.launch({ executablePath, args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: root,
-  MANAGER_WIRED_CONFIG: path.join(root, 'config'), MANAGER_WIRED_PYTHON: runtime } });
+  MANAGER_WIRED_CONFIG: path.join(root, 'config'), MANAGER_WIRED_PYTHON: process.platform === 'win32' ? process.env.MANAGER_WIRED_PYTHON : runtime } });
 try {
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
   if (process.platform === 'linux') await verify(page, v => writeFile(payload, JSON.stringify(v)), packaged ? 'desktop-packaged' : 'desktop');
   else {
     await page.getByRole('button', { name: 'Read tablet state', exact: true }).click();
-    await page.getByRole('heading', { name: 'Host transport unavailable' }).waitFor();
+    await page.getByRole('heading', { name: 'Not configured', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Inspect owned data' }).isDisabled(), true);
+    // Test-only substitution of main-process IPC responses exercises the actual
+    // sandbox/preload/shared renderer; it is NOT native Windows USB evidence.
+    await app.evaluate(({ ipcMain }, observed) => {
+      ipcMain.removeHandler('manager:observe');
+      ipcMain.removeHandler('manager:inspectOwned');
+      ipcMain.handle('manager:observe', () => observed);
+      ipcMain.handle('manager:inspectOwned', () => globalThis.ownedUiFixture);
+    }, { contract_version: 1, status: 'observed', observation: tablet });
+    await verify(page, v => app.evaluate((_electron, value) => { globalThis.ownedUiFixture = value; }, v), packaged ? 'desktop-windows-IPC-packaged' : 'desktop-windows-IPC');
+    console.log('Windows: actual Python/config refusal plus explicit IPC renderer fixtures; no physical USB qualification');
   }
 } finally { await app.close(); await rm(root, { recursive: true }); }
