@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -151,4 +153,47 @@ test('alteration of already downloaded file during publication recheck refuses',
     return h.fetcher(url, options);
   } });
   assert.equal(result.code, 'staging-changed'); await noReceipt(h.directory);
+});
+
+for (const kind of ['cancellation', 'deadline']) test(`late ${kind} during final directory validation refuses receipt commit`, async t => {
+  const controller = new AbortController(); const h = await harness(t);
+  const originalRealpath = fsPromises.realpath;
+  let triggered = false; let clock;
+  fsPromises.realpath = async path => {
+    if (path === h.directory && (await readdir(path)).includes('.quarantine-receipt.pending')) {
+      triggered = true;
+      if (kind === 'cancellation') controller.abort();
+      else {
+        // Simulate an elapsed monotonic deadline even before the timer's callback.
+        const now = performance.now.bind(performance);
+        clock = t.mock.method(performance, 'now', () => now() + 300001);
+      }
+    }
+    return originalRealpath(path);
+  };
+  syncBuiltinESMExports();
+  let result;
+  try { result = await h.run({ signal: controller.signal }); }
+  finally { fsPromises.realpath = originalRealpath; syncBuiltinESMExports(); clock?.mock.restore(); }
+  assert.equal(triggered, true); assert.equal(result.ok, false);
+  assert.equal(result.code, kind === 'cancellation' ? 'cancelled' : 'deadline');
+  await noReceipt(h.directory);
+  assert.ok((await readdir(h.directory)).includes('.quarantine-receipt.pending'));
+});
+
+test('cancellation after atomic link is issued cannot revoke its successful commit', async t => {
+  const controller = new AbortController(); const h = await harness(t);
+  const originalLink = fsPromises.link; let issued = false;
+  fsPromises.link = (source, destination) => {
+    const request = originalLink(source, destination);
+    issued = true; controller.abort();
+    return request;
+  };
+  syncBuiltinESMExports();
+  let result;
+  try { result = await h.run({ signal: controller.signal }); }
+  finally { fsPromises.link = originalLink; syncBuiltinESMExports(); }
+  assert.equal(issued, true); assert.equal(controller.signal.aborted, true);
+  assert.equal(result.ok, true);
+  assert.deepEqual(JSON.parse(await readFile(join(h.directory, 'quarantine-receipt.json'), 'utf8')), result.receipt);
 });

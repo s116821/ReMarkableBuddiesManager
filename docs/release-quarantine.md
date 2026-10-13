@@ -47,6 +47,13 @@ support hard links. A leftover `.quarantine-receipt.pending` is incomplete work,
 never a completion receipt. A successful receipt states `legacy-quarantined`
 and `apkInstallEligible: false`.
 
+Cancellation and the monotonic deadline are checked again immediately after the
+last asynchronous directory validation, with no await before issuing the atomic
+hard link. Cancellation observed before that issuance refuses completion. Once
+the link request is issued, it cannot be preempted: if it succeeds the command
+reports committed success even when cancellation arrives in flight; if it fails
+the command refuses. Cancellation after issuance does not revoke a receipt.
+
 The tarballs stay opaque: no extraction, decompression, ELF inspection, execution,
 service action, installation or key enrollment occurs. Checksum agreement with
 canonical GitHub records is not an independent signature, compiler attestation,

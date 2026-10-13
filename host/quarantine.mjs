@@ -150,6 +150,7 @@ export async function quarantineRelease({ tag, directory, signal: callerSignal, 
     if (typeof tag !== 'string' || tag.length > 64 || !/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(tag)) fail('invalid-tag-input');
     if (typeof directory !== 'string' || !isAbsolute(directory) || directory !== resolve(directory) || await realpath(dirname(directory)) !== dirname(directory)) fail('invalid-directory-input');
     const signal = callerSignal ? AbortSignal.any([callerSignal, AbortSignal.timeout(300000)]) : AbortSignal.timeout(300000);
+    const deadline = performance.now() + 300000;
     signal.throwIfAborted();
     const source = await publication(fetcher, tag, signal);
     signal.throwIfAborted();
@@ -185,7 +186,12 @@ export async function quarantineRelease({ tag, directory, signal: callerSignal, 
     const file = await open(pending, 'wx', 0o600);
     try { await file.writeFile(JSON.stringify(receipt, null, 2) + '\n'); await file.sync(); } finally { await file.close(); }
     signal.throwIfAborted(); await sameDirectory(directory, initial);
-    // Atomic exclusive publication: interrupted writes never become completion receipts.
+    // Last awaited validation can yield to cancellation/deadline. Check again with
+    // no await between this gate and issuing the atomic commit.
+    signal.throwIfAborted();
+    if (performance.now() >= deadline) throw new DOMException('deadline', 'TimeoutError');
+    // Once link is issued, it cannot be preempted: success commits even if a
+    // cancellation arrives in flight; failure publishes no successful receipt.
     await link(pending, join(directory, 'quarantine-receipt.json'));
     await unlink(pending).catch(() => {});
     return { ok: true, receipt };
