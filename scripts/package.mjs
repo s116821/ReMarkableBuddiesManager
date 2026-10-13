@@ -47,11 +47,16 @@ for (const [directory, metadata] of modules) {
   if (!found) throw new Error(`Missing runtime license for ${metadata.name}`);
 }
 writeFileSync('out/host/third-party/dependencies.json', JSON.stringify([...modules.values()].map(({ name, version, license }) => ({ name, version, license })), null, 2));
+// Fixed trusted verifier and unchanged hash-qualified producer dependencies.
+mkdirSync('out/scripts', { recursive: true });
+cpSync('scripts/verify-manager-bundle.py', 'out/scripts/verify-manager-bundle.py');
+mkdirSync('out/release', { recursive: true });
+for (const file of ['policy.py','coordinator.py']) cpSync(path.join('release',file),path.join('out/release',file));
 const paths = await packager({
   dir: 'out/staging', out: 'out/packages', name: 'ReMarkableBuddiesManager',
   platform, arch: 'x64', overwrite: true, prune: false,
   // Keep the dev identifier in ProductVersion/package.json, with numeric FileVersion.
   appVersion: info.version, buildVersion: info.version.split('-')[0],
-  electronVersion: '44.4.5', asar: true, extraResource: ['out/host'],
+  electronVersion: '44.4.5', asar: true, extraResource: ['out/host','out/scripts','out/release'],
 });
 console.log(JSON.stringify(paths));

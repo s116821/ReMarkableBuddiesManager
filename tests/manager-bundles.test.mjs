@@ -149,3 +149,24 @@ for (const changing of [false, true]) test(`Windows stat domains ${changing ? 's
   assert.equal(result.status, changing ? 1 : 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { ok: !changing });
 });
+
+
+test('host-owned shared download uses actual consumer bytes and exposes only sanitized completion', async t => {
+  const { ManagerDownloads } = await import('../host/manager-downloads.mjs');
+  const { parseDownloadState } = await import('../host/manager-download-protocol.mjs');
+  const h = await setup(t);
+  const host = new ManagerDownloads({ parent: h.parent, python: PYTHON, consumer: args => h.run(args) });
+  t.after(()=>host.dispose());
+  assert.equal((await host.request({action:'status'})).status,'idle');
+  const pending = await host.request({action:'start',tag:TAG});
+  assert.equal(pending.status,'downloading');
+  await assert.rejects(host.request({action:'start',tag:TAG}));
+  await host.active.promise;
+  const done = parseDownloadState(await host.request({action:'status'}));
+  assert.equal(done.status,'complete'); assert.equal(done.source_sha,SHA); assert.equal(done.update_eligible,false);
+  assert.equal(JSON.stringify(done).includes(h.parent),false);
+  const receipt=JSON.parse(await readFile(join(h.parent,done.folder,'quarantine-receipt.json'),'utf8'));
+  assert.equal(receipt.embeddedIdentityVerified,true);assert.equal(receipt.updateEligible,false);
+  assert.deepEqual(await readFile(join(h.parent,done.folder,'manager-browser.zip')),h.data['manager-browser.zip']);
+  assert.deepEqual(await host.request({action:'cancel',operation_id:done.operation_id}),done);
+});

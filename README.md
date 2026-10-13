@@ -73,6 +73,8 @@ Release machinery is adapted from GPLv3 ReMarkableBuddies at
 `33db26add721cea6c0121ad769a54d06ae600b4e`. This repository uses GPL-3.0-only;
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
 
+Manager verified download setup and limits: [download guide](docs/manager-downloads.md).
+
 Personalization inspect/edit/save/disable/clear and saved-versus-active limits: [editor guide](docs/personalization.md).
 
 Self-reported binary version and unknown running/package authority: [identity guide](docs/runtime-identity.md).

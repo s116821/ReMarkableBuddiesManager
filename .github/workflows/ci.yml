@@ -138,3 +138,15 @@ jobs:
             npm run test:runtime-identity-hosts
             npm run test:runtime-identity-hosts -- --packaged
           fi
+
+      - name: Shared Manager download UI checks
+        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:manager-download-hosts
+            xvfb-run -a npm run test:manager-download-hosts -- --packaged
+          else
+            npm run test:manager-download-hosts
+            npm run test:manager-download-hosts -- --packaged
+          fi
