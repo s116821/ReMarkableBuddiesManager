@@ -47,3 +47,22 @@ test('old completed identity cannot cancel a newly reserved setup attempt',async
  const host=new ManagerDownloads();host.state={...pending(),status:'complete',source_sha:'b'.repeat(40)};let ready;host.setup=()=>new Promise(r=>ready=r);
  const p=host.request({action:'start',tag});await host.request({action:'cancel',operation_id:id});assert.equal(host.active.controller.signal.aborted,false);host.dispose();ready();await p;assert.equal(host.active,null);
 });
+
+test('cancel during an in-flight status poll reaches the same operation, preserving a committed result',async t=>{
+ for(const committed of [false,true]){
+  let finish;const calls=[];
+  const complete={...pending(),status:'complete',source_sha:'b'.repeat(40)};
+  const c=new DownloadController({request:q=>{
+   calls.push({...q});if(q.action==='start')return Promise.resolve(pending());
+   if(q.action==='status')return new Promise(r=>finish=r);
+   assert.equal(q.operation_id,id);return Promise.resolve(committed?complete:{...pending(),status:'cancelled',error:'cancelled'});
+  }},()=>{});
+  t.after(()=>c.dispose());await c.request({action:'start',tag});const poll=c.request({action:'status'});
+  await c.request({action:'cancel',operation_id:'c'.repeat(64)});assert.equal(c.state.status,'downloading');
+  await c.request({action:'cancel',operation_id:id});await c.request({action:'cancel',operation_id:'c'.repeat(64)});
+  assert.deepEqual(calls.map(q=>q.action),['start','status']);assert.equal(c.state.status,'cancelling');
+  finish(committed?complete:pending());await poll;
+  assert.deepEqual(calls.map(q=>q.action),['start','status','cancel']);
+  assert.equal(c.state.status,committed?'complete':'cancelled');assert.equal(c.state.operation_id,id);c.dispose();
+ }
+});
