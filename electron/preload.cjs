@@ -4,5 +4,6 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
     cancel: () => ipcRenderer.invoke('manager:drive:cancel'), check: () => ipcRenderer.invoke('manager:drive:check'),
     disconnect: () => ipcRenderer.invoke('manager:drive:disconnect'), revoke: id => ipcRenderer.invoke('manager:drive:revoke', id) }),
   personalization: request => ipcRenderer.invoke('manager:personalization', request),
+  inspectRuntime: (...args) => args.length ? Promise.reject(new Error('Runtime identity input refused')) : ipcRenderer.invoke('manager:inspectRuntime'),
   inspectOwned: () => ipcRenderer.invoke('manager:inspectOwned'),
   observe: () => ipcRenderer.invoke('manager:observe'), cancel: () => ipcRenderer.invoke('manager:cancel') }));

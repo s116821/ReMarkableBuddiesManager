@@ -74,3 +74,5 @@ Release machinery is adapted from GPLv3 ReMarkableBuddies at
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
 
 Personalization inspect/edit/save/disable/clear and saved-versus-active limits: [editor guide](docs/personalization.md).
+
+Self-reported binary version and unknown running/package authority: [identity guide](docs/runtime-identity.md).

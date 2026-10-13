@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { parseRuntimeIdentity } from './runtime-identity.mjs';
 import { parseOwnedReport } from './owned-report.mjs';
 import { parsePersonalizationRequest, parsePersonalizationResult } from './personalization.mjs';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +31,14 @@ export class WiredObserver {
     }
     return value;
   }
+  async inspectRuntime() {
+    const expected = this.lastObservation;
+    const refusal = status => ({ ...result(status), runtime_identity: null });
+    if (!expected) return refusal('observation-unavailable');
+    const value = await this.run('runtime-identity', { connection_id: expected.connection_id, boot_id: expected.boot_id });
+    if (!value.observation || value.observation.connection_id !== expected.connection_id || value.observation.boot_id !== expected.boot_id) return refusal(value.status === 'observed' ? 'cable-lost' : value.status);
+    return value;
+  }
   async personalization(request) {
     parsePersonalizationRequest(request);
     const expected = this.lastObservation;
@@ -52,24 +61,24 @@ export class WiredObserver {
   }
   async run(action, request) {
     this.cancel();
-    const personal = action === 'personalization';
+    const personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
-    const refusal = status => personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    const refusal = status => runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const script = personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || action === 'observe' ? [] : [action])], { stdio: [personal ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      const script = runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || runtime || action === 'observe' ? [] : [action])], { stdio: [personal || runtime ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
-      if (personal) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      if (personal || runtime) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
         chunks.push(data); outputBytes += data.length;
-        if (outputBytes > (personal ? 139264 : action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        if (outputBytes > (personal ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = code => {
         clearTimeout(timer);
@@ -81,6 +90,13 @@ export class WiredObserver {
           const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
           if (action === 'observe') return resolve(validateResult(value));
           if (personal) return resolve(parsePersonalizationResult(value, request, validateResult));
+          if (runtime) {
+            if (Object.keys(value).sort().join() !== 'contract_version,observation,runtime_identity,status') throw new Error('Invalid runtime identity');
+            validateResult({ contract_version: value.contract_version, status: value.status, observation: value.observation });
+            if (value.status === 'observed') parseRuntimeIdentity(value.runtime_identity);
+            else if (value.runtime_identity !== null) throw new Error('Invalid runtime identity');
+            return resolve(value);
+          }
           if (!value || Object.keys(value).sort().join() !== 'contract_version,inspection,observation,status') throw new Error('Invalid inspection');
           validateResult({ contract_version: value.contract_version, status: value.status, observation: value.observation });
           if (value.status !== 'observed') {
