@@ -60,6 +60,27 @@
       <button class="ui-button ui-button-secondary mt-3" type="button" disabled>Install unavailable</button>
     </div>
   </section>
+  <section class="ui-panel my-6" aria-labelledby="manager-release-title">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h2 id="manager-release-title">Manager releases</h2>
+      <button class="ui-button ui-button-primary" type="button" (click)="refreshManager()" [disabled]="managerRelease().status === 'checking'">Refresh Manager releases</button>
+    </div>
+    <p class="text-sm text-muted">Manager and Buddy have independent releases. This check reads Manager's official stable release metadata.</p>
+    <dl class="my-4 grid gap-4 sm:grid-cols-2">
+      <div><dt class="ui-eyebrow">Current Manager build</dt><dd class="break-words" data-testid="current-manager-version">{{ version }}</dd></div>
+      <div><dt class="ui-eyebrow">Latest official stable Manager</dt><dd class="break-words" data-testid="available-manager-version">{{ managerRelease().candidate?.tag ?? (managerRelease().status === 'missing' ? 'No published stable release' : 'Not checked') }}</dd></div>
+    </dl>
+    <div aria-live="polite">
+      @if (managerRelease().status === 'checking') { <p>Checking Manager releases…</p> }
+      @if (managerRelease().error) { <p class="ui-error" role="alert">{{ managerRelease().error }}</p> }
+      @if (managerRelease().stale) { <p>Displayed Manager candidate is from a previous successful check.</p> }
+      @if (managerRelease().retryAt) { <p class="text-sm">Manager checks pause until {{ managerRelease().retryAt }}.</p> }
+      @if (managerRelease().checkedAt) { <p class="text-xs text-muted">Last successful Manager check: {{ managerRelease().checkedAt }}</p> }
+      @if (managerRelease().candidate) { <p data-testid="manager-assets">{{ managerRelease().candidate?.assetsPublished ? 'Expected release files are published; packages are not yet verified.' : 'Expected Manager release files are incomplete or unpublished.' }}</p> }
+    </div>
+    @if (!officialBuild) { <p class="text-sm text-muted">Development build; the stable candidate is shown for reference, without inferring upgrade order.</p> }
+    <p class="mt-3 text-sm text-muted">Downloads and automatic updates remain unavailable until package integrity and update behavior are qualified. This check does not change either application or tablet compatibility.</p>
+  </section>
   <section class="ui-panel my-6" aria-labelledby="owned-title">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <h2 id="owned-title">Buddy-owned data</h2>

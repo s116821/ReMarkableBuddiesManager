@@ -15,7 +15,7 @@ const api = 'https://api.github.com/repos/s116821/ReMarkableBuddies/releases/lat
 async function isolate(context, localOrigin) {
   await context.route('**/*', route => {
     const url = route.request().url();
-    if (url === api) return route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
+    if (url === api || url === 'https://api.github.com/repos/s116821/ReMarkableBuddiesManager/releases/latest') return route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
     if (url.startsWith('file:') || (localOrigin && new URL(url).origin === localOrigin)) return route.continue();
     return route.abort();
   });
