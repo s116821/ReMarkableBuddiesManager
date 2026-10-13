@@ -1,6 +1,6 @@
 /* global document, innerWidth, window */
 import { chromium, _electron as electron, expect } from '@playwright/test';
-import { mkdtemp, mkdir, rm, writeFile, copyFile, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, copyFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { startHelper } from '../host/browser-helper.mjs';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { downloadState } from '../host/manager-download-protocol.mjs';
-const root=await mkdtemp(path.join(os.tmpdir(),'manager-download-ui-'));await mkdir('test-results',{recursive:true});
+const root=await realpath(await mkdtemp(path.join(os.tmpdir(),'manager-download-ui-')));await mkdir('test-results',{recursive:true});
 const tag='v0.3.1',id='a'.repeat(64),source='b'.repeat(40);
 const state=(status='complete')=>({...downloadState(status),operation_id:id,tag,folder:`manager-download-${id}`,source_sha:status==='complete'?source:null,error:status==='cancelled'?'cancelled':status==='failed'?'download-refused':null,incomplete:status==='failed'});
 const release={draft:false,prerelease:false,tag_name:tag,published_at:'2026-10-13T00:00:00Z',html_url:`https://github.com/s116821/ReMarkableBuddiesManager/releases/tag/${tag}`,assets:['manager-browser.zip','manager-win32-x64.zip','manager-linux-x64.zip','provenance.json'].map(name=>({name,state:'uploaded',size:10,browser_download_url:`https://github.com/s116821/ReMarkableBuddiesManager/releases/download/${tag}/${name}`}))};
@@ -35,7 +35,14 @@ try{
    const generatedRoot=path.join(root,'generated'),input=path.join(root,'bundles');const fixture=fileURLToPath(new URL('./fixtures/manager-bundle-input.py',import.meta.url));
    const generated=spawnSync(python.stdout.trim(),['-I','-S','-B',fixture,generatedRoot,tag,source,'valid'],{encoding:'utf8'});assert.equal(generated.status,0);await mkdir(input);for(const name of ['manager-browser.zip','manager-win32-x64.zip','manager-linux-x64.zip','provenance.json']) await copyFile(path.join(generatedRoot,name),path.join(input,name));
    const verifier=await import(pathToFileURL(path.join(resources,'host/manager-bundles.mjs')).href);
-   await verifier.verifyManagerBundles({python:python.stdout.trim(),directory:input,tag,sha:source,signal:new AbortController().signal});
+   try { await verifier.verifyManagerBundles({python:python.stdout.trim(),directory:input,tag,sha:source,signal:new AbortController().signal}); }
+   catch {
+     // Test-only guard classification, never raw subprocess paths/payload/diagnostics.
+     const helper=path.join(resources,'scripts/verify-manager-bundle.py');
+     const program="import runpy,sys,json\nn=runpy.run_path(sys.argv[1]);g=n['verify'].__globals__\ndef refusal(): raise RuntimeError('refusal-line-'+str(sys._getframe(1).f_lineno))\ng['refuse']=refusal\ntry: n['verify'](*sys.argv[2:]);print('direct-helper-passed')\nexcept Exception as e: print(json.dumps({'type':type(e).__name__,'guard':str(e) if str(e).startswith('refusal-line-') else 'unclassified'}))";
+     const diagnostic=spawnSync(python.stdout.trim(),['-I','-S','-B','-c',program,helper,input,tag,source],{encoding:'utf8',timeout:30000,env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot,LANG:'C.UTF-8'}});
+     throw new Error('packaged-verifier-refused '+diagnostic.stdout.slice(0,256));
+   }
    console.log('actual packaged trusted Python/producer resources verify controlled ZIP declarations; payloads remain unexecuted');
  }
  const page=await app.firstWindow();await page.waitForLoadState('domcontentloaded');await isolate(app.context());await app.evaluate(async({app,BrowserWindow})=>BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`));
