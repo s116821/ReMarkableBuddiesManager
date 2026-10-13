@@ -48,8 +48,10 @@ for (const [directory, metadata] of modules) {
 }
 writeFileSync('out/host/third-party/dependencies.json', JSON.stringify([...modules.values()].map(({ name, version, license }) => ({ name, version, license })), null, 2));
 // Fixed trusted verifier and unchanged hash-qualified producer dependencies.
+rmSync('out/scripts', { recursive: true, force: true });
 mkdirSync('out/scripts', { recursive: true });
 cpSync('scripts/verify-manager-bundle.py', 'out/scripts/verify-manager-bundle.py');
+rmSync('out/release', { recursive: true, force: true });
 mkdirSync('out/release', { recursive: true });
 for (const file of ['policy.py','coordinator.py']) cpSync(path.join('release',file),path.join('out/release',file));
 const paths = await packager({
