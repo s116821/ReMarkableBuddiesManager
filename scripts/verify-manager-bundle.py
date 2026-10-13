@@ -13,6 +13,7 @@ import zipfile
 
 PACKAGES = ("manager-browser.zip", "manager-win32-x64.zip", "manager-linux-x64.zip")
 MAX_PACKAGE = 512 * 1024 * 1024
+WINDOWS = os.name == "nt"
 PINS = {
     "policy.py": "e10acd03ad0ea879a0cd7bcd45399089a10022bd054a5d08cd24b491c56da1bc",
     "coordinator.py": "fb6115ee9903513fc1860f47af4e43379e11dc81e889886df5d99e88d25e1f6a",
@@ -27,6 +28,17 @@ def identity(info):
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
+def opened(before, source):
+    handle = os.fstat(source.fileno())
+    if not stat.S_ISREG(handle.st_mode) or handle.st_size != before.st_size:
+        refuse()
+    # Windows path/descriptor APIs can report different identity/time tuples.
+    # Bracket each API in its own domain; content hashes bind actual ZIP bytes.
+    if not WINDOWS and identity(before) != identity(handle):
+        refuse()
+    return handle
+
+
 def regular(path, limit):
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 0 < info.st_size <= limit:
@@ -37,10 +49,9 @@ def regular(path, limit):
 def bounded_read(path, limit):
     before = regular(path, limit)
     with path.open("rb") as source:
-        if identity(before) != identity(os.fstat(source.fileno())):
-            refuse()
+        handle = opened(before, source)
         data = source.read(limit + 1)
-        if len(data) > limit or identity(before) != identity(os.fstat(source.fileno())):
+        if len(data) > limit or identity(handle) != identity(os.fstat(source.fileno())):
             refuse()
     if identity(before) != identity(path.lstat()):
         refuse()
@@ -89,7 +100,8 @@ def qualified_producer():
 def observe_zip(path, expected, expected_digest):
     before = regular(path, MAX_PACKAGE)
     with path.open("rb") as source:
-        if identity(before) != identity(os.fstat(source.fileno())) or before.st_size < 68:
+        handle = opened(before, source)
+        if before.st_size < 68:
             refuse()
         digest = hashlib.sha256()
         count = 0
@@ -152,7 +164,7 @@ def observe_zip(path, expected, expected_digest):
             exact(value, ("version", "sha", "tag", "official"))
             if value != expected or value["official"] is not True:
                 refuse()
-        if identity(before) != identity(os.fstat(source.fileno())):
+        if identity(handle) != identity(os.fstat(source.fileno())):
             refuse()
     if identity(before) != identity(path.lstat()):
         refuse()

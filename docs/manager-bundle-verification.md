@@ -63,6 +63,11 @@ before atomic link issuance; an already-issued successful link remains committed
 even if cancellation arrives in flight. Same-user malicious writers are outside
 the directory/file bracket guarantee.
 
+Python's Windows path and descriptor metadata can differ. The verifier brackets
+each API against itself, requires regular-file/type/size agreement and actual
+byte hashes, and makes no Windows stable-file-ID or atomic-writer guarantee.
+Linux retains its direct path/handle identity check as well.
+
 Public hardware-free checks:
 
 ```text

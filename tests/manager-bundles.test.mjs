@@ -139,3 +139,13 @@ test('changed producer module is refused before its code can run', async t => {
   assert.equal(result.status, 1); assert.equal(result.stdout, '{"ok":false,"code":"bundle-refused"}\n');
   assert.equal(result.stderr, ''); await assert.rejects(readFile(sentinel), { code: 'ENOENT' });
 });
+
+for (const changing of [false, true]) test(`Windows stat domains ${changing ? 'still refuse an in-handle metadata change' : 'are independently bracketed with actual byte verification'}`, async t => {
+  const h = await setup(t); const inputs = join(h.parent, 'observed'); await mkdir(inputs);
+  for (const [name, bytes] of Object.entries(h.data)) await writeFile(join(inputs, name), bytes);
+  const helper = fileURLToPath(new URL('../scripts/verify-manager-bundle.py', import.meta.url));
+  const program = "import runpy,sys,json,types\nn=runpy.run_path(sys.argv[1]);g=n['verify'].__globals__;g['WINDOWS']=True\nf=g['os'].fstat;calls=0\ndef metadata(fd):\n global calls\n calls+=1;s=f(fd);keys=('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns','st_mode');v={k:getattr(s,k) for k in keys};v['st_ctime_ns']+=1000000000+(calls if sys.argv[5]=='change' else 0);return types.SimpleNamespace(**v)\ng['os'].fstat=metadata\ntry: value=n['verify'](*sys.argv[2:5]);print(json.dumps({'ok':value['ok']}))\nexcept Exception: print(json.dumps({'ok':False}));sys.exit(1)";
+  const result = spawnSync(PYTHON, ['-I', '-S', '-B', '-c', program, helper, inputs, TAG, SHA, changing ? 'change' : 'stable'], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, changing ? 1 : 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { ok: !changing });
+});
