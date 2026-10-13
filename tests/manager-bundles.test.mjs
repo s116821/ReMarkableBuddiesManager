@@ -52,7 +52,15 @@ async function setup(t, mode = 'valid', mutate = () => {}) {
 
 test('actual Manager ZIP bytes and embedded identity verify without extraction or update eligibility', async t => {
   const h = await setup(t); const result = await h.run();
-  assert.equal(result.ok, true, JSON.stringify(result)); assert.equal(result.receipt.repository, REPO);
+  let diagnostic = '';
+  if (!result.ok) {
+    // Test-only source-line classification: no paths, payloads or raw diagnostics.
+    const program = "import runpy,sys,json\nn=runpy.run_path(sys.argv[1]);g=n['verify'].__globals__\ndef refusal(): raise RuntimeError('refusal-line-'+str(sys._getframe(1).f_lineno))\ng['refuse']=refusal\ntry: n['verify'](*sys.argv[2:]);print('direct-helper-passed')\nexcept Exception as e: print(json.dumps({'type':type(e).__name__,'guard':str(e) if str(e).startswith('refusal-line-') else 'unclassified'}))";
+    const helper = fileURLToPath(new URL('../scripts/verify-manager-bundle.py', import.meta.url));
+    const debug = spawnSync(PYTHON, ['-I', '-S', '-B', '-c', program, helper, h.directory, TAG, SHA], { encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8' }, timeout: 30000 });
+    diagnostic = debug.stdout.slice(0, 256);
+  }
+  assert.equal(result.ok, true, JSON.stringify(result) + diagnostic); assert.equal(result.receipt.repository, REPO);
   assert.equal(result.receipt.embeddedIdentityVerified, true); assert.equal(result.receipt.updateEligible, false);
   assert.equal(result.receipt.archivesExtracted, false); assert.equal(result.receipt.signatureVerified, false);
   assert.equal(result.receipt.apkInstallEligible, false);
