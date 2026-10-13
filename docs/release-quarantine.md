@@ -17,6 +17,10 @@ Replace both placeholders; the tag must exist in the fixed
 option, arbitrary download URL or local SDK override is accepted. Fork users can
 run the command without private tools; this command intentionally verifies only
 the canonical publication. Paths with spaces must be quoted by your shell.
+Use the actual canonical parent spelling, especially if Windows TEMP uses an
+8.3 short-name alias. Resolve an existing parent with Node's built-in
+`fs.realpathSync` before choosing the new child; the command does not silently
+redirect an aliased or linked destination.
 
 The command reads the public tag reference, its annotated tag object, and the
 release for that tag. It requires one annotation pointing directly to a commit,

@@ -59,6 +59,7 @@ jobs:
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
       - name: Install and check source
         if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+        shell: bash
         run: |
           npm ci --no-audit --no-fund
           npm run lint

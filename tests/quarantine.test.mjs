@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -23,7 +23,9 @@ function archive() {
 }
 
 async function harness(t, mutate = () => {}) {
-  const parent = await mkdtemp(join(tmpdir(), 'buddy-quarantine-'));
+  // Windows TEMP can use an 8.3 alias/case spelling; valid fixtures use the actual
+  // canonical parent, while unsafe-alias refusal remains a separate control.
+  const parent = await realpath(await mkdtemp(join(tmpdir(), 'buddy-quarantine-')));
   const directory = join(parent, 'new');
   const packages = Object.fromEntries(PACKAGE_NAMES.map(name => [name, archive()]));
   const provenance = { tag: TAG, sha: SHA, version: '1.2.3', packages: Object.fromEntries(PACKAGE_NAMES.map(name => [name, digest(packages[name])])) };
