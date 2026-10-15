@@ -41,19 +41,28 @@ npm run test:wired-hosts -- --packaged
 On headless Linux, run `npm run check` and `npm run test:package` under `xvfb-run -a`.
 Portable package checks support Windows x64 and Linux x64. macOS packaging,
 signing/notarization and automatic desktop updating are not delivered here.
-For release fixtures, install Python 3.12 and git-cliff 2.14.2, run
-`npm ci --prefix release`, then `npm run test:release`.
+For release fixtures, install Python 3.12 and the hash-locked maintained tools with
+`python -m pip install --require-hashes -r release/python-tools.lock`, then run
+`npm run test:release`. See [release tooling](release/README.md) for Action controls.
 All fixture tags/remotes are temporary and local. CI checks both supported hosts.
 
 ## Contribute and release
 
 Use scoped semantic PR titles, such as `feat(REM-21): add Manager foundation`.
 PR bodies contain only `# Summary` and concise bullets; put evidence in comments.
-Git tags are the official application version authority; `package.json`'s 0.0.0
-is only a tooling placeholder. Local/PR builds visibly carry a development suffix.
-Official browser and desktop ZIPs are compiled after tagging exact source;
-docs-only merges create no tag or application build. Major 1+ publication stays
-blocked until the separately reviewed REM-35 release gate.
+Git history supplies the application version; no own package.json version is
+maintained. Ordinary developer builds remain visibly unofficial. Controlled CI
+candidates embed a frozen future tag/version but do not establish publication
+trust. The ordered pipeline is checks -> build -> integration of downloaded
+browser/native packages -> one final main release job. Only after these gates
+pass are the official remote tag and release created from those same bytes.
+Docs-only changes remain noncompiling. Ambiguous main batch/initial history
+refuses; exact associated-PR identity admits squash merges and excludes direct
+push publication. Failed sources are not backfilled by later successes.
+
+Use Actions Re-run failed jobs for retained-artifact/same-ID draft recovery.
+See [release tools and evidence limits](release/README.md). Major 1+ publication,
+native behavior and unmerged consumer-parent reconciliation remain separate gates.
 
 All requirements, active OpenSpec changes, archives and workflow skills live only
 in [RemarkableBuddiesDocs](https://github.com/s116821/RemarkableBuddiesDocs).
