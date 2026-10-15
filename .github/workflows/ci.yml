@@ -7,77 +7,77 @@ on:
     branches: [main]
 permissions:
   contents: read
+  pull-requests: read
 jobs:
   policy:
-    name: Release policy
+    name: Changed paths and PR checks
     runs-on: ubuntu-latest
     outputs:
-      application: ${{ steps.policy.outputs.application }}
+      application: ${{ steps.paths.outputs.application }}
     steps:
+      # Read-only admission; application jobs never inherit write credentials.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - id: policy
-        run: python release/policy.py
-  check:
-    name: Foundation (${{ matrix.os }})
-    needs: policy
-    if: always()
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Require successful policy check
-        shell: bash
+      - name: Refuse an incomplete PR file inventory
+        if: github.event_name == 'pull_request' && (github.event.pull_request.changed_files <= 0 || github.event.pull_request.changed_files >= 3000)
+        run: exit 1
+      - name: Require unambiguous main push range
+        if: github.event_name == 'push'
         env:
-          POLICY_RESULT: ${{ needs.policy.result }}
-        run: test "$POLICY_RESULT" = success
-      - uses: actions/checkout@v4
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+          BEFORE: ${{ github.event.before }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: python release/admission.py range --before "$BEFORE" --sha "$SOURCE_SHA"
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: paths
         with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+          token: ${{ github.token }}
+          filters: .github/application-paths.yml
+          predicate-quantifier: every
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          ref: ${{ github.sha }}
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        if: github.event_name == 'pull_request' && steps.paths.outputs.application == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          node-version-file: .node-version
-          cache: npm
-      - uses: actions/setup-python@v5
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
-        with:
-          python-version: '3.12'
-      - uses: ./.github/actions/release-tools
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
-      - name: Install and check source
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true'
+          requireScope: true
+          types: |
+            feat
+            fix
+            perf
+            build
+            ci
+            chore
+            refactor
+            test
+            revert
+  application:
+    needs: policy
+    if: needs.policy.outputs.application == 'true'
+    uses: ./.github/workflows/pipeline.yml
+    permissions:
+      contents: write
+      pull-requests: read
+    with:
+      source_sha: ${{ github.sha }}
+      release: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+  result:
+    name: CI result
+    if: always()
+    needs: [policy, application]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          POLICY: ${{ needs.policy.result }}
+          APPLICATION: ${{ needs.application.result }}
+          DOCUMENTATION: ${{ needs.policy.outputs.application == 'false' }}
         run: |
-          npm ci --no-audit --no-fund
-          npm run lint
-          npm test
-          npm run test:release
-          npm run build:development
-          npm run build
-          npx playwright install --with-deps chromium
-          npm run package
-      - name: Browser and desktop checks (Linux)
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Linux'
-        run: |
-          python -m pip install -r host/requirements.txt
-          python -m unittest discover -s tests/wired -v
-          node tests/hosts.mjs --development
-          xvfb-run -a npm run test:hosts
-          xvfb-run -a npm run test:package
-          xvfb-run -a npm run test:wired-hosts
-          xvfb-run -a npm run test:wired-hosts -- --packaged
-      - name: Browser and desktop checks (Windows)
-        if: github.event_name == 'pull_request' && needs.policy.outputs.application == 'true' && runner.os == 'Windows'
-        run: |
-          node tests/hosts.mjs --development
-          npm run test:hosts
-          npm run test:package
-          npm run test:wired-hosts
-          npm run test:wired-hosts -- --packaged
+          test "$POLICY" = success
+          if test "$DOCUMENTATION" = true; then test "$APPLICATION" = skipped
+          else test "$APPLICATION" = success; fi
