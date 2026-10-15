@@ -110,17 +110,21 @@ jobs:
         id: freeze
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+          MAIN_RELEASE: ${{ inputs.release }}
         run: |
           set -euo pipefail
           git checkout -B main "$SOURCE_SHA"
           tag=$(semantic-release -c release/python-semantic-release.toml version --print-tag)
-          python release/freeze.py candidate --tag "$tag" --sha "$SOURCE_SHA"
+          eligibility=()
+          if test "$MAIN_RELEASE" = true; then eligibility+=(--require-semantic-source); fi
+          python release/freeze.py candidate --tag "$tag" --sha "$SOURCE_SHA" "${eligibility[@]}"
   build:
     name: Build frozen candidate
     needs: candidate
     runs-on: ubuntu-latest
     outputs:
       artifact_id: ${{ steps.artifacts.outputs.artifact-id }}
+      development_artifact_id: ${{ steps.development.outputs.artifact-id }}
     env:
       TAG: ${{ needs.candidate.outputs.tag }}
       SHA: ${{ needs.candidate.outputs.sha }}
@@ -144,6 +148,13 @@ jobs:
         with:
           name: candidate-${{ inputs.source_sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/packages/*
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        id: development
+        with:
+          name: development-browser-${{ inputs.source_sha }}-${{ github.run_attempt }}
+          path: test-results/development/browser/
           if-no-files-found: error
           retention-days: 14
   integration:
@@ -179,7 +190,13 @@ jobs:
         run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
       - name: Stage downloaded build without rebuilding
         run: python release/stage_integration.py "${{ runner.temp }}/packages"
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
+          path: test-results/development/browser
+          merge-multiple: true
       - run: npx playwright install --with-deps chromium
+      - run: node tests/hosts.mjs --development
       - if: runner.os == 'Linux'
         run: |
           python -m pip install -r host/requirements.txt
@@ -248,7 +265,7 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -B main "$SHA"
-          python release/freeze.py candidate --tag "$TAG" --sha "$SHA"
+          python release/freeze.py candidate --require-semantic-source --tag "$TAG" --sha "$SHA"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main:refs/remotes/origin/main --tags

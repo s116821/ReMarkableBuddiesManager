@@ -41,7 +41,7 @@ npm run test:wired-hosts -- --packaged
 On headless Linux, run `npm run check` and `npm run test:package` under `xvfb-run -a`.
 Portable package checks support Windows x64 and Linux x64. macOS packaging,
 signing/notarization and automatic desktop updating are not delivered here.
-For release fixtures, install Python3.12 and the hash-locked maintained tools with
+For release fixtures, install Python 3.12 and the hash-locked maintained tools with
 `python -m pip install --require-hashes -r release/python-tools.lock`, then run
 `npm run test:release`. See [release tooling](release/README.md) for Action controls.
 All fixture tags/remotes are temporary and local. CI checks both supported hosts.
@@ -61,7 +61,7 @@ refuses; exact associated-PR identity admits squash merges and excludes direct
 push publication. Failed sources are not backfilled by later successes.
 
 Use Actions Re-run failed jobs for retained-artifact/same-ID draft recovery.
-See [release tools and evidence limits](release/README.md). Major1+ publication,
+See [release tools and evidence limits](release/README.md). Major 1+ publication,
 native behavior and unmerged consumer-parent reconciliation remain separate gates.
 
 All requirements, active OpenSpec changes, archives and workflow skills live only

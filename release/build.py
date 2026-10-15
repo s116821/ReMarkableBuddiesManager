@@ -40,6 +40,9 @@ def build(repo, release, directory):
     directory.mkdir(parents=True, exist_ok=False)
     env = dict(os.environ, MANAGER_CANDIDATE_TAG=release.tag, MANAGER_CANDIDATE_SHA=release.sha)
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+    # Preserve the existing development/Tailwind check as a separate CI artifact;
+    # it never enters the fixed production release ZIP inventory.
+    subprocess.run([npm, "run", "build:development"], cwd=repo, env=env, check=True)
     subprocess.run([npm, "run", "build"], cwd=repo, env=env, check=True)
     browser = repo / "dist/manager/browser"
     shutil.copyfile(repo / "electron/build-info.json", browser / "build-info.json")
