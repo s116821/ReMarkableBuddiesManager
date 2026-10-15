@@ -35,6 +35,8 @@ export function parseMemoryReport(v) {
       v.status !== (q === 'partial' ? 'partial' : q === 'unavailable' ? 'unavailable' : 'ok') || v.incomplete !== ['partial', 'unavailable'].includes(q)) refuse();
   if (keys(diagnostics) !== 'budget_omitted,conflicted_keys,contradicted_claims,expired,snapshot_unavailable,suppressed,unsupported' ||
       typeof diagnostics.snapshot_unavailable !== 'boolean' || !Object.entries(diagnostics).every(([k, n]) => k === 'snapshot_unavailable' || integer(n))) refuse();
+  if (['complete', 'complete-empty'].includes(q) && (diagnostics.snapshot_unavailable ||
+      ['conflicted_keys', 'contradicted_claims', 'unsupported', 'budget_omitted'].some(k => diagnostics[k] > 0))) refuse();
   if (keys(c) !== 'facts,kind,provenance_authority' || c.kind !== 'associative-memory-data' || c.provenance_authority !== 'author-asserted-not-source-verified' ||
       !Array.isArray(c.facts) || c.facts.length > 8 || bytes(JSON.stringify(c)) > 8192 ||
       (['disabled', 'complete-empty', 'unavailable'].includes(q) && c.facts.length !== 0) || (q === 'complete' && c.facts.length === 0)) refuse();

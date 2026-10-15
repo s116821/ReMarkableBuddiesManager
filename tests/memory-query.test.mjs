@@ -90,3 +90,10 @@ test('actual helper rejects origin/cookie/query/path/oversize/duplicate/invalidU
   assert.equal((await send('x'.repeat(16385))).status, 413); assert.equal(calls, 0);
   assert.equal((await send(JSON.stringify(request()))).status, 200); assert.equal(observed.text, request().text); assert.equal(calls, 1);
 });
+
+test('healthy completion refuses diagnostics that explicitly report missing or withheld memory', () => {
+  for (const name of ['conflicted_keys', 'contradicted_claims', 'unsupported', 'budget_omitted', 'snapshot_unavailable']) {
+    const v = report('complete-empty'); v.data.diagnostics[name] = name === 'snapshot_unavailable' ? true : 1;
+    assert.throws(() => parseMemoryReport(v));
+  }
+});
