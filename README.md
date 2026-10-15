@@ -87,3 +87,7 @@ Manager verified download setup and limits: [download guide](docs/manager-downlo
 Personalization inspect/edit/save/disable/clear and saved-versus-active limits: [editor guide](docs/personalization.md).
 
 Self-reported binary version and unknown running/package authority: [identity guide](docs/runtime-identity.md).
+
+## Global subject-memory search
+
+Both companions can explicitly query the connected tablet’s configured global subject memory through the supported one-shot stdin interface. See [usage, compatibility and evidence limits](docs/memory-search.md); older installed Readers remain unsupported and no edit/forget or service-control action is added.

@@ -101,6 +101,36 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="memory-title">
+    <h2 id="memory-title">Global subject memory</h2>
+    <p class="text-sm text-muted">Search the tablet’s configured memory profile. Results are author-asserted context, not verified source facts or a complete inventory.</p>
+    <label class="block mt-4" for="memory-query">Search memory</label>
+    <textarea id="memory-query" class="ui-field block w-full" rows="2" maxlength="2048" [value]="memoryText()" (input)="editMemory($event)" aria-describedby="memory-query-help"></textarea>
+    <p id="memory-query-help" class="text-sm text-muted">Up to 2,048 bytes. Search only; facts are not edited or deleted.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-primary" type="button" (click)="searchMemory()" [disabled]="!profile().memoryQueryProbe || !host.memoryQuery || !memoryTextValid()">Search global memory</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="cancelMemory()" [disabled]="!memory().busy">Cancel search</button>
+    </div>
+    <p role="status" data-testid="memory-status">{{ memory().status }}</p>
+    @if (memoryData(); as data) {
+      <p class="text-sm text-muted">Conflicts: {{ data.diagnostics.conflicted_keys }} · Contradictions: {{ data.diagnostics.contradicted_claims }} · Unsupported: {{ data.diagnostics.unsupported }} · Expired: {{ data.diagnostics.expired }} · Suppressed: {{ data.diagnostics.suppressed }} · Omitted by budget: {{ data.diagnostics.budget_omitted }} · Snapshot unavailable: {{ data.diagnostics.snapshot_unavailable }}</p>
+      @for (match of data.context.facts; track match.record) {
+        <article class="ui-panel my-3" data-testid="memory-fact">
+          <h3 class="break-all">{{ match.fact.subject }}</h3>
+          <p class="text-sm break-all">{{ match.fact.claim }}</p>
+          <p class="whitespace-pre-wrap break-words">{{ match.fact.value }}</p>
+          <p class="text-sm break-words">{{ match.fact.provenance.basis }}: {{ match.fact.provenance.description }} · Confidence: {{ match.fact.confidence_basis_points / 100 }}%</p>
+          <details class="text-sm break-all"><summary>Fact identity and provenance</summary>
+            <p>Profile: {{ match.fact.key.profile }} · Fact: {{ match.fact.key.fact }}</p>
+            <p>Record: {{ match.record }} · Revision: {{ match.revision }}</p>
+            <p>Conversation: {{ match.fact.provenance.conversation ?? 'None' }} · Turn: {{ match.fact.provenance.turn ?? 'None' }} · Source: {{ match.fact.provenance.source ?? 'None' }}</p>
+            <p>Observed: {{ match.fact.observed_ms }} · Expires: {{ match.fact.expires_ms ?? 'Not specified' }} · Tags: {{ match.fact.tags.join(', ') }}</p>
+          </details>
+        </article>
+      }
+    }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="personalization-title">
     <h2 id="personalization-title">Personalization</h2>
     <p class="text-sm text-muted">Change the response preference saved on your tablet. Saving confirms the file only; use by Reader and Writer still needs verification.</p>
