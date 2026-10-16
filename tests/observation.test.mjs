@@ -56,7 +56,8 @@ test('cable failure clears observations and stops automatic reconnection', async
   } finally { controller.dispose(); }
 });
 test('unconfigured and unsupported observer refuse without spawning credentials or transport', async () => {
-  assert.equal((await new WiredObserver({ platform: 'win32' }).observe()).status, 'unsupported-host');
+  assert.equal((await new WiredObserver({ platform: 'darwin' }).observe()).status, 'unsupported-host');
+  assert.equal((await new WiredObserver({ platform: 'win32', config: undefined, python: undefined }).observe()).status, 'unconfigured');
   assert.equal((await new WiredObserver({ platform: 'linux', config: undefined, python: undefined }).observe()).status, 'unconfigured');
 });
 test('browser helper requires exact loopback host, origin, private session and bounded fixed action', async () => {

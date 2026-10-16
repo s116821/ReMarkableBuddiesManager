@@ -26,7 +26,7 @@ async function verify(page, expected) {
     await page.getByTestId('tablet-model').filter({ hasText: 'reMarkable 1.0' }).waitFor();
     assert.equal(await page.getByTestId('installed-version').textContent(), 'Unknown — installed provenance not verified');
     assert.equal(await page.getByRole('button', { name: 'Install unavailable' }).isDisabled(), true);
-  } else await page.getByRole('heading', { name: 'Host transport unavailable' }).waitFor();
+  } else await page.getByRole('heading', { name: expected === 'unconfigured' ? 'Not configured' : 'Host transport unavailable' }).waitFor();
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.mouse.move(0, 0);
@@ -50,9 +50,12 @@ try {
   await page.screenshot({ path: 'test-results/wired-browser.png', fullPage: true });
 } finally { await browser.close(); await helper.close(); }
 {
-  const python = path.join(root, 'fixture-python');
-  await writeFile(python, `#!${process.execPath}\nconsole.log(${JSON.stringify(JSON.stringify(fixture))});\n`);
-  await chmod(python, 0o700);
+  const python = process.platform === 'win32' ? process.env.MANAGER_WIRED_PYTHON : path.join(root, 'fixture-python');
+  if (process.platform === 'win32' && !python) throw new Error('Windows fixtures require the setup-python interpreter');
+  if (process.platform === 'linux') {
+    await writeFile(python, `#!${process.execPath}\nconsole.log(${JSON.stringify(JSON.stringify(fixture))});\n`);
+    await chmod(python, 0o700);
+  }
   const executablePath = packaged ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`) : undefined;
   const app = await electron.launch({ executablePath, args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: root,
     MANAGER_WIRED_CONFIG: path.join(root, 'fixture-config'), MANAGER_WIRED_PYTHON: python } });
@@ -64,11 +67,11 @@ try {
     await app.evaluate(async ({ app, BrowserWindow }) => {
       await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`);
     });
-    await verify(page, process.platform === 'linux' ? 'observed' : 'unsupported-host');
+    await verify(page, process.platform === 'linux' ? 'observed' : 'unconfigured');
     const host = await page.evaluate(() => ({ contract: window.managerHost.contract_version, keys: Object.keys(window.managerHost) }));
     assert.equal(host.contract, 1);
     assert.deepEqual(host.keys.sort(), ['cancel', 'contract_version', 'kind', 'observe', 'transport']);
   } finally { await app.close(); }
 }
 await rm(root, { recursive: true });
-console.log(`Shared helper/browser and ${packaged ? 'packaged ' : ''}Electron state path verified with explicit fixtures; native tablet adapter ${process.platform === 'linux' ? 'fixture observed' : 'unsupported'}`);
+console.log(`Shared helper/browser and ${packaged ? 'packaged ' : ''}Electron state path verified with explicit fixtures; native tablet adapter ${process.platform === 'linux' ? 'fixture observed' : 'actual Python/config refusal'}`);
