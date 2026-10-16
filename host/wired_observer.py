@@ -14,9 +14,11 @@ import stat
 import subprocess
 import sys
 import threading
+import time
 
 PEER = '10.11.99.1'
 LIMIT = 65536
+OWNED_COMMAND = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json /opt/bin/reader-buddy --inspect-owned-data'
 COMMAND = 'uname -m; systemctl show reader-buddy.service --no-pager -p LoadState -p ActiveState -p SubState'
 STATUSES = {'unconfigured', 'unsupported-host', 'disconnected', 'untrusted', 'authentication-required',
             'timeout', 'cancelled', 'cable-lost', 'observation-unavailable', 'observed'}
@@ -249,6 +251,47 @@ def inspect(transport):
         sftp.close()
 
 
+def inspect_owned(transport):
+    before = inspect(transport)
+    channel = transport.open_session(timeout=2)
+    output, discarded = bytearray(), 0
+    deadline = time.monotonic() + 8
+    try:
+        channel.settimeout(2)
+        channel.exec_command(OWNED_COMMAND)
+        while True:
+            if time.monotonic() > deadline:
+                raise Refusal('timeout')
+            while channel.recv_ready():
+                output.extend(channel.recv(4096))
+                if len(output) > 32768:
+                    raise Refusal('observation-unavailable')
+            while channel.recv_stderr_ready():
+                discarded += len(channel.recv_stderr(4096))
+                if discarded > 65536:
+                    raise Refusal('observation-unavailable')
+            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+                break
+            time.sleep(.01)
+        code = channel.recv_exit_status()
+        if code in (2, 126, 127):
+            payload = {'status': 'unsupported', 'report': None}
+        elif code != 0:
+            payload = {'status': 'unavailable', 'report': None}
+        else:
+            try:
+                report = json.loads(output)
+                payload = {'status': 'reported', 'report': report}
+            except (ValueError, UnicodeError):
+                payload = {'status': 'unavailable', 'report': None}
+        if inspect(transport) != before:
+            raise Refusal('observation-unavailable')
+        before['_inspection'] = payload
+        return before
+    finally:
+        channel.close()
+
+
 def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspect):
     import paramiko
     baseline = snapshot(config)
@@ -318,7 +361,10 @@ def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspe
 
 
 def main():
-    status, observation = 'unconfigured', None
+    owned = sys.argv[1:] == ['inspect-owned']
+    if sys.argv[1:] and not owned:
+        return
+    status, observation, inspection = 'unconfigured', None, None
     if sys.platform != 'linux':
         status = 'unsupported-host'
     elif os.environ.get('MANAGER_WIRED_CONFIG'):
@@ -332,7 +378,9 @@ def main():
                 config = load_config(os.environ['MANAGER_WIRED_CONFIG'])
             except (OSError, ValueError, TypeError, KeyError):
                 raise Refusal('unconfigured') from None
-            observation = observe(config)
+            observation = observe(config, inspection=inspect_owned if owned else inspect)
+            if owned:
+                inspection = observation.pop('_inspection')
             status = 'observed'
         except Refusal as error:
             status = error.status
@@ -350,7 +398,10 @@ def main():
                 status = 'observation-unavailable'
         finally:
             signal.alarm(0)
-    print(json.dumps({'contract_version': 1, 'status': status, 'observation': observation}))
+    value = {'contract_version': 1, 'status': status, 'observation': observation}
+    if owned:
+        value['inspection'] = inspection
+    print(json.dumps(value))
 
 
 if __name__ == '__main__':

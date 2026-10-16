@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import socket
@@ -40,6 +41,26 @@ class Peer(paramiko.ServerInterface):
         def send():
             channel.send(b'armv7l\nLoadState=not-found\nActiveState=inactive\nSubState=dead\n')
             channel.send_exit_status(0)
+            channel.shutdown_write()
+        threading.Thread(target=send, daemon=True).start()
+        return True
+
+
+class InspectorPeer(Peer):
+    def __init__(self, output, code=0):
+        super().__init__()
+        self.output, self.code = output, code
+
+    def check_channel_exec_request(self, channel, command):
+        if command.decode() == o.COMMAND:
+            return super().check_channel_exec_request(channel, command)
+        self.commands.append(command.decode())
+        if command.decode() != o.OWNED_COMMAND:
+            return False
+        def send():
+            channel.sendall(self.output)
+            channel.send_stderr(b'PROTECTED_STDERR_SENTINEL')
+            channel.send_exit_status(self.code)
             channel.shutdown_write()
         threading.Thread(target=send, daemon=True).start()
         return True
@@ -182,6 +203,32 @@ class ObserverTests(unittest.TestCase):
                     transport.close()
                     server.close()
                     client.close()
+
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
+    def test_owned_inspection_actual_fixed_ssh_command_and_old_cli_refusal(self):
+        for output, code, expected in [(b'{"report_version":1}', 0, 'reported'),
+                                       (b'PROTECTED_STDOUT_SENTINEL', 2, 'unsupported'),
+                                       (b'', 127, 'unsupported'), (b'bad json', 0, 'unavailable')]:
+            with self.subTest(code=code, expected=expected), tempfile.TemporaryDirectory() as root:
+                key = paramiko.RSAKey.generate(2048)
+                keypath = Path(root) / 'identity'
+                key.write_private_key_file(str(keypath)); keypath.chmod(0o600)
+                hostkey = paramiko.RSAKey.generate(2048)
+                client, server = socket.socketpair()
+                peer = InspectorPeer(output, code)
+                transport = paramiko.Transport(server)
+                transport.add_server_key(hostkey)
+                transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Files)
+                transport.start_server(event=threading.Event(), server=peer)
+                try:
+                    result = o.observe({'host_key_sha256': o.fingerprint(hostkey), 'identity_file': str(keypath)},
+                                       snapshot=lambda _: {'generation': 1}, dial=lambda _: client, inspection=o.inspect_owned)
+                    self.assertEqual(result['_inspection']['status'], expected)
+                    self.assertEqual(peer.commands, [o.COMMAND, o.OWNED_COMMAND, o.COMMAND])
+                    self.assertNotIn('SENTINEL', json.dumps(result))
+                    self.assertTrue(all(p in FILES and f == os.O_RDONLY for p, f in peer.opens))
+                finally:
+                    transport.close(); server.close(); client.close()
 
     def test_usb_ancestry_generation_and_route_fixture_refusals(self):
         with tempfile.TemporaryDirectory() as root:

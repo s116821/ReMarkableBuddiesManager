@@ -74,7 +74,7 @@ test('common source and dependency checks have exactly one owning job', () => {
   assert.notEqual(tools.with?.['audit-dependencies'], 'false');
   for (const [jobName, job] of Object.entries(pipeline.jobs)) {
     for (const step of job.steps) {
-      assert.ok(!common.test(step.run ?? ''), jobName + ' repeats a Checks-owned suite: ' + step.run);
+      assert.ok(!repeatsCommonChecks(jobName, step), jobName + ' repeats a Checks-owned suite: ' + step.run);
       if (step.uses === './.github/actions/release-tools')
         assert.equal(step.with?.['audit-dependencies'], 'false', jobName + ' repeats the locked Python dependency audit');
     }
@@ -153,3 +153,31 @@ if (manager) test('Windows integration stops at each failed native command', () 
     assert.equal(result.stdout.trim().split('\n').length, failAt, 'Commands after a failure must not run');
   }
 });
+
+function repeatsCommonChecks(jobName, step) {
+  const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test release\/fixtures\/workflow/;
+  const selectedWindowsControls = new Set([
+    'python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v',
+    'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v',
+  ]);
+  if (jobName !== 'integration' || step.if !== "runner.os == 'Windows'" || step.shell !== 'bash')
+    return common.test(step.run ?? '');
+  return (step.run ?? '').split('\n').some(line => common.test(line) && !selectedWindowsControls.has(line.trim()));
+}
+
+test('Windows native selections preserve platform coverage without admitting repeated common suites', () => {
+  const selected = {
+    if: "runner.os == 'Windows'", shell: 'bash',
+    run: 'python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v',
+  };
+  assert.equal(repeatsCommonChecks('integration', selected), false);
+  assert.equal(repeatsCommonChecks('integration', {...selected, run: 'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v'}), false);
+  assert.equal(repeatsCommonChecks('build', selected), true);
+  assert.equal(repeatsCommonChecks('integration', {...selected, if: undefined}), true);
+  assert.equal(repeatsCommonChecks('integration', {...selected, if: "runner.os == 'Linux'"}), true);
+  assert.equal(repeatsCommonChecks('integration', {...selected, shell: 'pwsh'}), true);
+  assert.equal(repeatsCommonChecks('integration', {...selected, run: 'python -m unittest discover -s tests/wired -v'}), true);
+  assert.equal(repeatsCommonChecks('integration', {...selected, run: selected.run + '\nnpm test'}), true);
+  assert.equal(repeatsCommonChecks('integration', {...selected, run: selected.run + ' && npm test'}), true);
+});
+
