@@ -46,13 +46,22 @@ as a decompressed member, at most16KiB and64KiB compressed. Its exact tag/source
 version/official declaration must match the selected release. App files stay
 compressed and are never extracted, started or individually safety-qualified.
 
-The qualified unchanged publisher identity validator is reused; producer-owned
-files remain untouched. Their expected code hashes are checked before trusted
-code is imported. The publisher's unbounded pathname-based `verify_packages`
-reader is not used on downloads; actual bytes are hashed through bounded handles
-and standard ZIP/JSON metadata is observed with strict bounds instead. A change
-to these qualified producer files needs coordinated requalification; no best-effort
-fallback or release-engine replacement is performed.
+The current producer's unchanged pure identity validator is reused from
+`host/qualified-producer/artifacts.py`, copied byte-for-byte from
+[Manager99bde579 release/artifacts.py](https://github.com/s116821/ReMarkableBuddiesManager/blob/99bde579c7ca458cd9670cc83682e0ed93c58c48/release/artifacts.py).
+Its SHA256 is `4c0386ae79b1de55f84bea1cb349e62620ef2a763d90c0366a939aec37cdc94c`.
+The bounded verifier checks this trusted resource before loading it and calls
+only its Release/verify_identity contract with the fixed three package names.
+The deleted policy/coordinator publisher modules are not runtime dependencies.
+The producer's unbounded package rereader and build/publish functions are not
+called. Changed or missing qualified bytes refuse before loading; there is no
+best-effort fallback. Packages carry the same fixed identity resource under host/.
+
+The fixture-only current-manager-build.py is the exact99bde579 build source,
+SHA256 `5fc651228ef50c5231b71ff91a2c688aade622c2a7a7c685cfbde08a8d660670`.
+It generates small actual ZIPs with synthetic payload using the current archive
+function. It is not packaged runtime code or evidence of a full application build,
+live official release, payload safety or installation eligibility.
 
 Success publishes `quarantine-receipt.json` with `embeddedIdentityVerified: true`
 and `updateEligible: false`. Checksums and embedded declarations do not attest
