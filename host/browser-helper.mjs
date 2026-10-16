@@ -24,10 +24,10 @@ export async function startHelper({ root, observer = new WiredObserver() }) {
       } catch { return refuse(400); }
       let value;
       try { value = JSON.parse(body); } catch { return refuse(400); }
-      if (!value || typeof value !== 'object' || Object.keys(value).join() !== 'action' || !['identity', 'observe', 'cancel'].includes(value.action)) return refuse(400);
+      if (!value || typeof value !== 'object' || Object.keys(value).join() !== 'action' || !['identity', 'observe', 'cancel', 'inspect-owned'].includes(value.action)) return refuse(400);
       res.setHeader('Content-Type', 'application/json');
       const output = value.action === 'identity' ? { contract_version: 1, kind: 'browser', transport: 'wired-read-only' } :
-        value.action === 'cancel' ? observer.cancel() : await observer.observe();
+        value.action === 'cancel' ? observer.cancel() : value.action === 'inspect-owned' ? await observer.inspectOwned() : await observer.observe();
       res.end(JSON.stringify(output)); return;
     }
     if (req.method !== 'GET' || !url.pathname.startsWith('/preview/')) return refuse(404);

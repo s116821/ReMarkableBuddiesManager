@@ -61,3 +61,45 @@ test('overlap and disposal cannot admit late metadata', async () => {
   const request = controller.refresh(); await controller.refresh(); assert.equal(calls, 1);
   controller.dispose(); finish(response(release())); await request; assert.equal(controller.state.candidate, null);
 });
+
+test('Manager stable identity is repository-specific and requires all expected published asset metadata', async () => {
+  const { MANAGER_ASSETS } = await import('../src/releases.ts');
+  const own = { ...release('v0.4.0'), html_url: 'https://github.com/s116821/ReMarkableBuddiesManager/releases/tag/v0.4.0',
+    assets: MANAGER_ASSETS.map(name => ({ name, state: 'uploaded', size: 12,
+      browser_download_url: `https://github.com/s116821/ReMarkableBuddiesManager/releases/download/v0.4.0/${name}` })) };
+  assert.equal(decodeCandidate(own, 'manager').assetsPublished, true);
+  assert.throws(() => decodeCandidate(own));
+  assert.throws(() => decodeCandidate(release(), 'manager'));
+  for (const patch of [{ draft: true }, { prerelease: true }, { tag_name: 'v0.4.0-rc.1' }]) assert.throws(() => decodeCandidate({ ...own, ...patch }, 'manager'));
+  assert.equal(decodeCandidate({ ...own, assets: own.assets.slice(1) }, 'manager').assetsPublished, false);
+  const bad = structuredClone(own); bad.assets[0].browser_download_url = 'https://other.invalid/file.zip';
+  assert.equal(decodeCandidate(bad, 'manager').assetsPublished, false);
+});
+test('Manager discovery refresh/backoff/failure stays independent from Buddy preference and cancellation', async () => {
+  const { MANAGER_RELEASE_API, MANAGER_ASSETS } = await import('../src/releases.ts');
+  let ownTag = 'v0.4.0', ownFailure = false, ownCalls = 0;
+  const own = () => ({ tag_name: ownTag, html_url: `https://github.com/s116821/ReMarkableBuddiesManager/releases/tag/${ownTag}`,
+    published_at: '2026-10-12T12:00:00Z', draft: false, prerelease: false,
+    assets: MANAGER_ASSETS.map(name => ({ name, state: 'uploaded', size: 12,
+      browser_download_url: `https://github.com/s116821/ReMarkableBuddiesManager/releases/download/${ownTag}/${name}` })) });
+  const store = { getItem: () => 'community', setItem: () => { throw new Error('Manager must not write Buddy preference'); } };
+  const manager = new ReleaseController(store, () => {}, async url => {
+    assert.equal(url, MANAGER_RELEASE_API); ownCalls++;
+    return ownFailure ? new Response('{}', { status: 429, headers: { 'Retry-After': '60' } }) : response(own());
+  }, 'manager');
+  const buddy = new ReleaseController(store, () => {}, async url => { assert.equal(url, RELEASE_API); return response(release()); });
+  try {
+    assert.equal(manager.state.preference, 'official');
+    assert.equal(manager.state.persistenceError, false);
+    assert.equal(buddy.state.preference, 'community');
+    manager.chooseOfficial();
+    await Promise.all([manager.refresh(), buddy.refresh()]);
+    ownTag = 'v0.5.0'; await manager.refresh();
+    assert.equal(manager.state.candidate.tag, ownTag);
+    assert.equal(buddy.state.candidate.tag, 'v0.3.0');
+    ownFailure = true; await manager.refresh();
+    assert.equal(manager.state.stale, true);
+    const count = ownCalls; await manager.refresh(); assert.equal(ownCalls, count);
+    await buddy.refresh(); assert.equal(buddy.state.status, 'ready');
+  } finally { manager.dispose(); buddy.dispose(); }
+});
