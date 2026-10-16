@@ -12,7 +12,14 @@ test('official metadata is exact clean tag/SHA; developer builds never impersona
   try {
     git('init'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid');
     writeFileSync(path.join(dir, 'app.txt'), 'fixture'); git('add', '.'); git('commit', '-m', 'feat(test): fixture');
-    git('tag', 'v0.1.0'); const sha = git('rev-parse', 'HEAD');
+    const sha = git('rev-parse', 'HEAD');
+    const candidate = { MANAGER_CANDIDATE_TAG: 'v0.1.0', MANAGER_CANDIDATE_SHA: sha };
+    assert.deepEqual(buildInfo(dir, candidate), { version: '0.1.0', sha, tag: 'v0.1.0', official: true });
+    assert.equal(git('tag'), '', 'Release-profile candidate must not create an official tag');
+    assert.throws(() => buildInfo(dir, { ...candidate, MANAGER_CANDIDATE_SHA: 'wrong' }), /mismatch/);
+    assert.throws(() => buildInfo(dir, { MANAGER_CANDIDATE_TAG: 'v0.1.0' }), /mismatch/);
+    assert.throws(() => buildInfo(dir, { ...candidate, MANAGER_RELEASE_SHA: sha }), /cannot be combined/);
+    git('tag', 'v0.1.0');
     const env = { MANAGER_RELEASE_TAG: 'v0.1.0', MANAGER_RELEASE_SHA: sha };
     assert.match(buildInfo(dir, {}).version, /-dev-/);
     assert.deepEqual(buildInfo(dir, env), { version: '0.1.0', sha, tag: 'v0.1.0', official: true });
