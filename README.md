@@ -6,8 +6,15 @@ official stable release discovery with a saved source preference. Installation, 
 configuration and data management remain REM-41/REM-42 work.
 See [wired observation setup and limits](docs/wired-observation.md).
 See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
+Google Drive [host sign-in setup and limits](docs/drive-auth.md) are independent of the tablet connection.
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
+The separate [original signed test-fixture observer](docs/signed-fixture-verification.md)
+checks actual historical Buddy APKs offline with an independently pinned public key.
+The separate [manual release quarantine command](docs/release-quarantine.md)
+verifies original legacy Buddy download bytes; matching checksums do not enable installation.
+The [manual Manager bundle verifier](docs/manager-bundle-verification.md) additionally
+checks the current browser/desktop ZIPs' bounded embedded release identity.
 
 Start with the public [ecosystem Docs hub](https://github.com/s116821/RemarkableBuddiesDocs)
 and [Manager foundation guide](https://github.com/s116821/RemarkableBuddiesDocs/blob/main/docs/manager-foundation.md).
@@ -74,3 +81,5 @@ Link coordinated Docs and code PRs with exact revisions; no duplicate spec tree 
 Release machinery is adapted from GPLv3 ReMarkableBuddies at
 `33db26add721cea6c0121ad769a54d06ae600b4e`. This repository uses GPL-3.0-only;
 see [LICENSE](LICENSE). Third-party packages retain their own licenses.
+
+Personalization inspect/edit/save/disable/clear and saved-versus-active limits: [editor guide](docs/personalization.md).

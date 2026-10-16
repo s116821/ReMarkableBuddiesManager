@@ -21,13 +21,17 @@
     "wired:browser": "node scripts/wired-browser.mjs",
     "test:wired-hosts": "node tests/wired-hosts.mjs",
     "build:development": "node scripts/version.mjs && ng build --configuration development --output-path test-results/development",
-    "test:styles": "npm run build:development && node tests/hosts.mjs --development"
+    "test:styles": "npm run build:development && node tests/hosts.mjs --development",
+    "test:owned-hosts": "node tests/owned-hosts.mjs",
+    "test:drive-hosts": "node tests/drive-hosts.mjs",
+    "test:personalization-hosts": "node tests/personalization-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",
     "@angular/compiler": "22.2.0",
     "@angular/core": "22.2.0",
     "@angular/platform-browser": "22.2.0",
+    "google-auth-library": "11.3.0",
     "rxjs": "7.8.2",
     "tslib": "2.8.1"
   },

@@ -60,10 +60,122 @@
       <button class="ui-button ui-button-secondary mt-3" type="button" disabled>Install unavailable</button>
     </div>
   </section>
+  <section class="ui-panel my-6" aria-labelledby="manager-release-title">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h2 id="manager-release-title">Manager releases</h2>
+      <button class="ui-button ui-button-primary" type="button" (click)="refreshManager()" [disabled]="managerRelease().status === 'checking'">Refresh Manager releases</button>
+    </div>
+    <p class="text-sm text-muted">Manager and Buddy have independent releases. This check reads Manager's official stable release metadata.</p>
+    <dl class="my-4 grid gap-4 sm:grid-cols-2">
+      <div><dt class="ui-eyebrow">Current Manager build</dt><dd class="break-words" data-testid="current-manager-version">{{ version }}</dd></div>
+      <div><dt class="ui-eyebrow">Latest official stable Manager</dt><dd class="break-words" data-testid="available-manager-version">{{ managerRelease().candidate?.tag ?? (managerRelease().status === 'missing' ? 'No published stable release' : 'Not checked') }}</dd></div>
+    </dl>
+    <div aria-live="polite">
+      @if (managerRelease().status === 'checking') { <p>Checking Manager releases…</p> }
+      @if (managerRelease().error) { <p class="ui-error" role="alert">{{ managerRelease().error }}</p> }
+      @if (managerRelease().stale) { <p>Displayed Manager candidate is from a previous successful check.</p> }
+      @if (managerRelease().retryAt) { <p class="text-sm">Manager checks pause until {{ managerRelease().retryAt }}.</p> }
+      @if (managerRelease().checkedAt) { <p class="text-xs text-muted">Last successful Manager check: {{ managerRelease().checkedAt }}</p> }
+      @if (managerRelease().candidate) { <p data-testid="manager-assets">{{ managerRelease().candidate?.assetsPublished ? 'Expected release files are published; packages are not yet verified.' : 'Expected Manager release files are incomplete or unpublished.' }}</p> }
+    </div>
+    @if (!officialBuild) { <p class="text-sm text-muted">Development build; the stable candidate is shown for reference, without inferring upgrade order.</p> }
+    <p class="mt-3 text-sm text-muted">Downloads and automatic updates remain unavailable until package integrity and update behavior are qualified. This check does not change either application or tablet compatibility.</p>
+  </section>
+  <section class="ui-panel my-6" aria-labelledby="personalization-title">
+    <h2 id="personalization-title">Personalization</h2>
+    <p class="text-sm text-muted">Change the response preference saved on your tablet. Saving confirms the file only; use by Reader and Writer still needs verification.</p>
+    <button class="ui-button ui-button-secondary" type="button" (click)="personalize('inspect')" [disabled]="!profile().personalizationProbe || !host.personalization || personalization().busy">Read personalization</button>
+    <p role="status" data-testid="personalization-status">{{ personalization().status }}</p>
+    @if (personalization().report) {
+      <label class="block mt-4" for="personalization-text">Response preference</label>
+      <textarea id="personalization-text" class="ui-field block w-full sm:w-full" rows="6" [value]="personalizationText()" (input)="editPersonalization($event)" (paste)="pastePersonalization($event)" aria-describedby="personalization-help"></textarea>
+      <p id="personalization-help" class="text-sm text-muted">{{ personalizationBytes() }} / 16,384 bytes. Spaces and line breaks are preserved.</p>
+      <label class="block"><input type="checkbox" [checked]="personalizationEnabled()" (change)="togglePersonalization($event)"> Enable this preference</label>
+      @if (!personalizationValid()) { <p role="alert" class="ui-error">Text is too large or contains an invalid character.</p> }
+      <div class="flex flex-wrap gap-3 mt-4">
+        <button class="ui-button ui-button-primary" type="button" (click)="personalize('set')" [disabled]="!profile().personalizationProbe || personalization().busy || !personalizationValid()">Save preference</button>
+        <button class="ui-button ui-button-secondary" type="button" (click)="personalize('disable')" [disabled]="!profile().personalizationProbe || personalization().busy">Disable saved preference</button>
+        <button class="ui-button ui-button-secondary" type="button" (click)="personalize('clear')" [disabled]="!profile().personalizationProbe || personalization().busy">Clear saved preference</button>
+      </div>
+      <p class="ui-warning">{{ personalization().report?.runtime_activation === 'restart-required' ? 'Saved on disk. A qualified restart and runtime check are still required.' : 'Disk value verified. Use in the running app has not been verified.' }}</p>
+    }
+    <p class="text-sm text-muted">Busy can mean the app is running or another maintenance task is using its data. This editor does not stop or restart it. Your history and handwriting data are preserved.</p>
+  </section>
+
+  <section class="ui-panel my-6" aria-labelledby="drive-title">
+    <h2 id="drive-title">Google Drive</h2>
+    <p class="text-sm text-muted">Sign in on this computer, even without a tablet connected.</p>
+    <p class="mt-3 font-semibold" role="status" data-testid="drive-status">{{ driveLabels[drive().status] }}</p>
+    @if (drive().account; as account) { <p class="break-words" data-testid="drive-account">{{ account.label }}</p> }
+    @if (drive().checkedAt) { <p class="text-xs text-muted">Last checked: {{ drive().checkedAt }}</p> }
+    @if (drive().status === 'cached') { <p class="ui-warning">These account details were saved earlier. Check the connection before relying on them.</p> }
+    @if (drive().status === 'unconfigured' || drive().status === 'unavailable') { <p class="text-sm text-muted">Check the Google Drive setup in the project guide. Sign-in details stay on this computer.</p> }
+    <div class="mt-4 flex flex-wrap gap-3">
+      <button class="ui-button ui-button-primary" type="button" (click)="signInDrive()" [disabled]="['unconfigured', 'unavailable', 'connecting', 'checking', 'revoking'].includes(drive().status)">Sign in to Google Drive</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="checkDrive()" [disabled]="!drive().account || ['connecting', 'checking', 'revoking'].includes(drive().status)">Check connection</button>
+      @if (['connecting', 'checking'].includes(drive().status)) { <button class="ui-button ui-button-secondary" type="button" (click)="cancelDrive()">Cancel</button> }
+      <button class="ui-button ui-button-secondary" type="button" (click)="disconnectDrive()" [disabled]="!drive().account || ['connecting', 'checking', 'revoking'].includes(drive().status)">Disconnect this Manager</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="revokeDrive()" [disabled]="!drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(drive().status)">Remove Google access…</button>
+    </div>
+    @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
+    <p class="mt-4 text-sm text-muted">Backup browsing and tablet restore are not available yet. Signing in does not change tablet settings or back up data.</p>
+  </section>
+  <section class="ui-panel my-6" aria-labelledby="owned-title">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <h2 id="owned-title">Buddy-owned data</h2>
+      <button class="ui-button ui-button-primary" type="button" (click)="inspectOwned()" [disabled]="!profile().inspection || owned().status === 'Inspecting owned data…'">Inspect owned data</button>
+    </div>
+    <p class="text-sm text-muted">Read-only inventory of Buddy's stored history and cache. Credentials and original tablet documents are excluded. Cleanup and restore remain unavailable.</p>
+    <p class="mt-3 font-semibold" role="status" data-testid="inspection-status">{{ owned().status }}</p>
+    @if (!profile().inspection) { <p class="text-sm text-muted">Read a wired tablet's model, architecture and consistent firmware first. The installed Buddy must support this report.</p> }
+    @if (owned().report; as report) {
+      <dl class="my-4 grid gap-4 sm:grid-cols-2">
+        <div><dt class="ui-eyebrow">Observed file sizes</dt><dd data-testid="observed-bytes">{{ bytes(report.observed_apparent_bytes) }}</dd></div>
+        <div><dt class="ui-eyebrow">Complete owned-path total</dt><dd data-testid="complete-bytes">{{ report.complete_apparent_bytes === null ? 'Unavailable — inventory incomplete' : bytes(report.complete_apparent_bytes) }}</dd></div>
+      </dl>
+      <p class="text-sm text-muted">File lengths are measured once per owned path. These sizes do not measure allocated disk space or space safe to reclaim. Media contents and current record use have not been verified.</p>
+      <h3 class="mt-5 font-semibold">Stored files</h3>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        @for (category of storageCategories; track category.key) {
+          <div class="min-w-0 rounded-lg border border-divider p-4" [attr.data-testid]="'storage-' + category.key">
+            <h4 class="font-semibold">{{ category.label }}</h4>
+            @if (report.storage[category.key]; as usage) { <p>{{ bytes(usage.apparent_bytes) }} · {{ usage.files }} observed files</p> }
+            @else { <p>Not inspected / no category observation</p> }
+            @if (category.key === 'cache' && !report.cache_inspected) { <p class="ui-warning">Cache inspection incomplete or unavailable</p> }
+            <p class="text-sm text-muted">{{ category.consequence }}</p>
+          </div>
+        }
+      </div>
+      <h3 class="mt-5 font-semibold">History and learning categories</h3>
+      <p class="text-sm text-muted">Media references can be shared across categories. Their totals cannot be added together. {{ report.shared_media_files }} shared media files account for {{ bytes(report.shared_media_apparent_bytes) }} of observed file sizes.</p>
+      @if (!report.domain_accounting_complete) { <p class="ui-warning">Category accounting is incomplete; no exact logical category totals are available.</p> }
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        @for (category of domainCategories; track category.key) {
+          <div class="min-w-0 rounded-lg border border-divider p-4" [attr.data-testid]="'domain-' + category.key">
+            <h4 class="font-semibold">{{ category.label }}</h4>
+            @if (report.observed_domains[category.key]; as usage) {
+              <p>{{ usage.observed_record_files }} observed records · {{ bytes(usage.observed_record_bytes) }}</p>
+              <p class="text-sm">Declared media: {{ bytes(usage.declared_media_bytes) }}; present referenced files: {{ bytes(usage.present_referenced_media_bytes) }}</p>
+              <dl class="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <div><dt>Missing references</dt><dd>{{ usage.missing_references }}</dd></div>
+                <div><dt>Uninspected references</dt><dd>{{ usage.uninspected_references }}</dd></div>
+                <div><dt>Omitted references</dt><dd>{{ usage.omitted_references }}</dd></div>
+                <div><dt>Size mismatches</dt><dd>{{ usage.size_mismatched_references }}</dd></div>
+              </dl>
+            } @else { <p>Not inspected / no category observation</p> }
+            <p class="mt-2 text-sm text-muted">{{ category.consequence }}</p>
+          </div>
+        }
+      </div>
+      @if (issues().length) { <h3 class="mt-4 font-semibold">Inspection limitations</h3><ul class="ml-5 list-disc">@for (issue of issues(); track issue.label) { <li>{{ issue.label }}: {{ issue.count }}</li> }</ul> }
+      <p class="mt-4 break-words text-xs text-muted">Observed at {{ owned().checkedAt }}. A new tablet-state read clears this inventory. Inspection pauses automatic state reads; use Read tablet state to refresh the connection.</p>
+      @if (report.status === 'busy') { <p class="ui-warning">Buddy is using the storage lock. No service was stopped; maintenance needs a separate coordinated step.</p> }
+    }
+  </section>
   <div class="grid gap-5 md:grid-cols-3">
     <section class="ui-panel" aria-labelledby="install-title"><span class="font-mono text-xs text-muted">01</span><h2 class="mt-5" id="install-title">Install &amp; update</h2><p class="text-sm text-muted">Get official Reader and Writer releases, with safe updates that preserve your work.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
     <section class="ui-panel" aria-labelledby="configure-title"><span class="font-mono text-xs text-muted">02</span><h2 class="mt-5" id="configure-title">Make it yours</h2><p class="text-sm text-muted">Choose your backends and preferences across Reader and Writer.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
-    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Review and manage the conversations and source evidence owned by your Buddies.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
+    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Read-only inventory is available above. Cleanup and restore of Buddy-owned history remain upcoming.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
   </div>
   <aside class="mt-8 border-t border-divider pt-5 text-sm text-muted"><h2 class="text-base">Built to work together</h2><p>Manager and the tablet application update independently. Your tablet version will appear once a connection is available.</p><a href="https://github.com/s116821/RemarkableBuddiesDocs" target="_blank" rel="noopener noreferrer">Read the project guide <span aria-hidden="true">↗</span></a></aside>
 </main>
