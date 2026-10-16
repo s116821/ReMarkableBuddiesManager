@@ -7,3 +7,4 @@ electron/build-info.json
 __pycache__/
 *.pyc
 test-results/
+.upstream/
