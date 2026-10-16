@@ -39,7 +39,7 @@ test('four stages preserve platform coverage and block dependent jobs on failure
   assert.equal(ci.jobs.checks.needs, 'title');
   assert.equal(ci.jobs.checks.if, "!cancelled() && (github.event_name == 'push' || needs.title.result == 'success')");
   assert.deepEqual(ci.jobs.application.needs, 'checks');
-  assert.equal(ci.jobs.application.if, "needs.checks.outputs.application == 'true'");
+  assert.equal(ci.jobs.application.if, "!cancelled() && needs.checks.result == 'success' && needs.checks.outputs.application == 'true'");
   assert.equal(pipeline.jobs.build.needs, undefined);
   assert.deepEqual(pipeline.jobs.integration.needs, 'build');
   assert.deepEqual(pipeline.jobs.release.needs, ['build','integration']);
