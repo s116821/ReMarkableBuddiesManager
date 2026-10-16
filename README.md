@@ -8,6 +8,8 @@ See [wired observation setup and limits](docs/wired-observation.md).
 See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
+The separate [manual release quarantine command](docs/release-quarantine.md)
+verifies original legacy Buddy download bytes; matching checksums do not enable installation.
 
 Start with the public [ecosystem Docs hub](https://github.com/s116821/RemarkableBuddiesDocs)
 and [Manager foundation guide](https://github.com/s116821/RemarkableBuddiesDocs/blob/main/docs/manager-foundation.md).

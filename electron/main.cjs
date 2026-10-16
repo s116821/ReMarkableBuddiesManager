@@ -19,7 +19,7 @@ app.whenReady().then(async () => {
   const ui = path.join(__dirname, '../dist/manager/browser/index.html');
   const authorized = (event, args) => args.length === 0 && event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(ui).href;
-  for (const action of ['observe', 'cancel']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
+  for (const action of ['observe', 'cancel', 'inspectOwned']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
     return observer[action]();
   });
