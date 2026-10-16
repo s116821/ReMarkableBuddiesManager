@@ -39,7 +39,7 @@ export class ConnectionController {
     if (!this.disposed && generation === this.generation) await this.read(generation);
   }
   private async read(generation: number) {
-    this.update({ status: 'checking', observation: null, checkedAt: null });
+    // connect() shows explicit progress; scheduled reads retain the last verified sample.
     try {
       const result = await this.adapter.observe();
       if (this.disposed || generation !== this.generation) return;
