@@ -86,7 +86,10 @@ A deployed web page or ordinary `npm start` UI has no wired transport. It does n
 probe other localhost ports. Stop the helper with Ctrl+C when finished.
 
 Choose **Read tablet state**. Successful observations refresh after four seconds,
-with each operation limited to 12 seconds and bounded fixed reads. **Disconnect**
+with each operation limited to 12 seconds and bounded fixed reads. Automatic reads
+keep the last verified status, details and timestamp visible while pending; a
+successful result updates that sample. Initial and manual reads show progress.
+**Disconnect**
 cancels the owned operation and clears current state. Authentication/trust errors,
 cable/route/interface changes, deadlines or a changed tablet boot stop polling.
 Reconnect explicitly after checking the cable, setup and trust; the UI never
