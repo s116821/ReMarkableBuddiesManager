@@ -128,24 +128,58 @@ jobs:
           artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
           path: test-results/development/browser
           merge-multiple: true
+      - name: Set trusted host interpreter for retained-package controls
+        shell: bash
+        run: |
+          python - <<'PYTHON'
+          import os, sys
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for name in ('MANAGER_WIRED_PYTHON', 'MANAGER_DRIVE_PYTHON'):
+                  output.write(f'{name}={sys.executable}\n')
+          PYTHON
       - run: npx playwright install --with-deps chromium
       - run: node tests/hosts.mjs --development
       - if: runner.os == 'Linux'
+        shell: bash
         run: |
           python -m pip install -r host/requirements.txt
           xvfb-run -a npm run test:hosts
           xvfb-run -a npm run test:package
           xvfb-run -a npm run test:wired-hosts
           xvfb-run -a npm run test:wired-hosts -- --packaged
+          xvfb-run -a npm run test:owned-hosts
+          xvfb-run -a npm run test:owned-hosts -- --packaged
+          xvfb-run -a npm run test:drive-hosts
+          xvfb-run -a npm run test:drive-hosts -- --packaged
+          xvfb-run -a npm run test:personalization-hosts
+          xvfb-run -a npm run test:personalization-hosts -- --packaged
+          xvfb-run -a npm run test:runtime-identity-hosts
+          xvfb-run -a npm run test:runtime-identity-hosts -- --packaged
       - if: runner.os == 'Windows'
+        shell: bash
         run: |
           npm run test:hosts
           npm run test:package
           npm run test:wired-hosts
           npm run test:wired-hosts -- --packaged
+          npm run test:owned-hosts
+          npm run test:owned-hosts -- --packaged
+          npm run test:drive-hosts
+          npm run test:drive-hosts -- --packaged
+          npm run test:personalization-hosts
+          npm run test:personalization-hosts -- --packaged
+          npm run test:runtime-identity-hosts
+          npm run test:runtime-identity-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
         run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+      - name: Preserve Windows native API and NTFS custody controls
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m pip install -r host/requirements.txt
+          python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
+          python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.build.outputs.uploader_artifact_id }}

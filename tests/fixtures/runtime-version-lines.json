@@ -1,0 +1,12 @@
+{
+  "source": "Pinned Rust6254092 build.rs; exact first line captured by independent reviewer from its actual local binary. Other forms are bounded build.rs/git-describe contract fixtures, not executed build claims.",
+  "lines": [
+    "remarkable-reader-buddy dev.v0.2.0-73-g6254092\n",
+    "remarkable-reader-buddy dev.unknown\n",
+    "remarkable-reader-buddy dev.v0.2.0\n",
+    "remarkable-reader-buddy dev.v0.2.0-dirty\n",
+    "remarkable-reader-buddy dev.v0.2.0-73-g6254092-dirty\n",
+    "remarkable-reader-buddy dev.6254092\n",
+    "remarkable-reader-buddy dev.6254092-dirty\n"
+  ]
+}

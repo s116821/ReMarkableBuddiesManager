@@ -3,9 +3,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { WiredObserver } from './observer.mjs';
+import { DriveAuth } from './drive-auth.mjs';
+import { parsePersonalizationRequest } from './personalization.mjs';
+import { DRIVE_ACTIONS } from './drive-protocol.mjs';
 
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
-export async function startHelper({ root, observer = new WiredObserver() }) {
+export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth() }) {
   const token = randomBytes(32).toString('hex');
   let origin;
   const server = createServer(async (req, res) => {
@@ -15,6 +18,29 @@ export async function startHelper({ root, observer = new WiredObserver() }) {
     const refuse = code => { res.writeHead(code).end(); };
     if (req.headers.host !== new URL(origin).host) return refuse(403);
     const url = new URL(req.url, origin);
+    if (url.pathname === '/manager-personalization') {
+      if (req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      let body, bytes = 0; const chunks = [];
+      try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 131072) return refuse(413); chunks.push(chunk); } body = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)); } catch { return refuse(400); }
+      let request;
+      try { request = JSON.parse(body); if (body !== JSON.stringify(request)) throw new Error('Noncanonical input'); parsePersonalizationRequest(request); } catch { return refuse(400); }
+      try { const value = await observer.personalization(request); res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); }
+      catch { refuse(503); }
+      return;
+    }
+    if (url.pathname === '/manager-drive') {
+      if (req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      let body = '', bytes = 0;
+      try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 192) return refuse(413); body += chunk; } } catch { return refuse(400); }
+      let value; try { value = JSON.parse(body); } catch { return refuse(400); }
+      if (!value || body !== JSON.stringify(value) || !DRIVE_ACTIONS.includes(value.action) || Object.keys(value).sort().join() !== (value.action === 'revoke' ? 'action,authorizationId' : 'action') ||
+          (value.action === 'revoke' && (typeof value.authorizationId !== 'string' || !/^[a-f0-9]{64}$/.test(value.authorizationId)))) return refuse(400);
+      try {
+        const output = value.action === 'revoke' ? await driveAuth.revoke(value.authorizationId) : await driveAuth[value.action]();
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(output));
+      } catch { refuse(503); }
+      return;
+    }
     if (url.pathname === '/manager-host') {
       if (req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' ||
           req.headers.cookie !== `manager_session=${token}`) return refuse(403);
@@ -24,10 +50,10 @@ export async function startHelper({ root, observer = new WiredObserver() }) {
       } catch { return refuse(400); }
       let value;
       try { value = JSON.parse(body); } catch { return refuse(400); }
-      if (!value || typeof value !== 'object' || Object.keys(value).join() !== 'action' || !['identity', 'observe', 'cancel'].includes(value.action)) return refuse(400);
+      if (!value || typeof value !== 'object' || Object.keys(value).join() !== 'action' || !['identity', 'observe', 'cancel', 'inspect-owned', 'inspect-runtime'].includes(value.action)) return refuse(400);
       res.setHeader('Content-Type', 'application/json');
-      const output = value.action === 'identity' ? { contract_version: 1, kind: 'browser', transport: 'wired-read-only' } :
-        value.action === 'cancel' ? observer.cancel() : await observer.observe();
+      const output = value.action === 'identity' ? { contract_version: 1, kind: 'browser', transport: 'wired-maintenance' } :
+        value.action === 'cancel' ? observer.cancel() : value.action === 'inspect-runtime' ? await observer.inspectRuntime() : value.action === 'inspect-owned' ? await observer.inspectOwned() : await observer.observe();
       res.end(JSON.stringify(output)); return;
     }
     if (req.method !== 'GET' || !url.pathname.startsWith('/preview/')) return refuse(404);
@@ -44,5 +70,5 @@ export async function startHelper({ root, observer = new WiredObserver() }) {
   server.headersTimeout = 5000;
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { observer.cancel(); await new Promise(resolve => server.close(resolve)); } };
+  return { origin, server, close: async () => { observer.cancel(); driveAuth.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }

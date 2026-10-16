@@ -1,6 +1,13 @@
-import { Component, ChangeDetectionStrategy, OnDestroy, signal } from '@angular/core';
-import { currentHost } from './host';
+import { Component, ChangeDetectionStrategy, OnDestroy, signal, computed } from '@angular/core';
+import { currentHost, unsupportedDrive } from './host';
+import { DriveController } from './drive-auth';
+import { unavailableDrive as unsupportedDriveState } from '../host/drive-protocol.mjs';
 import { ConnectionController, CONNECTION_LABELS } from './observation';
+import { PersonalizationController, validText, editText, rawOffset } from './personalization';
+import type { PersonalizationOperation } from '../host/personalization.mjs';
+import { RuntimeIdentityController } from './runtime-identity';
+import { OwnedDataController } from './owned-data';
+import { resolveDeviceProfile } from './device-profile';
 import buildInfo from './build-info.json';
 import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 
@@ -10,18 +17,98 @@ import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 })
 export class App implements OnDestroy {
   readonly host = currentHost();
+  readonly drive = signal(unsupportedDriveState());
+  readonly driveConsent = signal<string | null>(null);
+  private readonly driveController = new DriveController(this.host.driveAuth ?? unsupportedDrive, (state, url) => { this.drive.set(state); this.driveConsent.set(url); });
+  readonly driveLabels: Record<string, string> = {
+    unconfigured: 'Google Drive setup required', disconnected: 'Not signed in', connecting: 'Waiting for Google sign-in…', cached: 'Saved account — connection not checked',
+    connected: 'Google Drive connected', checking: 'Checking Google Drive…', cancelled: 'Sign-in or check cancelled', expired: 'Sign-in expired', denied: 'Sign-in declined',
+    'authorization-failed': 'Sign-in or account check failed', unavailable: 'Google Drive connection unavailable', revoking: 'Removing Google access…', 'revocation-unconfirmed': 'Google access removal could not be confirmed',
+  };
   readonly version = buildInfo.version;
+  readonly officialBuild = buildInfo.official;
   readonly connectionLabels = CONNECTION_LABELS;
-  private readonly connectionController = new ConnectionController(this.host, state => this.connection.set(state));
+  private readonly ownedController = new OwnedDataController(state => this.owned.set(state));
+  readonly owned = signal(this.ownedController.state);
+  readonly personalizationText = signal('');
+  readonly personalizationEnabled = signal(false);
+  private readonly personalizationController = new PersonalizationController(state => { this.personalization.set(state); if (state.report?.personalization) { this.personalizationText.set(state.report.personalization.text); this.personalizationEnabled.set(state.report.personalization.enabled); } });
+  readonly personalization = signal(this.personalizationController.state);
+  readonly personalizationValid = computed(() => validText(this.personalizationText()));
+  readonly personalizationBytes = computed(() => new TextEncoder().encode(this.personalizationText()).length);
+  private readonly runtimeController = new RuntimeIdentityController(state => this.runtimeIdentity.set(state));
+  readonly runtimeIdentity = signal(this.runtimeController.state);
+  private readonly connectionController = new ConnectionController(this.host, state => { this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
+  readonly profile = computed(() => resolveDeviceProfile(this.connection()));
+  readonly storageCategories = [
+    { key: 'structural', label: 'Storage structure', consequence: 'Identity and manifests keep stored history consistent.' },
+    { key: 'record-metadata', label: 'Record metadata', consequence: 'Conversation, source and association records preserve history.' },
+    { key: 'media-object', label: 'Media objects', consequence: 'Referenced source evidence may be shared by several categories.' },
+    { key: 'unclassified-object', label: 'Unclassified objects', consequence: 'No safe deletion or current-use conclusion is available.' },
+    { key: 'retained-generation', label: 'Retained generations', consequence: 'Older retained history can be needed for recovery.' },
+    { key: 'cache', label: 'Caches and indexes', consequence: 'Inspection requires the matching cache owner; source history stays separate.' },
+    { key: 'diagnostics', label: 'Owned diagnostics', consequence: 'External transient diagnostics are excluded from this inventory.' },
+    { key: 'staging', label: 'Staging', consequence: 'Interrupted or in-progress files require separate maintenance checks.' },
+  ];
+  readonly domainCategories = [
+    { key: 'conversation', label: 'Conversations', consequence: 'Durable conversation metadata and history.' },
+    { key: 'source', label: 'Source evidence', consequence: 'Buddy-owned source-image references; original tablet documents are excluded.' },
+    { key: 'export-association', label: 'Export associations', consequence: 'Local associations do not prove native page readiness or delete exported notes.' },
+    { key: 'subject-memory', label: 'Subject memory', consequence: 'Stored memory records; presence does not establish current selected membership.' },
+    { key: 'handwriting', label: 'Handwriting learning', consequence: 'Buddy-owned learning records; native ink remains separate.' },
+  ];
+  issues() { return Object.entries(this.owned().report?.issues ?? {}).map(([code, count]) => ({ label: code.replaceAll('-', ' '), count })); }
+  bytes(value: number) { return `${new Intl.NumberFormat().format(value)} bytes`; }
   readonly blockers = INSTALL_BLOCKERS;
   private readonly releases = new ReleaseController(this.preferenceStorage(), state => this.release.set(state));
   readonly release = signal(this.releases.state);
-  constructor() { this.releases.start(); }
+  private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
+  readonly managerRelease = signal(this.managerReleases.state);
+  constructor() { this.releases.start(); this.managerReleases.start(); void this.driveController.load(); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
+  async inspectOwned() {
+    const tablet = this.connection().observation;
+    if (!this.profile().inspection || !tablet || this.owned().status === 'Inspecting owned data…') return;
+    await this.connectionController.pause();
+    if (this.connection().observation !== tablet || !this.profile().inspection) return;
+    await this.ownedController.inspect(this.host, tablet);
+  }
+  async inspectRuntime() {
+    const tablet = this.connection().observation;
+    if (!tablet || !this.profile().runtimeIdentityProbe || !this.host.inspectRuntime || this.runtimeIdentity().status === 'Reading binary version…') return;
+    await this.connectionController.pause();
+    if (this.connection().observation !== tablet || !this.profile().runtimeIdentityProbe) return;
+    await this.runtimeController.inspect({ inspectRuntime: () => this.host.inspectRuntime!() }, tablet);
+  }
+  async personalize(operation: PersonalizationOperation) {
+    const tablet = this.connection().observation;
+    if (!tablet || !this.profile().personalizationProbe || !this.host.personalization || this.personalization().busy) return;
+    const submittedText = this.personalizationText(), submittedEnabled = this.personalizationEnabled();
+    await this.connectionController.pause();
+    if (this.connection().observation !== tablet || !this.profile().personalizationProbe) return;
+    await this.personalizationController.run({ personalization: request => this.host.personalization!(request) }, tablet, operation, submittedText, submittedEnabled);
+  }
+  editPersonalization(event: Event) { this.personalizationText.set(editText(this.personalizationText(), (event.target as HTMLTextAreaElement).value)); }
+  pastePersonalization(event: ClipboardEvent) {
+    if (!event.clipboardData) return;
+    const field = event.target as HTMLTextAreaElement, original = this.personalizationText();
+    const next = original.slice(0, rawOffset(original, field.selectionStart)) + event.clipboardData.getData('text/plain') + original.slice(rawOffset(original, field.selectionEnd));
+    event.preventDefault(); this.personalizationText.set(next); field.value = next.replace(/\r\n?/g, '\n');
+  }
+  togglePersonalization(event: Event) { this.personalizationEnabled.set((event.target as HTMLInputElement).checked); }
+  signInDrive() { void this.driveController.begin(); }
+  checkDrive() { void this.driveController.action('check'); }
+  cancelDrive() { void this.driveController.action('cancel'); }
+  disconnectDrive() { void this.driveController.action('disconnect'); }
+  revokeDrive() {
+    const account = this.drive().account?.label;
+    if (account && window.confirm(`Remove Google access for ${account}? This may stop Drive access in other copies of this Google app. Your backups will not be deleted.`)) void this.driveController.action('revoke');
+  }
   refresh() { void this.releases.refresh(); }
+  refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.releases.dispose(); this.connectionController.dispose(); }
+  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }
