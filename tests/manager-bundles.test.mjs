@@ -124,16 +124,30 @@ for (const kind of ['timeout', 'cancelled', 'oversized', 'wrong-result', 'stderr
   assert.ok(!JSON.stringify(result).includes('untrusted diagnostic'));
 });
 
+test('current-only qualified runtime verifies without obsolete release modules', async t => {
+  const h = await setup(t);
+  const root = join(h.parent, 'current-only-runtime');
+  const scripts = join(root, 'scripts'); const qualified = join(root, 'host/qualified-producer'); const inputs = join(root, 'inputs');
+  await mkdir(scripts, { recursive: true }); await mkdir(qualified, { recursive: true }); await mkdir(inputs);
+  await copyFile(fileURLToPath(new URL('../scripts/verify-manager-bundle.py', import.meta.url)), join(scripts, 'verify-manager-bundle.py'));
+  await copyFile(fileURLToPath(new URL('../host/qualified-producer/artifacts.py', import.meta.url)), join(qualified, 'artifacts.py'));
+  for (const [name, bytes] of Object.entries(h.data)) await writeFile(join(inputs, name), bytes);
+  await assert.rejects(readdir(join(root, 'release')), { code: 'ENOENT' });
+  const result = spawnSync(PYTHON, ['-I', '-S', '-B', join(scripts, 'verify-manager-bundle.py'), inputs, TAG, SHA], { encoding: 'utf8' });
+  assert.equal(result.status, 0, 'actual current-only consumer should verify without policy/coordinator');
+  assert.equal(result.stdout, '{"ok":true,"embeddedIdentityVerified":true,"archivesExtracted":false,"payloadExecuted":false}\n');
+  assert.equal(result.stderr, '');
+});
+
 test('changed producer module is refused before its code can run', async t => {
   const h = await setup(t);
-  const root = join(h.parent, 'isolated-source'); const scripts = join(root, 'scripts'); const release = join(root, 'release'); const inputs = join(root, 'inputs');
-  await mkdir(scripts, { recursive: true }); await mkdir(release); await mkdir(inputs);
+  const root = join(h.parent, 'isolated-source'); const scripts = join(root, 'scripts'); const qualified = join(root, 'host/qualified-producer'); const inputs = join(root, 'inputs');
+  await mkdir(scripts, { recursive: true }); await mkdir(qualified, { recursive: true }); await mkdir(inputs);
   const verifier = fileURLToPath(new URL('../scripts/verify-manager-bundle.py', import.meta.url));
   await copyFile(verifier, join(scripts, 'verify-manager-bundle.py'));
-  await copyFile(fileURLToPath(new URL('../release/policy.py', import.meta.url)), join(release, 'policy.py'));
-  const original = await readFile(fileURLToPath(new URL('../release/coordinator.py', import.meta.url)), 'utf8');
+  const original = await readFile(fileURLToPath(new URL('../host/qualified-producer/artifacts.py', import.meta.url)), 'utf8');
   const sentinel = join(root, 'MUST_NOT_RUN');
-  await writeFile(join(release, 'coordinator.py'), original + `\n__import__('pathlib').Path(${JSON.stringify(sentinel)}).write_text('unsafe')\n`);
+  await writeFile(join(qualified, 'artifacts.py'), original + `\n__import__('pathlib').Path(${JSON.stringify(sentinel)}).write_text('unsafe')\n`);
   for (const [name, bytes] of Object.entries(h.data)) await writeFile(join(inputs, name), bytes);
   const result = spawnSync(PYTHON, ['-I', '-S', '-B', join(scripts, 'verify-manager-bundle.py'), inputs, TAG, SHA], { encoding: 'utf8' });
   assert.equal(result.status, 1); assert.equal(result.stdout, '{"ok":false,"code":"bundle-refused"}\n');
