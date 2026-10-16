@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { parseOwnedReport } from './owned-report.mjs';
 import { fileURLToPath } from 'node:url';
 
 export const statuses = new Set(['unconfigured', 'unsupported-host', 'disconnected', 'untrusted', 'authentication-required', 'timeout', 'cancelled', 'cable-lost', 'observation-unavailable', 'observed']);
@@ -29,27 +30,59 @@ export class WiredObserver {
   }
   cancel() { this.generation++; this.active?.kill('SIGKILL'); return result('cancelled'); }
   async observe() {
+    const value = await this.run('observe');
+    this.lastObservation = value.status === 'observed' ? value.observation : null;
+    return value;
+  }
+  async inspectOwned() {
+    const expected = this.lastObservation;
+    if (!expected) return { ...result('observation-unavailable'), inspection: null };
+    const value = await this.run('inspect-owned');
+    if (value.observation && (value.observation.boot_id !== expected.boot_id || value.observation.connection_id !== expected.connection_id)) {
+      this.lastObservation = null;
+      return { ...result('cable-lost'), inspection: null };
+    }
+    return value;
+  }
+  async run(action) {
     this.cancel();
-    if (this.platform !== 'linux') return result('unsupported-host');
-    if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return result('unconfigured');
+    const refusal = status => action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
+    if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const child = spawn(this.python, [this.script], { stdio: ['ignore', 'pipe', 'ignore'],
-        env: { PATH: process.env.PATH, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
+      const child = spawn(this.python, [this.script, ...(action === 'observe' ? [] : [action])], { stdio: ['ignore', 'pipe', 'ignore'],
+        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       let output = '', expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
         output += data.toString('utf8');
-        if (output.length > 8192) { oversized = true; child.kill('SIGKILL'); }
+        if (Buffer.byteLength(output) > (action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = code => {
         clearTimeout(timer);
         if (this.active === child) this.active = null;
-        if (generation !== this.generation) return resolve(result('cancelled'));
-        if (expired) return resolve(result('timeout'));
-        if (code !== 0 || oversized) return resolve(result('observation-unavailable'));
-        try { resolve(validateResult(JSON.parse(output))); } catch { resolve(result('observation-unavailable')); }
+        if (generation !== this.generation) return resolve(refusal('cancelled'));
+        if (expired) return resolve(refusal('timeout'));
+        if (code !== 0 || oversized) return resolve(refusal('observation-unavailable'));
+        try {
+          const value = JSON.parse(output);
+          if (action === 'observe') return resolve(validateResult(value));
+          if (!value || Object.keys(value).sort().join() !== 'contract_version,inspection,observation,status') throw new Error('Invalid inspection');
+          validateResult({ contract_version: value.contract_version, status: value.status, observation: value.observation });
+          if (value.status !== 'observed') {
+            if (value.inspection !== null) throw new Error('Invalid inspection');
+          } else {
+            const i = value.inspection;
+            if (!i || Object.keys(i).sort().join() !== 'report,status' || !['reported', 'unsupported', 'unavailable'].includes(i.status)) throw new Error('Invalid inspection');
+            if (i.status === 'reported') {
+              try { i.report = parseOwnedReport(i.report); }
+              catch (error) { i.status = error.message === 'Unsupported owned-data report' ? 'unsupported' : 'unavailable'; i.report = null; }
+            } else if (i.report !== null) throw new Error('Invalid inspection');
+          }
+          resolve(value);
+        } catch { resolve(refusal('observation-unavailable')); }
       };
       child.once('error', () => finish(-1));
       child.once('close', finish);

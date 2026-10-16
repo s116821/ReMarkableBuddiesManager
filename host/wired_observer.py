@@ -1,4 +1,4 @@
-"""Fixed read-only Linux USB observer. No caller-defined remote command or path."""
+"""Fixed read-only wired USB observer. No caller-defined remote command or path."""
 import base64
 import errno
 import hashlib
@@ -8,15 +8,16 @@ import json
 import os
 from pathlib import Path
 import re
-import signal
 import socket
 import stat
 import subprocess
 import sys
 import threading
+import time
 
 PEER = '10.11.99.1'
 LIMIT = 65536
+OWNED_COMMAND = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json /opt/bin/reader-buddy --inspect-owned-data'
 COMMAND = 'uname -m; systemctl show reader-buddy.service --no-pager -p LoadState -p ActiveState -p SubState'
 STATUSES = {'unconfigured', 'unsupported-host', 'disconnected', 'untrusted', 'authentication-required',
             'timeout', 'cancelled', 'cable-lost', 'observation-unavailable', 'observed'}
@@ -28,6 +29,9 @@ class Refusal(Exception):
 
 
 def private_bytes(path, parent_private=False, maximum=16384):
+    if sys.platform == 'win32':
+        from windows_wired import private_bytes as windows_private_bytes
+        return windows_private_bytes(path, parent_private, maximum)
     path = Path(path)
     if not path.is_absolute() or str(path.resolve()) != str(path):
         raise Refusal('unconfigured')
@@ -249,26 +253,71 @@ def inspect(transport):
         sftp.close()
 
 
-def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspect):
+def inspect_owned(transport):
+    before = inspect(transport)
+    channel = transport.open_session(timeout=2)
+    output, discarded = bytearray(), 0
+    deadline = time.monotonic() + 8
+    try:
+        channel.settimeout(2)
+        channel.exec_command(OWNED_COMMAND)
+        while True:
+            if time.monotonic() > deadline:
+                raise Refusal('timeout')
+            while channel.recv_ready():
+                output.extend(channel.recv(4096))
+                if len(output) > 32768:
+                    raise Refusal('observation-unavailable')
+            while channel.recv_stderr_ready():
+                discarded += len(channel.recv_stderr(4096))
+                if discarded > 65536:
+                    raise Refusal('observation-unavailable')
+            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+                break
+            time.sleep(.01)
+        code = channel.recv_exit_status()
+        if code in (2, 126, 127):
+            payload = {'status': 'unsupported', 'report': None}
+        elif code != 0:
+            payload = {'status': 'unavailable', 'report': None}
+        else:
+            try:
+                report = json.loads(output)
+                payload = {'status': 'reported', 'report': report}
+            except (ValueError, UnicodeError):
+                payload = {'status': 'unavailable', 'report': None}
+        if inspect(transport) != before:
+            raise Refusal('observation-unavailable')
+        before['_inspection'] = payload
+        return before
+    finally:
+        channel.close()
+
+
+def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspect, notices=None):
     import paramiko
     baseline = snapshot(config)
     sock = dial(config)
-    if snapshot(config) != baseline:
+    try:
+        if snapshot(config) != baseline:
+            raise Refusal('cable-lost')
+        transport = paramiko.Transport(sock)
+    except BaseException:
         sock.close()
-        raise Refusal('cable-lost')
-    transport = paramiko.Transport(sock)
+        raise
     done = threading.Event()
     invalid = []
 
-    notices = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
-    try:
-        notices.bind((0, 0x51))  # link, IPv4 address, IPv4 route
-        notices.settimeout(.25)
-    except BaseException:
-        notices.close()
-        transport.close()
-        sock.close()
-        raise Refusal('disconnected') from None
+    if notices is None:
+        notices = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
+        try:
+            notices.bind((0, 0x51))  # link, IPv4 address, IPv4 route
+            notices.settimeout(.25)
+        except BaseException:
+            notices.close()
+            transport.close()
+            sock.close()
+            raise Refusal('disconnected') from None
 
     def watch():
         try:
@@ -318,21 +367,38 @@ def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspe
 
 
 def main():
-    status, observation = 'unconfigured', None
-    if sys.platform != 'linux':
+    owned = sys.argv[1:] == ['inspect-owned']
+    if sys.argv[1:] and not owned:
+        return
+    status, observation, inspection = 'unconfigured', None, None
+    if sys.platform not in ('linux', 'win32'):
         status = 'unsupported-host'
     elif os.environ.get('MANAGER_WIRED_CONFIG'):
         try:
             import paramiko
             if paramiko.__version__ != '5.0.0':
                 raise Refusal('unconfigured')
-            signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(Refusal('timeout')))
-            signal.alarm(12)
+            def expire():
+                value = {'contract_version': 1, 'status': 'timeout', 'observation': None}
+                if owned:
+                    value['inspection'] = None
+                print(json.dumps(value), flush=True)
+                os._exit(0)
+            deadline = threading.Timer(12, expire)
+            deadline.daemon = True
+            deadline.start()
             try:
-                config = load_config(os.environ['MANAGER_WIRED_CONFIG'])
+                if sys.platform == 'win32':
+                    import windows_wired
+                    config = windows_wired.load_config(os.environ['MANAGER_WIRED_CONFIG'])
+                else:
+                    config = load_config(os.environ['MANAGER_WIRED_CONFIG'])
             except (OSError, ValueError, TypeError, KeyError):
                 raise Refusal('unconfigured') from None
-            observation = observe(config)
+            inspection_fn = inspect_owned if owned else inspect
+            observation = windows_wired.observe(config, sys.modules[__name__], inspection=inspection_fn) if sys.platform == 'win32' else observe(config, inspection=inspection_fn)
+            if owned:
+                inspection = observation.pop('_inspection')
             status = 'observed'
         except Refusal as error:
             status = error.status
@@ -349,9 +415,14 @@ def main():
             else:
                 status = 'observation-unavailable'
         finally:
-            signal.alarm(0)
-    print(json.dumps({'contract_version': 1, 'status': status, 'observation': observation}))
+            if 'deadline' in locals():
+                deadline.cancel()
+    value = {'contract_version': 1, 'status': status, 'observation': observation}
+    if owned:
+        value['inspection'] = inspection
+    print(json.dumps(value))
 
 
 if __name__ == '__main__':
+    sys.modules['wired_observer'] = sys.modules[__name__]
     main()
