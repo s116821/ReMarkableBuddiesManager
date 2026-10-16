@@ -27,6 +27,70 @@ test('disconnect suppresses a late actual adapter result and clears current stat
   assert.equal(controller.state.observation, null);
   controller.dispose();
 });
+test('automatic read retains verified details without a pending notification until success', async () => {
+  let complete, ownRead, refreshed;
+  const owned = new Promise(resolve => { ownRead = resolve; });
+  const updated = new Promise(resolve => { refreshed = resolve; });
+  const changes = [];
+  let reads = 0;
+  const next = { ...observation, firmware: '3.28.0.173' };
+  const controller = new ConnectionController({
+    observe: () => ++reads === 1 ? Promise.resolve(observed(observation)) : new Promise(resolve => { complete = resolve; ownRead(); }),
+    cancel: cancelled,
+  }, state => { changes.push(state); if (state.observation === next) refreshed(); }, 1);
+  try {
+    await controller.connect();
+    const verified = controller.state;
+    const notifications = changes.length;
+    await owned;
+    assert.equal(controller.state, verified);
+    assert.equal(controller.state.status, 'observed');
+    assert.equal(controller.state.observation, observation);
+    assert.equal(changes.length, notifications, 'A pending automatic read must not announce checking');
+    complete(observed(next)); await updated;
+    assert.equal(controller.state.observation, next);
+    assert.ok(controller.state.checkedAt >= verified.checkedAt);
+    assert.equal(changes.filter(state => state.status === 'checking').length, 1, 'Only the explicit read announces progress');
+  } finally { controller.dispose(); }
+});
+
+test('disconnect during an automatic read clears the retained sample and suppresses its late result', async () => {
+  let complete, ownRead;
+  const owned = new Promise(resolve => { ownRead = resolve; });
+  let reads = 0;
+  const controller = new ConnectionController({
+    observe: () => ++reads === 1 ? Promise.resolve(observed(observation)) : new Promise(resolve => { complete = resolve; ownRead(); }),
+    cancel: cancelled,
+  }, () => {}, 1);
+  try {
+    await controller.connect(); await owned;
+    assert.equal(controller.state.status, 'observed');
+    controller.disconnect();
+    assert.deepEqual(controller.state, { status: 'cancelled', observation: null, checkedAt: null });
+    complete(observed(observation));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(controller.state, { status: 'cancelled', observation: null, checkedAt: null });
+    assert.equal(reads, 2);
+  } finally { controller.dispose(); }
+});
+
+test('manual refresh still shows explicit pending feedback after a verified observation', async () => {
+  let complete, ownRead;
+  const owned = new Promise(resolve => { ownRead = resolve; });
+  let reads = 0;
+  const controller = new ConnectionController({
+    observe: () => ++reads === 1 ? Promise.resolve(observed(observation)) : new Promise(resolve => { complete = resolve; ownRead(); }),
+    cancel: cancelled,
+  }, () => {}, 60000);
+  try {
+    await controller.connect();
+    const pending = controller.connect();
+    assert.deepEqual(controller.state, { status: 'checking', observation: null, checkedAt: null });
+    await owned; complete(observed(observation)); await pending;
+    assert.equal(controller.state.status, 'observed');
+  } finally { controller.dispose(); }
+});
+
 test('changed tablet boot stops polling and cannot silently switch observed identity', async () => {
   let changed;
   const event = new Promise(resolve => { changed = resolve; });
