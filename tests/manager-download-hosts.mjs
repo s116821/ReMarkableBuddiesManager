@@ -30,7 +30,8 @@ try{
  if (packaged) {
    const resources=await app.evaluate(()=>process.resourcesPath);
    assert.deepEqual(await readdir(path.join(resources,'scripts')),['verify-manager-bundle.py']);
-   assert.deepEqual((await readdir(path.join(resources,'release'))).sort(),['coordinator.py','policy.py']);
+   assert.deepEqual(await readdir(path.join(resources,'host/qualified-producer')),['artifacts.py']);
+   await assert.rejects(readdir(path.join(resources,'release')),{code:'ENOENT'});
    const python=spawnSync(process.platform==='win32'?'python':'python3',['-I','-S','-c','import sys; print(sys.executable)'],{encoding:'utf8'});assert.equal(python.status,0);
    const generatedRoot=path.join(root,'generated'),input=path.join(root,'bundles');const fixture=fileURLToPath(new URL('./fixtures/manager-bundle-input.py',import.meta.url));
    const generated=spawnSync(python.stdout.trim(),['-I','-S','-B',fixture,generatedRoot,tag,source,'valid'],{encoding:'utf8'});assert.equal(generated.status,0);await mkdir(input);for(const name of ['manager-browser.zip','manager-win32-x64.zip','manager-linux-x64.zip','provenance.json']) await copyFile(path.join(generatedRoot,name),path.join(input,name));

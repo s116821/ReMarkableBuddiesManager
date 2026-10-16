@@ -15,8 +15,7 @@ PACKAGES = ("manager-browser.zip", "manager-win32-x64.zip", "manager-linux-x64.z
 MAX_PACKAGE = 512 * 1024 * 1024
 WINDOWS = os.name == "nt"
 PINS = {
-    "policy.py": "e10acd03ad0ea879a0cd7bcd45399089a10022bd054a5d08cd24b491c56da1bc",
-    "coordinator.py": "fb6115ee9903513fc1860f47af4e43379e11dc81e889886df5d99e88d25e1f6a",
+    "artifacts.py": "4c0386ae79b1de55f84bea1cb349e62620ef2a763d90c0366a939aec37cdc94c",
 }
 
 
@@ -81,20 +80,20 @@ def exact(value, keys):
 
 def qualified_producer():
     # Only hash-qualified trusted checkout code is compiled, never archive data.
-    root = Path(__file__).resolve().parent.parent / "release"
+    root = Path(__file__).resolve().parent.parent / "host/qualified-producer"
     modules = {}
     for filename, expected in PINS.items():
         path = root / filename
         data = bounded_read(path, 64 * 1024)
         if hashlib.sha256(data).hexdigest() != expected:
             refuse()
-        name = "policy" if filename == "policy.py" else "_qualified_manager_coordinator"
+        name = "_qualified_manager_artifacts"
         module = types.ModuleType(name)
         module.__file__ = str(path)
         sys.modules[name] = module
         exec(compile(data, str(path), "exec"), module.__dict__)
         modules[filename] = module
-    return modules["coordinator.py"]
+    return modules["artifacts.py"]
 
 
 def observe_zip(path, expected, expected_digest):
@@ -195,7 +194,7 @@ def verify(directory, tag, sha):
     # Reuse the unchanged pure identity validator. Do not call the producer's
     # unbounded pathname-based ZIP/manifest rereads on downloaded input.
     producer = qualified_producer()
-    producer.verify_identity(provenance, producer.Release(tag, sha))
+    producer.verify_identity(provenance, producer.Release(tag, sha), PACKAGES)
     return {"ok": True, "embeddedIdentityVerified": True, "archivesExtracted": False, "payloadExecuted": False}
 
 

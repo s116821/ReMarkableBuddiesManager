@@ -12,6 +12,6 @@ A completed result names the selected tag, source SHA and host-chosen manager-do
 
 Failure/cancellation can leave partial public release files with no successful receipt. Retries create a new folder and never overwrite/delete earlier or user-owned files. Cancellation arriving after successful atomic receipt issuance does not undo that committed download. Unknown or malformed host status is not success: check the current host status before retrying.
 
-The package includes the fixed trusted Python verifier and unchanged hash-qualified producer modules beside host resources; interpreter provisioning stays explicit. The source-checkout [manual verification guide](manager-bundle-verification.md) remains available without UI or private tools.
+The package includes the fixed trusted Python verifier and the unchanged hash-qualified current producer identity helper under host/qualified-producer (without the deleted policy/coordinator modules); interpreter provisioning stays explicit. The source-checkout [manual verification guide](manager-bundle-verification.md) remains available without UI or private tools.
 
 Central owning change: manager-download-ui. Verification separates actual controlled local HTTP/ZIP/process/filesystem evidence from substituted browser/Electron UI reports. No live official-release or native update claim follows.

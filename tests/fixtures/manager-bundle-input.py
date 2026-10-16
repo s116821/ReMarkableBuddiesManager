@@ -1,6 +1,7 @@
 """Generate real test ZIPs through the unchanged publisher; payload is synthetic."""
 
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import stat
@@ -9,8 +10,15 @@ import sys
 import warnings
 import zipfile
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release"))
-from coordinator import archive_package  # noqa: E402
+# Exact current producer fixture, not runtime build-engine code.
+repo = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(repo / "host/qualified-producer"))
+builder_path = Path(__file__).with_name("current-manager-build.py")
+assert hashlib.sha256(builder_path.read_bytes()).hexdigest() == "5fc651228ef50c5231b71ff91a2c688aade622c2a7a7c685cfbde08a8d660670"
+spec = importlib.util.spec_from_file_location("_current_manager_build_fixture", builder_path)
+builder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(builder)
+archive_package = builder.archive_package
 
 root, tag, sha, mode = sys.argv[1:]
 root = Path(root)
