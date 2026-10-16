@@ -70,7 +70,7 @@ export MANAGER_WIRED_PYTHON="$HOME/.local/share/manager-wired-python/bin/python"
 
 For Electron, run `npm run desktop`, or launch the portable desktop executable
 from the configured host environment. The sandboxed renderer only requests
-observation or cancellation; it cannot submit a target, file, key or command.
+observation, cancellation or [owned-data inspection](owned-data-inspection.md); it cannot submit a target, file, key or command.
 
 For a browser, explicitly start the companion helper from a source checkout:
 
@@ -107,10 +107,7 @@ npm run test:wired-hosts -- --packaged
 Headless Linux host checks require `xvfb-run -a`. Fixtures use local synthetic
 SSH/SFTP peers and explicitly substituted host adapters; CI never accesses a
 physical tablet. Both browser/helper and unpackaged/packaged Electron paths are
-checked. Windows checks exercise the shared browser helper with fixtures and
-Electron's explicit unsupported native transport state. They do not qualify
-Windows USB/SSH. A native Windows interface-constrained adapter, RM2/Paper Pro
-hardware, Vellum package ownership, installation/update/rollback and REM-35
+checked. Windows software checks exercise the shared browser/helper fixtures and Electron's actual Python/config refusal, with explicitly substituted IPC report fixtures where named. They do not qualify physical Windows USB/SSH. The repaired Windows development adapter, RM2/Paper Pro hardware, Vellum package ownership, installation/update/rollback and REM-35
 acceptance remain separate work.
 
 Linux RM1 development observation was read-only on October 8, 2026: model
@@ -127,3 +124,19 @@ in [reManager](https://github.com/rmitchellscott/reManager) at
 `b3047fbf12ad51193c5ff05563d2d7d677638c95`; its trust defaults are not adopted.
 The central canonical contract is
 [manager-wired-observation](https://github.com/s116821/RemarkableBuddiesDocs/tree/main/openspec/specs/manager-wired-observation).
+
+
+## Windows development adapter (qualification pending)
+
+The pending native Windows adapter uses Windows10/11 x64, Python3.10+, the same pinned Paramiko, and pinned pywin32 installed in a user-owned virtual environment. Use `py -3 -m venv <local-path>` then `<local-path>\\Scripts\\python.exe -m pip install -r host/requirements.txt`. Do not run pywin32 global post-install scripts in this environment. The interpreter remains external to portable Electron.
+
+Inspect `Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter` and selected PnP parent properties to identify the actual present physical USB parent. The strict Windows config fields are `contract_version`, `interface_guid` (adapter GUID), `usb_instance` (uppercase physical USB device instance ID, without an MI interface suffix), `usb_vendor`/`usb_product` (lowercase four-digit hex), `source_address`, `host_key_sha256`, and `identity_file` (absolute local key path). These are host-only values. Never substitute an IP/interface alias for USB ancestry or trust a newly scanned host key. Existing Linux schema remains unchanged.
+
+Store the local config and key in current-user-owned directories protected by NTFS ACLs. Disable inherited broad grants on the immediate directory and files; permit only the current user, SYSTEM and Administrators. The adapter independently checks owners/DACLs through opened handles, refuses remote/reparse/alternate-stream paths, holds parents against rename and reads bounded contents without sharing. Windows `chmod` is not an ACL setup method. Use ordinary Windows Security settings to review these locations; no elevation/broad grant bypass.
+
+Set `$env:MANAGER_WIRED_CONFIG` and `$env:MANAGER_WIRED_PYTHON` to absolute local paths before launching Electron or the existing browser helper. The adapter verifies actual USB device ancestry, GUID/LUID/index and selected source/on-link routes; applies IP_UNICAST_IF in network order, verifies its host-order readback, then binds source and connects only to10.11.99.1:22. Network/PnP notifications invalidate reads and close the owned socket, including rapid removal/reattachment; unrelated network changes may conservatively stop a read too. Explicit reconnect remains required.
+
+The original Windows repair has independent source/API acceptance at PR8 revision3770515; this new integration still needs current Windows CI/review and Main's actual tablet/cable/competing-route qualification. A Windows ZIP's existence does not establish USB support. Browser fixture observations, real Windows API controls, real Python refusal through Electron, and physical tablet observations must be reported separately. Installed version/provenance remain unknown and Install stays disabled. No tablet mutation follows from setup.
+
+
+The new Windows inspector integration threads the same fixed read-only callback through this adapter. Host-only software/API and renderer fixtures remain distinct from Main physical qualification; see [owned-data inspection](owned-data-inspection.md).

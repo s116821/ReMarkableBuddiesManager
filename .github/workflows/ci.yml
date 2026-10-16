@@ -112,10 +112,14 @@ jobs:
         if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true')
       - run: npm run test:release
         if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true')
-      - if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true') && (runner.os == 'Linux')
+      - name: Preserve selected host safety controls
+        shell: bash
         run: |
           python -m pip install -r host/requirements.txt
           python -m unittest discover -s tests/wired -v
+          python -m unittest discover -s tests/drive -v
+          python -m unittest discover -s tests/vellum -p test_real_fixture.py -v
+        if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true')
       - run: npm ci --prefix release/fixtures --ignore-scripts --no-audit --no-fund
         if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true')
       - run: npm audit --prefix release/fixtures

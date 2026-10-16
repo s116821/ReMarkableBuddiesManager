@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import socket
@@ -45,6 +46,26 @@ class Peer(paramiko.ServerInterface):
         return True
 
 
+class InspectorPeer(Peer):
+    def __init__(self, output, code=0):
+        super().__init__()
+        self.output, self.code = output, code
+
+    def check_channel_exec_request(self, channel, command):
+        if command.decode() == o.COMMAND:
+            return super().check_channel_exec_request(channel, command)
+        self.commands.append(command.decode())
+        if command.decode() != o.OWNED_COMMAND:
+            return False
+        def send():
+            channel.sendall(self.output)
+            channel.send_stderr(b'PROTECTED_STDERR_SENTINEL')
+            channel.send_exit_status(self.code)
+            channel.shutdown_write()
+        threading.Thread(target=send, daemon=True).start()
+        return True
+
+
 class Files(paramiko.SFTPServerInterface):
     def __init__(self, server, *args, **kwargs):
         super().__init__(server, *args, **kwargs)
@@ -80,6 +101,7 @@ class ObserverTests(unittest.TestCase):
             with self.subTest(route=route), self.assertRaises(o.Refusal):
                 o.validate_route(route, 'usb0', '10.11.99.2')
 
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
     def test_socket_binds_device_and_source_before_fixed_connect(self):
         sock = Mock()
         sock.getsockopt.return_value = b'usb0\0'
@@ -96,6 +118,7 @@ class ObserverTests(unittest.TestCase):
             o.bound_socket({'interface': 'usb0', 'source_address': '10.11.99.2'})
         sock.close.assert_called_once()
 
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
     def test_protected_config_refuses_mode_symlink_and_extra_fields(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / 'config.json'
@@ -183,6 +206,33 @@ class ObserverTests(unittest.TestCase):
                     server.close()
                     client.close()
 
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
+    def test_owned_inspection_actual_fixed_ssh_command_and_old_cli_refusal(self):
+        for output, code, expected in [(b'{"report_version":1}', 0, 'reported'),
+                                       (b'PROTECTED_STDOUT_SENTINEL', 2, 'unsupported'),
+                                       (b'', 127, 'unsupported'), (b'bad json', 0, 'unavailable')]:
+            with self.subTest(code=code, expected=expected), tempfile.TemporaryDirectory() as root:
+                key = paramiko.RSAKey.generate(2048)
+                keypath = Path(root) / 'identity'
+                key.write_private_key_file(str(keypath)); keypath.chmod(0o600)
+                hostkey = paramiko.RSAKey.generate(2048)
+                client, server = socket.socketpair()
+                peer = InspectorPeer(output, code)
+                transport = paramiko.Transport(server)
+                transport.add_server_key(hostkey)
+                transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Files)
+                transport.start_server(event=threading.Event(), server=peer)
+                try:
+                    result = o.observe({'host_key_sha256': o.fingerprint(hostkey), 'identity_file': str(keypath)},
+                                       snapshot=lambda _: {'generation': 1}, dial=lambda _: client, inspection=o.inspect_owned)
+                    self.assertEqual(result['_inspection']['status'], expected)
+                    self.assertEqual(peer.commands, [o.COMMAND, o.OWNED_COMMAND, o.COMMAND])
+                    self.assertNotIn('SENTINEL', json.dumps(result))
+                    self.assertTrue(all(p in FILES and f == os.O_RDONLY for p, f in peer.opens))
+                finally:
+                    transport.close(); server.close(); client.close()
+
+    @unittest.skipUnless(os.name == 'posix' and hasattr(socket, 'AF_NETLINK'), 'Linux observer')
     def test_usb_ancestry_generation_and_route_fixture_refusals(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
@@ -235,6 +285,66 @@ class ObserverTests(unittest.TestCase):
         self.assertTrue(sock.close.called)
         transport.close.assert_called_once()
 
+
+
+class InspectionIntegrationTests(unittest.TestCase):
+    def test_portable_real_ssh_inspection_callback_with_injected_notice_fixture(self):
+        # Real SSH/SFTP/CLI protocol, synthetic route/notification/key custody.
+        # Actual Windows ACL/native-notice controls remain in test_windows.
+        class Notices:
+            def recv(self, _size):
+                threading.Event().wait(.01)
+                raise socket.timeout()
+            def close(self):
+                pass
+        key, hostkey = paramiko.RSAKey.generate(2048), paramiko.RSAKey.generate(2048)
+        client, server = socket.socketpair()
+        peer = InspectorPeer(b'{"report_version":1}', 0)
+        transport = paramiko.Transport(server)
+        transport.add_server_key(hostkey)
+        transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Files)
+        transport.start_server(event=threading.Event(), server=peer)
+        try:
+            with patch.object(o, 'read_key', return_value=key):
+                result = o.observe({'host_key_sha256': o.fingerprint(hostkey)},
+                                   snapshot=lambda _: {'generation': 1}, dial=lambda _: client,
+                                   inspection=o.inspect_owned, notices=Notices())
+            self.assertEqual(result['_inspection']['status'], 'reported')
+            self.assertEqual(peer.commands, [o.COMMAND, o.OWNED_COMMAND, o.COMMAND])
+            self.assertNotIn('SENTINEL', json.dumps(result))
+        finally:
+            transport.close(); server.close(); client.close()
+
+    def test_windows_main_dispatches_fixed_owned_callback_and_preserves_timeout_envelope(self):
+        import sys
+        from types import SimpleNamespace
+        from contextlib import redirect_stdout
+        fixture = {'boot_id': '11111111-1111-1111-1111-111111111111',
+                   '_inspection': {'status': 'unsupported', 'report': None}}
+        windows = SimpleNamespace(load_config=Mock(return_value={'fixture': True}),
+                                  observe=Mock(side_effect=lambda *_args, **_kw: dict(fixture)))
+        timer = Mock()
+        output = io.StringIO()
+        with patch.dict(sys.modules, {'observer': o, 'windows_wired': windows}), \
+             patch.object(o.sys, 'platform', 'win32'), patch.object(o.sys, 'argv', ['wired_observer.py', 'inspect-owned']), \
+             patch.dict(os.environ, {'MANAGER_WIRED_CONFIG': 'FIXTURE_ONLY'}), \
+             patch.object(o.threading, 'Timer', return_value=timer), redirect_stdout(output):
+            o.main()
+        self.assertIs(windows.observe.call_args.kwargs['inspection'], o.inspect_owned)
+        self.assertEqual(json.loads(output.getvalue())['inspection'], {'status': 'unsupported', 'report': None})
+        timer.cancel.assert_called_once()
+        output = io.StringIO()
+        def immediate(_seconds, callback):
+            deadline = Mock()
+            deadline.start.side_effect = callback
+            return deadline
+        with patch.object(o.sys, 'platform', 'win32'), patch.object(o.sys, 'argv', ['wired_observer.py', 'inspect-owned']), \
+             patch.dict(os.environ, {'MANAGER_WIRED_CONFIG': 'FIXTURE_ONLY'}), \
+             patch.object(o.threading, 'Timer', side_effect=immediate), \
+             patch.object(o.os, '_exit', side_effect=SystemExit(0)), redirect_stdout(output):
+            with self.assertRaises(SystemExit):
+                o.main()
+        self.assertEqual(json.loads(output.getvalue()), {'contract_version': 1, 'status': 'timeout', 'observation': None, 'inspection': None})
 
 if __name__ == '__main__':
     unittest.main()
