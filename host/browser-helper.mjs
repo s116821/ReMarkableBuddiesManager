@@ -1,3 +1,6 @@
+import { BasicSettingsHost } from './basic-settings.mjs';
+import { MaintenanceIO } from './maintenance-io.mjs';
+import { parseBasicSettingsRequest,parseBasicSettingsResult } from './basic-settings-protocol.mjs';
 import { parseSavedConfigurationRequest, parseSavedConfigurationResult } from './saved-configuration.mjs';
 import { MemoryForgetHost } from './memory-forget.mjs';
 import { parseForgetRequest, parseForgetResult } from './memory-forget-protocol.mjs';
@@ -18,7 +21,9 @@ import { DRIVE_ACTIONS } from './drive-protocol.mjs';
 
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
-  const forget = new MemoryForgetHost({ observer });
+  const io=new MaintenanceIO();let basic;
+  const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>basic?.invalidate() });
+  basic=new BasicSettingsHost({observer,io,beforeIO:()=>forget.invalidate()});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -38,6 +43,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       return;
     }
     if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) observer.cancel();
+    if(url.pathname==='/manager-basic-settings'){
+      if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
+      const chunks=[];let bytes=0,request;
+      try{for await(const chunk of req){bytes+=chunk.length;if(bytes>1024)return refuse(413);chunks.push(chunk);}const raw=new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseBasicSettingsRequest(request);}catch{return refuse(400);}
+      try{const value=parseBasicSettingsResult(await basic.request(request),request,validateResult);basic.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}return;
+    }
     if (url.pathname === '/manager-memory-forget') {
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
       const chunks = []; let bytes = 0, request;

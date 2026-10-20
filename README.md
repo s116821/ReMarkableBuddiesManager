@@ -99,3 +99,7 @@ Current revisions of a fact deliberately selected from search: [single-fact insp
 Explicit prepared confirmation and historical receipt recovery: [forget one memory fact](docs/memory-forget.md).
 
 Saved-only settings and safe origin summaries: [configuration inspection](docs/saved-configuration.md).
+
+Saved basic settings can be deliberately edited in both companions; see the
+[basic-settings guide](docs/basic-settings.md) for supported fields, private
+conditions, uncertain outcomes and the fixed manual equivalent.

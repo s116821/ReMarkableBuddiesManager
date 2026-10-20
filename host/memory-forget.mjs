@@ -1,26 +1,28 @@
+import { MaintenanceIO } from './maintenance-io.mjs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { parseForgetRequest, parseForgetReport, parseForgetResult } from './memory-forget-protocol.mjs';
 import { validateResult } from './observation-protocol.mjs';
 const terminal = new Set(['none','invalidated','unsupported','unavailable','busy','not-dispatched','acknowledged']);
-const external = new Set(['observe','cancel','inspectOwned','inspectRuntime','personalization','memoryQuery','inspectMemory','inspectSavedMode','inspectSavedConfiguration']);
+const external = new Set(['run','observe','cancel','inspectOwned','inspectRuntime','personalization','memoryQuery','inspectMemory','inspectSavedMode','inspectSavedConfiguration']);
 const sameTarget = (a,b) => a && b && a.connection_id===b.connection_id && a.boot_id===b.boot_id;
 export class MemoryForgetHost {
   #slot=null;
   #epoch=0;
-  constructor({observer, now=()=>performance.now(), uuid=randomUUID, reference=()=>randomBytes(32).toString('hex')}={}) {
-    this.observer=observer; this.now=now; this.uuid=uuid; this.reference=reference;
+  constructor({observer, now=()=>performance.now(), uuid=randomUUID, reference=()=>randomBytes(32).toString('hex'), io=new MaintenanceIO(), beforeIO=()=>{}}={}) {
+    this.observer=observer; this.now=now; this.uuid=uuid; this.reference=reference; this.io=io; this.beforeIO=beforeIO;
   }
   wrap() {
     return new Proxy(this.observer,{get:(target,name)=>{
       const v=Reflect.get(target,name,target);
       if(typeof v!=='function') return v;
-      return (...args)=>{ if(external.has(name)) this.invalidate(); return Reflect.apply(v,target,args); };
+      return (...args)=>{ if(external.has(name)){this.invalidate();this.beforeIO();this.io.revoke();} return Reflect.apply(v,target,args); };
     }});
   }
   invalidate() {
     this.#epoch++;
     const s=this.#slot;
     if(!s) return;
+    const token=this.io.ownerFor('forget',s.reference);if(token)this.io.release(token);
     s.preview=null;
     if(s.claimed && !['acknowledged','not-dispatched'].includes(s.state)) { s.state='unknown'; s.report=null; }
     else if(['preparing','prepared'].includes(s.state)) { s.state='invalidated'; s.packet=null; s.report=null; }
@@ -70,56 +72,59 @@ export class MemoryForgetHost {
     const s=this.#slot;
     if(!s || q.reference!==s.reference) return this.#checked(this.#value('unavailable'));
     if(q.action==='cancel') {
-      this.invalidate(); this.observer.cancel(); return this.#checked(this.#snapshot());
+      const token=this.io.ownerFor('forget',s.reference);this.invalidate();if(token)this.observer.cancel();return this.#checked(this.#snapshot());
     }
     if(q.action==='confirm') {
       if(s.state!=='prepared' || s.claimed || s.epoch!==this.#epoch || !s.packet || !sameTarget(this.observer.lastObservation,s.sample)) return this.#checked(this.#value('unavailable'));
+      const token=this.io.acquire('forget',s.reference,'confirm');if(!token)return this.#checked(this.#value('busy'));this.beforeIO();
       // No await can interleave this irreversible same-host claim.
       s.claimed=true; s.state='confirming'; s.preview=null; s.report=null;
-      return this.#execute(s,'forget');
+      return this.#execute(s,'forget',token);
     }
     if(s.state==='acknowledged') return this.#checked(this.#snapshot());
     if(!s.claimed || !s.packet || !['unknown','unresolved'].includes(s.state) || !sameTarget(this.observer.lastObservation,s.sample)) return this.#checked(this.#value(s.claimed?'unresolved':'unavailable'));
+    const token=this.io.acquire('forget',s.reference,'receipt');if(!token)return this.#checked(this.#value('busy'));this.beforeIO();
     s.state='checking-receipt'; s.report=null;
-    return this.#execute(s,'forget-receipt');
+    return this.#execute(s,'forget-receipt',token);
   }
   async #prepare(q) {
-    if(this.#slot && !terminal.has(this.#slot.state)) return this.#checked(this.#value('busy'));
+    if(this.#slot && !terminal.has(this.#slot.state)) return await this.#checked(this.#value('busy'));
     const sample=this.observer.lastObservation;
-    if(!sameTarget(sample,q)) return this.#checked(this.#value('unavailable'));
+    if(!sameTarget(sample,q)) return await this.#checked(this.#value('unavailable'));
     const s={reference:this.reference(),operation:this.uuid(),key:structuredClone(q.key),sample:structuredClone(sample),epoch:this.#epoch,state:'preparing',claimed:false,packet:null,preview:null,report:null,acknowledgement:null};
+    const token=this.io.acquire('forget',s.reference,'prepare');if(!token)return await this.#checked(this.#value('busy'));this.beforeIO();
     this.#slot=s; const epoch=this.#epoch;
     try {
       const input=Buffer.from(JSON.stringify({prepared_version:1,operation:s.operation,key:s.key}));
       const output=await this.#raw('prepare-forget',input,s.sample);
       const parsed=await parseForgetReport(output.report,'prepare-forget',{operation:s.operation,key:s.key,...s.sample});
-      if(this.#stale(s,epoch)) return this.#checked(this.#value('invalidated'));
-      if(!parsed.intent) { s.state=parsed.report.status==='invalid-input'?'unavailable':parsed.report.status; s.report=parsed.report; return this.#checked(this.#snapshot()); }
+      if(this.#stale(s,epoch)) return await this.#checked(this.#value('invalidated'));
+      if(!parsed.intent) { s.state=parsed.report.status==='invalid-input'?'unavailable':parsed.report.status; s.report=parsed.report; return await this.#checked(this.#snapshot()); }
       const body=Buffer.from(JSON.stringify({intent:parsed.intent}));
       if(body.length>131072) throw Error('Private input refused');
       s.packet=Object.freeze({original:Buffer.from(output.raw),input:body,originalSha:createHash('sha256').update(output.raw).digest('hex'),inputSha:createHash('sha256').update(body).digest('hex'),previewSha:parsed.intent.expected[0].sha256});
       s.preview=parsed.preview; s.sample=structuredClone(output.sample); s.report=parsed.report; s.deadline=this.now()+120000; s.state='prepared';
-      return this.#checked(this.#snapshot());
+      return await this.#checked(this.#snapshot());
     } catch(error) {
-      if(this.#stale(s,epoch)) return this.#checked(this.#value('invalidated'));
-      s.state=error.unsupported?'unsupported':'unavailable'; s.packet=null; s.preview=null; s.report=null; return this.#checked(this.#snapshot());
-    }
+      if(this.#stale(s,epoch)) return await this.#checked(this.#value('invalidated'));
+      s.state=error.unsupported?'unsupported':'unavailable'; s.packet=null; s.preview=null; s.report=null; return await this.#checked(this.#snapshot());
+    } finally {this.io.release(token);}
   }
-  async #execute(s,selector) {
+  async #execute(s,selector,token) {
     const epoch=this.#epoch;
     try {
       if (createHash('sha256').update(s.packet.input).digest('hex')!==s.packet.inputSha || createHash('sha256').update(s.packet.original).digest('hex')!==s.packet.originalSha) throw Error('Original bytes refused');
       const output=await this.#raw(selector,s.packet.input,s.sample);
       const parsed=await parseForgetReport(output.report,selector,{operation:s.operation});
-      if(this.#stale(s,epoch)) return this.#checked(this.#value('unknown'));
+      if(this.#stale(s,epoch)) return await this.#checked(this.#value('unknown'));
       s.report=parsed.report;
       if(parsed.acknowledgement) { s.state='acknowledged'; s.acknowledgement=parsed.acknowledgement; }
       else if(selector==='forget' && parsed.report.outcome==='not-dispatched') { s.state='not-dispatched'; s.packet=null; }
       else s.state=selector==='forget'?'unknown':'unresolved';
-      return this.#checked(this.#snapshot());
+      return await this.#checked(this.#snapshot());
     } catch {
-      if(this.#stale(s,epoch)) return this.#checked(this.#value('unknown'));
-      s.state=selector==='forget'?'unknown':'unresolved'; s.report=null; return this.#checked(this.#snapshot());
-    }
+      if(this.#stale(s,epoch)) return await this.#checked(this.#value('unknown'));
+      s.state=selector==='forget'?'unknown':'unresolved'; s.report=null; return await this.#checked(this.#snapshot());
+    } finally {this.io.release(token);}
   }
 }
