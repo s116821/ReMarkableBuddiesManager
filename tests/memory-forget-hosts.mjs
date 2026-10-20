@@ -53,8 +53,11 @@ const helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser
 const browser=await chromium.launch();
 try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.goto(helper.origin+'/preview/');await verify(page,async v=>{mode=v;completePending=null;},()=>page.locator('section[aria-labelledby="memory-forget-title"]').screenshot({path:`test-results/memory-forget-browser${packaged?'':'-development'}.png`}),async()=>{assert.equal(typeof completePending,'function');completePending();},async()=>{await expect.poll(()=>typeof completePending).toBe('function');},async button=>{
  const started=performance.now();
- const pending=page.waitForResponse(response=>{if(response.url()!==helper.origin+'/manager-memory-forget'||response.request().method()!=='POST')return false;try{return response.request().postDataJSON()?.action==='prepare';}catch{return false;}},{timeout:14000});
- await button.click();const response=await pending;assert.equal(response.status(),200);const value=await response.json();assert.equal(value.forget.state,'prepared');
+ const isPrepare=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='prepare';}catch{return false;}};
+ const pending=page.waitForResponse(response=>isPrepare(response.request()),{timeout:14000});
+ const finished=page.waitForEvent('requestfinished',{predicate:isPrepare,timeout:14000});
+ const [response,request]=await Promise.all([pending,finished,button.click()]);assert.equal(request,response.request());assert.equal(response.status(),200);
+ // The renderer and exact preview assertions below validate the body; avoid a second CDP body read.
  console.log('Initial browser preparation public response complete before unchanged UI assertions:',Math.ceil(performance.now()-started),'ms; existing14s request bound');
 },async()=>{
  const started=performance.now(),requests=new Set(),events=[],pageErrors=[],consoleErrors=[];let mainDocument=null;
