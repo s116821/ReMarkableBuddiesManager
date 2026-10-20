@@ -1,0 +1,45 @@
+{
+  "fixture_version": 1,
+  "origin": "Synthetic offline serialization diagnostic using existing Windows libremarkable_reader_buddy-b63c9f967e9a415a.rlib and matched serde_json64ba; Envelope/Fact/derived-ID validated, no Store/device or new feature execution. Independent Python canonical bytes equal actual Rust library output. Initial helper compile with incompatible serde_json artifact failed and was corrected; no production source changed.",
+  "input": {
+    "actor_id": "55555555-5555-4555-8555-555555555555",
+    "domain_schema_version": 1,
+    "envelope_version": 1,
+    "kind": "value",
+    "media_descriptors": [],
+    "namespace": "subject-memory",
+    "operation_id": "44444444-4444-4444-8444-444444444444",
+    "parents": [
+      "77777777-7777-4777-8777-777777777777",
+      "66666666-6666-4666-8666-666666666666"
+    ],
+    "payload": {
+      "claim": "physics units",
+      "confidence_basis_points": 8000,
+      "expires_ms": null,
+      "key": {
+        "fact": "22222222-2222-4222-8222-222222222222",
+        "profile": "11111111-1111-4111-8111-111111111111",
+        "scope": {
+          "kind": "global"
+        }
+      },
+      "observed_ms": 9007199254740991,
+      "provenance": {
+        "basis": "user-confirmed",
+        "conversation": null,
+        "description": "Explicit host fixture assertion",
+        "source": null,
+        "turn": null
+      },
+      "subject": "Caf\u00e9 \u03a9",
+      "tags": [],
+      "value": "quote \" slash / backslash \\ newline\n tab\t unit\u001f separator\u2028 emoji\ud83d\ude42"
+    },
+    "record_id": "aa0b8ad5-2bb5-5515-84d6-668fb768d199",
+    "revision_id": "33333333-3333-4333-8333-333333333333"
+  },
+  "canonical_utf8": "{\"envelope_version\":1,\"namespace\":\"subject-memory\",\"domain_schema_version\":1,\"record_id\":\"aa0b8ad5-2bb5-5515-84d6-668fb768d199\",\"revision_id\":\"33333333-3333-4333-8333-333333333333\",\"parents\":[\"66666666-6666-4666-8666-666666666666\",\"77777777-7777-4777-8777-777777777777\"],\"operation_id\":\"44444444-4444-4444-8444-444444444444\",\"actor_id\":\"55555555-5555-4555-8555-555555555555\",\"kind\":\"value\",\"payload\":{\"claim\":\"physics units\",\"confidence_basis_points\":8000,\"expires_ms\":null,\"key\":{\"fact\":\"22222222-2222-4222-8222-222222222222\",\"profile\":\"11111111-1111-4111-8111-111111111111\",\"scope\":{\"kind\":\"global\"}},\"observed_ms\":9007199254740991,\"provenance\":{\"basis\":\"user-confirmed\",\"conversation\":null,\"description\":\"Explicit host fixture assertion\",\"source\":null,\"turn\":null},\"subject\":\"Caf\u00e9 \u03a9\",\"tags\":[],\"value\":\"quote \\\" slash / backslash \\\\ newline\\n tab\\t unit\\u001f separator\u2028 emoji\ud83d\ude42\"},\"media_descriptors\":[]}",
+  "canonical_byte_length": 913,
+  "sha256": "a32d40a07ce867ec4d0d738e0f5317636f5d8bcd9c62dadbd342ffc7fbf1f75c"
+}

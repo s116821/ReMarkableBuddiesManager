@@ -102,3 +102,6 @@ export async function reduceMemoryInspectionResult(v, request, validate) {
   } else if (q.report !== null) refuse();
   return parseMemoryInspectionResult({ contract_version: v.contract_version, status: v.status, observation: v.observation, memory_inspection: { status, view } }, request, validate);
 }
+
+// Shared supported Fact validation; this does not prepare mutation authority.
+export const parseMemoryFact = (value, requested) => fact(value, requested);

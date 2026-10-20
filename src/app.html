@@ -189,6 +189,35 @@
     <p class="text-sm text-muted">A selected-memory conflict or invalid registered state may refuse the entire view. Busy or unavailable does not mean no current heads. Read tablet state to refresh the connection.</p>
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="memory-forget-title">
+    <h2 id="memory-forget-title">Forget one prepared fact</h2>
+    <p class="text-sm text-muted">Inspect one supported current value above, then prepare a new preview. Forget records a tombstone; it preserves history and original documents, reclaims no disk space and does not prove cloud propagation.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="prepareForget()" [disabled]="!host.memoryForget || !forgetHead() || forget().busy || forget().uncertain">Prepare forget preview</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="forgetAction('status')" [disabled]="!host.memoryForget || forget().busy">Check retained request</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopForget()" [disabled]="!forget().busy && forget().view?.state !== 'prepared'">Stop local wait</button>
+    </div>
+    <p role="status" data-testid="memory-forget-status">{{ forget().status }}</p>
+    @if (forget().view?.preview; as preview) {
+      <article class="ui-panel my-3" data-testid="memory-forget-preview">
+        <h3 class="break-all">{{ preview.head.fact.subject }}</h3>
+        <p class="whitespace-pre-wrap break-words">{{ preview.head.fact.value }}</p>
+        <p class="text-sm break-words">Claim: {{ preview.head.fact.claim }} · Tags: {{ preview.head.fact.tags.join(', ') || 'None' }}</p>
+        <p class="text-sm break-words whitespace-pre-wrap">Author asserted: {{ preview.head.fact.provenance.basis }} — {{ preview.head.fact.provenance.description }} · Confidence: {{ preview.head.fact.confidence_basis_points / 100 }}%</p>
+        <p class="text-sm break-all">Observed: {{ preview.head.fact.observed_ms }} · Expires: {{ preview.head.fact.expires_ms ?? 'Not specified' }} · Conversation: {{ preview.head.fact.provenance.conversation ?? 'None' }} · Turn: {{ preview.head.fact.provenance.turn ?? 'None' }} · Source: {{ preview.head.fact.provenance.source ?? 'None' }}</p>
+        <p class="text-sm break-all">Profile: {{ preview.key.profile }} · Fact: {{ preview.key.fact }} · Revision: {{ preview.head.revision }}</p>
+        <p class="text-sm break-all">Target connection: {{ connection().observation?.connection_id }} · Boot: {{ connection().observation?.boot_id }}</p>
+        <p class="text-sm break-all">Effect: {{ preview.scope.kind === 'local' ? 'Local memory' : 'Selected memory publication' }} · Group: {{ preview.scope.group ?? 'None' }}</p>
+        <p class="ui-warning">Confirm only this fresh preview. This will not purge stored history or original documents.</p>
+        <button class="ui-button ui-button-primary my-3" type="button" (click)="forgetAction('confirm')" [disabled]="forget().busy || forget().uncertain">Confirm forget of this prepared fact</button>
+      </article>
+    }
+    <button class="ui-button ui-button-secondary my-3" type="button" (click)="forgetAction('receipt')" [disabled]="!host.memoryForget || !forget().reference || !forget().uncertain || forget().busy">Check historical receipt only</button>
+    @if (forget().view?.acknowledgement; as acknowledgement) { <p class="text-sm break-all" data-testid="memory-forget-ack">Historical operation: {{ acknowledgement.operation }} · Transaction: {{ acknowledgement.transaction }}. Inspect current revisions deliberately to learn current state.</p> }
+    @if (forget().view?.report; as report) { <p class="text-sm">{{ report.selector }}: {{ report.status }} · Incomplete: {{ report.incomplete }} · Outcome: {{ report.outcome ?? 'Read-only preparation' }}</p> }
+    <p class="text-sm text-muted">One request is retained only while this host runs. A full helper/app restart can lose receipt-recovery ability and never proves no earlier commit. No automatic retry or replacement intent is sent. Refresh or disconnect invalidates confirmation; stopping a wait does not undo a possible commit.</p>
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="personalization-title">
     <h2 id="personalization-title">Personalization</h2>
     <p class="text-sm text-muted">Change the response preference saved on your tablet. Saving confirms the file only; use by Reader and Writer still needs verification.</p>

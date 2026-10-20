@@ -95,3 +95,5 @@ Both companions can explicitly query the connected tablet’s configured global 
 Saved storage mode inspection and its saved-versus-active limits: [inspection guide](docs/saved-storage-mode.md).
 
 Current revisions of a fact deliberately selected from search: [single-fact inspection](docs/memory-inspection.md).
+
+Explicit prepared confirmation and historical receipt recovery: [forget one memory fact](docs/memory-forget.md).
