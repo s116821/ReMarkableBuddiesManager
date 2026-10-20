@@ -111,11 +111,16 @@
     <p role="status" data-testid="saved-configuration-status">{{ savedConfiguration().status }}</p>
     @if (savedConfiguration().view?.snapshot; as snapshot) {
       <p class="text-sm my-3" data-testid="saved-configuration-basis">Saved settings only. Configured paths and the running app have not been checked. The file may have changed since this read.</p>
-      <dl class="grid gap-3 my-3" data-testid="saved-configuration-fields">
-        @for (row of configurationRows(); track row.key) {
-          <div class="grid gap-1 border-b border-divider py-2 sm:grid-cols-3 sm:gap-x-5" [attr.data-field]="row.key"><dt class="font-semibold break-words">{{ row.label }}</dt><dd class="break-words">{{ row.value }}</dd><dd class="text-sm text-muted">{{ row.origin }}</dd></div>
+      <div data-testid="saved-configuration-fields">
+        @for (group of configurationGroups(); track group.label) {
+          <h3 class="font-semibold mt-5">{{ group.label }}</h3>
+          <dl class="grid gap-3 my-3">
+            @for (row of group.rows; track row.key) {
+              <div class="grid gap-1 border-b border-divider py-2 sm:grid-cols-3 sm:gap-x-5" [attr.data-field]="row.key"><dt class="font-semibold break-words">{{ row.label }}</dt><dd class="break-words">{{ row.value }}</dd><dd class="text-sm text-muted">{{ row.origin }}</dd></div>
+            }
+          </dl>
         }
-      </dl>
+      </div>
       <h3 class="font-semibold">Not represented in this configuration schema</h3>
       <ul class="list-disc ml-5 text-sm" data-testid="saved-configuration-unsupported">@for (gap of configurationGaps(); track gap.key) { <li>{{ gap.label }}</li> }</ul>
       <p class="text-sm text-muted my-3">These gaps are not false/default settings. Use the separate personalization and saved-storage-mode features for their own supported actions; this view grants no edit, reload, enable or service authority.</p>

@@ -60,7 +60,15 @@ export class App implements OnDestroy {
   readonly memoryInspection = signal(this.memoryInspectionController.state);
   private readonly savedConfigurationController=new SavedConfigurationController(state=>this.savedConfiguration.set(state));
   readonly savedConfiguration=signal(this.savedConfigurationController.state);
-  readonly configurationRows=computed(()=>savedConfigurationRows(this.savedConfiguration().view));
+  readonly configurationGroups=computed(()=>{
+    const rows=savedConfigurationRows(this.savedConfiguration().view);
+    return [
+      {label:'Model and basic settings',rows:rows.filter(row=>!row.key.includes('.'))},
+      {label:'Paths',rows:rows.filter(row=>row.key.startsWith('paths.'))},
+      {label:'Memory and sync',rows:rows.filter(row=>row.key.startsWith('memory.')||row.key.startsWith('sync.'))},
+      {label:'Personalization',rows:rows.filter(row=>row.key.startsWith('personalization.'))},
+    ];
+  });
   readonly configurationGaps=computed(()=>{const labels:Record<string,string>={'reader-enablement':'Reader enablement','writer-enablement':'Writer enablement','retrieval-policy':'Retrieval policy','research-policy':'Research policy','mem-destination':'Mem destination','handwriting-settings':'Handwriting settings'};return (this.savedConfiguration().view?.snapshot?.unsupported??[]).map(key=>({key,label:labels[key]}));});
   private readonly savedModeController = new SavedModeController(state => this.savedMode.set(state));
   readonly savedMode = signal(this.savedModeController.state);
