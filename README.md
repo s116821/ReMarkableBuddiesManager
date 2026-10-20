@@ -8,6 +8,8 @@ See [wired observation setup and limits](docs/wired-observation.md).
 See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
+The separate [original signed test-fixture observer](docs/signed-fixture-verification.md)
+checks actual historical Buddy APKs offline with an independently pinned public key.
 The separate [manual release quarantine command](docs/release-quarantine.md)
 verifies original legacy Buddy download bytes; matching checksums do not enable installation.
 The [manual Manager bundle verifier](docs/manager-bundle-verification.md) additionally
