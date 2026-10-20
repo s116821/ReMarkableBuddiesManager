@@ -25,7 +25,7 @@ async function isolate(context, origin) {
     return route.abort();
   });
 }
-async function verify(page, setState, capture, release) {
+async function verify(page, setState, capture, release, waitRefresh) {
   await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
   const input = page.getByLabel('Search memory', { exact: true }); const search = page.getByRole('button', { name: 'Search global memory', exact: true });
   await input.fill('gravity 第二行 🦊'); await search.click(); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
@@ -37,18 +37,23 @@ async function verify(page, setState, capture, release) {
     if (mode !== 'partial') await expect(page.getByTestId('memory-fact')).toHaveCount(0);
   }
   await input.fill('🦊'.repeat(513)); await expect(search).toBeDisabled(); await input.fill('gravity');
-  await setState('delayed'); await search.click(); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await page.getByRole('button', { name: 'Cancel search', exact: true }).click();
+  await setState('delayed'); await search.click(); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await waitRefresh(); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await page.getByRole('button', { name: 'Cancel search', exact: true }).click();
   await expect(page.getByTestId('memory-status')).toHaveText('Search cancelled');
   await release(); await page.waitForTimeout(100); await expect(page.getByTestId('memory-fact')).toHaveCount(0);
   await setState('complete'); await search.click(); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click(); await expect(page.getByTestId('memory-fact')).toHaveCount(0); await expect(search).toBeDisabled();
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
 }
-const helper = await startHelper({ root: path.resolve('dist/manager/browser'), observer: { observe: async () => ({ contract_version: 1, status: 'observed', observation: tablet }), memoryQuery: respond, cancel: () => ({ contract_version: 1, status: 'cancelled', observation: null }) }, driveAuth: { dispose() {} } });
+// Keep later automatic observation reads pending in this semantic UI fixture.
+// Otherwise a real four-second refresh can clear the deliberately delayed query
+// between Playwright's enabled assertion and cancellation click. Actual polling
+// invalidation remains covered by observation.test.mjs; no product guard changes.
+let observationReads = 0;
+const helper = await startHelper({ root: path.resolve('dist/manager/browser'), observer: { observe: async () => ++observationReads === 1 ? ({ contract_version: 1, status: 'observed', observation: tablet }) : new Promise(() => {}), memoryQuery: respond, cancel: () => ({ contract_version: 1, status: 'cancelled', observation: null }) }, driveAuth: { dispose() {} } });
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext(); await isolate(context, helper.origin); const page = await context.newPage(); await page.goto(helper.origin + '/preview/');
-  await verify(page, async v => { state = v; }, () => page.screenshot({ path: 'test-results/memory-query-browser.png', fullPage: true }), async () => { releasePending(); });
+  await verify(page, async v => { state = v; }, () => page.screenshot({ path: 'test-results/memory-query-browser.png', fullPage: true }), async () => { releasePending(); }, () => expect.poll(() => observationReads, {timeout:7000}).toBeGreaterThan(1));
   console.log('browser synthetic global-memory status/provenance/UTF8/cancel/disconnect/390+1280 pass; no backend or physical qualification');
 } finally { await browser.close(); await helper.close(); }
 const packaged = process.argv.includes('--packaged');
@@ -65,8 +70,8 @@ try {
     assert.equal(child.status, 0); assert.equal(child.stderr, ''); assert.equal(child.stdout.includes('PRIVATE_QUERY_CANARY'), false);
   }
   await app.evaluate(({ ipcMain }, fixture) => {
-    globalThis.memoryMode = 'complete'; globalThis.memoryFixture = fixture;
-    ipcMain.removeHandler('manager:observe'); ipcMain.handle('manager:observe', () => ({ contract_version: 1, status: 'observed', observation: fixture.tablet }));
+    globalThis.memoryMode = 'complete'; globalThis.memoryFixture = fixture;globalThis.memoryObservationReads=0;
+    ipcMain.removeHandler('manager:observe'); ipcMain.handle('manager:observe', () => ++globalThis.memoryObservationReads===1 ? ({ contract_version: 1, status: 'observed', observation: fixture.tablet }) : new Promise(() => {}));
     ipcMain.removeHandler('manager:memoryQuery'); ipcMain.handle('manager:memoryQuery', async (_event, q) => {
       if (Object.keys(q).sort().join() !== 'boot_id,connection_id,text') throw Error('Unexpected input');
       const mode = globalThis.memoryMode; const v = structuredClone(globalThis.memoryFixture.reply);
@@ -80,6 +85,6 @@ try {
   await verify(page, v => app.evaluate((_electron, v) => { globalThis.memoryMode = v; }, v), async () => {
     const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG().toString('base64'));
     const { writeFile } = await import('node:fs/promises'); await writeFile(`test-results/memory-query-desktop${packaged ? '-packaged' : ''}.png`, Buffer.from(png, 'base64'));
-  }, () => app.evaluate(() => { globalThis.memoryRelease(); globalThis.memoryRelease = null; }));
+  }, () => app.evaluate(() => { globalThis.memoryRelease(); globalThis.memoryRelease = null; }), () => expect.poll(() => app.evaluate(() => globalThis.memoryObservationReads), {timeout:7000}).toBeGreaterThan(1));
   console.log(`${packaged ? 'packaged ' : ''}Electron actual invalid-input/resource refusal and synthetic memory IPC/UI pass; no live tablet/provider proof`);
 } finally { await app.close(); await rm(folder, { recursive: true, force: true }); }

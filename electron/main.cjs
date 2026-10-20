@@ -10,7 +10,11 @@ app.whenReady().then(async () => {
   const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
   const { parseMemoryInspectionRequest, parseMemoryInspectionResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-inspection.mjs')).href);
   const { parseSavedModeRequest, parseSavedModeResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-mode.mjs')).href);
-  const observer = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
+  const { MemoryForgetHost } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget.mjs')).href);
+  const { parseForgetRequest, parseForgetResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget-protocol.mjs')).href);
+  const rawObserver = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
+  const forget = new MemoryForgetHost({ observer: rawObserver });
+  const observer = forget.wrap();
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
@@ -36,6 +40,13 @@ app.whenReady().then(async () => {
   ipcMain.handle('manager:memoryQuery', (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
+  });
+  window.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if(mainFrame) forget.invalidate(); });
+  ipcMain.handle('manager:memoryForget', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw Error('Memory forget caller refused');
+    const request = parseForgetRequest(args[0]);
+    const value = await parseForgetResult(await forget.request(request), validateResult);
+    return forget.assertCurrent(value);
   });
   ipcMain.handle('manager:inspectMemory', async (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory inspection caller refused');

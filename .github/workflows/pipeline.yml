@@ -159,6 +159,8 @@ jobs:
           xvfb-run -a npm run test:manager-download-hosts -- --packaged
           xvfb-run -a npm run test:memory-query-hosts
           xvfb-run -a npm run test:memory-query-hosts -- --packaged
+          xvfb-run -a npm run test:memory-forget-hosts
+          xvfb-run -a npm run test:memory-forget-hosts -- --packaged
           xvfb-run -a npm run test:memory-inspection-hosts
           xvfb-run -a npm run test:memory-inspection-hosts -- --packaged
           xvfb-run -a npm run test:saved-mode-hosts
@@ -182,6 +184,8 @@ jobs:
           npm run test:manager-download-hosts -- --packaged
           npm run test:memory-query-hosts
           npm run test:memory-query-hosts -- --packaged
+          npm run test:memory-forget-hosts
+          npm run test:memory-forget-hosts -- --packaged
           npm run test:memory-inspection-hosts
           npm run test:memory-inspection-hosts -- --packaged
           npm run test:saved-mode-hosts
