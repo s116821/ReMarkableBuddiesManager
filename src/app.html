@@ -140,54 +140,6 @@
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
     <p class="mt-4 text-sm text-muted">Backup browsing and tablet restore are not available yet. Signing in does not change tablet settings or back up data.</p>
   </section>
-  <section class="ui-panel my-6" aria-labelledby="runtime-title">
-    <h2 id="runtime-title">Buddy binary version</h2>
-    <button class="ui-button ui-button-secondary" type="button" (click)="inspectRuntime()" [disabled]="!profile().runtimeIdentityProbe || !host.inspectRuntime || runtimeIdentity().status === 'Reading binary version…'">Read binary version</button>
-    <p role="status" data-testid="runtime-identity-status">{{ runtimeIdentity().status }}</p>
-    @if (runtimeIdentity().report?.binary_version; as value) { <p class="font-mono break-all" data-testid="runtime-binary-version">{{ value }}</p> }
-    <p class="text-sm text-muted">This is the version reported by the known Buddy program. The running process, package source and compatibility remain unverified. It does not make a release eligible for installation.</p>
-    @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
-  </section>
-
-  <section class="ui-panel my-6" aria-labelledby="personalization-title">
-    <h2 id="personalization-title">Personalization</h2>
-    <p class="text-sm text-muted">Change the response preference saved on your tablet. Saving confirms the file only; use by Reader and Writer still needs verification.</p>
-    <button class="ui-button ui-button-secondary" type="button" (click)="personalize('inspect')" [disabled]="!profile().personalizationProbe || !host.personalization || personalization().busy">Read personalization</button>
-    <p role="status" data-testid="personalization-status">{{ personalization().status }}</p>
-    @if (personalization().report) {
-      <label class="block mt-4" for="personalization-text">Response preference</label>
-      <textarea id="personalization-text" class="ui-field block w-full sm:w-full" rows="6" [value]="personalizationText()" (input)="editPersonalization($event)" (paste)="pastePersonalization($event)" aria-describedby="personalization-help"></textarea>
-      <p id="personalization-help" class="text-sm text-muted">{{ personalizationBytes() }} / 16,384 bytes. Spaces and line breaks are preserved.</p>
-      <label class="block"><input type="checkbox" [checked]="personalizationEnabled()" (change)="togglePersonalization($event)"> Enable this preference</label>
-      @if (!personalizationValid()) { <p role="alert" class="ui-error">Text is too large or contains an invalid character.</p> }
-      <div class="flex flex-wrap gap-3 mt-4">
-        <button class="ui-button ui-button-primary" type="button" (click)="personalize('set')" [disabled]="!profile().personalizationProbe || personalization().busy || !personalizationValid()">Save preference</button>
-        <button class="ui-button ui-button-secondary" type="button" (click)="personalize('disable')" [disabled]="!profile().personalizationProbe || personalization().busy">Disable saved preference</button>
-        <button class="ui-button ui-button-secondary" type="button" (click)="personalize('clear')" [disabled]="!profile().personalizationProbe || personalization().busy">Clear saved preference</button>
-      </div>
-      <p class="ui-warning">{{ personalization().report?.runtime_activation === 'restart-required' ? 'Saved on disk. A qualified restart and runtime check are still required.' : 'Disk value verified. Use in the running app has not been verified.' }}</p>
-    }
-    <p class="text-sm text-muted">Busy can mean the app is running or another maintenance task is using its data. This editor does not stop or restart it. Your history and handwriting data are preserved.</p>
-  </section>
-
-  <section class="ui-panel my-6" aria-labelledby="drive-title">
-    <h2 id="drive-title">Google Drive</h2>
-    <p class="text-sm text-muted">Sign in on this computer, even without a tablet connected.</p>
-    <p class="mt-3 font-semibold" role="status" data-testid="drive-status">{{ driveLabels[drive().status] }}</p>
-    @if (drive().account; as account) { <p class="break-words" data-testid="drive-account">{{ account.label }}</p> }
-    @if (drive().checkedAt) { <p class="text-xs text-muted">Last checked: {{ drive().checkedAt }}</p> }
-    @if (drive().status === 'cached') { <p class="ui-warning">These account details were saved earlier. Check the connection before relying on them.</p> }
-    @if (drive().status === 'unconfigured' || drive().status === 'unavailable') { <p class="text-sm text-muted">Check the Google Drive setup in the project guide. Sign-in details stay on this computer.</p> }
-    <div class="mt-4 flex flex-wrap gap-3">
-      <button class="ui-button ui-button-primary" type="button" (click)="signInDrive()" [disabled]="['unconfigured', 'unavailable', 'connecting', 'checking', 'revoking'].includes(drive().status)">Sign in to Google Drive</button>
-      <button class="ui-button ui-button-secondary" type="button" (click)="checkDrive()" [disabled]="!drive().account || ['connecting', 'checking', 'revoking'].includes(drive().status)">Check connection</button>
-      @if (['connecting', 'checking'].includes(drive().status)) { <button class="ui-button ui-button-secondary" type="button" (click)="cancelDrive()">Cancel</button> }
-      <button class="ui-button ui-button-secondary" type="button" (click)="disconnectDrive()" [disabled]="!drive().account || ['connecting', 'checking', 'revoking'].includes(drive().status)">Disconnect this Manager</button>
-      <button class="ui-button ui-button-secondary" type="button" (click)="revokeDrive()" [disabled]="!drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(drive().status)">Remove Google access…</button>
-    </div>
-    @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
-    <p class="mt-4 text-sm text-muted">Backup browsing and tablet restore are not available yet. Signing in does not change tablet settings or back up data.</p>
-  </section>
   <section class="ui-panel my-6" aria-labelledby="owned-title">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <h2 id="owned-title">Buddy-owned data</h2>
