@@ -57,7 +57,7 @@ export class App implements OnDestroy {
   readonly memory = signal(this.memoryController.state);
   readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
-  private readonly modelController=new ModelSettingsController(state=>this.model.set(state));
+  private readonly modelController=new ModelSettingsController(state=>this.model.set(state),key=>{document.querySelectorAll<HTMLTextAreaElement>(key?'#model-replacement-'+key:'[id^="model-replacement-"]').forEach(field=>{field.value='';});});
   readonly model=signal(this.modelController.state);
   readonly modelCanSave=computed(()=>this.model().view?.state==='ready'&&!this.model().busy&&this.model().valid&&this.model().retained.length<8);
   readonly modelRows=computed(()=>{const current=this.model().view?.current;if(!current)return [];return (['model','base_url'] as ModelKey[]).map(key=>({key,label:key==='model'?'Model':'Endpoint',originLabel:{default:'No saved override',declared:'Saved value present','declared-null':'Explicitly empty'}[current[key].origin],action:this.model().actions[key]}));});

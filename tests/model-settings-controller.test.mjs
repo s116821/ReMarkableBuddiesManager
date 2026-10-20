@@ -62,3 +62,12 @@ test('ambiguous unanchored normalized edits refuse rather than choose a differen
  assert.throws(()=>reconcileModelText('A\r\nX\r\nY\r\nB','A\nP\nQ\nB')); assert.throws(()=>reconcileModelText('A\r\n\nB','A\nB'));assert.throws(()=>reconcileModelText('A\n\r\nB','A\nB'));assert.throws(()=>reconcileModelText('A\r\nB','A\n\nB'));assert.equal(reconcileModelText('A\r\nB','A\nX'),'A\r\nX');
  const f=open();await start(f);paste(f.controller,'model','A\r\n\nB');f.controller.input('model','A\nB');assert.equal(f.controller.state.valid,false);assert.match(f.controller.state.status,/refused/);const calls=f.calls.length;await f.controller.save(f.adapter,tablet);assert.equal(f.calls.length,calls);f.controller.clear();
 });
+
+test('synchronous input-clear hook runs per field and before dispatch or local invalidation, independent of rendering',async()=>{
+ const f=modelFixture(),dom={model:'',base_url:''},events=[],controller=new ModelSettingsController(()=>{},key=>{events.push('clear:'+(key??'all'));for(const k of key?[key]:['model','base_url'])dom[k]='';}),adapter={modelSettings:q=>f.model.request(q)};await controller.begin(adapter,tablet,async()=>true);
+ paste(controller,'model','PRIVATE_MODEL');dom.model=controller.text('model');paste(controller,'base_url','PRIVATE_ENDPOINT');dom.base_url=controller.text('base_url');controller.action('model','keep');assert.equal(dom.model,'');assert.equal(dom.base_url,'PRIVATE_ENDPOINT');events.length=0;
+ const gate=defer(),pending=controller.save({modelSettings:async q=>{events.push('dispatch');assert.deepEqual(dom,{model:'',base_url:''});await gate.promise;return adapter.modelSettings(q);}},tablet);assert.deepEqual(events,['clear:all','dispatch']);gate.resolve();await pending;
+ await controller.begin(adapter,tablet,async()=>true);paste(controller,'model','PRIVATE_HIDE');dom.model=controller.text('model');controller.clear();assert.deepEqual(dom,{model:'',base_url:''});
+ const delayed=defer(),oldRead=controller.retained({modelSettings:()=>delayed.promise});controller.clear();await controller.begin(adapter,tablet,async()=>true);paste(controller,'model','NEW_ACTIVE_PRIVATE');dom.model=controller.text('model');events.length=0;
+ delayed.resolve(await f.model.request({action:'retained'}));await oldRead;assert.equal(controller.text('model'),'NEW_ACTIVE_PRIVATE');assert.equal(dom.model,'NEW_ACTIVE_PRIVATE');assert.deepEqual(events,[]);controller.clear();
+});

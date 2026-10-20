@@ -75,16 +75,16 @@ export class ModelSettingsController {
  state:ModelUiState={status:'Not inspected',busy:false,view:null,reference:null,actions:empty(),valid:false,retained:[],uncertain:false};
  private generation=0;private pendingAction:ModelSettingsRequest['action']|null=null;private possible=false;private original:ModelRetained|null=null;
  private draft=new ModelDraft();private timer:ReturnType<typeof setTimeout>|null=null;
- private readonly changed:(v:ModelUiState)=>void;
- constructor(changed:(v:ModelUiState)=>void){this.changed=changed;}
+ private readonly changed:(v:ModelUiState)=>void;private readonly clearInputs:(key?:ModelKey)=>void;
+ constructor(changed:(v:ModelUiState)=>void,clearInputs:(key?:ModelKey)=>void=()=>{}){this.changed=changed;this.clearInputs=clearInputs;}
  private publish(p:Partial<ModelUiState>){this.state={...this.state,...p};this.changed(this.state);}
- private resetDraft(){if(this.timer!==null)clearTimeout(this.timer);this.timer=null;this.draft.clear();}
+ private resetDraft(){if(this.timer!==null)clearTimeout(this.timer);this.timer=null;this.draft.clear();this.clearInputs();}
  private keepOriginal(){if(this.original&&!this.state.retained.some(x=>x.reference===this.original!.reference))this.publish({retained:[...this.state.retained,this.original].slice(0,8)});}
  clear(){this.generation++;this.pendingAction=null;this.resetDraft();if(this.possible)this.keepOriginal();this.publish({status:this.possible?'Model save outcome unknown - check its original desired file':'Model editor invalidated - begin a fresh edit',busy:false,view:null,actions:empty(),valid:false,reference:this.possible?this.original?.reference??null:null,uncertain:this.possible});}
  text(key:ModelKey){return this.draft.display(key);}
  private editable(){return !this.state.busy&&this.state.view?.state==='ready';}
  private refreshValidity(){this.publish({valid:this.editable()&&MODEL_KEYS.some(k=>this.state.actions[k]!=='keep')&&MODEL_KEYS.every(k=>this.state.actions[k]!=='replace'||this.draft.valid(k))});}
- action(key:ModelKey,value:string){if(!this.editable()||!['keep','replace','clear'].includes(value))return;this.draft.clear(key);this.publish({actions:{...this.state.actions,[key]:value as ModelAction}});this.refreshValidity();}
+ action(key:ModelKey,value:string){if(!this.editable()||!['keep','replace','clear'].includes(value))return;this.draft.clear(key);this.clearInputs(key);this.publish({actions:{...this.state.actions,[key]:value as ModelAction}});this.refreshValidity();}
  beforeInput(key:ModelKey,start:number,end:number,type:string,data:string|null){if(this.editable()&&this.state.actions[key]==='replace')this.draft.beforeInput(key,start,end,type,data);}
  input(key:ModelKey,value:string){if(!this.editable()||this.state.actions[key]!=='replace')return;const ok=this.draft.input(key,value);this.publish({status:ok?labels['ready']:'Replacement edit refused - enter a fresh valid replacement'});this.refreshValidity();}
  paste(key:ModelKey,start:number,end:number,text:string){if(!this.editable()||this.state.actions[key]!=='replace')return;const ok=this.draft.paste(key,start,end,text);this.publish({status:ok?labels['ready']:'Replacement paste refused - enter a fresh valid replacement'});this.refreshValidity();}
