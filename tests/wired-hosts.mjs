@@ -70,7 +70,7 @@ try {
     await verify(page, process.platform === 'linux' ? 'observed' : 'unconfigured');
     const host = await page.evaluate(() => ({ contract: window.managerHost.contract_version, keys: Object.keys(window.managerHost) }));
     assert.equal(host.contract, 1);
-    assert.deepEqual(host.keys.sort(), ['cancel', 'contract_version', 'downloads', 'driveAuth', 'inspectOwned', 'inspectRuntime', 'inspectSavedMode', 'kind', 'memoryQuery', 'observe', 'personalization', 'transport']);
+    assert.deepEqual(host.keys.sort(), ['cancel', 'contract_version', 'downloads', 'driveAuth', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedMode', 'kind', 'memoryQuery', 'observe', 'personalization', 'transport']);
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({}, {}).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSavedMode({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
