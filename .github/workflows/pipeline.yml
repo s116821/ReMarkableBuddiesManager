@@ -165,6 +165,8 @@ jobs:
           xvfb-run -a npm run test:memory-inspection-hosts -- --packaged
           xvfb-run -a npm run test:saved-mode-hosts
           xvfb-run -a npm run test:saved-mode-hosts -- --packaged
+          xvfb-run -a npm run test:saved-configuration-hosts
+          xvfb-run -a npm run test:saved-configuration-hosts -- --packaged
       - if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -190,6 +192,8 @@ jobs:
           npm run test:memory-inspection-hosts -- --packaged
           npm run test:saved-mode-hosts
           npm run test:saved-mode-hosts -- --packaged
+          npm run test:saved-configuration-hosts
+          npm run test:saved-configuration-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
         run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"

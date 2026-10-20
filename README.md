@@ -97,3 +97,5 @@ Saved storage mode inspection and its saved-versus-active limits: [inspection gu
 Current revisions of a fact deliberately selected from search: [single-fact inspection](docs/memory-inspection.md).
 
 Explicit prepared confirmation and historical receipt recovery: [forget one memory fact](docs/memory-forget.md).
+
+Saved-only settings and safe origin summaries: [configuration inspection](docs/saved-configuration.md).

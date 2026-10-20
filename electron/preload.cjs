@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   memoryQuery: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory query input refused')) : ipcRenderer.invoke('manager:memoryQuery', args[0]),
   memoryForget: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory forget input refused')) : ipcRenderer.invoke('manager:memoryForget', args[0]),
   inspectMemory: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory inspection input refused')) : ipcRenderer.invoke('manager:inspectMemory', args[0]),
+  inspectSavedConfiguration: (...args) => args.length !== 1 ? Promise.reject(new Error('Saved configuration input refused')) : ipcRenderer.invoke('manager:inspectSavedConfiguration', args[0]),
   inspectSavedMode: (...args) => args.length !== 1 ? Promise.reject(new Error('Saved mode input refused')) : ipcRenderer.invoke('manager:inspectSavedMode', args[0]),
   personalization: request => ipcRenderer.invoke('manager:personalization', request),
   inspectRuntime: (...args) => args.length ? Promise.reject(new Error('Runtime identity input refused')) : ipcRenderer.invoke('manager:inspectRuntime'),

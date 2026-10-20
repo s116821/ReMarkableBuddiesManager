@@ -1,3 +1,4 @@
+import { request as navigationRequest } from 'node:http';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp,writeFile,rm } from 'node:fs/promises';
@@ -51,7 +52,7 @@ test('actual helper refuses preparation invalidated during its second public val
  const pause=deferred(),release=deferred(),original=globalThis.crypto.subtle.digest;let sha1=0;
  globalThis.crypto.subtle.digest=async function(algorithm,data){if(algorithm==='SHA-1'&&++sha1===4){pause.resolve();await release.promise;}return original.call(this,algorithm,data);};t.after(()=>{globalThis.crypto.subtle.digest=original;});
  const pending=fetch(helper.origin+'/manager-memory-forget',{method:'POST',headers,body:JSON.stringify(prepareRequest())});
- await pause.promise;await fetch(helper.origin+'/preview/');release.resolve();assert.equal((await pending).status,503);
+ await pause.promise;await new Promise((resolve,reject)=>{const req=navigationRequest(helper.origin+'/preview/',{headers:{'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'}},res=>{res.resume();res.on('end',resolve);});req.on('error',reject);req.end();});release.resolve();assert.equal((await pending).status,503);
  const state=await (await fetch(helper.origin+'/manager-memory-forget',{method:'POST',headers,body:'{"action":"status"}'})).json();assert.equal(state.forget.state,'invalidated');assert.equal(state.forget.preview,null);
 });
 

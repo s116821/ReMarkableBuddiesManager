@@ -6,6 +6,7 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import { startHelper } from '../host/browser-helper.mjs';
 import { report, reply, tablet } from './fixtures/memory-query.mjs';
+import { validMemoryText } from '../host/memory-query.mjs';
 
 const folder = await mkdtemp(path.join(os.tmpdir(), 'manager-memory-ui-'));
 await mkdir('test-results', { recursive: true });
@@ -25,22 +26,27 @@ async function isolate(context, origin) {
     return route.abort();
   });
 }
-async function verify(page, setState, capture, release, waitRefresh) {
+async function verify(page, setState, capture, release, waitRefresh, hostState) {
   await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
   const input = page.getByLabel('Search memory', { exact: true }); const search = page.getByRole('button', { name: 'Search global memory', exact: true });
-  await input.fill('gravity 第二行 🦊'); await search.click(); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
+  const samples=[];
+  await input.evaluate(el=>{globalThis.memoryInputEvents=[];el.addEventListener('input',()=>{globalThis.memoryInputEvents.push({time:Date.now(),characters:el.value.length,bytes:new TextEncoder().encode(el.value).length});});});
+  async function snapshot(phase){const value=await input.inputValue();samples.push({phase,time:Date.now(),connection:await page.locator('#connection-title').textContent(),modelPresent:await page.getByTestId('tablet-model').count(),status:await page.getByTestId('memory-status').textContent(),disabled:await search.isDisabled(),characters:value.length,bytes:new TextEncoder().encode(value).length,validInput:validMemoryText(value),host:await hostState(),inputEvents:await page.evaluate(()=>globalThis.memoryInputEvents)});}
+  async function clickSearch(mode){await snapshot(`before:${mode}`);try{await search.click();}catch(error){await snapshot(`failed:${mode}`);console.error('Memory-query fixture state:',JSON.stringify(samples));throw error;}}
+
+  await input.fill('gravity 第二行 🦊'); await clickSearch('complete'); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
   await expect(page.getByTestId('memory-fact')).toContainText('Explicit fixture assertion');
   for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
-  await page.locator('#memory-title').scrollIntoViewIfNeeded(); await capture();
+  await page.locator('#memory-title').scrollIntoViewIfNeeded(); await snapshot('before-capture'); await capture(); await snapshot('after-capture');
   for (const [mode, label] of [['partial', 'Partial results'], ['complete-empty', 'no matching global facts'], ['disabled', 'Subject memory disabled'], ['busy', 'Memory query busy'], ['unavailable', 'Subject memory unavailable'], ['invalid-input', 'input unsupported'], ['future', 'report version unsupported']]) {
-    await setState(mode); await search.click(); await expect(page.getByTestId('memory-status')).toContainText(label);
+    await setState(mode); await clickSearch(mode); await expect(page.getByTestId('memory-status')).toContainText(label);
     if (mode !== 'partial') await expect(page.getByTestId('memory-fact')).toHaveCount(0);
   }
   await input.fill('🦊'.repeat(513)); await expect(search).toBeDisabled(); await input.fill('gravity');
-  await setState('delayed'); await search.click(); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await waitRefresh(); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await page.getByRole('button', { name: 'Cancel search', exact: true }).click();
+  await setState('delayed'); await clickSearch('delayed'); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await waitRefresh(); await expect(page.getByRole('button', { name: 'Cancel search', exact: true })).toBeEnabled(); await page.getByRole('button', { name: 'Cancel search', exact: true }).click();
   await expect(page.getByTestId('memory-status')).toHaveText('Search cancelled');
   await release(); await page.waitForTimeout(100); await expect(page.getByTestId('memory-fact')).toHaveCount(0);
-  await setState('complete'); await search.click(); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
+  await setState('complete'); await clickSearch('complete-after-cancel'); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click(); await expect(page.getByTestId('memory-fact')).toHaveCount(0); await expect(search).toBeDisabled();
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
 }
@@ -48,14 +54,17 @@ async function verify(page, setState, capture, release, waitRefresh) {
 // Otherwise a real four-second refresh can clear the deliberately delayed query
 // between Playwright's enabled assertion and cancellation click. Actual polling
 // invalidation remains covered by observation.test.mjs; no product guard changes.
+// Retain synthetic completions like real I/O: an unrooted never-promise can let
+// Electron collect its IPC reply channel and reject an otherwise pending read.
 let observationReads = 0;
-const helper = await startHelper({ root: path.resolve('dist/manager/browser'), observer: { observe: async () => ++observationReads === 1 ? ({ contract_version: 1, status: 'observed', observation: tablet }) : new Promise(() => {}), memoryQuery: respond, cancel: () => ({ contract_version: 1, status: 'cancelled', observation: null }) }, driveAuth: { dispose() {} } });
+const observationPending=new Set();
+const helper = await startHelper({ root: path.resolve('dist/manager/browser'), observer: { observe: async () => ++observationReads === 1 ? ({ contract_version: 1, status: 'observed', observation: tablet }) : new Promise(resolve=>{observationPending.add(resolve);}), memoryQuery: respond, cancel: () => ({ contract_version: 1, status: 'cancelled', observation: null }) }, driveAuth: { dispose() {} } });
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext(); await isolate(context, helper.origin); const page = await context.newPage(); await page.goto(helper.origin + '/preview/');
-  await verify(page, async v => { state = v; }, () => page.screenshot({ path: 'test-results/memory-query-browser.png', fullPage: true }), async () => { releasePending(); }, () => expect.poll(() => observationReads, {timeout:7000}).toBeGreaterThan(1));
+  await verify(page, async v => { state = v; }, () => page.screenshot({ path: 'test-results/memory-query-browser.png', fullPage: true }), async () => { releasePending(); }, () => expect.poll(() => observationReads, {timeout:7000}).toBeGreaterThan(1),async()=>({observationReads,mode:state}));
   console.log('browser synthetic global-memory status/provenance/UTF8/cancel/disconnect/390+1280 pass; no backend or physical qualification');
-} finally { await browser.close(); await helper.close(); }
+} finally { for(const resolve of observationPending)resolve({contract_version:1,status:'cancelled',observation:null});observationPending.clear();await browser.close();await helper.close(); }
 const packaged = process.argv.includes('--packaged');
 const app = await electron.launch({ executablePath: packaged ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`) : undefined,
   args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...process.env, MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: folder } });
@@ -70,8 +79,8 @@ try {
     assert.equal(child.status, 0); assert.equal(child.stderr, ''); assert.equal(child.stdout.includes('PRIVATE_QUERY_CANARY'), false);
   }
   await app.evaluate(({ ipcMain }, fixture) => {
-    globalThis.memoryMode = 'complete'; globalThis.memoryFixture = fixture;globalThis.memoryObservationReads=0;
-    ipcMain.removeHandler('manager:observe'); ipcMain.handle('manager:observe', () => ++globalThis.memoryObservationReads===1 ? ({ contract_version: 1, status: 'observed', observation: fixture.tablet }) : new Promise(() => {}));
+    globalThis.memoryMode = 'complete'; globalThis.memoryFixture = fixture;globalThis.memoryObservationReads=0;globalThis.memoryObservationPending=new Set();
+    ipcMain.removeHandler('manager:observe'); ipcMain.handle('manager:observe', () => ++globalThis.memoryObservationReads===1 ? ({ contract_version: 1, status: 'observed', observation: fixture.tablet }) : new Promise(resolve=>{globalThis.memoryObservationPending.add(resolve);}));
     ipcMain.removeHandler('manager:memoryQuery'); ipcMain.handle('manager:memoryQuery', async (_event, q) => {
       if (Object.keys(q).sort().join() !== 'boot_id,connection_id,text') throw Error('Unexpected input');
       const mode = globalThis.memoryMode; const v = structuredClone(globalThis.memoryFixture.reply);
@@ -83,8 +92,15 @@ try {
     });
   }, { tablet, reply: reply(report()) });
   await verify(page, v => app.evaluate((_electron, v) => { globalThis.memoryMode = v; }, v), async () => {
+    // Native capture can create GC pressure; keep the scheduled read alive through it.
+    await expect.poll(()=>app.evaluate(()=>globalThis.memoryObservationReads),{timeout:7000}).toBeGreaterThan(1);
+    assert.equal(await app.evaluate(()=>globalThis.memoryObservationPending.size),1);
+    await app.evaluate(async()=>{const require=process.mainModule.require.bind(process.mainModule);require('node:v8').setFlagsFromString('--expose-gc');const gc=require('node:vm').runInNewContext('gc');for(let i=0;i<3;i++){gc();await new Promise(resolve=>setImmediate(resolve));}});
+    await expect(page.locator('#connection-title')).toHaveText('Wired tablet observed');
+    await expect(page.getByRole('button',{name:'Search global memory',exact:true})).toBeEnabled();
+    assert.equal(await app.evaluate(()=>globalThis.memoryObservationPending.size),1);
     const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG().toString('base64'));
     const { writeFile } = await import('node:fs/promises'); await writeFile(`test-results/memory-query-desktop${packaged ? '-packaged' : ''}.png`, Buffer.from(png, 'base64'));
-  }, () => app.evaluate(() => { globalThis.memoryRelease(); globalThis.memoryRelease = null; }), () => expect.poll(() => app.evaluate(() => globalThis.memoryObservationReads), {timeout:7000}).toBeGreaterThan(1));
+  }, () => app.evaluate(() => { globalThis.memoryRelease(); globalThis.memoryRelease = null; }), () => expect.poll(() => app.evaluate(() => globalThis.memoryObservationReads), {timeout:7000}).toBeGreaterThan(1),()=>app.evaluate(()=>({observationReads:globalThis.memoryObservationReads,mode:globalThis.memoryMode})));
   console.log(`${packaged ? 'packaged ' : ''}Electron actual invalid-input/resource refusal and synthetic memory IPC/UI pass; no live tablet/provider proof`);
-} finally { await app.close(); await rm(folder, { recursive: true, force: true }); }
+} finally { await app.evaluate(()=>{for(const resolve of globalThis.memoryObservationPending??[])resolve({contract_version:1,status:'cancelled',observation:null});globalThis.memoryObservationPending?.clear();});await app.close();await rm(folder,{recursive:true,force:true}); }

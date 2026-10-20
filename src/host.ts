@@ -1,3 +1,4 @@
+import type { SavedConfigurationAdapter,SavedConfigurationResult } from './saved-configuration';
 import type { ForgetAdapter, ForgetResult } from './memory-forget';
 import type { MemoryInspectionAdapter, MemoryInspectionResult } from './memory-inspection';
 import type { MemoryAdapter, MemoryResult } from './memory-query';
@@ -13,6 +14,7 @@ import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly memoryForget?: ForgetAdapter['memoryForget'];
   readonly inspectMemory?: MemoryInspectionAdapter['inspectMemory'];
+  readonly inspectSavedConfiguration?: SavedConfigurationAdapter['inspectSavedConfiguration'];
   readonly inspectSavedMode?: SavedModeAdapter['inspectSavedMode'];
   readonly memoryQuery?: MemoryAdapter['memoryQuery'];
   readonly downloads?: DownloadAdapter;
@@ -74,6 +76,15 @@ export function currentHost(): ManagerHost {
       try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 270336) throw new Error('Memory inspection response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as MemoryInspectionResult;
+    },
+    inspectSavedConfiguration: async (request: import('../host/saved-configuration.mjs').SavedConfigurationRequest) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Saved configuration helper unavailable');
+      const response=await fetch('/manager-saved-configuration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
+      if(!response.ok||!response.body)throw Error('Saved configuration unavailable');
+      const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>32768)throw Error('Saved configuration response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}
+      return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as SavedConfigurationResult;
     },
     inspectSavedMode: async (request: import('../host/saved-mode.mjs').SavedModeRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Saved mode helper unavailable');

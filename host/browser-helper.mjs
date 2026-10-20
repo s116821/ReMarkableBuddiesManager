@@ -1,3 +1,4 @@
+import { parseSavedConfigurationRequest, parseSavedConfigurationResult } from './saved-configuration.mjs';
 import { MemoryForgetHost } from './memory-forget.mjs';
 import { parseForgetRequest, parseForgetResult } from './memory-forget-protocol.mjs';
 import { parseMemoryInspectionRequest, parseMemoryInspectionResult } from './memory-inspection.mjs';
@@ -36,7 +37,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
       return;
     }
-    if (req.method === 'GET' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) forget.invalidate();
+    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) observer.cancel();
     if (url.pathname === '/manager-memory-forget') {
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
       const chunks = []; let bytes = 0, request;
@@ -64,6 +65,22 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
         const value = await parseMemoryInspectionResult(await observer.inspectMemory(request), request, validateResult);
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));
       } catch { refuse(503); }
+      return;
+    }
+    if (url.pathname === '/manager-saved-configuration') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const chunks=[];let bytes=0,request;
+      try {
+        for await(const chunk of req){bytes+=chunk.length;if(bytes>256)return refuse(413);chunks.push(chunk);}
+        const raw=new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
+        request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseSavedConfigurationRequest(request);
+      }catch{return refuse(400);}
+      try {
+        const pending=observer.inspectSavedConfiguration(request),generation=observer.generation;
+        const value=parseSavedConfigurationResult(await pending,request,validateResult);
+        if(generation!==observer.generation)throw Error('Inspection invalidated');
+        res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));
+      }catch{refuse(503);}
       return;
     }
     if (url.pathname === '/manager-saved-mode') {

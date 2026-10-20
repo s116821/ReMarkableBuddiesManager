@@ -2,7 +2,7 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { parseForgetRequest, parseForgetReport, parseForgetResult } from './memory-forget-protocol.mjs';
 import { validateResult } from './observation-protocol.mjs';
 const terminal = new Set(['none','invalidated','unsupported','unavailable','busy','not-dispatched','acknowledged']);
-const external = new Set(['observe','cancel','inspectOwned','inspectRuntime','personalization','memoryQuery','inspectMemory','inspectSavedMode']);
+const external = new Set(['observe','cancel','inspectOwned','inspectRuntime','personalization','memoryQuery','inspectMemory','inspectSavedMode','inspectSavedConfiguration']);
 const sameTarget = (a,b) => a && b && a.connection_id===b.connection_id && a.boot_id===b.boot_id;
 export class MemoryForgetHost {
   #slot=null;

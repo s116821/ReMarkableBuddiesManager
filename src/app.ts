@@ -1,3 +1,4 @@
+import { SavedConfigurationController,savedConfigurationRows } from './saved-configuration';
 import { MemoryForgetController } from './memory-forget';
 import { MemoryInspectionController } from './memory-inspection';
 import type { MemoryKey } from '../host/memory-inspection.mjs';
@@ -57,11 +58,23 @@ export class App implements OnDestroy {
   readonly forgetHead = computed(() => { const heads = this.memoryInspection().view?.heads; return heads?.length === 1 && heads[0].kind === 'value' ? heads[0] : null; });
   private readonly memoryInspectionController = new MemoryInspectionController(state => this.memoryInspection.set(state));
   readonly memoryInspection = signal(this.memoryInspectionController.state);
+  private readonly savedConfigurationController=new SavedConfigurationController(state=>this.savedConfiguration.set(state));
+  readonly savedConfiguration=signal(this.savedConfigurationController.state);
+  readonly configurationGroups=computed(()=>{
+    const rows=savedConfigurationRows(this.savedConfiguration().view);
+    return [
+      {label:'Model and basic settings',rows:rows.filter(row=>!row.key.includes('.'))},
+      {label:'Paths',rows:rows.filter(row=>row.key.startsWith('paths.'))},
+      {label:'Memory and sync',rows:rows.filter(row=>row.key.startsWith('memory.')||row.key.startsWith('sync.'))},
+      {label:'Personalization',rows:rows.filter(row=>row.key.startsWith('personalization.'))},
+    ];
+  });
+  readonly configurationGaps=computed(()=>{const labels:Record<string,string>={'reader-enablement':'Reader enablement','writer-enablement':'Writer enablement','retrieval-policy':'Retrieval policy','research-policy':'Research policy','mem-destination':'Mem destination','handwriting-settings':'Handwriting settings'};return (this.savedConfiguration().view?.snapshot?.unsupported??[]).map(key=>({key,label:labels[key]}));});
   private readonly savedModeController = new SavedModeController(state => this.savedMode.set(state));
   readonly savedMode = signal(this.savedModeController.state);
   private readonly runtimeController = new RuntimeIdentityController(state => this.runtimeIdentity.set(state));
   readonly runtimeIdentity = signal(this.runtimeController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
+  private readonly connectionController = new ConnectionController(this.host, state => { this.savedConfigurationController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -127,6 +140,19 @@ export class App implements OnDestroy {
   async stopForget() {
     await this.forgetController.stop(this.host.memoryForget ? { memoryForget: request => this.host.memoryForget!(request) } : null, () => this.host.cancel());
   }
+  async inspectSavedConfiguration(){
+    const tablet=this.connection().observation;
+    if(!tablet||!this.profile().savedConfigurationProbe||!this.host.inspectSavedConfiguration||this.savedConfiguration().busy)return;
+    this.forgetController.clear();
+    await this.savedConfigurationController.inspect({inspectSavedConfiguration:q=>this.host.inspectSavedConfiguration!(q)},tablet,async()=>{
+      await this.connectionController.pause();
+      return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;
+    });
+  }
+  async cancelSavedConfiguration(){
+    this.forgetController.clear();
+    await this.savedConfigurationController.cancel(()=>this.connectionController.pause());
+  }
   async inspectSavedMode() {
     this.forgetController.clear();
     const tablet = this.connection().observation;
@@ -183,5 +209,5 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }
