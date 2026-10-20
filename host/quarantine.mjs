@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { link, lstat, mkdir, open, realpath, readdir, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { verifyManagerBundles } from './manager-bundles.mjs';
 
-const REPO = 's116821/ReMarkableBuddies';
-const API = `https://api.github.com/repos/${REPO}`;
-export const PACKAGE_NAMES = ['reader-buddy-armv7-unknown-linux-gnueabihf.tar.gz', 'reader-buddy-aarch64-unknown-linux-gnu.tar.gz'];
-const NAMES = [...PACKAGE_NAMES, 'provenance.json'];
+export const PACKAGE_NAMES = Object.freeze(['reader-buddy-armv7-unknown-linux-gnueabihf.tar.gz', 'reader-buddy-aarch64-unknown-linux-gnu.tar.gz']);
+export const MANAGER_PACKAGE_NAMES = Object.freeze(['manager-browser.zip', 'manager-win32-x64.zip', 'manager-linux-x64.zip']);
+const profile = (repository, packages, marker, manager = false) => Object.freeze({ repository, packages, marker, manager, api: `https://api.github.com/repos/${repository}`, names: Object.freeze([...packages, 'provenance.json']) });
+const BUDDY = profile('s116821/ReMarkableBuddies', PACKAGE_NAMES, 'reader-buddy-complete');
+const MANAGER = profile('s116821/ReMarkableBuddiesManager', MANAGER_PACKAGE_NAMES, 'manager-complete', true);
 const SHA = /^[a-f0-9]{40}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const HOSTS = new Set(['api.github.com', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com']);
@@ -85,35 +87,35 @@ async function consume(res, limit, signal, write = null) {
   } finally { await reader.cancel().catch(() => {}); }
 }
 
-async function json(fetcher, path, signal) {
-  const res = await response(fetcher, `${API}/${path}`, 'application/vnd.github+json', signal);
+async function json(profile, fetcher, path, signal) {
+  const res = await response(fetcher, `${profile.api}/${path}`, 'application/vnd.github+json', signal);
   return strictJson((await consume(res, 256 * 1024, signal)).bytes);
 }
 
-function completion(body) {
+function completion(profile, body) {
   if (typeof body !== 'string') fail('invalid-completion');
-  const markers = [...body.matchAll(/<!-- reader-buddy-complete:(.*?) -->/gs)];
-  if (markers.length !== 1 || body.split('reader-buddy-complete:').length !== 2) fail('invalid-completion');
+  const markers = [...body.matchAll(new RegExp(`<!-- ${profile.marker}:(.*?) -->`, 'gs'))];
+  if (markers.length !== 1 || body.split(`${profile.marker}:`).length !== 2) fail('invalid-completion');
   return strictJson(Buffer.from(markers[0][1]));
 }
 
-async function publication(fetcher, tag, signal) {
-  const ref = await json(fetcher, `git/ref/tags/${tag}`, signal);
+async function publication(profile, fetcher, tag, signal) {
+  const ref = await json(profile, fetcher, `git/ref/tags/${tag}`, signal);
   if (ref.ref !== `refs/tags/${tag}` || ref.object?.type !== 'tag' || !SHA.test(ref.object.sha)) fail('invalid-tag');
-  const annotation = await json(fetcher, `git/tags/${ref.object.sha}`, signal);
+  const annotation = await json(profile, fetcher, `git/tags/${ref.object.sha}`, signal);
   if (annotation.sha !== ref.object.sha || annotation.tag !== tag || annotation.object?.type !== 'commit' || !SHA.test(annotation.object.sha)) fail('invalid-tag');
   const sha = annotation.object.sha;
-  const release = await json(fetcher, `releases/tags/${tag}`, signal);
-  if (!positive(release.id) || release.tag_name !== tag || release.draft !== false || release.prerelease !== false || typeof release.published_at !== 'string' || !Number.isFinite(Date.parse(release.published_at)) || release.html_url !== `https://github.com/${REPO}/releases/tag/${tag}` || !Array.isArray(release.assets) || release.assets.length !== 3) fail('invalid-release');
-  const record = completion(release.body);
-  if (!exact(record, ['tag', 'sha', 'version', 'packages', 'provenance_sha256']) || record.tag !== tag || record.sha !== sha || record.version !== tag.slice(1) || !exact(record.packages, PACKAGE_NAMES) || !Object.values(record.packages).every(v => typeof v === 'string' && HASH.test(v)) || typeof record.provenance_sha256 !== 'string' || !HASH.test(record.provenance_sha256)) fail('invalid-completion');
+  const release = await json(profile, fetcher, `releases/tags/${tag}`, signal);
+  if (!positive(release.id) || release.tag_name !== tag || release.draft !== false || release.prerelease !== false || typeof release.published_at !== 'string' || !Number.isFinite(Date.parse(release.published_at)) || release.html_url !== `https://github.com/${profile.repository}/releases/tag/${tag}` || !Array.isArray(release.assets) || release.assets.length !== profile.names.length) fail('invalid-release');
+  const record = completion(profile, release.body);
+  if (!exact(record, ['tag', 'sha', 'version', 'packages', 'provenance_sha256']) || record.tag !== tag || record.sha !== sha || record.version !== tag.slice(1) || !exact(record.packages, profile.packages) || !Object.values(record.packages).every(v => typeof v === 'string' && HASH.test(v)) || typeof record.provenance_sha256 !== 'string' || !HASH.test(record.provenance_sha256)) fail('invalid-completion');
   const assets = []; const ids = new Set();
-  for (const name of NAMES) {
+  for (const name of profile.names) {
     const matches = release.assets.filter(a => a.name === name);
     if (matches.length !== 1) fail('invalid-assets');
     const a = matches[0];
     const expected = name === 'provenance.json' ? record.provenance_sha256 : record.packages[name];
-    if (!positive(a.id) || ids.has(a.id) || a.state !== 'uploaded' || !positive(a.size) || a.size > (name === 'provenance.json' ? 64 * 1024 : 512 * 1024 * 1024) || a.digest !== `sha256:${expected}` || a.browser_download_url !== `https://github.com/${REPO}/releases/download/${tag}/${name}` || a.url !== `${API}/releases/assets/${a.id}`) fail('invalid-assets');
+    if (!positive(a.id) || ids.has(a.id) || a.state !== 'uploaded' || !positive(a.size) || a.size > (name === 'provenance.json' ? 64 * 1024 : 512 * 1024 * 1024) || a.digest !== `sha256:${expected}` || a.browser_download_url !== `https://github.com/${profile.repository}/releases/download/${tag}/${name}` || a.url !== `${profile.api}/releases/assets/${a.id}`) fail('invalid-assets');
     ids.add(a.id); assets.push({ id: a.id, name, size: a.size, sha256: expected });
   }
   if (assets.reduce((sum, a) => sum + a.size, 0) > 768 * 1024 * 1024) fail('aggregate-limit');
@@ -125,8 +127,8 @@ async function sameDirectory(directory, initial) {
   if (!now.isDirectory() || now.isSymbolicLink() || now.dev !== initial.dev || now.ino !== initial.ino || await realpath(directory) !== directory) fail('staging-changed');
 }
 
-async function verifyFiles(directory, assets, signal) {
-  if ((await readdir(directory)).sort().join() !== NAMES.toSorted().join()) fail('staging-changed');
+async function verifyFiles(profile, directory, assets, signal) {
+  if ((await readdir(directory)).sort().join() !== profile.names.toSorted().join()) fail('staging-changed');
   for (const asset of assets) {
     const path = join(directory, asset.name);
     const before = await lstat(path);
@@ -144,22 +146,25 @@ async function verifyFiles(directory, assets, signal) {
 }
 
 // fetcher injection is solely for controlled HTTP tests; the CLI supplies native fetch.
-export async function quarantineRelease({ tag, directory, signal: callerSignal, fetcher = fetch }) {
+export function quarantineRelease(args) { return runQuarantine(BUDDY, args); }
+export function quarantineManagerRelease(args) { return runQuarantine(MANAGER, args); }
+async function runQuarantine(profile, { tag, directory, python, signal: callerSignal, fetcher = fetch }) {
   let created = false;
   try {
     if (typeof tag !== 'string' || tag.length > 64 || !/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(tag)) fail('invalid-tag-input');
+    if (profile.manager && (typeof python !== 'string' || !isAbsolute(python))) fail('verifier-unconfigured');
     if (typeof directory !== 'string' || !isAbsolute(directory) || directory !== resolve(directory) || await realpath(dirname(directory)) !== dirname(directory)) fail('invalid-directory-input');
     const signal = callerSignal ? AbortSignal.any([callerSignal, AbortSignal.timeout(300000)]) : AbortSignal.timeout(300000);
     const deadline = performance.now() + 300000;
     signal.throwIfAborted();
-    const source = await publication(fetcher, tag, signal);
+    const source = await publication(profile, fetcher, tag, signal);
     signal.throwIfAborted();
     await mkdir(directory, { mode: 0o700 }); created = true;
     const initial = await lstat(directory);
     let provenance;
     for (const asset of source.assets) {
       await sameDirectory(directory, initial); signal.throwIfAborted();
-      const res = await response(fetcher, `${API}/releases/assets/${asset.id}`, 'application/octet-stream', signal);
+      const res = await response(fetcher, `${profile.api}/releases/assets/${asset.id}`, 'application/octet-stream', signal);
       let file;
       try { file = await open(join(directory, asset.name), 'wx', 0o600); }
       catch (error) { await res.body.cancel().catch(() => {}); throw error; }
@@ -176,12 +181,14 @@ export async function quarantineRelease({ tag, directory, signal: callerSignal, 
       } finally { await file.close(); }
       if (downloaded.size !== asset.size || downloaded.digest !== asset.sha256) fail('asset-mismatch');
     }
-    if (!exact(provenance, ['tag', 'sha', 'version', 'packages']) || provenance.tag !== source.tag || provenance.sha !== source.sha || provenance.version !== source.version || !exact(provenance.packages, PACKAGE_NAMES) || PACKAGE_NAMES.some(name => provenance.packages[name] !== source.record.packages[name])) fail('provenance-mismatch');
-    const final = await publication(fetcher, tag, signal);
+    if (!exact(provenance, ['tag', 'sha', 'version', 'packages']) || provenance.tag !== source.tag || provenance.sha !== source.sha || provenance.version !== source.version || !exact(provenance.packages, profile.packages) || profile.packages.some(name => provenance.packages[name] !== source.record.packages[name])) fail('provenance-mismatch');
+    if (profile.manager) await verifyManagerBundles({ directory, tag, sha: source.sha, python, signal });
+    const final = await publication(profile, fetcher, tag, signal);
     if (JSON.stringify(final) !== JSON.stringify(source)) fail('publication-changed');
-    await sameDirectory(directory, initial); await verifyFiles(directory, source.assets, signal);
+    await sameDirectory(directory, initial); await verifyFiles(profile, directory, source.assets, signal);
     await sameDirectory(directory, initial); signal.throwIfAborted();
-    const receipt = { state: 'legacy-quarantined', repository: REPO, tag, sourceSha: source.sha, annotatedTagSha: source.tagObject, releaseId: source.releaseId, assets: source.assets, checksumAgreement: true, apkInstallEligible: false, reason: 'legacy-tarballs-no-signed-apk-contract', archivesExtracted: false, payloadSafetyVerified: false, signatureVerified: false, reuseRequiresReverification: true };
+    const receipt = { state: profile.manager ? 'manager-bundles-quarantined' : 'legacy-quarantined', repository: profile.repository, tag, sourceSha: source.sha, annotatedTagSha: source.tagObject, releaseId: source.releaseId, assets: source.assets, checksumAgreement: true, apkInstallEligible: false, reason: profile.manager ? 'manager-bundles-no-qualified-updater' : 'legacy-tarballs-no-signed-apk-contract', archivesExtracted: false, payloadSafetyVerified: false, signatureVerified: false, reuseRequiresReverification: true };
+    if (profile.manager) Object.assign(receipt, { embeddedIdentityVerified: true, updateEligible: false });
     const pending = join(directory, '.quarantine-receipt.pending');
     const file = await open(pending, 'wx', 0o600);
     try { await file.writeFile(JSON.stringify(receipt, null, 2) + '\n'); await file.sync(); } finally { await file.close(); }
@@ -196,7 +203,7 @@ export async function quarantineRelease({ tag, directory, signal: callerSignal, 
     await unlink(pending).catch(() => {});
     return { ok: true, receipt };
   } catch (error) {
-    const codes = new Set(['invalid-json', 'json-depth', 'duplicate-json-member', 'unsafe-remote-url', 'invalid-redirect', 'remote-refusal', 'redirect-limit', 'byte-limit', 'invalid-completion', 'invalid-tag', 'invalid-release', 'invalid-assets', 'aggregate-limit', 'staging-changed', 'invalid-tag-input', 'invalid-directory-input', 'staging-write', 'asset-mismatch', 'provenance-mismatch', 'publication-changed']);
+    const codes = new Set(['invalid-json', 'json-depth', 'duplicate-json-member', 'unsafe-remote-url', 'invalid-redirect', 'remote-refusal', 'redirect-limit', 'byte-limit', 'invalid-completion', 'invalid-tag', 'invalid-release', 'invalid-assets', 'aggregate-limit', 'staging-changed', 'invalid-tag-input', 'invalid-directory-input', 'staging-write', 'asset-mismatch', 'provenance-mismatch', 'publication-changed', 'verifier-unconfigured', 'verifier-refused', 'verifier-timeout']);
     return { ok: false, code: codes.has(error.message) ? error.message : callerSignal?.aborted ? 'cancelled' : error.name === 'TimeoutError' ? 'deadline' : 'operation-refused', incompleteQuarantine: created };
   }
 }
