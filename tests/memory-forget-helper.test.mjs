@@ -80,3 +80,22 @@ test('cancel racing an already completed acknowledgement can recover it without 
  await c.run({memoryForget:q=>host.request(q)},{action:'receipt',reference});
  assert.equal(c.state.view.state,'acknowledged');assert.equal(c.state.uncertain,false);assert.equal(f.calls.length,2);
 });
+
+
+test('deliberate same-original host status settles a lost definitive refusal, while later/null/foreign refusals do not',async()=>{
+ const {MemoryForgetHost}=await import('../host/memory-forget.mjs');
+ const f=observer(async(selector,body)=>selector==='prepare-forget'?prepared(body.operation,body.key):failure('forget','conflict',false,'not-dispatched'));
+ const host=new MemoryForgetHost({observer:f.host,reference:()=>reference,uuid:()=>operation}),c=new MemoryForgetController(()=>{});
+ const adapter={memoryForget:async q=>{const value=await host.request(q);if(q.action==='confirm')throw Error('Synthetic renderer reply loss');return value;}};
+ await c.run(adapter,prepareRequest());await c.run(adapter,{action:'confirm',reference});
+ assert.equal(c.state.uncertain,true);assert.equal((await host.request({action:'status'})).forget.state,'not-dispatched');
+ const retained=await host.request({action:'status'});
+ // A row offered as a later receipt invocation is not retained-host reconciliation.
+ await c.run({memoryForget:async()=>retained},{action:'receipt',reference});assert.equal(c.state.uncertain,true);
+ for(const ref of [null,'1'.repeat(64)]){const value=structuredClone(retained);value.forget.reference=ref;await c.run({memoryForget:async()=>value},{action:'status'});assert.equal(c.state.uncertain,true);assert.equal(c.state.reference,reference);}
+ await c.run(adapter,{action:'receipt',reference});assert.equal(c.state.uncertain,true);
+ await c.run(adapter,{action:'status'});assert.equal(c.state.view.state,'not-dispatched');assert.equal(c.state.uncertain,false);assert.match(c.state.status,/refused before mutation attempt/);
+ assert.equal(f.calls.filter(x=>x.selector==='forget').length,1);
+ assert.equal(f.calls.filter(x=>x.selector==='forget-receipt').length,0);
+ await c.run(adapter,prepareRequest());assert.equal(c.state.view.state,'prepared');
+});

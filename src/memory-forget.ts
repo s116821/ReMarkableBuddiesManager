@@ -32,7 +32,7 @@ export class MemoryForgetController {
       const value=await adapter.memoryForget(request);await parseForgetResult(value,validateResult);
       if(generation!==this.generation)return;
       const q=value.forget;
-      if(previousUncertain && (q.reference!==original || q.state==='not-dispatched')){this.publish('Original intent is unavailable or unresolved — a later refusal does not prove no earlier commit',false,true,original);return;}
+      if(previousUncertain && (q.reference!==original || q.state==='not-dispatched'&&request.action!=='status')){this.publish('Original intent is unavailable or unresolved — a later refusal does not prove no earlier commit',false,true,original);return;}
       if(request.action==='prepare'&&q.state==='prepared'&&(q.preview?.key.profile!==request.key.profile||q.preview?.key.fact!==request.key.fact||value.observation?.connection_id!==request.connection_id||value.observation?.boot_id!==request.boot_id))throw Error('Preview identity refused');
       if('reference' in request&&q.reference!==null&&q.reference!==request.reference)throw Error('Reference refused');
       const uncertain=['unknown','unresolved','confirming','checking-receipt'].includes(q.state) || this.possible&&!['acknowledged','not-dispatched'].includes(q.state);
