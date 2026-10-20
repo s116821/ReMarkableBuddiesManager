@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
     disconnect: () => ipcRenderer.invoke('manager:drive:disconnect'), revoke: id => ipcRenderer.invoke('manager:drive:revoke', id) }),
   downloads: Object.freeze({ request: (...args) => args.length !== 1 ? Promise.reject(new Error('Download input refused')) : ipcRenderer.invoke('manager:download', args[0]) }),
   memoryQuery: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory query input refused')) : ipcRenderer.invoke('manager:memoryQuery', args[0]),
+  modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
   basicSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:basicSettings',args[0]):Promise.reject(new Error('Basic settings arity refused')),
   memoryForget: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory forget input refused')) : ipcRenderer.invoke('manager:memoryForget', args[0]),
   inspectMemory: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory inspection input refused')) : ipcRenderer.invoke('manager:inspectMemory', args[0]),

@@ -13,13 +13,16 @@ app.whenReady().then(async () => {
   const { parseSavedModeRequest, parseSavedModeResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-mode.mjs')).href);
   const { MemoryForgetHost } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget.mjs')).href);
   const { parseForgetRequest, parseForgetResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget-protocol.mjs')).href);
+  const { ModelSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'model-settings.mjs')).href);
+  const { parseModelSettingsRequest,parseModelSettingsResult,modelResponseContext }=await import(pathToFileURL(path.join(hostRoot,'model-settings-protocol.mjs')).href);
   const { BasicSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'basic-settings.mjs')).href);
   const { MaintenanceIO }=await import(pathToFileURL(path.join(hostRoot,'maintenance-io.mjs')).href);
   const { parseBasicSettingsRequest,parseBasicSettingsResult }=await import(pathToFileURL(path.join(hostRoot,'basic-settings-protocol.mjs')).href);
   const rawObserver = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
-  const io=new MaintenanceIO();let basic;
-  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>basic?.invalidate() });
-  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>forget.invalidate()});
+  const io=new MaintenanceIO();let basic,model;
+  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{basic?.invalidate();model?.invalidate();} });
+  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{forget.invalidate();model?.invalidate();}});
+  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{forget.invalidate();basic.invalidate();}});
   const observer = forget.wrap();
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
@@ -48,6 +51,11 @@ app.whenReady().then(async () => {
     return observer.memoryQuery(args[0]);
   });
   window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  ipcMain.handle('manager:modelSettings',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Model settings caller refused');
+    let request=parseModelSettingsRequest(args[0]);args.length=0;
+    try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
+  });
   ipcMain.handle('manager:basicSettings',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Basic settings caller refused');
     const request=parseBasicSettingsRequest(args[0]);const value=parseBasicSettingsResult(await basic.request(request),request,validateResult);return basic.assertCurrent(value);

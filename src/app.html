@@ -101,6 +101,37 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="model-settings-title">
+    <h2 id="model-settings-title">Saved model and endpoint</h2>
+    <p class="text-sm text-muted">Read saved declaration origins only. Existing values stay private. A saved change does not verify the effective model, endpoint or provider, or restart Buddy.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="beginModel()" [disabled]="!host.modelSettings || !profile().savedConfigurationProbe || model().busy">Begin model settings edit</button>
+      <button class="ui-button ui-button-primary" type="button" (click)="saveModel()" [disabled]="!modelCanSave()">Save model settings</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopModel()" [disabled]="!model().busy && model().view?.state !== 'ready'">{{ model().busy ? 'Stop model wait' : 'Cancel model edit' }}</button>
+    </div>
+    <p role="status" data-testid="model-settings-status">{{ model().status }}</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-3 min-w-0" data-testid="model-settings-fields">
+      @for (row of modelRows(); track row.key) {
+        <div class="min-w-0">
+          <label class="block" [for]="'model-action-' + row.key">{{ row.label }}</label>
+          <p class="text-sm">Saved origin: {{ row.originLabel }}</p>
+          <select class="ui-field w-full max-w-full" [id]="'model-action-' + row.key" (change)="modelAction(row.key,$event)" [disabled]="model().busy || model().view?.state !== 'ready'">
+            <option value="keep" [selected]="row.action === 'keep'">Keep unchanged</option><option value="replace" [selected]="row.action === 'replace'">Replace</option><option value="clear" [selected]="row.action === 'clear'">Remove override</option>
+          </select>
+          @if (row.action === 'replace') {
+            <label class="block mt-3" [for]="'model-replacement-' + row.key">{{ row.label }} replacement</label>
+            <textarea class="ui-field w-full max-w-full" rows="3" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" [spellcheck]="false" [id]="'model-replacement-' + row.key" [value]="modelText(row.key)" (beforeinput)="beforeModelInput(row.key,$event)" (input)="inputModel(row.key,$event)" (paste)="pasteModel(row.key,$event)" [disabled]="model().busy"></textarea>
+          }
+        </div>
+      }
+    </div>
+    <p class="text-sm text-muted">Replacement text may contain sensitive information. It is cleared when submitted or the editor is closed, and is never read back from the tablet. Untouched fields stay unchanged.</p>
+    @for (record of model().retained; track record.reference; let i = $index) {
+      <article class="ui-panel my-3" data-testid="model-settings-retained"><h3>Unconfirmed model save {{ i + 1 }}</h3><p>Original outcome remains {{ record.state }}. The replacement text is not kept for retry.</p><button class="ui-button ui-button-secondary" type="button" (click)="checkModel(record)" [disabled]="model().busy || !modelTarget(record)">Check model desired file {{ i + 1 }}</button>@if (!modelTarget(record)) { <p class="text-sm">Read state from the original tablet before checking.</p> }</article>
+    }
+    <p class="text-sm text-muted">Recovery keeps only an original file fingerprint while this host runs. Stopping is not rollback; a desired-file match does not prove who saved it or running behavior.</p>
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="basic-settings-title">
     <h2 id="basic-settings-title">Saved basic settings</h2>
     <p class="text-sm text-muted">Edit three saved preferences. Running behavior may use other settings; saving does not restart Buddy.</p>

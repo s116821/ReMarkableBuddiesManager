@@ -169,6 +169,8 @@ jobs:
           xvfb-run -a npm run test:saved-configuration-hosts -- --packaged
           xvfb-run -a npm run test:basic-settings-hosts
           xvfb-run -a npm run test:basic-settings-hosts -- --packaged
+          xvfb-run -a npm run test:model-settings-hosts
+          xvfb-run -a npm run test:model-settings-hosts -- --packaged
       - if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -198,6 +200,8 @@ jobs:
           npm run test:saved-configuration-hosts -- --packaged
           npm run test:basic-settings-hosts
           npm run test:basic-settings-hosts -- --packaged
+          npm run test:model-settings-hosts
+          npm run test:model-settings-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
         run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
