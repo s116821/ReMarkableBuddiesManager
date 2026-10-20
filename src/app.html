@@ -143,6 +143,7 @@
           <p class="text-sm break-all">{{ match.fact.claim }}</p>
           <p class="whitespace-pre-wrap break-words">{{ match.fact.value }}</p>
           <p class="text-sm break-words">{{ match.fact.provenance.basis }}: {{ match.fact.provenance.description }} · Confidence: {{ match.fact.confidence_basis_points / 100 }}%</p>
+          <button class="ui-button ui-button-secondary my-3" type="button" (click)="inspectMemory(match.fact.key)" [disabled]="!profile().memoryInspectionProbe || !host.inspectMemory || memoryInspection().busy">Inspect current revisions</button>
           <details class="text-sm break-all"><summary>Fact identity and provenance</summary>
             <p>Profile: {{ match.fact.key.profile }} · Fact: {{ match.fact.key.fact }}</p>
             <p>Record: {{ match.record }} · Revision: {{ match.revision }}</p>
@@ -152,6 +153,40 @@
         </article>
       }
     }
+  </section>
+
+  <section class="ui-panel my-6" aria-labelledby="memory-inspection-title">
+    <h2 id="memory-inspection-title">Current revisions of a selected fact</h2>
+    <p class="text-sm text-muted">Choose Inspect current revisions on a search result above. This reads that key again; it is not a complete inventory or permission to edit or delete.</p>
+    <p role="status" data-testid="memory-inspection-status">{{ memoryInspection().status }}</p>
+    <button class="ui-button ui-button-secondary my-3" type="button" (click)="cancelMemoryInspection()" [disabled]="!memoryInspection().busy">Cancel fact inspection</button>
+    @if (memoryInspection().key; as key) { <p class="text-sm break-all">Selected search key — Profile: {{ key.profile }} · Fact: {{ key.fact }}</p> }
+    @if (memoryInspection().view; as view) {
+      <p class="text-sm">Backend status: {{ view.status }} · Incomplete: {{ view.incomplete }}</p>
+      @if (view.heads; as heads) {
+        <div data-testid="memory-inspection-details">
+          <p>{{ heads.length }} current heads. No ordering selects a winner. Deletion records do not erase historical data.</p>
+          @for (head of heads; track head.revision) {
+            <article class="ui-panel my-3" data-testid="memory-head">
+              @if (head.fact; as fact) {
+                <h3 class="break-all">{{ fact.subject }}</h3>
+                <p class="text-sm break-all">{{ fact.claim }}</p>
+                <p class="whitespace-pre-wrap break-words">{{ fact.value }}</p>
+                <p class="text-sm break-words">Author asserted: {{ fact.provenance.basis }} — {{ fact.provenance.description }} · Confidence: {{ fact.confidence_basis_points / 100 }}%</p>
+                <p class="text-sm break-words">Tags: {{ fact.tags.join(', ') }} · Observed: {{ fact.observed_ms }} · Expires: {{ fact.expires_ms ?? 'Not specified' }}</p>
+                <p class="text-sm break-all">Conversation: {{ fact.provenance.conversation ?? 'None' }} · Turn: {{ fact.provenance.turn ?? 'None' }} · Source: {{ fact.provenance.source ?? 'None' }}</p>
+              } @else { <h3>Deletion record (tombstone)</h3><p>No current value is carried by this revision.</p> }
+              <details class="text-sm break-all"><summary>Current revision identities</summary>
+                <p>Record: {{ head.record }} · Revision: {{ head.revision }}</p>
+                <p>Parents: {{ head.parents.join(', ') || 'None' }}</p>
+                <p>Operation: {{ head.operation }} · Actor: {{ head.actor }}</p>
+              </details>
+            </article>
+          }
+        </div>
+      }
+    }
+    <p class="text-sm text-muted">A selected-memory conflict or invalid registered state may refuse the entire view. Busy or unavailable does not mean no current heads. Read tablet state to refresh the connection.</p>
   </section>
 
   <section class="ui-panel my-6" aria-labelledby="personalization-title">

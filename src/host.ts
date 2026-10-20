@@ -1,3 +1,4 @@
+import type { MemoryInspectionAdapter, MemoryInspectionResult } from './memory-inspection';
 import type { MemoryAdapter, MemoryResult } from './memory-query';
 import type { SavedModeAdapter, SavedModeResult } from './saved-mode';
 import type { DownloadAdapter } from './manager-downloads';
@@ -9,6 +10,7 @@ import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/driv
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly inspectMemory?: MemoryInspectionAdapter['inspectMemory'];
   readonly inspectSavedMode?: SavedModeAdapter['inspectSavedMode'];
   readonly memoryQuery?: MemoryAdapter['memoryQuery'];
   readonly downloads?: DownloadAdapter;
@@ -53,6 +55,15 @@ export function currentHost(): ManagerHost {
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
     } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    inspectMemory: async (request: import('../host/memory-inspection.mjs').MemoryInspectionRequest) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Memory inspection helper unavailable');
+      const response = await fetch('/manager-memory-inspection', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
+      if (!response.ok || !response.body) throw new Error('Memory inspection unavailable');
+      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
+      try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 270336) throw new Error('Memory inspection response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
+      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as MemoryInspectionResult;
+    },
     inspectSavedMode: async (request: import('../host/saved-mode.mjs').SavedModeRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Saved mode helper unavailable');
       const response = await fetch('/manager-saved-mode', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });

@@ -1,3 +1,4 @@
+import { parseMemoryInspectionRequest, parseMemoryInspectionResult } from './memory-inspection.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -29,6 +30,20 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 192) return refuse(413); body += chunk; } } catch { return refuse(400); }
       let q; try { q = JSON.parse(body); if (body !== JSON.stringify(q)) throw new Error('Input'); parseDownloadRequest(q); } catch { return refuse(400); }
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
+      return;
+    }
+    if (url.pathname === '/manager-memory-inspection') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const chunks = []; let bytes = 0, request;
+      try {
+        for await (const chunk of req) { bytes += chunk.length; if (bytes > 1024) return refuse(413); chunks.push(chunk); }
+        const raw = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+        request = JSON.parse(raw); if (raw !== JSON.stringify(request)) throw new Error('Input'); parseMemoryInspectionRequest(request);
+      } catch { return refuse(400); }
+      try {
+        const value = await parseMemoryInspectionResult(await observer.inspectMemory(request), request, validateResult);
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));
+      } catch { refuse(503); }
       return;
     }
     if (url.pathname === '/manager-saved-mode') {

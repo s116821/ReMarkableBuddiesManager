@@ -1,3 +1,5 @@
+import { MemoryInspectionController } from './memory-inspection';
+import type { MemoryKey } from '../host/memory-inspection.mjs';
 import { MemoryController } from './memory-query';
 import { SavedModeController } from './saved-mode';
 import { validMemoryText } from '../host/memory-query.mjs';
@@ -49,11 +51,13 @@ export class App implements OnDestroy {
   readonly memory = signal(this.memoryController.state);
   readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
+  private readonly memoryInspectionController = new MemoryInspectionController(state => this.memoryInspection.set(state));
+  readonly memoryInspection = signal(this.memoryInspectionController.state);
   private readonly savedModeController = new SavedModeController(state => this.savedMode.set(state));
   readonly savedMode = signal(this.savedModeController.state);
   private readonly runtimeController = new RuntimeIdentityController(state => this.runtimeIdentity.set(state));
   readonly runtimeIdentity = signal(this.runtimeController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
+  private readonly connectionController = new ConnectionController(this.host, state => { this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -86,11 +90,21 @@ export class App implements OnDestroy {
   disconnectTablet() { this.connectionController.disconnect(); }
   editMemory(event: Event) { this.memoryText.set((event.target as HTMLTextAreaElement).value); }
   async searchMemory() {
+    this.memoryInspectionController.clear();
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().memoryQueryProbe || !this.host.memoryQuery || !this.memoryTextValid()) return;
     await this.memoryController.search({ memoryQuery: request => this.host.memoryQuery!(request) }, tablet, this.memoryText());
   }
-  async cancelMemory() { this.memoryController.clear('Search cancelled'); try { await this.host.cancel(); } catch { /* Already cleared; no late result is accepted. */ } }
+  async cancelMemory() { this.memoryInspectionController.clear(); this.memoryController.clear('Search cancelled'); try { await this.host.cancel(); } catch { /* Already cleared; no late result is accepted. */ } }
+  async inspectMemory(key: MemoryKey) {
+    const tablet = this.connection().observation;
+    const matches = this.memoryData()?.context.facts;
+    if (!tablet || !this.profile().memoryInspectionProbe || !this.host.inspectMemory || this.memoryInspection().busy || !matches?.some(m => JSON.stringify(m.fact.key) === JSON.stringify(key))) return;
+    await this.connectionController.pause();
+    if (this.connection().observation !== tablet || this.memoryData()?.context.facts !== matches) return;
+    await this.memoryInspectionController.inspect({ inspectMemory: request => this.host.inspectMemory!(request) }, tablet, key);
+  }
+  async cancelMemoryInspection() { this.memoryInspectionController.clear('Memory inspection cancelled'); try { await this.host.cancel(); } catch { /* Already invalidated. */ } }
   async inspectSavedMode() {
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().savedModeProbe || !this.host.inspectSavedMode || this.savedMode().busy) return;
@@ -143,5 +157,5 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }

@@ -136,6 +136,7 @@ jobs:
           python -m unittest discover -s tests/runtime_identity -v
           python -m unittest discover -s tests/memory_query -v
           python -m unittest discover -s tests/saved_mode -v
+          python -m unittest discover -s tests/memory_inspection -v
           python -m unittest discover -s tests/vellum -p test_real_fixture.py -v
         if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true')
       - run: npm ci --prefix release/fixtures --ignore-scripts --no-audit --no-fund

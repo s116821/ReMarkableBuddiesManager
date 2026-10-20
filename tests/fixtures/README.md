@@ -60,3 +60,8 @@ corpus, physical device/provider/native proof or full source lifecycle is inferr
 both public host bridges and from renderer state. SSH-peer fixtures replay a
 recorded report over an actual owned channel with synthetic route/notice state and
 fixed publicly known test identities; they do not access a development tablet.
+
+`memory-inspection.mjs` contains explicitly synthetic local all-head/tombstone and
+selected-refusal UI/transport data. The UUIDv5 example follows the producer contract;
+independent Python UUID generation checks canonical requested identity. Synthetic
+reports are not actual producer stdin receipts or device observations.

@@ -8,6 +8,7 @@ if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_PROFILE) app.se
 app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
   const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
+  const { parseMemoryInspectionRequest, parseMemoryInspectionResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-inspection.mjs')).href);
   const { parseSavedModeRequest, parseSavedModeResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-mode.mjs')).href);
   const observer = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
@@ -35,6 +36,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('manager:memoryQuery', (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
+  });
+  ipcMain.handle('manager:inspectMemory', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw new Error('Memory inspection caller refused');
+    const request = parseMemoryInspectionRequest(args[0]);
+    return parseMemoryInspectionResult(await observer.inspectMemory(request), request, validateResult);
   });
   ipcMain.handle('manager:inspectSavedMode', async (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Saved mode caller refused');
