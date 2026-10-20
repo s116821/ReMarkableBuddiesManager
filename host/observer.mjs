@@ -47,12 +47,12 @@ export class WiredObserver {
   async run(action) {
     this.cancel();
     const refusal = status => action === 'observe' ? result(status) : { ...result(status), inspection: null };
-    if (this.platform !== 'linux') return refusal('unsupported-host');
+    if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
       const child = spawn(this.python, [this.script, ...(action === 'observe' ? [] : [action])], { stdio: ['ignore', 'pipe', 'ignore'],
-        env: { PATH: process.env.PATH, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
+        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       let output = '', expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);

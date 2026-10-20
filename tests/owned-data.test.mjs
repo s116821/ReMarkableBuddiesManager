@@ -50,9 +50,10 @@ test('controller drops cancelled late and changed-session reports, then preserve
 test('actual host subprocess bounds/sanitizes report and refuses changed identity before renderer handoff', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'manager-inspection-host-'));
   try {
+    for (const platform of ['linux', 'win32']) {
     const runtime = process.execPath;
     const script = path.join(root, 'fixture.mjs');
-    const observer = new WiredObserver({ platform: 'linux', config: path.join(root, 'config'), python: runtime, script });
+    const observer = new WiredObserver({ platform, config: path.join(root, 'config'), python: runtime, script });
     const observed = { contract_version: 1, status: 'observed', observation: tablet };
     const publish = async (report, changed = false) => writeFile(script, `console.log(JSON.stringify(process.argv.includes('inspect-owned') ? ${JSON.stringify({ ...inspection(report), observation: changed ? { ...tablet, connection_id: 'b'.repeat(64) } : tablet })} : ${JSON.stringify(observed)}));`);
     await publish(ownedReport());
@@ -69,6 +70,7 @@ test('actual host subprocess bounds/sanitizes report and refuses changed identit
     assert.equal((await observer.inspectOwned()).status, 'cable-lost');
     assert.equal((await observer.inspectOwned()).status, 'observation-unavailable');
     observer.cancel();
+    }
   } finally { await rm(root, { recursive: true }); }
 });
 

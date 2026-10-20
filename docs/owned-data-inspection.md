@@ -20,8 +20,7 @@ raw output, error details, saved text and credentials are never displayed.
 Both editions reuse [wired setup](wired-observation.md). Static web deployments
 have no tablet transport; browser users explicitly launch the authenticated
 loopback helper. Electron exposes only parameterless observation, cancellation
-and inspection IPC. Current native host support is Linux; Windows/macOS remain
-unsupported by this adapter. No product WLAN SSH or Buddy admin API is introduced.
+and inspection IPC. Linux remains previously accepted. The separate Windows development integration reuses the repaired adapter from PR8; software fixtures do not qualify physical USB. macOS remains unsupported. No product WLAN SSH or Buddy admin API is introduced.
 The report schema number is independent of Git-tag application versions.
 
 Inspection pauses automatic tablet observations. The host verifies the configured
