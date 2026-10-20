@@ -9,6 +9,8 @@ app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
   const { WiredObserver } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
   const observer = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
+  const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
+  const driveAuth = new DriveAuth();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   const window = new BrowserWindow({
@@ -23,7 +25,20 @@ app.whenReady().then(async () => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
     return observer[action]();
   });
-  window.on('closed', () => observer.cancel());
+  for (const action of ['status', 'begin', 'cancel', 'check', 'disconnect', 'revoke']) ipcMain.handle(`manager:drive:${action}`, async (event, ...args) => {
+    const allowed = action === 'revoke' ? args.length === 1 && typeof args[0] === 'string' && /^[a-f0-9]{64}$/.test(args[0]) : args.length === 0;
+    if (!allowed || !authorized(event, [])) throw new Error('Drive caller refused');
+    if (action !== 'begin') return action === 'revoke' ? driveAuth.revoke(args[0]) : driveAuth[action]();
+    const result = await driveAuth.begin();
+    if (result.authorizationUrl && driveAuth.ownsAuthorizationUrl(result.authorizationUrl)) {
+      if (process.env.MANAGER_TEST !== '1') {
+        try { await shell.openExternal(result.authorizationUrl); }
+        catch { driveAuth.cancel(); return { state: driveAuth.state, authorizationUrl: null }; }
+      }
+    }
+    return { state: result.state, authorizationUrl: null };
+  });
+  window.on('closed', () => { observer.cancel(); driveAuth.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

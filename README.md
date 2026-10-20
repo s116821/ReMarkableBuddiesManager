@@ -6,6 +6,7 @@ official stable release discovery with a saved source preference. Installation, 
 configuration and data management remain REM-41/REM-42 work.
 See [wired observation setup and limits](docs/wired-observation.md).
 See [release-source preview](docs/release-source.md) and [shared Tailwind conventions](docs/styling.md).
+Google Drive [host sign-in setup and limits](docs/drive-auth.md) are independent of the tablet connection.
 Developers can separately run [offline Vellum apk qualification](docs/vellum-verification.md).
 Its synthetic host evidence does not enable installation or qualify a tablet.
 The separate [original signed test-fixture observer](docs/signed-fixture-verification.md)
