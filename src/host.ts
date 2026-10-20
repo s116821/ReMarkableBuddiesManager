@@ -1,3 +1,4 @@
+import type { RuntimeAdapter, RuntimeResult } from './runtime-identity';
 import type { PersonalizationRequest } from '../host/personalization.mjs';
 import type { PersonalizationAdapter, PersonalizationResult } from './personalization';
 import type { DriveAdapter } from './drive-auth';
@@ -6,13 +7,14 @@ import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly driveAuth?: DriveAdapter;
+  readonly inspectRuntime?: RuntimeAdapter['inspectRuntime'];
   readonly personalization?: PersonalizationAdapter['personalization'];
   readonly contract_version: 1;
   readonly kind: 'browser' | 'desktop';
   readonly transport: 'not-configured' | 'wired-maintenance';
 }
 declare global { interface Window { managerHost?: ManagerHost } }
-async function helper(action: 'observe' | 'cancel' | 'inspect-owned'): Promise<ObservationResult | InspectionResult> {
+async function helper(action: 'observe' | 'cancel' | 'inspect-owned' | 'inspect-runtime'): Promise<ObservationResult | InspectionResult | RuntimeResult> {
   if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') return { contract_version: 1, status: 'unconfigured', observation: null };
   try {
     const response = await fetch('/manager-host', { method: 'POST', credentials: 'same-origin',
@@ -43,6 +45,7 @@ export function currentHost(): ManagerHost {
       if (!response.ok) throw new Error('Personalization unavailable');
       return await response.json() as PersonalizationResult;
     },
+    inspectRuntime: () => helper('inspect-runtime') as Promise<RuntimeResult>,
     inspectOwned: () => helper('inspect-owned') as Promise<InspectionResult>,
     observe: () => helper('observe') as Promise<ObservationResult>, cancel: () => helper('cancel') as Promise<ObservationResult> });
 }

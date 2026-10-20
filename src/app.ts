@@ -5,6 +5,7 @@ import { unavailableDrive as unsupportedDriveState } from '../host/drive-protoco
 import { ConnectionController, CONNECTION_LABELS } from './observation';
 import { PersonalizationController, validText, editText, rawOffset } from './personalization';
 import type { PersonalizationOperation } from '../host/personalization.mjs';
+import { RuntimeIdentityController } from './runtime-identity';
 import { OwnedDataController } from './owned-data';
 import { resolveDeviceProfile } from './device-profile';
 import buildInfo from './build-info.json';
@@ -35,7 +36,9 @@ export class App implements OnDestroy {
   readonly personalization = signal(this.personalizationController.state);
   readonly personalizationValid = computed(() => validText(this.personalizationText()));
   readonly personalizationBytes = computed(() => new TextEncoder().encode(this.personalizationText()).length);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.ownedController.clear(); this.personalizationController.clear(); this.connection.set(state); });
+  private readonly runtimeController = new RuntimeIdentityController(state => this.runtimeIdentity.set(state));
+  readonly runtimeIdentity = signal(this.runtimeController.state);
+  private readonly connectionController = new ConnectionController(this.host, state => { this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -73,6 +76,13 @@ export class App implements OnDestroy {
     if (this.connection().observation !== tablet || !this.profile().inspection) return;
     await this.ownedController.inspect(this.host, tablet);
   }
+  async inspectRuntime() {
+    const tablet = this.connection().observation;
+    if (!tablet || !this.profile().runtimeIdentityProbe || !this.host.inspectRuntime || this.runtimeIdentity().status === 'Reading binary version…') return;
+    await this.connectionController.pause();
+    if (this.connection().observation !== tablet || !this.profile().runtimeIdentityProbe) return;
+    await this.runtimeController.inspect({ inspectRuntime: () => this.host.inspectRuntime!() }, tablet);
+  }
   async personalize(operation: PersonalizationOperation) {
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().personalizationProbe || !this.host.personalization || this.personalization().busy) return;
@@ -100,5 +110,5 @@ export class App implements OnDestroy {
   refresh() { void this.releases.refresh(); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); }
+  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }
