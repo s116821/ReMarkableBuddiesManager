@@ -1,3 +1,4 @@
+import type { MemoryAdapter, MemoryResult } from './memory-query';
 import type { DownloadAdapter } from './manager-downloads';
 import type { RuntimeAdapter, RuntimeResult } from './runtime-identity';
 import type { PersonalizationRequest } from '../host/personalization.mjs';
@@ -7,6 +8,7 @@ import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/driv
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly memoryQuery?: MemoryAdapter['memoryQuery'];
   readonly downloads?: DownloadAdapter;
   readonly driveAuth?: DriveAdapter;
   readonly inspectRuntime?: RuntimeAdapter['inspectRuntime'];
@@ -49,6 +51,15 @@ export function currentHost(): ManagerHost {
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
     } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    memoryQuery: async (request: import('../host/memory-query.mjs').MemoryRequest) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Memory query helper unavailable');
+      const response = await fetch('/manager-memory-query', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
+      if (!response.ok || !response.body) throw new Error('Memory query unavailable');
+      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
+      try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 139264) throw new Error('Memory query response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
+      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as MemoryResult;
+    },
     personalization: async (request: PersonalizationRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Personalization helper unavailable');
       const response = await fetch('/manager-personalization', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });

@@ -31,6 +31,10 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Download caller refused');
     return downloads.request(args[0]);
   });
+  ipcMain.handle('manager:memoryQuery', (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
+    return observer.memoryQuery(args[0]);
+  });
   ipcMain.handle('manager:personalization', (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Personalization caller refused');
     return observer.personalization(args[0]);

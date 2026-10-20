@@ -25,3 +25,10 @@ status or complete-total presence. Regenerate using Main's public Store/Config A
 a cooperating lease holder, explicit nonsecret config and the actual inspection CLI;
 no private account/agent is required. Runtime UI evidence at Manager2da remains valid;
 this adds protocol fixtures only and does not change the reviewed backend or UI.
+
+
+## Main626 memory query reports
+
+main-626-memory-reports.json contains actual stdout from unchanged runtime626c2f818ad335f6aa49e5a9e88a739267b270cb (locked SDK5c0bc303bb9b22e8e01bce9b2bd2a7fe47c8010e), Linux x64 Rust1.98.1. Built only the Reader binary from its immutable Git archive; source/manifest/lock/SDK pins unchanged. An initial offline build lacked the pinned SDK checkout; a normal locked fetch/build succeeded in58.18s. Binary SHA256cdcf357159abd518ab778cec53de38f3222fb3c800390c167f200d7f77813d12. No production/native build provenance is inferred from an archive.
+
+Six sanitized actual reports: local-complete, local-empty, busy (actual owned-file lock held with flock), missing-store, invalid-input, selected-complete. Existing file-based put and selected initialize operations set up isolated temporary Stores; query itself uses stdin+EOF. Local and selected reports exactly match regular-file query output, including original fact IDs/asserted provenance and Unicode/CRLF. Missing/invalid requests do not create Store paths. No raw stderr was emitted; all owned fixture Stores were removed afterward. Existing controller/parser tests consume these exact outputs; renderer fixtures in memory-query.mjs are separately synthetic. This does not establish physical tablet, provider/model, native pages, restore, full domain coverage or installation authority.

@@ -1,3 +1,5 @@
+import { MemoryController } from './memory-query';
+import { validMemoryText } from '../host/memory-query.mjs';
 import { Component, ChangeDetectionStrategy, OnDestroy, signal, computed } from '@angular/core';
 import { currentHost, unsupportedDrive } from './host';
 import { DriveController } from './drive-auth';
@@ -41,9 +43,14 @@ export class App implements OnDestroy {
   readonly personalization = signal(this.personalizationController.state);
   readonly personalizationValid = computed(() => validText(this.personalizationText()));
   readonly personalizationBytes = computed(() => new TextEncoder().encode(this.personalizationText()).length);
+  readonly memoryText = signal('');
+  private readonly memoryController = new MemoryController(state => this.memory.set(state));
+  readonly memory = signal(this.memoryController.state);
+  readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
+  readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
   private readonly runtimeController = new RuntimeIdentityController(state => this.runtimeIdentity.set(state));
   readonly runtimeIdentity = signal(this.runtimeController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
+  private readonly connectionController = new ConnectionController(this.host, state => { this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -74,6 +81,13 @@ export class App implements OnDestroy {
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
+  editMemory(event: Event) { this.memoryText.set((event.target as HTMLTextAreaElement).value); }
+  async searchMemory() {
+    const tablet = this.connection().observation;
+    if (!tablet || !this.profile().memoryQueryProbe || !this.host.memoryQuery || !this.memoryTextValid()) return;
+    await this.memoryController.search({ memoryQuery: request => this.host.memoryQuery!(request) }, tablet, this.memoryText());
+  }
+  async cancelMemory() { this.memoryController.clear('Search cancelled'); try { await this.host.cancel(); } catch { /* Already cleared; no late result is accepted. */ } }
   async inspectOwned() {
     const tablet = this.connection().observation;
     if (!this.profile().inspection || !tablet || this.owned().status === 'Inspecting owned data…') return;
@@ -118,5 +132,5 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }

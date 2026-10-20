@@ -1,0 +1,158 @@
+{
+  "source": "626c2f818ad335f6aa49e5a9e88a739267b270cb",
+  "sdk": "5c0bc303bb9b22e8e01bce9b2bd2a7fe47c8010e",
+  "binary_sha256": "cdcf357159abd518ab778cec53de38f3222fb3c800390c167f200d7f77813d12",
+  "environment": "Linux x64 Rust1.98.1 immutable Git archive; host protocol only",
+  "reports": {
+    "local-complete": {
+      "report_version": 1,
+      "operation": "query",
+      "status": "ok",
+      "incomplete": false,
+      "data": {
+        "context": {
+          "facts": [
+            {
+              "fact": {
+                "claim": "physics units",
+                "confidence_basis_points": 8000,
+                "expires_ms": null,
+                "key": {
+                  "fact": "4150209e-a0d4-4685-88c2-662fc6530b2f",
+                  "profile": "b040ce7c-5f75-4557-ac85-325fa2b89b05",
+                  "scope": {
+                    "kind": "global"
+                  }
+                },
+                "observed_ms": 10,
+                "provenance": {
+                  "basis": "user-confirmed",
+                  "conversation": null,
+                  "description": "Explicit isolated host fixture assertion",
+                  "source": null,
+                  "turn": null
+                },
+                "subject": "physics",
+                "tags": [
+                  "units"
+                ],
+                "value": "Use SI gravity units.\r\nα and β stay Unicode 🦊."
+              },
+              "record": "0360825c-92ac-53db-b5aa-ee01fb422ae8",
+              "revision": "dfb3c619-7cb6-585f-a257-673024a6066a"
+            }
+          ],
+          "kind": "associative-memory-data",
+          "provenance_authority": "author-asserted-not-source-verified"
+        },
+        "diagnostics": {
+          "budget_omitted": 0,
+          "conflicted_keys": 0,
+          "contradicted_claims": 0,
+          "expired": 0,
+          "snapshot_unavailable": false,
+          "suppressed": 0,
+          "unsupported": 0
+        },
+        "query_status": "complete"
+      }
+    },
+    "local-empty": {
+      "report_version": 1,
+      "operation": "query",
+      "status": "ok",
+      "incomplete": false,
+      "data": {
+        "context": {
+          "facts": [],
+          "kind": "associative-memory-data",
+          "provenance_authority": "author-asserted-not-source-verified"
+        },
+        "diagnostics": {
+          "budget_omitted": 0,
+          "conflicted_keys": 0,
+          "contradicted_claims": 0,
+          "expired": 0,
+          "snapshot_unavailable": false,
+          "suppressed": 0,
+          "unsupported": 0
+        },
+        "query_status": "complete-empty"
+      }
+    },
+    "busy": {
+      "report_version": 1,
+      "operation": "query",
+      "status": "busy",
+      "incomplete": false,
+      "data": null
+    },
+    "missing-store": {
+      "report_version": 1,
+      "operation": "query",
+      "status": "unavailable",
+      "incomplete": false,
+      "data": null
+    },
+    "invalid-input": {
+      "report_version": 1,
+      "operation": "query",
+      "status": "invalid-input",
+      "incomplete": false,
+      "data": null
+    },
+    "selected-complete": {
+      "report_version": 1,
+      "operation": "query",
+      "status": "ok",
+      "incomplete": false,
+      "data": {
+        "context": {
+          "facts": [
+            {
+              "fact": {
+                "claim": "physics units",
+                "confidence_basis_points": 8000,
+                "expires_ms": null,
+                "key": {
+                  "fact": "4150209e-a0d4-4685-88c2-662fc6530b2f",
+                  "profile": "b040ce7c-5f75-4557-ac85-325fa2b89b05",
+                  "scope": {
+                    "kind": "global"
+                  }
+                },
+                "observed_ms": 10,
+                "provenance": {
+                  "basis": "user-confirmed",
+                  "conversation": null,
+                  "description": "Explicit isolated host fixture assertion",
+                  "source": null,
+                  "turn": null
+                },
+                "subject": "physics",
+                "tags": [
+                  "units"
+                ],
+                "value": "Use SI gravity units.\r\nα and β stay Unicode 🦊."
+              },
+              "record": "0360825c-92ac-53db-b5aa-ee01fb422ae8",
+              "revision": "187de14b-3f6e-54e0-a25f-9b7ad2efef4f"
+            }
+          ],
+          "kind": "associative-memory-data",
+          "provenance_authority": "author-asserted-not-source-verified"
+        },
+        "diagnostics": {
+          "budget_omitted": 0,
+          "conflicted_keys": 0,
+          "contradicted_claims": 0,
+          "expired": 0,
+          "snapshot_unavailable": false,
+          "suppressed": 0,
+          "unsupported": 0
+        },
+        "query_status": "complete"
+      }
+    }
+  }
+}

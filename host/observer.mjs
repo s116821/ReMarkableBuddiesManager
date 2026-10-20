@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { parseMemoryRequest, parseMemoryResult } from './memory-query.mjs';
 import { parseRuntimeIdentity } from './runtime-identity.mjs';
 import { parseOwnedReport } from './owned-report.mjs';
 import { parsePersonalizationRequest, parsePersonalizationResult } from './personalization.mjs';
@@ -59,26 +60,32 @@ export class WiredObserver {
     }
     return value;
   }
+  async memoryQuery(request) {
+    parseMemoryRequest(request);
+    const expected = this.lastObservation;
+    if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return { ...result('observation-unavailable'), memory_query: { status: 'unavailable', report: null } };
+    return this.run('memory-query', request);
+  }
   async run(action, request) {
     this.cancel();
-    const personal = action === 'personalization', runtime = action === 'runtime-identity';
+    const memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
-    const refusal = status => runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    const refusal = status => memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const script = runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || runtime || action === 'observe' ? [] : [action])], { stdio: [personal || runtime ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      const script = memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
-      if (personal || runtime) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      if (personal || runtime || memory) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
         chunks.push(data); outputBytes += data.length;
-        if (outputBytes > (personal ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        if (outputBytes > (personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = code => {
         clearTimeout(timer);
@@ -89,6 +96,16 @@ export class WiredObserver {
         try {
           const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
           if (action === 'observe') return resolve(validateResult(value));
+          if (memory) {
+            try { return resolve(parseMemoryResult(value, request, validateResult)); }
+            catch (error) {
+              if (error.message === 'Memory query report version unsupported' && value.status === 'observed') {
+                value.memory_query = { status: 'unsupported', report: null };
+                return resolve(parseMemoryResult(value, request, validateResult));
+              }
+              throw error;
+            }
+          }
           if (personal) return resolve(parsePersonalizationResult(value, request, validateResult));
           if (runtime) {
             if (Object.keys(value).sort().join() !== 'contract_version,observation,runtime_identity,status') throw new Error('Invalid runtime identity');
