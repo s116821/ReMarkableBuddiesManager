@@ -9,6 +9,7 @@ app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
   const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
   const { parseMemoryInspectionRequest, parseMemoryInspectionResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-inspection.mjs')).href);
+  const { parseSavedConfigurationRequest, parseSavedConfigurationResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-configuration.mjs')).href);
   const { parseSavedModeRequest, parseSavedModeResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-mode.mjs')).href);
   const { MemoryForgetHost } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget.mjs')).href);
   const { parseForgetRequest, parseForgetResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget-protocol.mjs')).href);
@@ -41,7 +42,7 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
   });
-  window.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => { if(mainFrame) forget.invalidate(); });
+  window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
   ipcMain.handle('manager:memoryForget', async (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw Error('Memory forget caller refused');
     const request = parseForgetRequest(args[0]);
@@ -52,6 +53,14 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory inspection caller refused');
     const request = parseMemoryInspectionRequest(args[0]);
     return parseMemoryInspectionResult(await observer.inspectMemory(request), request, validateResult);
+  });
+  ipcMain.handle('manager:inspectSavedConfiguration',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Saved configuration caller refused');
+    const request=parseSavedConfigurationRequest(args[0]);
+    const pending=observer.inspectSavedConfiguration(request),generation=observer.generation;
+    const value=parseSavedConfigurationResult(await pending,request,validateResult);
+    if(generation!==observer.generation)throw Error('Inspection invalidated');
+    return value;
   });
   ipcMain.handle('manager:inspectSavedMode', async (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Saved mode caller refused');

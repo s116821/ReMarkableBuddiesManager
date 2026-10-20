@@ -1,3 +1,4 @@
+import { parseSavedConfigurationRequest, reduceSavedConfigurationResult } from './saved-configuration.mjs';
 import { parseMemoryInspectionRequest, reduceMemoryInspectionResult } from './memory-inspection.mjs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -74,6 +75,15 @@ export class WiredObserver {
     if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return { ...result('observation-unavailable'), memory_inspection: { status: 'unavailable', view: null } };
     return this.run('memory-inspection', request);
   }
+  async inspectSavedConfiguration(request) {
+    parseSavedConfigurationRequest(request);
+    const expected=this.lastObservation;
+    const refusal=status=>({...result(status),saved_configuration:{status:'unavailable',view:null}});
+    if(!expected||expected.connection_id!==request.connection_id||expected.boot_id!==request.boot_id)return refusal('observation-unavailable');
+    const pending=this.run('saved-configuration',request),generation=this.generation;
+    const value=await pending;
+    return generation===this.generation?value:refusal('cancelled');
+  }
   async inspectSavedMode(request) {
     parseSavedModeRequest(request);
     const expected = this.lastObservation;
@@ -82,24 +92,25 @@ export class WiredObserver {
   }
   async run(action, request) {
     this.cancel();
+    const configuration = action === 'saved-configuration';
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
-    const refusal = status => forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    const refusal = status => configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const script = forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      const script = configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
-      if (personal || runtime || memory || saved || detail || forget) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      if (personal || runtime || memory || saved || detail || forget || configuration) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
         chunks.push(data); outputBytes += data.length;
-        if (outputBytes > (forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        if (outputBytes > (configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = async code => {
         clearTimeout(timer);
@@ -110,6 +121,10 @@ export class WiredObserver {
         try {
           const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
           if (action === 'observe') return resolve(validateResult(value));
+          if (configuration) {
+            const reduced=reduceSavedConfigurationResult(value,request,validateResult);
+            return resolve(generation===this.generation?reduced:refusal('cancelled'));
+          }
           if (forget) {
             if (Object.keys(value).sort().join() !== 'contract_version,forget_raw,observation,status') throw Error('Private response refused');
             validateResult({ contract_version:value.contract_version,status:value.status,observation:value.observation });

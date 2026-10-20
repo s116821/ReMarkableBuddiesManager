@@ -101,6 +101,28 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="saved-configuration-title">
+    <h2 id="saved-configuration-title">Saved configuration</h2>
+    <p class="text-sm text-muted">Inspect saved settings and defaults only. Runtime, environment overrides, provider credentials and path validity remain unverified. Private values and identities are withheld.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="inspectSavedConfiguration()" [disabled]="!profile().savedConfigurationProbe || !host.inspectSavedConfiguration || savedConfiguration().busy">Inspect saved configuration</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="cancelSavedConfiguration()" [disabled]="!savedConfiguration().busy">Cancel configuration inspection</button>
+    </div>
+    <p role="status" data-testid="saved-configuration-status">{{ savedConfiguration().status }}</p>
+    @if (savedConfiguration().view?.snapshot; as snapshot) {
+      <p class="text-sm my-3" data-testid="saved-configuration-basis">Saved settings only. Configured paths and the running app have not been checked. The file may have changed since this read.</p>
+      <dl class="grid gap-3 my-3" data-testid="saved-configuration-fields">
+        @for (row of configurationRows(); track row.key) {
+          <div class="grid gap-1 border-b border-divider py-2 sm:grid-cols-3 sm:gap-x-5" [attr.data-field]="row.key"><dt class="font-semibold break-words">{{ row.label }}</dt><dd class="break-words">{{ row.value }}</dd><dd class="text-sm text-muted">{{ row.origin }}</dd></div>
+        }
+      </dl>
+      <h3 class="font-semibold">Not represented in this configuration schema</h3>
+      <ul class="list-disc ml-5 text-sm" data-testid="saved-configuration-unsupported">@for (gap of configurationGaps(); track gap.key) { <li>{{ gap.label }}</li> }</ul>
+      <p class="text-sm text-muted my-3">These gaps are not false/default settings. Use the separate personalization and saved-storage-mode features for their own supported actions; this view grants no edit, reload, enable or service authority.</p>
+    }
+    @if (!host.inspectSavedConfiguration) { <p class="ui-warning">This Manager host does not support saved configuration inspection.</p> }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="saved-mode-title">
     <h2 id="saved-mode-title">Saved storage mode</h2>
     <p class="text-sm text-muted">Read the choice saved in Buddy-owned data. This does not change it or verify sync, service or cloud readiness.</p>

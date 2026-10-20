@@ -136,6 +136,7 @@ jobs:
           python -m unittest discover -s tests/runtime_identity -v
           python -m unittest discover -s tests/memory_query -v
           python -m unittest discover -s tests/saved_mode -v
+          python -m unittest discover -s tests/saved_configuration -v
           python -m unittest discover -s tests/memory_inspection -v
           python -m unittest discover -s tests/memory_forget -v
           python -m unittest discover -s tests/vellum -p test_real_fixture.py -v
