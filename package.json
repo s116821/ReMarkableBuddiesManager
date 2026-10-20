@@ -25,7 +25,8 @@
     "test:owned-hosts": "node tests/owned-hosts.mjs",
     "test:drive-hosts": "node tests/drive-hosts.mjs",
     "test:personalization-hosts": "node tests/personalization-hosts.mjs",
-    "test:runtime-identity-hosts": "node tests/runtime-identity-hosts.mjs"
+    "test:runtime-identity-hosts": "node tests/runtime-identity-hosts.mjs",
+    "test:manager-download-hosts": "node tests/manager-download-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

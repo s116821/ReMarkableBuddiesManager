@@ -1,3 +1,4 @@
+import type { DownloadAdapter } from './manager-downloads';
 import type { RuntimeAdapter, RuntimeResult } from './runtime-identity';
 import type { PersonalizationRequest } from '../host/personalization.mjs';
 import type { PersonalizationAdapter, PersonalizationResult } from './personalization';
@@ -6,6 +7,7 @@ import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/driv
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly downloads?: DownloadAdapter;
   readonly driveAuth?: DriveAdapter;
   readonly inspectRuntime?: RuntimeAdapter['inspectRuntime'];
   readonly personalization?: PersonalizationAdapter['personalization'];
@@ -38,7 +40,15 @@ const browserDrive: DriveAdapter = {
 export const unsupportedDrive: DriveAdapter = { status: async () => unavailableDrive(), begin: async () => ({ state: unavailableDrive(), authorizationUrl: null }),
   check: async () => unavailableDrive(), cancel: async () => unavailableDrive(), disconnect: async () => unavailableDrive(), revoke: async () => unavailableDrive() };
 export function currentHost(): ManagerHost {
-  return window.managerHost ?? Object.freeze({ driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+  return window.managerHost ?? Object.freeze({ downloads: { request: async (q: import('../host/manager-download-protocol.mjs').DownloadRequest) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Download host unavailable');
+      const response = await fetch('/manager-download', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q), signal: AbortSignal.timeout(10000) });
+      if (!response.ok || !response.body) throw new Error('Download host unavailable');
+      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
+      try { for (;;) { const result = await reader.read(); if (result.done) break; bytes += result.value.byteLength; if (bytes > 2048) throw new Error('Download response refused'); chunks.push(result.value); } } finally { await reader.cancel().catch(() => {}); }
+      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
+    } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
     personalization: async (request: PersonalizationRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Personalization helper unavailable');
       const response = await fetch('/manager-personalization', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
