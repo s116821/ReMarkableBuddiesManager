@@ -32,4 +32,10 @@ test('actual helper distinguishes document from resource/iframe and never publis
  const f=basicFixture(),h=await open(t,f),ready=await h.basic({action:'begin',...identity}),generation=f.observer.generation;
  for(const headers of [{'Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'},{'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'iframe'}])assert.equal(await get(h.origin+'/preview/',headers),200);assert.equal(f.observer.generation,generation);
  const gate=defer(),started=defer();f.state.onApply=async r=>{started.resolve();await gate.promise;return r;};const pending=h.basic({action:'save',...identity,reference:ready.basic_settings.reference,changes:{debug_dump:{action:'set',value:true}}});await started.promise;await get(h.origin+'/preview/',{'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});gate.resolve();assert.equal((await pending).basic_settings.state,'unknown');assert.equal((await h.basic({action:'retained'})).basic_settings.retained.length,1);
+ for(const change of ['document','same-ID-refresh']){
+  const reading=defer(),response=defer();f.state.onInspect=async r=>{reading.resolve();await response.promise;return r;};const late=h.basic({action:'begin',...identity});await reading.promise;
+  if(change==='document')await get(h.origin+'/preview/',{'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
+  else {const observed=await h.send({action:'observe'},'/manager-host');assert.equal(observed.status,200);assert.equal((await observed.json()).observation.boot_id,identity.boot_id);}
+  response.resolve();const rejected=await late;assert.equal(rejected.basic_settings.state,'invalidated',change);assert.equal(rejected.basic_settings.current,null,change);assert.equal(rejected.basic_settings.reference,null,change);
+ }
 });
