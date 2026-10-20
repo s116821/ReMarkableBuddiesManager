@@ -1,0 +1,132 @@
+{
+  "source": "b1fa8a60c547141ccd5e716611863f04f1efdb48",
+  "binary_sha256": "fc46c824c02454ac54b5a47f3b92d1f684f7c1658d7fb676dcc7b21fe72376c6",
+  "evidence": "Producer-owner Windows CLI fresh disposable local Store capture. Seven inspect reports: four saved meanings, missing Store, actual OS-lock Busy and malformed-identity Unsupported. No selected-state corpus, physical or provider qualification; valid selected format2 is supported. Binary identity supplied by producer owner, not rebuilt by consumer.",
+  "encoding": "Canonical compact JSON in recorded field order plus LF. Five original report hashes supplied by producer owner; Busy/Unsupported hashes computed from its exact quoted compact output bytes.",
+  "report_sha256": {
+    "isolated-backup.json": "8a4a657d310c5b30954b5a8c6f15dfb8f3193ff2fdb1f3f1da756d0c5439afca",
+    "local-only.json": "cc394250195a5c7d89c92d5d696c5d3029af71e7b7ebc7ad77d2c24d7c2bd960",
+    "missing.json": "7b360b752234fa501a80187ede489b9bd711c98ed5aff15e6a666883df34f4cb",
+    "shared-group.json": "b23a85790c1c46dc67e76bd0df671ee106c35a4a3d6db144666bbc109fbb62b9",
+    "unconfigured.json": "69419a4afd696971cfeab7fda238b10402bddc24dfc0a12427b50b95bc400e1e",
+    "busy.json": "bc6a5c97371d4f292a339211509add5a25ce703031c81fbf7bd8ee810ade7f0d",
+    "unsupported.json": "e3008c13497b009b3824003ebd7360034c5a1fa793fc2836fb46e30014a76740"
+  },
+  "reports": {
+    "isolated-backup.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "ok",
+      "incomplete": false,
+      "activation_performed": false,
+      "data": {
+        "current_snapshot": {
+          "device": "f62bd6ca-b502-46f4-be79-242fc9cf819d",
+          "epoch": "0da587db-0a51-4d1f-913e-8ec80389623b",
+          "mode": {
+            "kind": "isolated-backup",
+            "backup": "cedf972a-29a3-47b4-a283-33e2a76591bc",
+            "binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "token": {
+            "actor": "306b792b-5070-4b8c-b1b9-febdbe61438b",
+            "sha256": "3617f3c43cff5a0efa4a28c3ea633ebb124fd285c392cfe06da79a04ed3639db"
+          }
+        },
+        "receipt": null,
+        "receipt_status": null
+      }
+    },
+    "local-only.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "ok",
+      "incomplete": false,
+      "activation_performed": false,
+      "data": {
+        "current_snapshot": {
+          "device": "f62bd6ca-b502-46f4-be79-242fc9cf819d",
+          "epoch": "117376ba-610c-44ae-89bc-6dbc6db6ad0a",
+          "mode": {
+            "kind": "local-only"
+          },
+          "token": {
+            "actor": "306b792b-5070-4b8c-b1b9-febdbe61438b",
+            "sha256": "f78be0b751e760a1e3e258f456044a90667354e8f81b12cc3a52a004965da415"
+          }
+        },
+        "receipt": null,
+        "receipt_status": null
+      }
+    },
+    "missing.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "unavailable",
+      "incomplete": true,
+      "activation_performed": false,
+      "data": null
+    },
+    "shared-group.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "ok",
+      "incomplete": false,
+      "activation_performed": false,
+      "data": {
+        "current_snapshot": {
+          "device": "f62bd6ca-b502-46f4-be79-242fc9cf819d",
+          "epoch": "3c27531a-195a-4b59-afbf-df445840e4ac",
+          "mode": {
+            "kind": "shared-group",
+            "group": "05cbf487-49ee-448a-81ed-6770b91390c7",
+            "binding_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "root_id": "fixture-root"
+          },
+          "token": {
+            "actor": "306b792b-5070-4b8c-b1b9-febdbe61438b",
+            "sha256": "f9ab1eb97a00154940529f770838eaa3e82d1c2535e2725bde0e5e829448d65c"
+          }
+        },
+        "receipt": null,
+        "receipt_status": null
+      }
+    },
+    "unconfigured.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "ok",
+      "incomplete": false,
+      "activation_performed": false,
+      "data": {
+        "current_snapshot": {
+          "device": null,
+          "epoch": null,
+          "mode": null,
+          "token": {
+            "actor": "306b792b-5070-4b8c-b1b9-febdbe61438b",
+            "sha256": "a75184e441121e97feb2688fb8267440309a3b51d671cf41be5a86e37051a814"
+          }
+        },
+        "receipt": null,
+        "receipt_status": null
+      }
+    },
+    "busy.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "busy",
+      "incomplete": false,
+      "activation_performed": false,
+      "data": null
+    },
+    "unsupported.json": {
+      "report_version": 1,
+      "operation": "inspect",
+      "status": "unsupported",
+      "incomplete": false,
+      "activation_performed": false,
+      "data": null
+    }
+  }
+}

@@ -8,6 +8,8 @@ import { parsePersonalizationRequest } from './personalization.mjs';
 import { ManagerDownloads } from './manager-downloads.mjs';
 import { parseDownloadRequest } from './manager-download-protocol.mjs';
 import { parseMemoryRequest } from './memory-query.mjs';
+import { parseSavedModeRequest, parseSavedModeResult } from './saved-mode.mjs';
+import { validateResult } from './observation-protocol.mjs';
 import { DRIVE_ACTIONS } from './drive-protocol.mjs';
 
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
@@ -27,6 +29,20 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 192) return refuse(413); body += chunk; } } catch { return refuse(400); }
       let q; try { q = JSON.parse(body); if (body !== JSON.stringify(q)) throw new Error('Input'); parseDownloadRequest(q); } catch { return refuse(400); }
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
+      return;
+    }
+    if (url.pathname === '/manager-saved-mode') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const chunks = []; let bytes = 0, request;
+      try {
+        for await (const chunk of req) { bytes += chunk.length; if (bytes > 256) return refuse(413); chunks.push(chunk); }
+        const raw = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+        request = JSON.parse(raw); if (raw !== JSON.stringify(request)) throw new Error('Input'); parseSavedModeRequest(request);
+      } catch { return refuse(400); }
+      try {
+        const value = parseSavedModeResult(await observer.inspectSavedMode(request), request, validateResult);
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));
+      } catch { refuse(503); }
       return;
     }
     if (url.pathname === '/manager-memory-query') {

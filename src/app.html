@@ -101,6 +101,29 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="saved-mode-title">
+    <h2 id="saved-mode-title">Saved storage mode</h2>
+    <p class="text-sm text-muted">Read the choice saved in Buddy-owned data. This does not change it or verify sync, service or cloud readiness.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="inspectSavedMode()" [disabled]="!profile().savedModeProbe || !host.inspectSavedMode || savedMode().busy">Read saved storage mode</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="cancelSavedMode()" [disabled]="!savedMode().busy">Cancel mode inspection</button>
+    </div>
+    <p role="status" data-testid="saved-mode-status">{{ savedMode().status }}</p>
+    @if (savedMode().view?.snapshot; as snapshot) {
+      @if (snapshot.kind === 'unconfigured') { <p>No explicit mode is saved. This is not an explicit Local only choice.</p> }
+      @if (snapshot.device) {
+        <dl class="my-3 grid gap-3 sm:grid-cols-2" data-testid="saved-mode-details">
+          <div><dt class="ui-eyebrow">Buddy data device ID</dt><dd class="break-all">{{ snapshot.device }}</dd></div>
+          @if (snapshot.group) { <div><dt class="ui-eyebrow">Saved group ID</dt><dd class="break-all">{{ snapshot.group }}</dd></div> }
+          @if (snapshot.backup) { <div><dt class="ui-eyebrow">Saved backup ID</dt><dd class="break-all">{{ snapshot.backup }}</dd></div> }
+        </dl>
+        <details class="text-sm break-all"><summary>Saved choice details</summary><p>Saved epoch: {{ snapshot.epoch }}</p></details>
+      }
+    }
+    @if (!host.inspectSavedMode) { <p class="ui-warning">This Manager host does not support saved mode inspection.</p> }
+    <p class="text-sm text-muted">Busy means the data cannot be inspected now. Try again later; this action does not stop or unlock the app.</p>
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="memory-title">
     <h2 id="memory-title">Global subject memory</h2>
     <p class="text-sm text-muted">Search the tablet’s configured memory profile. Results are author-asserted context, not verified source facts or a complete inventory.</p>

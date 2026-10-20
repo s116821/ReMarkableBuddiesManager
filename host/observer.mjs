@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { parseMemoryRequest, parseMemoryResult } from './memory-query.mjs';
+import { parseSavedModeRequest, reduceSavedModeResult } from './saved-mode.mjs';
 import { parseRuntimeIdentity } from './runtime-identity.mjs';
 import { parseOwnedReport } from './owned-report.mjs';
 import { parsePersonalizationRequest, parsePersonalizationResult } from './personalization.mjs';
@@ -66,26 +67,32 @@ export class WiredObserver {
     if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return { ...result('observation-unavailable'), memory_query: { status: 'unavailable', report: null } };
     return this.run('memory-query', request);
   }
+  async inspectSavedMode(request) {
+    parseSavedModeRequest(request);
+    const expected = this.lastObservation;
+    if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return { ...result('observation-unavailable'), saved_mode: { status: 'unavailable', view: null } };
+    return this.run('saved-mode', request);
+  }
   async run(action, request) {
     this.cancel();
-    const memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
+    const saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
-    const refusal = status => memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    const refusal = status => saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const script = memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || runtime || memory || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      const script = saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
-      if (personal || runtime || memory) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      if (personal || runtime || memory || saved) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
         chunks.push(data); outputBytes += data.length;
-        if (outputBytes > (personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        if (outputBytes > (saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = code => {
         clearTimeout(timer);
@@ -96,6 +103,7 @@ export class WiredObserver {
         try {
           const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
           if (action === 'observe') return resolve(validateResult(value));
+          if (saved) return resolve(reduceSavedModeResult(value, request, validateResult));
           if (memory) {
             try { return resolve(parseMemoryResult(value, request, validateResult)); }
             catch (error) {

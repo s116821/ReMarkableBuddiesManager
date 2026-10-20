@@ -7,7 +7,8 @@ app.setName('ReMarkableBuddies Manager');
 if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_PROFILE) app.setPath('userData', process.env.MANAGER_TEST_PROFILE);
 app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
-  const { WiredObserver } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
+  const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
+  const { parseSavedModeRequest, parseSavedModeResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-mode.mjs')).href);
   const observer = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
@@ -34,6 +35,11 @@ app.whenReady().then(async () => {
   ipcMain.handle('manager:memoryQuery', (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
+  });
+  ipcMain.handle('manager:inspectSavedMode', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw new Error('Saved mode caller refused');
+    const request = parseSavedModeRequest(args[0]);
+    return parseSavedModeResult(await observer.inspectSavedMode(request), request, validateResult);
   });
   ipcMain.handle('manager:personalization', (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Personalization caller refused');
