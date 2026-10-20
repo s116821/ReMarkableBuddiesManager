@@ -103,3 +103,7 @@ Saved-only settings and safe origin summaries: [configuration inspection](docs/s
 Saved basic settings can be deliberately edited in both companions; see the
 [basic-settings guide](docs/basic-settings.md) for supported fields, private
 conditions, uncertain outcomes and the fixed manual equivalent.
+
+Saved model and endpoint declarations can also be deliberately replaced/cleared
+from both companions. The [private model editor guide](docs/model-settings.md)
+explains origin-only reads, exact replacement text and hash-only recovery.
