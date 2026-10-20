@@ -5,10 +5,12 @@ import { randomBytes } from 'node:crypto';
 import { WiredObserver } from './observer.mjs';
 import { DriveAuth } from './drive-auth.mjs';
 import { parsePersonalizationRequest } from './personalization.mjs';
+import { ManagerDownloads } from './manager-downloads.mjs';
+import { parseDownloadRequest } from './manager-download-protocol.mjs';
 import { DRIVE_ACTIONS } from './drive-protocol.mjs';
 
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
-export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth() }) {
+export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
   const token = randomBytes(32).toString('hex');
   let origin;
   const server = createServer(async (req, res) => {
@@ -18,6 +20,14 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
     const refuse = code => { res.writeHead(code).end(); };
     if (req.headers.host !== new URL(origin).host) return refuse(403);
     const url = new URL(req.url, origin);
+    if (url.pathname === '/manager-download') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      let body = '', bytes = 0;
+      try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 192) return refuse(413); body += chunk; } } catch { return refuse(400); }
+      let q; try { q = JSON.parse(body); if (body !== JSON.stringify(q)) throw new Error('Input'); parseDownloadRequest(q); } catch { return refuse(400); }
+      try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
+      return;
+    }
     if (url.pathname === '/manager-personalization') {
       if (req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
       let body, bytes = 0; const chunks = [];
@@ -70,5 +80,5 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   server.headersTimeout = 5000;
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { observer.cancel(); driveAuth.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
+  return { origin, server, close: async () => { observer.cancel(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }

@@ -11,6 +11,8 @@ app.whenReady().then(async () => {
   const observer = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
+  const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
+  const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   const window = new BrowserWindow({
@@ -24,6 +26,10 @@ app.whenReady().then(async () => {
   for (const action of ['observe', 'cancel', 'inspectOwned', 'inspectRuntime']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
     return observer[action]();
+  });
+  ipcMain.handle('manager:download', (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw new Error('Download caller refused');
+    return downloads.request(args[0]);
   });
   ipcMain.handle('manager:personalization', (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Personalization caller refused');
@@ -42,7 +48,7 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { observer.cancel(); driveAuth.dispose(); });
+  window.on('closed', () => { observer.cancel(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

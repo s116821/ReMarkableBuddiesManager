@@ -5,6 +5,7 @@ import { unavailableDrive as unsupportedDriveState } from '../host/drive-protoco
 import { ConnectionController, CONNECTION_LABELS } from './observation';
 import { PersonalizationController, validText, editText, rawOffset } from './personalization';
 import type { PersonalizationOperation } from '../host/personalization.mjs';
+import { DownloadController } from './manager-downloads';
 import { RuntimeIdentityController } from './runtime-identity';
 import { OwnedDataController } from './owned-data';
 import { resolveDeviceProfile } from './device-profile';
@@ -25,6 +26,10 @@ export class App implements OnDestroy {
     connected: 'Google Drive connected', checking: 'Checking Google Drive…', cancelled: 'Sign-in or check cancelled', expired: 'Sign-in expired', denied: 'Sign-in declined',
     'authorization-failed': 'Sign-in or account check failed', unavailable: 'Google Drive connection unavailable', revoking: 'Removing Google access…', 'revocation-unconfirmed': 'Google access removal could not be confirmed',
   };
+  private readonly downloadController = new DownloadController(this.host.downloads ?? { request: async () => { throw new Error('Download unavailable'); } }, (state, unknown) => { this.download.set(state); this.downloadUnknown.set(unknown); });
+  readonly download = signal(this.downloadController.state);
+  readonly downloadUnknown = signal(false);
+  readonly downloadLabels = { unconfigured: 'Download setup required', idle: 'Ready to download', downloading: 'Downloading and checking release files…', cancelling: 'Cancelling download…', complete: 'Download checked at completion', cancelled: 'Download cancelled', failed: 'Download could not be verified' };
   readonly version = buildInfo.version;
   readonly officialBuild = buildInfo.official;
   readonly connectionLabels = CONNECTION_LABELS;
@@ -65,7 +70,7 @@ export class App implements OnDestroy {
   readonly release = signal(this.releases.state);
   private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
   readonly managerRelease = signal(this.managerReleases.state);
-  constructor() { this.releases.start(); this.managerReleases.start(); void this.driveController.load(); }
+  constructor() { this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
@@ -108,7 +113,10 @@ export class App implements OnDestroy {
     if (account && window.confirm(`Remove Google access for ${account}? This may stop Drive access in other copies of this Google app. Your backups will not be deleted.`)) void this.driveController.action('revoke');
   }
   refresh() { void this.releases.refresh(); }
+  downloadManager() { const state = this.managerRelease(); if (state.status === 'ready' && !state.stale && state.candidate?.assetsPublished) void this.downloadController.request({action:'start',tag:state.candidate.tag}); }
+  cancelManagerDownload() { const id = this.download().operation_id; if (id) void this.downloadController.request({action:'cancel',operation_id:id}); }
+  checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }
