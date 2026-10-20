@@ -66,10 +66,12 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
  page.on('request',onRequest);page.on('pageerror',onError);page.on('console',onConsole);page.on('response',onResponse);delayReloadStatus=true;
  try{
   const responsePromise=page.waitForResponse(response=>requests.has(response.request()),{timeout:14000});
-  const [response]=await Promise.all([responsePromise,page.reload()]);
+  const finishedPromise=page.waitForEvent('requestfinished',{predicate:request=>requests.has(request),timeout:14000});
+  const [response,finishedRequest]=await Promise.all([responsePromise,finishedPromise,page.reload()]);assert.equal(finishedRequest,response.request());
   events.push({event:'startup-status-response',ms:Math.ceil(performance.now()-started)});
   await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});
-  assert.equal(response.status(),200);assert.equal((await response.json()).forget.state,'unknown');
+  // The renderer and retainedStatus below validate the body; do not retrieve it again through CDP after navigation.
+  assert.equal(response.status(),200);
   console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors:pageErrors.length,mainDocument,delayConsumed:!delayReloadStatus}));assert.equal(delayReloadStatus,false);
  }catch(error){
   const document=await page.evaluate(()=>{
