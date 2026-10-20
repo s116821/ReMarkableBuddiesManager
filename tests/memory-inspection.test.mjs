@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMemoryInspectionRequest, memoryRecordId, parseMemoryInspectionReport, parseMemoryInspectionView, parseMemoryInspectionResult, reduceMemoryInspectionResult } from '../host/memory-inspection.mjs';
@@ -103,4 +104,48 @@ test('actual loopback helper guards canonical requests and refuses raw-private r
   for (const body of [' '+JSON.stringify(request()), JSON.stringify({ ...request(), path: '/bad' }), '{"key":0,"key":1}', Buffer.from([255])]) assert.equal((await send(body)).status, 400);
   assert.equal((await send('x'.repeat(1025))).status, 413); assert.equal(calls, 0);
   assert.equal((await send(JSON.stringify(request()))).status, 200); leak = true; assert.equal((await send(JSON.stringify(request()))).status, 503);
+});
+
+
+test('13 actual new producer stdin/request byte pairs preserve all-head, opaque refusal and selected evidence distinctions', async () => {
+  const corpus = JSON.parse(await readFile(new URL('./fixtures/main-4e2-memory-inspection.json', import.meta.url), 'utf8'));
+  assert.equal(corpus.manifest.source_body_revision, '4e2f8dec4d5bcb5032bca2ea6953747e61394989');
+  assert.equal(corpus.manifest.binary_sha256, 'e6354379733fb7e0954ff458c28ec380232c0360e10965df3f4b76f660eede0b');
+  assert.equal(Object.keys(corpus.specimens).length, 13);
+  const c = new MemoryInspectionController(() => {});
+  for (const [name, specimen] of Object.entries(corpus.specimens)) {
+    for (const [field, manifest] of [['stdout_utf8', 'report_sha256'], ['request_utf8', 'request_sha256']]) {
+      assert.equal(createHash('sha256').update(Buffer.from(specimen[field], 'utf8')).digest('hex'), corpus.manifest.reports[name][manifest]);
+    }
+    const raw = JSON.parse(specimen.stdout_utf8), k = JSON.parse(specimen.request_utf8);
+    const q = { connection_id: tablet.connection_id, boot_id: tablet.boot_id, key: k };
+    if (name === 'invalid.json') {
+      assert.throws(() => parseMemoryInspectionRequest(q)); assert.equal(raw.status, 'invalid-input'); assert.equal(raw.data, null); continue;
+    }
+    if (name === 'local-opaque.json') {
+      assert.equal(raw.data.length, 3);
+      await assert.rejects(parseMemoryInspectionReport(raw, q));
+      await c.inspect({ inspectMemory: () => reduceMemoryInspectionResult(privateReply(raw), q, validateResult) }, tablet, k);
+      assert.equal(c.state.view, null); continue;
+    }
+    const view = await parseMemoryInspectionReport(raw, q);
+    const publicValue = await reduceMemoryInspectionResult(privateReply(raw), q, validateResult);
+    await parseMemoryInspectionResult(publicValue, q, validateResult);
+    await c.inspect({ inspectMemory: async () => publicValue }, tablet, k);
+    assert.deepEqual(c.state.view, view);
+    assert.equal(view.status, raw.status); assert.equal(view.incomplete, raw.incomplete);
+    if (raw.status === 'ok') {
+      const derived = await memoryRecordId(k);
+      assert.deepEqual(view.heads.map(h => h.revision), raw.data.map(e => e.revision_id));
+      for (let i = 0; i < raw.data.length; i++) {
+        assert.equal(view.heads[i].record, derived); assert.deepEqual(view.heads[i].fact, raw.data[i].payload);
+        assert.deepEqual(view.heads[i].parents, raw.data[i].parents);
+      }
+      if (name === 'local-conflict.json') { assert.equal(view.heads.length, 2); assert.match(c.state.status, /Conflict/); }
+      if (name === 'selected-after-refused-conflict.json') { assert.equal(view.heads.length, 1); assert.equal(view.heads[0].kind, 'tombstone'); assert.doesNotMatch(c.state.status, /unavailable|Conflict/); }
+    } else assert.equal(view.heads, null);
+    if (name === 'selected-unrelated-refusal.json') { assert.equal(view.status, 'unavailable'); assert.equal(view.incomplete, true); }
+    if (name === 'unavailable.json') { assert.equal(view.status, 'unavailable'); assert.equal(view.incomplete, false); }
+  }
+  assert.equal(corpus.specimens['selected-after-refused-conflict.json'].stdout_utf8, corpus.specimens['selected-tombstone.json'].stdout_utf8);
 });

@@ -25,8 +25,8 @@ integers are refused without rounding or filtering other heads.
 ## Supported contract and manual equivalent
 
 Producer contract is the proposed [inspect stdin packet](https://github.com/s116821/ReMarkableBuddiesDocs/blob/86bb4c0a594666b98135d6552fd3504a488af4a7/openspec/changes/inspect-memory-fact-over-stdin/contract.md).
-Its implementation/qualification and actual producer compatibility remain delivery
-gates for this consumer. Current installed older builds can refuse the operation;
+Candidate producer source4e2f8dec implements this transport; qualified producer
+delivery remains a gate for this consumer. Current installed older builds can refuse the operation;
 that is unsupported/unavailable capability, never successful empty data. No
 release-version threshold or installed capability is inferred from equal SemVer.
 
@@ -70,6 +70,13 @@ Focused public controls are `node --test tests/memory-inspection.test.mjs`,
 Use documented host dependencies/headless display setup. Actual local SSH peer
 checks exercise fixed command/Key bytes/EOF/channel/trust with public deterministic
 test keys and synthetic route/report fixtures. UI checks keep real HTTP/session/
-IPC guards while substituting semantic reports/transport methods. Actual producer
-stdin specimens must be attributed separately before compatibility delivery.
+IPC guards while substituting semantic reports/transport methods. The actual producer-owner corpus main-4e2-memory-inspection.json retains13 raw
+stdout/request strings with all26 original SHA256 checks, source4e2f8dec and the
+producer binary digest. The real parser/controller preserves all supported heads
+and exact refusal flags; invalid input refuses before dispatch, and an opaque local
+head refuses the whole view. Selected-after-refused-conflict is a healthy unchanged
+tombstone, while selected-unrelated-refusal is the actual CLI unavailable report.
+These producer cases used disposable host Stores, not a tablet. The first attempted
+text transfer failed cp1252 encoding; ASCII-escaped resend restored original UTF8
+strings and all hashes without rerunning or relabeling specimens.
 No physical USB, deployment, provider, model or native-page qualification follows.

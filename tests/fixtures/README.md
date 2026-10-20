@@ -65,3 +65,11 @@ fixed publicly known test identities; they do not access a development tablet.
 selected-refusal UI/transport data. The UUIDv5 example follows the producer contract;
 independent Python UUID generation checks canonical requested identity. Synthetic
 reports are not actual producer stdin receipts or device observations.
+
+`main-4e2-memory-inspection.json` retains13 actual producer-owner inspect-stdin
+stdout/request strings and the original26 SHA256 values from candidate4e2f8dec.
+Decode the outer JSON then hash UTF8 strings directly, never reserialize parsed
+reports. The selected-after-refused-conflict report is the same healthy tombstone
+as before the rejected setup attempt; selected-unrelated-refusal is the separate
+actual whole-view CLI refusal. Disposable host Store/binary evidence does not
+qualify deployment or native behavior. The synthetic peer/UI fixtures stay separate.

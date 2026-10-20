@@ -1,0 +1,115 @@
+{
+  "manifest": {
+    "source_body_revision": "4e2f8dec4d5bcb5032bca2ea6953747e61394989",
+    "capture": "Actual new stdin command raw stdout + exact request, final three passing CLI cases; workingtree bodies promoted unchanged to this commit. Earlier failed fixture runs remain separate.",
+    "binary_sha256": "e6354379733fb7e0954ff458c28ec380232c0360e10965df3f4b76f660eede0b",
+    "reports": {
+      "busy.json": {
+        "report_sha256": "6dec98019b52ce48803444524e150a03bbe0c8fd5485179ce6ad29279d2f3853",
+        "request_sha256": "43345130d3f04b80ed512e51d134f479822f61a1f44c8bbf5486140b6e632ed0"
+      },
+      "invalid.json": {
+        "report_sha256": "278a1a0497d6386448c8b84d7cc36d5dbee970372f4878c2f6b908f080e91017",
+        "request_sha256": "2c2ef28687d23fb14d3ac73b740aaf160afec2997179ea10ef1190e366e646e0"
+      },
+      "local-conflict.json": {
+        "report_sha256": "27752de9613bae1aa37bf4e7b56d747f1f043e67711c2d6dd64efc93b6848a6e",
+        "request_sha256": "43345130d3f04b80ed512e51d134f479822f61a1f44c8bbf5486140b6e632ed0"
+      },
+      "local-empty.json": {
+        "report_sha256": "99323d0b40744e9cd8d400d15f9067a644baa5a59e2ead124733cbcb1509c172",
+        "request_sha256": "b0faefd92533a0de92b420625b02a00bdacbcc01dfb565cabb6d599014458ba7"
+      },
+      "local-opaque.json": {
+        "report_sha256": "93bc4b87cc0f3c4993d6cf818cf414502dc9c2c272353cec837668a216e824fe",
+        "request_sha256": "43345130d3f04b80ed512e51d134f479822f61a1f44c8bbf5486140b6e632ed0"
+      },
+      "local-tombstone.json": {
+        "report_sha256": "8bbea15fa2fe8e68d1b31a41641978fb4e29e9a8dfae71489e62e566bdeed8db",
+        "request_sha256": "43345130d3f04b80ed512e51d134f479822f61a1f44c8bbf5486140b6e632ed0"
+      },
+      "local-value.json": {
+        "report_sha256": "2c8b2cf80e0930b8dac3adb891a6564d5d2dd23cc17fc948f820f3c35b6cfcd2",
+        "request_sha256": "43345130d3f04b80ed512e51d134f479822f61a1f44c8bbf5486140b6e632ed0"
+      },
+      "selected-after-refused-conflict.json": {
+        "report_sha256": "9784a17185e22531aca0cfe1797ef22a1bfb810eaaa891571c9b1bc282064c69",
+        "request_sha256": "f1109119227acca0e77cfe7d1b0f9c401fdf6247cbec81b2b880326881c60273"
+      },
+      "selected-empty.json": {
+        "report_sha256": "99323d0b40744e9cd8d400d15f9067a644baa5a59e2ead124733cbcb1509c172",
+        "request_sha256": "818a100ac859ed0e5af14be3c3c4623a5a8c5e909e116222b8ef76567bdc2b77"
+      },
+      "selected-tombstone.json": {
+        "report_sha256": "9784a17185e22531aca0cfe1797ef22a1bfb810eaaa891571c9b1bc282064c69",
+        "request_sha256": "f1109119227acca0e77cfe7d1b0f9c401fdf6247cbec81b2b880326881c60273"
+      },
+      "selected-unrelated-refusal.json": {
+        "report_sha256": "d130e7a89e671fe2650a898b3b6d3d4a76742aafef1c77c2ca83a2ae716d176a",
+        "request_sha256": "6bcafd3b24ed0c1e23ee7a9322cd038aa4ac2218dc5224c51106336458dab4cc"
+      },
+      "selected-value.json": {
+        "report_sha256": "2aab2ed94a33cbffe7ed0843ca3e31faabe79e5ec3ca68c67288b3d04b563cd4",
+        "request_sha256": "f1109119227acca0e77cfe7d1b0f9c401fdf6247cbec81b2b880326881c60273"
+      },
+      "unavailable.json": {
+        "report_sha256": "fe684a9ee614b6a0d8d96571d50ab6f84489ec4d7ee06640f88761adb2350a47",
+        "request_sha256": "8f239fb12ada3688bb34d135ba8a1682264051bd09581ea34150dcb6443e52eb"
+      }
+    }
+  },
+  "specimens": {
+    "busy.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"busy\",\"incomplete\":false,\"data\":null}\n",
+      "request_utf8": "{\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"},\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\"}"
+    },
+    "invalid.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"invalid-input\",\"incomplete\":false,\"data\":null}\n",
+      "request_utf8": "{\"fact\":\"288ee738-aca7-427a-8704-6dfc0f371fb6\",\"profile\":\"3ee7e716-bcb0-48b4-9e59-504c8bb1ddbe\",\"scope\":{\"kind\":\"global\",\"unknown\":\"PRIVATE_SCOPE_SENTINEL\"}}"
+    },
+    "local-conflict.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"c8231db7-86bf-4135-9b2b-bfcc7c7faaac\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"tombstone\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"4029b2e4-9267-4797-982b-c96b4365e5a7\",\"parents\":[\"57951f75-4458-591d-a0d3-e68c3b77a789\"],\"payload\":null,\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"71cd53a8-1a79-47ba-9fa6-48bd90d4c3ae\"},{\"actor_id\":\"a1c9c92b-dace-4a14-89b6-75aaeef7aefe\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"value\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"9a65366f-5d1b-482d-a910-64e7f8216fe3\",\"parents\":[\"57951f75-4458-591d-a0d3-e68c3b77a789\"],\"payload\":{\"claim\":\"physics units\",\"confidence_basis_points\":8000,\"expires_ms\":null,\"key\":{\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\",\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"}},\"observed_ms\":10,\"provenance\":{\"basis\":\"user-confirmed\",\"conversation\":null,\"description\":\"Explicit host fixture assertion\",\"source\":null,\"turn\":null},\"subject\":\"physics\",\"tags\":[],\"value\":\"Use SI gravity units.\\n\u03b1 and \u03b2 stay Unicode.\"},\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"7252fdcb-6efa-46be-bea3-6b31131c2140\"}]}\n",
+      "request_utf8": "{\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"},\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\"}"
+    },
+    "local-empty.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[]}\n",
+      "request_utf8": "{\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"},\"fact\":\"2a5a260d-cadd-4209-b7b5-e879a1ca7f7a\"}"
+    },
+    "local-opaque.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"a9b2c39c-ba80-48a1-aeeb-e94570bdddf2\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"value\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"0844261a-7052-4eff-80e1-2d8574d77072\",\"parents\":[\"57951f75-4458-591d-a0d3-e68c3b77a789\"],\"payload\":{\"unsupported_future_payload\":true},\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"65dcc455-63d0-4dd1-b08a-2f129c0eb360\"},{\"actor_id\":\"c8231db7-86bf-4135-9b2b-bfcc7c7faaac\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"tombstone\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"4029b2e4-9267-4797-982b-c96b4365e5a7\",\"parents\":[\"57951f75-4458-591d-a0d3-e68c3b77a789\"],\"payload\":null,\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"71cd53a8-1a79-47ba-9fa6-48bd90d4c3ae\"},{\"actor_id\":\"a1c9c92b-dace-4a14-89b6-75aaeef7aefe\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"value\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"9a65366f-5d1b-482d-a910-64e7f8216fe3\",\"parents\":[\"57951f75-4458-591d-a0d3-e68c3b77a789\"],\"payload\":{\"claim\":\"physics units\",\"confidence_basis_points\":8000,\"expires_ms\":null,\"key\":{\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\",\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"}},\"observed_ms\":10,\"provenance\":{\"basis\":\"user-confirmed\",\"conversation\":null,\"description\":\"Explicit host fixture assertion\",\"source\":null,\"turn\":null},\"subject\":\"physics\",\"tags\":[],\"value\":\"Use SI gravity units.\\n\u03b1 and \u03b2 stay Unicode.\"},\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"7252fdcb-6efa-46be-bea3-6b31131c2140\"}]}\n",
+      "request_utf8": "{\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"},\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\"}"
+    },
+    "local-tombstone.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"6d94214b-714f-44df-9991-650defa30fc5\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"tombstone\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"3887a955-978a-406d-b1de-95cb061bbaab\",\"parents\":[\"65dcc455-63d0-4dd1-b08a-2f129c0eb360\",\"71cd53a8-1a79-47ba-9fa6-48bd90d4c3ae\",\"7252fdcb-6efa-46be-bea3-6b31131c2140\"],\"payload\":null,\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"c9840611-ff64-5ba3-a83f-4652eeddc203\"}]}\n",
+      "request_utf8": "{\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"},\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\"}"
+    },
+    "local-value.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"6d94214b-714f-44df-9991-650defa30fc5\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"value\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"d90cbff1-5d79-43b8-86ab-cf9786cee264\",\"parents\":[],\"payload\":{\"claim\":\"physics units\",\"confidence_basis_points\":8000,\"expires_ms\":null,\"key\":{\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\",\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"}},\"observed_ms\":10,\"provenance\":{\"basis\":\"user-confirmed\",\"conversation\":null,\"description\":\"Explicit host fixture assertion\",\"source\":null,\"turn\":null},\"subject\":\"physics\",\"tags\":[],\"value\":\"Use SI gravity units.\\n\u03b1 and \u03b2 stay Unicode.\"},\"record_id\":\"a31d03f9-f265-5c78-99a4-1385e3bcaa25\",\"revision_id\":\"57951f75-4458-591d-a0d3-e68c3b77a789\"}]}\n",
+      "request_utf8": "{\"profile\":\"b8afa649-6a6a-42e4-8227-d4e47761246b\",\"scope\":{\"kind\":\"global\"},\"fact\":\"2dbe85b7-15ea-42b7-b3bc-7869f3ea1796\"}"
+    },
+    "selected-after-refused-conflict.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"0799323b-bf2a-4bef-a519-6f6e9e341b10\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"tombstone\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"7a1b8898-9946-4071-b6b2-74ae986958b9\",\"parents\":[\"3e5a299a-b6e0-598f-b3c8-fbe17a9c61bd\"],\"payload\":null,\"record_id\":\"2bd02ee5-3e27-51cb-bd74-68884b4c39f7\",\"revision_id\":\"772b9f41-3c42-5e20-87be-2a8992b510f9\"}]}\n",
+      "request_utf8": "{\"profile\":\"f6faa195-88a5-4264-af30-05d705d7c674\",\"scope\":{\"kind\":\"global\"},\"fact\":\"ddff49cb-ecee-465b-bb54-26e4ee29a2f3\"}"
+    },
+    "selected-empty.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[]}\n",
+      "request_utf8": "{\"profile\":\"f6faa195-88a5-4264-af30-05d705d7c674\",\"scope\":{\"kind\":\"global\"},\"fact\":\"1a1678a5-c745-43fe-9aba-9c0949a17411\"}"
+    },
+    "selected-tombstone.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"0799323b-bf2a-4bef-a519-6f6e9e341b10\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"tombstone\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"7a1b8898-9946-4071-b6b2-74ae986958b9\",\"parents\":[\"3e5a299a-b6e0-598f-b3c8-fbe17a9c61bd\"],\"payload\":null,\"record_id\":\"2bd02ee5-3e27-51cb-bd74-68884b4c39f7\",\"revision_id\":\"772b9f41-3c42-5e20-87be-2a8992b510f9\"}]}\n",
+      "request_utf8": "{\"profile\":\"f6faa195-88a5-4264-af30-05d705d7c674\",\"scope\":{\"kind\":\"global\"},\"fact\":\"ddff49cb-ecee-465b-bb54-26e4ee29a2f3\"}"
+    },
+    "selected-unrelated-refusal.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"incomplete\":true,\"data\":null}\n",
+      "request_utf8": "{\"profile\":\"8b31a1b2-9039-478a-a76f-aa6f8a228bd9\",\"scope\":{\"kind\":\"global\"},\"fact\":\"90a4195f-2dd7-4276-af84-0c223c9f9234\"}"
+    },
+    "selected-value.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"data\":[{\"actor_id\":\"0799323b-bf2a-4bef-a519-6f6e9e341b10\",\"domain_schema_version\":1,\"envelope_version\":1,\"kind\":\"value\",\"media_descriptors\":[],\"namespace\":\"subject-memory\",\"operation_id\":\"de55182f-dbaa-4b0c-8abf-dd59cb36b9f8\",\"parents\":[],\"payload\":{\"claim\":\"physics units\",\"confidence_basis_points\":8000,\"expires_ms\":null,\"key\":{\"fact\":\"ddff49cb-ecee-465b-bb54-26e4ee29a2f3\",\"profile\":\"f6faa195-88a5-4264-af30-05d705d7c674\",\"scope\":{\"kind\":\"global\"}},\"observed_ms\":10,\"provenance\":{\"basis\":\"user-confirmed\",\"conversation\":null,\"description\":\"Explicit host fixture assertion\",\"source\":null,\"turn\":null},\"subject\":\"physics\",\"tags\":[],\"value\":\"Use SI gravity units.\\n\u03b1 and \u03b2 stay Unicode.\"},\"record_id\":\"2bd02ee5-3e27-51cb-bd74-68884b4c39f7\",\"revision_id\":\"3e5a299a-b6e0-598f-b3c8-fbe17a9c61bd\"}]}\n",
+      "request_utf8": "{\"profile\":\"f6faa195-88a5-4264-af30-05d705d7c674\",\"scope\":{\"kind\":\"global\"},\"fact\":\"ddff49cb-ecee-465b-bb54-26e4ee29a2f3\"}"
+    },
+    "unavailable.json": {
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"incomplete\":false,\"data\":null}\n",
+      "request_utf8": "{\"profile\":\"d671ce60-eedc-47b8-b294-0fe28f8612ae\",\"scope\":{\"kind\":\"global\"},\"fact\":\"42367788-ff17-438f-b49c-757345c7bbe1\"}"
+    }
+  }
+}
