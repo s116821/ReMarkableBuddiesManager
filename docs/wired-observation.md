@@ -70,7 +70,7 @@ export MANAGER_WIRED_PYTHON="$HOME/.local/share/manager-wired-python/bin/python"
 
 For Electron, run `npm run desktop`, or launch the portable desktop executable
 from the configured host environment. The sandboxed renderer only requests
-observation or cancellation; it cannot submit a target, file, key or command.
+observation, cancellation or [owned-data inspection](owned-data-inspection.md); it cannot submit a target, file, key or command.
 
 For a browser, explicitly start the companion helper from a source checkout:
 

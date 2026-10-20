@@ -62,6 +62,7 @@ export class ConnectionController {
     this.timer = null;
     this.cancellation = this.cancellation.then(() => this.adapter.cancel()).catch(() => undefined);
   }
+  async pause() { this.stop(); await this.cancellation; }
   disconnect() { this.stop(); this.identity = null; this.update({ status: 'cancelled', observation: null, checkedAt: null }); }
   dispose() { this.disposed = true; this.stop(); }
 }

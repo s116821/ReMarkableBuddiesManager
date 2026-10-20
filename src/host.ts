@@ -1,11 +1,12 @@
+import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
-export interface ManagerHost extends ObservationAdapter {
+export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly contract_version: 1;
   readonly kind: 'browser' | 'desktop';
   readonly transport: 'not-configured' | 'wired-read-only';
 }
 declare global { interface Window { managerHost?: ManagerHost } }
-async function helper(action: 'observe' | 'cancel'): Promise<ObservationResult> {
+async function helper(action: 'observe' | 'cancel' | 'inspect-owned'): Promise<ObservationResult | InspectionResult> {
   if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') return { contract_version: 1, status: 'unconfigured', observation: null };
   try {
     const response = await fetch('/manager-host', { method: 'POST', credentials: 'same-origin',
@@ -16,5 +17,6 @@ async function helper(action: 'observe' | 'cancel'): Promise<ObservationResult> 
 }
 export function currentHost(): ManagerHost {
   return window.managerHost ?? Object.freeze({ contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
-    observe: () => helper('observe'), cancel: () => helper('cancel') });
+    inspectOwned: () => helper('inspect-owned') as Promise<InspectionResult>,
+    observe: () => helper('observe') as Promise<ObservationResult>, cancel: () => helper('cancel') as Promise<ObservationResult> });
 }
