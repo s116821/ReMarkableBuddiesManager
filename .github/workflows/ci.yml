@@ -118,6 +118,7 @@ jobs:
           python -m pip install -r host/requirements.txt
           python -m unittest discover -s tests/wired -v
           python -m unittest discover -s tests/drive -v
+          python -m unittest discover -s tests/personalization -v
           python -m unittest discover -s tests/vellum -p test_real_fixture.py -v
         if: (needs.title.outputs.application == 'true' || steps.paths.outputs.application == 'true')
       - run: npm ci --prefix release/fixtures --ignore-scripts --no-audit --no-fund

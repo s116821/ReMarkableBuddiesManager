@@ -23,7 +23,8 @@
     "build:development": "node scripts/version.mjs && ng build --configuration development --output-path test-results/development",
     "test:styles": "npm run build:development && node tests/hosts.mjs --development",
     "test:owned-hosts": "node tests/owned-hosts.mjs",
-    "test:drive-hosts": "node tests/drive-hosts.mjs"
+    "test:drive-hosts": "node tests/drive-hosts.mjs",
+    "test:personalization-hosts": "node tests/personalization-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

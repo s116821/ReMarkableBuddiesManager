@@ -25,6 +25,10 @@ app.whenReady().then(async () => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
     return observer[action]();
   });
+  ipcMain.handle('manager:personalization', (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw new Error('Personalization caller refused');
+    return observer.personalization(args[0]);
+  });
   for (const action of ['status', 'begin', 'cancel', 'check', 'disconnect', 'revoke']) ipcMain.handle(`manager:drive:${action}`, async (event, ...args) => {
     const allowed = action === 'revoke' ? args.length === 1 && typeof args[0] === 'string' && /^[a-f0-9]{64}$/.test(args[0]) : args.length === 0;
     if (!allowed || !authorized(event, [])) throw new Error('Drive caller refused');

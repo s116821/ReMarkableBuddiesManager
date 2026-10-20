@@ -314,7 +314,7 @@ class Notifications:
         # callbacks remain alive through cancellation, never unregister inside callback.
 
 
-def observe(config, shared, inspection=None):
+def observe(config, shared, inspection=None, expected_connection=None):
     windows = Windows()
     notices = Notifications(windows, config)  # registration precedes baseline/dial
     try:
@@ -335,6 +335,6 @@ def observe(config, shared, inspection=None):
             sock = bound_socket(config, current)
             notices.attach(sock)
             return sock
-        return shared.observe(config, snapshot=snapshot, dial=dial, notices=notices, inspection=inspection or shared.inspect)
+        return shared.observe(config, snapshot=snapshot, dial=dial, notices=notices, inspection=inspection or shared.inspect, expected_connection=expected_connection)
     finally:
         notices.close()

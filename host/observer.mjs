@@ -1,25 +1,11 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { parseOwnedReport } from './owned-report.mjs';
+import { parsePersonalizationRequest, parsePersonalizationResult } from './personalization.mjs';
 import { fileURLToPath } from 'node:url';
 
-export const statuses = new Set(['unconfigured', 'unsupported-host', 'disconnected', 'untrusted', 'authentication-required', 'timeout', 'cancelled', 'cable-lost', 'observation-unavailable', 'observed']);
-export const result = (status, observation = null) => ({ contract_version: 1, status, observation });
-export function validateResult(value) {
-  if (!value || value.contract_version !== 1 || !statuses.has(value.status) || Object.keys(value).sort().join() !== 'contract_version,observation,status') throw new Error('Invalid observation');
-  if (value.status !== 'observed') {
-    if (value.observation !== null) throw new Error('Invalid observation');
-    return value;
-  }
-  const o = value.observation;
-  if (!o || Object.keys(o).sort().join() !== 'architecture,boot_id,connection_id,firmware,firmware_conflict,installed_version,model,provenance,service' ||
-      !/^[a-f0-9]{64}$/.test(o.connection_id) || !/^[a-f0-9-]{36}$/.test(o.boot_id) ||
-      o.installed_version !== null || o.provenance !== 'unknown' || typeof o.firmware_conflict !== 'boolean') throw new Error('Invalid observation');
-  for (const key of ['model', 'firmware', 'architecture']) if (o[key] !== null && (typeof o[key] !== 'string' || !/^[A-Za-z0-9 ._()+/-]{1,96}$/.test(o[key]))) throw new Error('Invalid observation');
-  if (!o.service || Object.keys(o.service).sort().join() !== 'ActiveState,LoadState,SubState') throw new Error('Invalid observation');
-  for (const value of Object.values(o.service)) if (value !== null && (typeof value !== 'string' || !/^[a-z-]{1,32}$/.test(value))) throw new Error('Invalid observation');
-  return value;
-}
+import { result, validateResult } from './observation-protocol.mjs';
+export { statuses, result, validateResult } from './observation-protocol.mjs';
 
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
@@ -44,21 +30,46 @@ export class WiredObserver {
     }
     return value;
   }
-  async run(action) {
+  async personalization(request) {
+    parsePersonalizationRequest(request);
+    const expected = this.lastObservation;
+    const refusal = outcome => ({ ...result('observation-unavailable'), personalization: { status: 'unavailable', report: null, outcome } });
+    if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return refusal('not-dispatched');
+    const prior = this.personalizationSnapshot;
+    if (request.operation !== 'inspect' && (!prior || prior.connection_id !== request.connection_id || prior.boot_id !== request.boot_id || prior.report.config_sha256 !== request.expected_config_sha256)) return refusal('not-dispatched');
+    this.personalizationSnapshot = null;
+    const value = await this.run('personalization', request);
+    if (!value.observation || value.observation.boot_id !== expected.boot_id || value.observation.connection_id !== expected.connection_id) return refusal(request.operation === 'inspect' ? 'read-only' : value.personalization.outcome === 'not-dispatched' ? 'not-dispatched' : 'unknown');
+    const report = value.personalization.report;
+    if (report?.status === 'ok') {
+      const observed = report.personalization;
+      if ((request.operation === 'set' && (observed.text !== request.text || observed.enabled !== request.enabled)) ||
+          (request.operation === 'disable' && (observed.enabled || observed.text !== prior.report.personalization.text)) ||
+          (request.operation === 'clear' && (observed.enabled || observed.text !== ''))) return refusal('unknown');
+      this.personalizationSnapshot = { connection_id: request.connection_id, boot_id: request.boot_id, report };
+    }
+    return value;
+  }
+  async run(action, request) {
     this.cancel();
-    const refusal = status => action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    const personal = action === 'personalization';
+    let launched = false;
+    const refusal = status => personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const child = spawn(this.python, [this.script, ...(action === 'observe' ? [] : [action])], { stdio: ['ignore', 'pipe', 'ignore'],
+      const script = personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || action === 'observe' ? [] : [action])], { stdio: [personal ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
-      let output = '', expired = false, oversized = false;
+      child.once('spawn', () => { launched = true; });
+      if (personal) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
-        output += data.toString('utf8');
-        if (Buffer.byteLength(output) > (action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        chunks.push(data); outputBytes += data.length;
+        if (outputBytes > (personal ? 139264 : action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = code => {
         clearTimeout(timer);
@@ -67,8 +78,9 @@ export class WiredObserver {
         if (expired) return resolve(refusal('timeout'));
         if (code !== 0 || oversized) return resolve(refusal('observation-unavailable'));
         try {
-          const value = JSON.parse(output);
+          const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
           if (action === 'observe') return resolve(validateResult(value));
+          if (personal) return resolve(parsePersonalizationResult(value, request, validateResult));
           if (!value || Object.keys(value).sort().join() !== 'contract_version,inspection,observation,status') throw new Error('Invalid inspection');
           validateResult({ contract_version: value.contract_version, status: value.status, observation: value.observation });
           if (value.status !== 'observed') {

@@ -151,6 +151,8 @@ jobs:
           xvfb-run -a npm run test:owned-hosts -- --packaged
           xvfb-run -a npm run test:drive-hosts
           xvfb-run -a npm run test:drive-hosts -- --packaged
+          xvfb-run -a npm run test:personalization-hosts
+          xvfb-run -a npm run test:personalization-hosts -- --packaged
       - if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -162,6 +164,8 @@ jobs:
           npm run test:owned-hosts -- --packaged
           npm run test:drive-hosts
           npm run test:drive-hosts -- --packaged
+          npm run test:personalization-hosts
+          npm run test:personalization-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
         run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
