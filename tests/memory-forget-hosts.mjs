@@ -13,7 +13,7 @@ import { prepared,ack,failure,rawReply } from './fixtures/memory-forget.mjs';
 const packaged=process.argv.includes('--packaged');
 const folder=await mkdtemp(path.join(os.tmpdir(),'manager-memory-forget-ui-'));
 await mkdir('test-results',{recursive:true});
-let mode='ack',completePending,calls=[];
+let mode='ack',completePending,calls=[],delayReloadStatus=false;
 const fixtureResponse=async(selector,body)=>{
  calls.push(selector);
  // Exercise legal operation latency beyond the UI matcher's five-second paint check.
@@ -24,19 +24,21 @@ const fixtureResponse=async(selector,body)=>{
  if(selector==='forget')return mode==='lost'?failure(selector,'unavailable',true,'unknown'):mode==='refused'?failure(selector,'conflict',false,'not-dispatched'):ack(selector,body.intent.operation);
  return ack(selector,body.intent.operation);
 };
-async function isolate(context,origin){await context.route('**/*',route=>{const u=route.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||(origin&&new URL(u).origin===origin))return route.continue();return route.abort();});}
-async function verify(page,setMode,capture,release,waitDispatch,prepareInitial=button=>button.click()){
+async function isolate(context,origin){await context.route('**/*',async route=>{const u=route.request().url();if(origin&&u===origin+'/manager-memory-forget'&&route.request().method()==='POST'&&delayReloadStatus&&route.request().postDataJSON()?.action==='status'){delayReloadStatus=false;await new Promise(resolve=>setTimeout(resolve,6000));}if(u.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||(origin&&new URL(u).origin===origin))return route.continue();return route.abort();});}
+async function verify(page,setMode,capture,release,waitDispatch,prepareInitial=button=>button.click(),reloadReady=async()=>{await page.reload();await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});}){
  const prepare=page.getByRole('button',{name:'Prepare forget preview',exact:true});const confirm=page.getByRole('button',{name:'Confirm forget of this prepared fact',exact:true});const status=page.getByTestId('memory-forget-status');const preview=page.getByTestId('memory-forget-preview');const receipt=page.getByRole('button',{name:'Check historical receipt only',exact:true});
  const inspect=page.getByRole('button',{name:'Inspect current revisions',exact:true});
  async function read(){await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await page.locator('#memory-query').fill('gravity');await page.getByRole('button',{name:'Search global memory',exact:true}).click();await inspect.waitFor();await inspect.click();await expect(page.getByTestId('memory-inspection-status')).toHaveText('Current fact revision inspected');}
  await expect(prepare).toBeDisabled();await read();await prepareInitial(prepare);await expect(preview).toContainText('Café Ω');await expect(preview).toContainText('Selected memory publication');await expect(preview).toContainText('Observed: 9007199254740991');await expect(preview).toContainText('Author asserted:');
  for(const width of [390,1280]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  await page.locator('#memory-forget-title').scrollIntoViewIfNeeded();await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await capture();
- const publicState=await page.evaluate(()=>window.managerHost?window.managerHost.memoryForget({action:'status'}):fetch('/manager-memory-forget',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{"action":"status"}'}).then(r=>r.json()));
+ async function retainedStatus(){return page.evaluate(()=>window.managerHost?window.managerHost.memoryForget({action:'status'}):fetch('/manager-memory-forget',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{"action":"status"}'}).then(r=>r.json()));}
+ const publicState=await retainedStatus();
  const text=JSON.stringify(publicState);for(const field of ['config_sha256','accepted_base_sha256','selection_sha256','store_generation','input_base64'])assert.equal(text.includes(field),false);
  await confirm.click();await expect(status).toContainText('acknowledged historically');await expect(preview).toHaveCount(0);await expect(page.getByTestId('memory-fact')).toHaveCount(1);await expect(prepare).toBeDisabled();
  await read();await setMode('lost');await prepare.click();await expect(preview).toBeVisible();await confirm.click();await expect(status).toContainText('unknown');await expect(preview).toHaveCount(0);await expect(prepare).toBeDisabled();
- await page.reload();await expect(status).toContainText('unknown');await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await receipt.click();await expect(status).toContainText('acknowledged historically');await expect(preview).toHaveCount(0);
+ const retained=await retainedStatus();assert.equal(retained.forget.state,'unknown');assert.match(retained.forget.reference,/^[0-9a-f]{64}$/);
+ await reloadReady();const reloaded=await retainedStatus();assert.equal(reloaded.forget.state,'unknown');assert.equal(reloaded.forget.reference,retained.forget.reference);await expect(status).toContainText('unknown');await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await receipt.click();await expect(status).toContainText('acknowledged historically');await expect(preview).toHaveCount(0);
  await setMode('refused');await read();await prepare.click();await expect(preview).toBeVisible();await confirm.click();await expect(status).toContainText('refused before mutation attempt');
  await setMode('unsupported');await read();await prepare.click();await expect(status).toContainText('unsupported');await expect(confirm).toHaveCount(0);
  await setMode('private');await read();await prepare.click();await expect(status).toContainText('unavailable');await expect(confirm).toHaveCount(0);assert.equal((await page.textContent('body')).includes('PRIVATE_REPORT_CANARY'),false);
@@ -54,6 +56,22 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
  const pending=page.waitForResponse(response=>{if(response.url()!==helper.origin+'/manager-memory-forget'||response.request().method()!=='POST')return false;try{return response.request().postDataJSON()?.action==='prepare';}catch{return false;}},{timeout:14000});
  await button.click();const response=await pending;assert.equal(response.status(),200);const value=await response.json();assert.equal(value.forget.state,'prepared');
  console.log('Initial browser preparation public response complete before unchanged UI assertions:',Math.ceil(performance.now()-started),'ms; existing14s request bound');
+},async()=>{
+ const started=performance.now(),requests=new Set(),events=[];let pageErrors=0;
+ const isStatus=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='status';}catch{return false;}};
+ const onRequest=request=>{if(isStatus(request)){requests.add(request);events.push({event:'startup-status-request',ms:Math.ceil(performance.now()-started)});}};
+ const onError=()=>{pageErrors++;};page.on('request',onRequest);page.on('pageerror',onError);delayReloadStatus=true;
+ try{
+  const responsePromise=page.waitForResponse(response=>requests.has(response.request()),{timeout:14000});
+  const [response]=await Promise.all([responsePromise,page.reload()]);
+  events.push({event:'startup-status-response',ms:Math.ceil(performance.now()-started)});
+  await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});
+  assert.equal(response.status(),200);assert.equal((await response.json()).forget.state,'unknown');
+  console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors,delayConsumed:!delayReloadStatus}));assert.equal(delayReloadStatus,false);
+ }catch(error){
+  const document=await page.evaluate(()=>({readyState:document.readyState,rootPresent:!!document.querySelector('app-root'),rootChildren:document.querySelector('app-root')?.childElementCount??0,statusPresent:!!document.querySelector('[data-testid="memory-forget-status"]')})).catch(()=>null);
+  console.error('Reload readiness diagnostic:',JSON.stringify({events,pageErrors,path:new URL(page.url()).pathname,document}));throw error;
+ }finally{delayReloadStatus=false;page.off('request',onRequest);page.off('pageerror',onError);}
 });assert.equal(calls.filter(x=>x==='forget').length,4);console.log(`${packaged?'retained production':'development'} browser prepared forget/immutable preview/ack-only/unknown/reload/receipt/cancel pass; raw producer reports and route are synthetic`);}finally{await browser.close();await helper.close();}
 const env={...process.env};for(const n of Object.keys(env))if(n.startsWith('MANAGER_'))delete env[n];Object.assign(env,{MANAGER_TEST:'1',MANAGER_TEST_DEFER_LOAD:'1',MANAGER_TEST_PROFILE:folder});
 const app=await electron.launch({executablePath:packaged?path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform==='win32'?'ReMarkableBuddiesManager.exe':'ReMarkableBuddiesManager'}`):undefined,args:[...(packaged?[]:['.']),...(process.platform==='linux'?['--disable-gpu']:[])],env});
