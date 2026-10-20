@@ -1,3 +1,5 @@
+import {OrdinaryExportController} from './ordinary-export';
+import type {ExportRetained} from '../host/ordinary-export-protocol.mjs';
 import { ModelSettingsController } from './model-settings';
 import type { ModelKey,ModelRetained } from '../host/model-settings-protocol.mjs';
 import { BasicSettingsController,basicRows } from './basic-settings';
@@ -57,6 +59,8 @@ export class App implements OnDestroy {
   readonly memory = signal(this.memoryController.state);
   readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
+  private readonly exportController=new OrdinaryExportController(state=>this.archiveExport.set(state),()=>{document.querySelectorAll<HTMLTextAreaElement>('#archive-export-destination').forEach(field=>{field.value='';});});
+  readonly archiveExport=signal(this.exportController.state);
   private readonly modelController=new ModelSettingsController(state=>this.model.set(state),key=>{document.querySelectorAll<HTMLTextAreaElement>(key?'#model-replacement-'+key:'[id^="model-replacement-"]').forEach(field=>{field.value='';});});
   readonly model=signal(this.modelController.state);
   readonly modelCanSave=computed(()=>this.model().view?.state==='ready'&&!this.model().busy&&this.model().valid&&this.model().retained.length<8);
@@ -86,7 +90,7 @@ export class App implements OnDestroy {
   readonly savedMode = signal(this.savedModeController.state);
   private readonly runtimeController = new RuntimeIdentityController(state => this.runtimeIdentity.set(state));
   readonly runtimeIdentity = signal(this.runtimeController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.savedConfigurationController.clear(); this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
+  private readonly connectionController = new ConnectionController(this.host, state => { this.savedConfigurationController.clear(); this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -113,21 +117,21 @@ export class App implements OnDestroy {
   readonly release = signal(this.releases.state);
   private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
   readonly managerRelease = signal(this.managerReleases.state);
-  private readonly clearModelOnPageHide=()=>this.modelController.clear();
-  constructor() { window.addEventListener('pagehide',this.clearModelOnPageHide); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
+  private readonly clearModelOnPageHide=()=>{this.exportController.clear();this.modelController.clear();};
+  constructor() { window.addEventListener('pagehide',this.clearModelOnPageHide); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
   editMemory(event: Event) { this.memoryText.set((event.target as HTMLTextAreaElement).value); }
   async searchMemory() {
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear();
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().memoryQueryProbe || !this.host.memoryQuery || !this.memoryTextValid()) return;
     await this.memoryController.search({ memoryQuery: request => this.host.memoryQuery!(request) }, tablet, this.memoryText());
   }
-  async cancelMemory() { this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.memoryController.clear('Search cancelled'); try { await this.host.cancel(); } catch { /* Already cleared; no late result is accepted. */ } }
+  async cancelMemory() { this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.memoryController.clear('Search cancelled'); try { await this.host.cancel(); } catch { /* Already cleared; no late result is accepted. */ } }
   async inspectMemory(key: MemoryKey) {
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     const tablet = this.connection().observation;
     const matches = this.memoryData()?.context.facts;
     if (!tablet || !this.profile().memoryInspectionProbe || !this.host.inspectMemory || this.memoryInspection().busy || !matches?.some(m => JSON.stringify(m.fact.key) === JSON.stringify(key))) return;
@@ -135,10 +139,19 @@ export class App implements OnDestroy {
     if (this.connection().observation !== tablet || this.memoryData()?.context.facts !== matches) return;
     await this.memoryInspectionController.inspect({ inspectMemory: request => this.host.inspectMemory!(request) }, tablet, key);
   }
-  async cancelMemoryInspection() { this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear('Memory inspection cancelled'); try { await this.host.cancel(); } catch { /* Already invalidated. */ } }
+  async cancelMemoryInspection() { this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear('Memory inspection cancelled'); try { await this.host.cancel(); } catch { /* Already invalidated. */ } }
+  exportText(){return this.exportController.text();}
+  beforeExportInput(event:Event){const e=event as InputEvent,field=event.target as HTMLTextAreaElement;this.exportController.beforeInput(field.selectionStart,field.selectionEnd,e.inputType,e.data);}
+  inputExport(event:Event){const field=event.target as HTMLTextAreaElement;this.exportController.input(field.value);field.value=this.exportController.text();}
+  pasteExport(event:Event){const e=event as ClipboardEvent;if(!e.clipboardData)return;const field=event.target as HTMLTextAreaElement,text=e.clipboardData.getData('text/plain'),start=field.selectionStart;e.preventDefault();this.exportController.paste(start,field.selectionEnd,text);field.value=this.exportController.text();const caret=Math.min(field.value.length,start+text.replace(/\r\n?/g,'\n').length);field.setSelectionRange(caret,caret);}
+  async prepareExport(){const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.ordinaryExport||this.archiveExport().busy)return;this.modelController.clear();this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();await this.exportController.prepare({ordinaryExport:q=>this.host.ordinaryExport!(q)},tablet,async()=>{await this.connectionController.pause();return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;});}
+  async confirmExport(){const tablet=this.connection().observation;if(tablet&&this.host.ordinaryExport){this.modelController.clear();this.basicController.clear();this.forgetController.clear();await this.exportController.confirm({ordinaryExport:q=>this.host.ordinaryExport!(q)},tablet);}}
+  async checkExport(record:ExportRetained){const tablet=this.connection().observation;if(tablet&&this.host.ordinaryExport&&tablet.connection_id===record.connection_id&&tablet.boot_id===record.boot_id){this.modelController.clear();this.basicController.clear();this.forgetController.clear();await this.exportController.status({ordinaryExport:q=>this.host.ordinaryExport!(q)},tablet,record.reference,async()=>{await this.connectionController.pause();return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;});}}
+  canCheckExport(record:ExportRetained){const tablet=this.connection().observation;return !this.archiveExport().busy&&!!tablet&&tablet.connection_id===record.connection_id&&tablet.boot_id===record.boot_id;}
+  async stopExport(){if(this.host.ordinaryExport)await this.exportController.stop({ordinaryExport:q=>this.host.ordinaryExport!(q)});}
   async beginModel(){
     const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.modelSettings||this.model().busy)return;
-    this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();
+    this.exportController.clear();this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();
     await this.modelController.begin({modelSettings:q=>this.host.modelSettings!(q)},tablet,async()=>{await this.connectionController.pause();return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;});
   }
   modelAction(key:ModelKey,event:Event){this.modelController.action(key,(event.target as HTMLSelectElement).value);}
@@ -149,25 +162,25 @@ export class App implements OnDestroy {
     if(!event.clipboardData)return;event.preventDefault();const field=event.target as HTMLTextAreaElement,start=field.selectionStart,end=field.selectionEnd,text=event.clipboardData.getData('text/plain');
     this.modelController.paste(key,start,end,text);field.value=this.modelController.text(key);const caret=Math.min(field.value.length,start+text.replace(/\r\n?/g,'\n').length);field.setSelectionRange(caret,caret);
   }
-  async saveModel(){const tablet=this.connection().observation;if(tablet&&this.host.modelSettings){this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();await this.modelController.save({modelSettings:q=>this.host.modelSettings!(q)},tablet);}}
+  async saveModel(){const tablet=this.connection().observation;if(tablet&&this.host.modelSettings){this.exportController.clear();this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();await this.modelController.save({modelSettings:q=>this.host.modelSettings!(q)},tablet);}}
   modelTarget(record:ModelRetained){const tablet=this.connection().observation;return tablet?.connection_id===record.connection_id&&tablet.boot_id===record.boot_id;}
-  async checkModel(record:ModelRetained){const tablet=this.connection().observation;if(tablet&&this.host.modelSettings){this.basicController.clear();this.forgetController.clear();await this.modelController.status({modelSettings:q=>this.host.modelSettings!(q)},record,tablet);}}
+  async checkModel(record:ModelRetained){const tablet=this.connection().observation;if(tablet&&this.host.modelSettings){this.exportController.clear();this.basicController.clear();this.forgetController.clear();await this.modelController.status({modelSettings:q=>this.host.modelSettings!(q)},record,tablet);}}
   async stopModel(){if(this.host.modelSettings)await this.modelController.stop({modelSettings:q=>this.host.modelSettings!(q)},()=>this.connectionController.pause());}
   async beginBasic(){
     const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.basicSettings||this.basic().busy)return;
-    this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();
+    this.exportController.clear();this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();
     await this.basicController.begin({basicSettings:q=>this.host.basicSettings!(q)},tablet,async()=>{await this.connectionController.pause();return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;});
   }
   editBasic(key:BasicKey,event:Event){this.basicController.edit(key,(event.target as HTMLSelectElement).value);}
   clearBasic(key:BasicKey){this.basicController.edit(key,'');}
-  async saveBasic(){const tablet=this.connection().observation;if(tablet&&this.host.basicSettings){this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();await this.basicController.save({basicSettings:q=>this.host.basicSettings!(q)},tablet);}}
+  async saveBasic(){const tablet=this.connection().observation;if(tablet&&this.host.basicSettings){this.exportController.clear();this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();await this.basicController.save({basicSettings:q=>this.host.basicSettings!(q)},tablet);}}
   basicTarget(record:BasicRetained){const tablet=this.connection().observation;return tablet?.connection_id===record.connection_id&&tablet.boot_id===record.boot_id;}
-  async checkBasic(record:BasicRetained){const tablet=this.connection().observation;if(tablet&&this.host.basicSettings){this.modelController.clear();this.forgetController.clear();await this.basicController.status({basicSettings:q=>this.host.basicSettings!(q)},record,tablet);}}
+  async checkBasic(record:BasicRetained){const tablet=this.connection().observation;if(tablet&&this.host.basicSettings){this.exportController.clear();this.modelController.clear();this.forgetController.clear();await this.basicController.status({basicSettings:q=>this.host.basicSettings!(q)},record,tablet);}}
   async stopBasic(){if(this.host.basicSettings)await this.basicController.stop({basicSettings:q=>this.host.basicSettings!(q)},()=>this.connectionController.pause());}
   async prepareForget() {
     const tablet = this.connection().observation, head = this.forgetHead();
     if (!tablet || !head?.fact || !this.host.memoryForget || this.forget().busy) return;
-    this.modelController.clear();this.basicController.clear();await this.connectionController.pause();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear();await this.connectionController.pause();
     if (this.connection().observation !== tablet || this.forgetHead() !== head) return;
     await this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'prepare', connection_id:tablet.connection_id, boot_id:tablet.boot_id, key:head.fact.key });
   }
@@ -175,7 +188,7 @@ export class App implements OnDestroy {
     if (!this.host.memoryForget) return;
     const reference = this.forget().reference;
     if (action !== 'status' && !reference) return;
-    if(action!=='status'){this.modelController.clear();this.basicController.clear();}
+    if(action!=='status'){this.exportController.clear();this.modelController.clear();this.basicController.clear();}
     if (action === 'confirm') this.memoryInspectionController.clear('Current data unverified after possible confirmation dispatch');
     await this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, action === 'status' ? { action } : { action, reference:reference! });
   }
@@ -185,27 +198,27 @@ export class App implements OnDestroy {
   async inspectSavedConfiguration(){
     const tablet=this.connection().observation;
     if(!tablet||!this.profile().savedConfigurationProbe||!this.host.inspectSavedConfiguration||this.savedConfiguration().busy)return;
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     await this.savedConfigurationController.inspect({inspectSavedConfiguration:q=>this.host.inspectSavedConfiguration!(q)},tablet,async()=>{
       await this.connectionController.pause();
       return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;
     });
   }
   async cancelSavedConfiguration(){
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     await this.savedConfigurationController.cancel(()=>this.connectionController.pause());
   }
   async inspectSavedMode() {
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().savedModeProbe || !this.host.inspectSavedMode || this.savedMode().busy) return;
     await this.connectionController.pause();
     if (this.connection().observation !== tablet || !this.profile().savedModeProbe) return;
     await this.savedModeController.inspect({ inspectSavedMode: request => this.host.inspectSavedMode!(request) }, tablet);
   }
-  async cancelSavedMode() { this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.savedModeController.clear('Saved mode inspection cancelled'); try { await this.host.cancel(); } catch { /* Pending view is already invalidated. */ } }
+  async cancelSavedMode() { this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.savedModeController.clear('Saved mode inspection cancelled'); try { await this.host.cancel(); } catch { /* Pending view is already invalidated. */ } }
   async inspectOwned() {
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     const tablet = this.connection().observation;
     if (!this.profile().inspection || !tablet || this.owned().status === 'Inspecting owned data…') return;
     await this.connectionController.pause();
@@ -213,7 +226,7 @@ export class App implements OnDestroy {
     await this.ownedController.inspect(this.host, tablet);
   }
   async inspectRuntime() {
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().runtimeIdentityProbe || !this.host.inspectRuntime || this.runtimeIdentity().status === 'Reading binary version…') return;
     await this.connectionController.pause();
@@ -221,7 +234,7 @@ export class App implements OnDestroy {
     await this.runtimeController.inspect({ inspectRuntime: () => this.host.inspectRuntime!() }, tablet);
   }
   async personalize(operation: PersonalizationOperation) {
-    this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
+    this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear();
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().personalizationProbe || !this.host.personalization || this.personalization().busy) return;
     const submittedText = this.personalizationText(), submittedEnabled = this.personalizationEnabled();
@@ -251,5 +264,5 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }
