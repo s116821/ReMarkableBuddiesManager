@@ -32,3 +32,31 @@ this adds protocol fixtures only and does not change the reviewed backend or UI.
 main-626-memory-reports.json contains actual stdout from unchanged runtime626c2f818ad335f6aa49e5a9e88a739267b270cb (locked SDK5c0bc303bb9b22e8e01bce9b2bd2a7fe47c8010e), Linux x64 Rust1.98.1. Built only the Reader binary from its immutable Git archive; source/manifest/lock/SDK pins unchanged. An initial offline build lacked the pinned SDK checkout; a normal locked fetch/build succeeded in58.18s. Binary SHA256cdcf357159abd518ab778cec53de38f3222fb3c800390c167f200d7f77813d12. No production/native build provenance is inferred from an archive.
 
 Six sanitized actual reports: local-complete, local-empty, busy (actual owned-file lock held with flock), missing-store, invalid-input, selected-complete. Existing file-based put and selected initialize operations set up isolated temporary Stores; query itself uses stdin+EOF. Local and selected reports exactly match regular-file query output, including original fact IDs/asserted provenance and Unicode/CRLF. Missing/invalid requests do not create Store paths. No raw stderr was emitted; all owned fixture Stores were removed afterward. Existing controller/parser tests consume these exact outputs; renderer fixtures in memory-query.mjs are separately synthetic. This does not establish physical tablet, provider/model, native pages, restore, full domain coverage or installation authority.
+
+## Saved-mode producer reports
+
+`main-b1-saved-mode-reports.json` contains seven actual producer-owner Windows CLI
+inspection reports from immutable source `b1fa8a60c547141ccd5e716611863f04f1efdb48`.
+The original compiled binary SHA256 is recorded in the fixture; this consumer did
+not rebuild or execute that binary. A fresh disposable local Store was explicitly
+initialized/changed by the producer owner's existing one-shot commands, then
+inspected to capture unconfigured, LocalOnly, isolated backup and shared group.
+A missing Store returned Unavailable. An actual owned OS byte lock produced Busy;
+temporarily malformed fixture identity produced Unsupported, followed by exact
+restoration. Unsupported is not a selected-format qualification; valid selected
+format2 remains supported by the producer.
+
+Each bounded command returned status0, empty stderr, one report line no larger
+than16KiB and activation_performed=false. This is a fresh attributed capture, not
+the original CLI suite's retained stdout or a replay of that suite. The first five
+compact-JSON-plus-LF hashes match those supplied by the producer owner. Busy and
+Unsupported hashes were computed from its exact quoted compact output. Fixture
+IDs/digests refer only to that disposable Store and contain no user credentials.
+
+The actual reports feed the real private-report/reduced-view parser and shared
+controller without changing statuses or snapshot identities. No selected-state
+corpus, physical device/provider/native proof or full source lifecycle is inferred.
+`saved-mode.mjs` is separately synthetic UI data. Its canaries verify removal at
+both public host bridges and from renderer state. SSH-peer fixtures replay a
+recorded report over an actual owned channel with synthetic route/notice state and
+fixed publicly known test identities; they do not access a development tablet.

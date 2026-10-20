@@ -91,3 +91,5 @@ Self-reported binary version and unknown running/package authority: [identity gu
 ## Global subject-memory search
 
 Both companions can explicitly query the connected tablet’s configured global subject memory through the supported one-shot stdin interface. See [usage, compatibility and evidence limits](docs/memory-search.md); older installed Readers remain unsupported and no edit/forget or service-control action is added.
+
+Saved storage mode inspection and its saved-versus-active limits: [inspection guide](docs/saved-storage-mode.md).

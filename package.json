@@ -27,7 +27,8 @@
     "test:personalization-hosts": "node tests/personalization-hosts.mjs",
     "test:runtime-identity-hosts": "node tests/runtime-identity-hosts.mjs",
     "test:manager-download-hosts": "node tests/manager-download-hosts.mjs",
-    "test:memory-query-hosts": "node tests/memory-query-hosts.mjs"
+    "test:memory-query-hosts": "node tests/memory-query-hosts.mjs",
+    "test:saved-mode-hosts": "node tests/saved-mode-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",
