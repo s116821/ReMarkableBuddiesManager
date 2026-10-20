@@ -10,16 +10,27 @@ const root = path.resolve(development ? 'test-results/development/browser' : 'di
 const info = JSON.parse(await readFile('electron/build-info.json', 'utf8'));
 await mkdir('test-results', { recursive: true });
 
+const managerReleaseUrl = 'https://api.github.com/repos/s116821/ReMarkableBuddiesManager/releases/latest';
+const managerAssets = ['manager-browser.zip', 'manager-linux-x64.zip', 'manager-win32-x64.zip', 'provenance.json'];
 const releaseUrl = 'https://api.github.com/repos/s116821/ReMarkableBuddies/releases/latest';
 
 async function installFixture(context, localOrigin) {
-  const fixture = { tag: 'v0.3.0', fail: false, pending: undefined, requests: 0, unexpected: [], errors: [] };
+  const fixture = { tag: 'v0.3.0', managerTag: 'v0.4.0', managerFail: false, managerRequests: 0, fail: false, pending: undefined, requests: 0, unexpected: [], errors: [] };
   const observeErrors = page => page.on('pageerror', error => fixture.errors.push(error.message));
   context.on('page', observeErrors);
   for (const page of context.pages()) observeErrors(page);
   // Deny external traffic, including unexpected endpoints, before any UI loads.
   await context.route('**/*', async route => {
     const url = route.request().url();
+    if (url === managerReleaseUrl) {
+      fixture.managerRequests++;
+      return route.fulfill({ status: fixture.managerFail ? 503 : 200, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Accept,X-GitHub-Api-Version' }, json: {
+        tag_name: fixture.managerTag, draft: false, prerelease: false,
+        html_url: `https://github.com/s116821/ReMarkableBuddiesManager/releases/tag/${fixture.managerTag}`,
+        published_at: '2026-10-12T12:00:00Z', assets: managerAssets.map(name => ({ name, state: 'uploaded', size: 12,
+          browser_download_url: `https://github.com/s116821/ReMarkableBuddiesManager/releases/download/${fixture.managerTag}/${name}` })),
+      } });
+    }
     if (url === releaseUrl) {
       fixture.requests++;
       if (fixture.pending) await fixture.pending;
@@ -49,6 +60,18 @@ async function verify(page, host, fixture) {
   assert.equal(await page.getByRole('button', { name: 'Install unavailable', exact: true }).isDisabled(), true);
   assert.equal(await page.locator('#release-source option[value=community]').isDisabled(), true);
   assert.equal(fixture.requests, 1, 'The initial UI load must use the release fixture before any refresh or reload');
+  await page.getByTestId('available-manager-version').filter({ hasText: fixture.managerTag }).waitFor();
+  assert.equal(await page.getByTestId('current-manager-version').textContent(), info.version);
+  assert.equal(fixture.managerRequests, 1, 'Manager first load uses its independent intercepted repository');
+  assert.match(await page.getByTestId('manager-assets').textContent(), /Expected release files are published/);
+  fixture.managerTag = 'v0.5.0'; await page.getByRole('button', { name: 'Refresh Manager releases', exact: true }).click();
+  await page.getByTestId('available-manager-version').filter({ hasText: fixture.managerTag }).waitFor();
+  assert.equal(await page.getByTestId('official-version').textContent(), fixture.tag);
+  fixture.managerFail = true; await page.getByRole('button', { name: 'Refresh Manager releases', exact: true }).click();
+  await page.getByText('Official Manager release metadata could not be verified. Try again.', { exact: true }).waitFor();
+  await page.getByText('Displayed Manager candidate is from a previous successful check.', { exact: true }).waitFor();
+  fixture.managerFail = false;
+  if (host === 'Browser') await page.locator('section[aria-labelledby="manager-release-title"]').screenshot({ path: 'test-results/manager-self-browser.png' });
   fixture.tag = 'v0.4.0'; await page.getByRole('button', { name: 'Refresh releases' }).click();
   await page.getByTestId('official-version').filter({ hasText: fixture.tag }).waitFor();
   await page.evaluate(() => localStorage.setItem('remarkable-buddies-manager.release-source', 'community'));
@@ -227,6 +250,13 @@ try {
       return capture.toPNG().toString('base64');
     });
     await writeFile(`test-results/desktop${packaged ? '-packaged' : ''}.png`, Buffer.from(png, 'base64'));
+    await page.locator('section[aria-labelledby="manager-release-title"]').evaluate(el => el.scrollIntoView({ block: 'start' }));
+    const selfPng = await app.evaluate(async ({ BrowserWindow }) => {
+      const capture = await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true });
+      if (capture.isEmpty()) throw new Error('Manager release capture is empty');
+      return capture.toPNG().toString('base64');
+    });
+    await writeFile(`test-results/manager-self-desktop${packaged ? '-packaged' : ''}.png`, Buffer.from(selfPng, 'base64'));
   }
 } finally { await app.close(); }
 console.log(`Verified ${packaged ? 'packaged desktop' : 'browser, responsive browser and Electron'}; version ${info.version}`);

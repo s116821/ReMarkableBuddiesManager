@@ -13,6 +13,7 @@ import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 export class App implements OnDestroy {
   readonly host = currentHost();
   readonly version = buildInfo.version;
+  readonly officialBuild = buildInfo.official;
   readonly connectionLabels = CONNECTION_LABELS;
   private readonly ownedController = new OwnedDataController(state => this.owned.set(state));
   readonly owned = signal(this.ownedController.state);
@@ -41,7 +42,9 @@ export class App implements OnDestroy {
   readonly blockers = INSTALL_BLOCKERS;
   private readonly releases = new ReleaseController(this.preferenceStorage(), state => this.release.set(state));
   readonly release = signal(this.releases.state);
-  constructor() { this.releases.start(); }
+  private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
+  readonly managerRelease = signal(this.managerReleases.state);
+  constructor() { this.releases.start(); this.managerReleases.start(); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
@@ -53,6 +56,7 @@ export class App implements OnDestroy {
     await this.ownedController.inspect(this.host, tablet);
   }
   refresh() { void this.releases.refresh(); }
+  refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.releases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); }
+  ngOnDestroy() { this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.ownedController.clear(); }
 }
