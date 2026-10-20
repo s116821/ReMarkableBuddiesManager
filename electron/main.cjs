@@ -13,8 +13,13 @@ app.whenReady().then(async () => {
   const { parseSavedModeRequest, parseSavedModeResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-mode.mjs')).href);
   const { MemoryForgetHost } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget.mjs')).href);
   const { parseForgetRequest, parseForgetResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-forget-protocol.mjs')).href);
+  const { BasicSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'basic-settings.mjs')).href);
+  const { MaintenanceIO }=await import(pathToFileURL(path.join(hostRoot,'maintenance-io.mjs')).href);
+  const { parseBasicSettingsRequest,parseBasicSettingsResult }=await import(pathToFileURL(path.join(hostRoot,'basic-settings-protocol.mjs')).href);
   const rawObserver = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
-  const forget = new MemoryForgetHost({ observer: rawObserver });
+  const io=new MaintenanceIO();let basic;
+  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>basic?.invalidate() });
+  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>forget.invalidate()});
   const observer = forget.wrap();
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
@@ -43,6 +48,10 @@ app.whenReady().then(async () => {
     return observer.memoryQuery(args[0]);
   });
   window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  ipcMain.handle('manager:basicSettings',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Basic settings caller refused');
+    const request=parseBasicSettingsRequest(args[0]);const value=parseBasicSettingsResult(await basic.request(request),request,validateResult);return basic.assertCurrent(value);
+  });
   ipcMain.handle('manager:memoryForget', async (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw Error('Memory forget caller refused');
     const request = parseForgetRequest(args[0]);

@@ -1,3 +1,5 @@
+import type { BasicSettingsAdapter } from './basic-settings';
+import type { BasicSettingsResult } from '../host/basic-settings-protocol.mjs';
 import type { SavedConfigurationAdapter,SavedConfigurationResult } from './saved-configuration';
 import type { ForgetAdapter, ForgetResult } from './memory-forget';
 import type { MemoryInspectionAdapter, MemoryInspectionResult } from './memory-inspection';
@@ -12,6 +14,7 @@ import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/driv
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly basicSettings?: BasicSettingsAdapter['basicSettings'];
   readonly memoryForget?: ForgetAdapter['memoryForget'];
   readonly inspectMemory?: MemoryInspectionAdapter['inspectMemory'];
   readonly inspectSavedConfiguration?: SavedConfigurationAdapter['inspectSavedConfiguration'];
@@ -59,6 +62,13 @@ export function currentHost(): ManagerHost {
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
     } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    basicSettings: async (request: import('../host/basic-settings-protocol.mjs').BasicSettingsRequest) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Basic settings helper unavailable');
+      const response=await fetch('/manager-basic-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
+      if(!response.ok||!response.body)throw Error('Basic settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Basic settings response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as BasicSettingsResult;
+    },
     memoryForget: async (request: import('../host/memory-forget-protocol.mjs').ForgetRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Memory forget helper unavailable');
       const response = await fetch('/manager-memory-forget', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });

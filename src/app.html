@@ -101,6 +101,39 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="basic-settings-title">
+    <h2 id="basic-settings-title">Saved basic settings</h2>
+    <p class="text-sm text-muted">Edit three saved preferences. Running behavior may use other settings; saving does not restart Buddy.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="beginBasic()" [disabled]="!host.basicSettings || !profile().savedConfigurationProbe || basic().busy">Begin basic settings edit</button>
+      <button class="ui-button ui-button-primary" type="button" (click)="saveBasic()" [disabled]="!basicCanSave()">Save basic settings</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopBasic()" [disabled]="!basic().busy && basic().view?.state !== 'ready'">{{ basic().busy ? 'Stop settings wait' : 'Cancel settings edit' }}</button>
+    </div>
+    <p role="status" data-testid="basic-settings-status">{{ basic().status }}</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-3 min-w-0" data-testid="basic-settings-fields">
+      @for (row of basicRows(); track row.key) {
+        <div class="min-w-0">
+          <label class="block" [for]="'basic-' + row.key">{{ row.label }}</label>
+          <select class="ui-field w-full max-w-full" [id]="'basic-' + row.key" (change)="editBasic(row.key,$event)" [disabled]="basic().busy || basic().view?.state !== 'ready'">
+            @for (option of row.options; track option[0]) { <option [value]="option[0]" [selected]="option[0] === row.value">{{ option[1] }}</option> }
+          </select>
+          <p class="text-sm">Saved origin: {{ row.originLabel }}</p>
+          <button class="ui-button ui-button-secondary my-2 disabled:opacity-50" type="button" [attr.aria-label]="'Remove ' + row.label + ' override'" (click)="clearBasic(row.key)" [disabled]="basic().busy || basic().view?.state !== 'ready' || row.origin === 'default'">Remove override</button>
+          @if (row.key === 'debug_dump') { <p class="text-sm text-muted">Diagnostic images may include page content.</p> }
+        </div>
+      }
+    </div>
+    @for (record of basic().retained; track record.reference; let i = $index) {
+      <article class="ui-panel my-3" data-testid="basic-settings-retained">
+        <h3>Unconfirmed save {{ i + 1 }}</h3>
+        <p>Original outcome remains {{ record.state }}. A desired-file check cannot prove who saved it or whether running behavior changed.</p>
+        <button class="ui-button ui-button-secondary" type="button" (click)="checkBasic(record)" [disabled]="basic().busy || !basicTarget(record)">Check desired file {{ i + 1 }}</button>
+        @if (!basicTarget(record)) { <p class="text-sm">Read state from the original tablet before checking.</p> }
+      </article>
+    }
+    <p class="text-sm text-muted">Unconfirmed original requests are retained only while this host runs. Stopping a wait is not rollback; a new edit is a distinct request.</p>
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="saved-configuration-title">
     <h2 id="saved-configuration-title">Saved configuration</h2>
     <p class="text-sm text-muted">Inspect saved settings and defaults only. Runtime, environment overrides, provider credentials and path validity remain unverified. Private values and identities are withheld.</p>

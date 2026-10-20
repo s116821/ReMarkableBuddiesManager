@@ -92,25 +92,26 @@ export class WiredObserver {
   }
   async run(action, request) {
     this.cancel();
+    const basic = action === 'basic-settings';
     const configuration = action === 'saved-configuration';
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
-    const refusal = status => configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    const refusal = status => basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const script = configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      const script = basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || basic || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || basic ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
-      if (personal || runtime || memory || saved || detail || forget || configuration) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      if (personal || runtime || memory || saved || detail || forget || configuration || basic) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, this.timeoutMs);
       child.stdout.on('data', data => {
         chunks.push(data); outputBytes += data.length;
-        if (outputBytes > (configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        if (outputBytes > (basic ? 24576 : configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = async code => {
         clearTimeout(timer);
@@ -124,6 +125,13 @@ export class WiredObserver {
           if (configuration) {
             const reduced=reduceSavedConfigurationResult(value,request,validateResult);
             return resolve(generation===this.generation?reduced:refusal('cancelled'));
+          }
+          if (basic) {
+            if(Object.keys(value).sort().join()!=='basic_raw,contract_version,observation,status')throw Error('Private response refused');
+            validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});
+            const q=value.basic_raw;if(!q||Object.keys(q).sort().join()!=='status,stdout_base64'||!['reported','unsupported','unavailable'].includes(q.status)||(q.status==='reported'?value.status!=='observed'||typeof q.stdout_base64!=='string':q.stdout_base64!==null))throw Error('Private response refused');
+            if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Private identity refused');
+            return resolve(value);
           }
           if (forget) {
             if (Object.keys(value).sort().join() !== 'contract_version,forget_raw,observation,status') throw Error('Private response refused');
