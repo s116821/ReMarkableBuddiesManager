@@ -50,3 +50,15 @@ test('all32 original model reports cross actual typed private coordinator/shared
  }
  assert.equal(count,32);
 });
+
+test('recorded collapsed deletion removes exactly the selected mixed newline across raw CRLF/LF/loneCR and UTF16 carets',()=>{
+ for(const prefix of ['A','😀A'])for(const first of ['\r\n','\n','\r'])for(const second of ['\r\n','\n','\r'])for(const [type,offset,keep] of [['deleteContentForward',prefix.length,second],['deleteContentBackward',prefix.length+1,second],['deleteContentForward',prefix.length+1,first],['deleteContentBackward',prefix.length+2,first]]){
+  if(first==='\r'&&second==='\n')continue; // Adjacent CR+LF is one displayed break, tested separately below.
+  const d=new ModelDraft(),raw=prefix+first+second+'B',next=prefix+'\nB';assert.equal(d.paste('model',0,0,raw),true);d.beforeInput('model',offset,offset,type,null);assert.equal(d.input('model',next),true,JSON.stringify({raw,type,offset}));assert.equal(d.patch({model:'replace',base_url:'keep'}).model.value,prefix+keep+'B',JSON.stringify({raw,type,offset}));
+ }
+ for(const prefix of ['A','😀A'])for(const [type,offset] of [['deleteContentForward',prefix.length],['deleteContentBackward',prefix.length+1]]){const d=new ModelDraft();d.paste('model',0,0,prefix+'\r\nB');d.beforeInput('model',offset,offset,type,null);assert.equal(d.input('model',prefix+'B'),true);assert.equal(d.patch({model:'replace',base_url:'keep'}).model.value,prefix+'B');}
+});
+test('ambiguous unanchored normalized edits refuse rather than choose a different raw newline and keep Save disabled',async()=>{
+ assert.throws(()=>reconcileModelText('A\r\nX\r\nY\r\nB','A\nP\nQ\nB')); assert.throws(()=>reconcileModelText('A\r\n\nB','A\nB'));assert.throws(()=>reconcileModelText('A\n\r\nB','A\nB'));assert.throws(()=>reconcileModelText('A\r\nB','A\n\nB'));assert.equal(reconcileModelText('A\r\nB','A\nX'),'A\r\nX');
+ const f=open();await start(f);paste(f.controller,'model','A\r\n\nB');f.controller.input('model','A\nB');assert.equal(f.controller.state.valid,false);assert.match(f.controller.state.status,/refused/);const calls=f.calls.length;await f.controller.save(f.adapter,tablet);assert.equal(f.calls.length,calls);f.controller.clear();
+});

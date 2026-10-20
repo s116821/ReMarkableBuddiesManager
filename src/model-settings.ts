@@ -10,9 +10,20 @@ function rawOffset(raw:string,position:number){
 }
 export function spliceModelText(raw:string,start:number,end:number,text:string){if(end<start)throw Error('Replacement edit refused');return raw.slice(0,rawOffset(raw,start))+text+raw.slice(rawOffset(raw,end));}
 export function reconcileModelText(raw:string,next:string){
- const before=displayModelText(raw);if(next!==displayModelText(next))throw Error('Replacement edit refused');let start=0;while(start<before.length&&start<next.length&&before[start]===next[start])start++;
- let oldEnd=before.length,newEnd=next.length;while(oldEnd>start&&newEnd>start&&before[oldEnd-1]===next[newEnd-1]){oldEnd--;newEnd--;}
- return spliceModelText(raw,start,oldEnd,next.slice(start,newEnd));
+ const before=displayModelText(raw);if(next!==displayModelText(next))throw Error('Replacement edit refused');if(before===next)return raw;
+ // Equal displayed spans can contain different raw CRLF/LF/CR. Without an
+ // event anchor, accept only when every minimal splice produces identical raw text.
+ if(!raw.includes('\r'))return next;
+ let prefix=0;while(prefix<before.length&&prefix<next.length&&before[prefix]===next[prefix])prefix++;
+ let suffix=0;while(suffix<before.length&&suffix<next.length&&before[before.length-1-suffix]===next[next.length-1-suffix])suffix++;
+ const matched=Math.min(before.length,next.length,prefix+suffix);let result:string|null=null;
+ for(let start=Math.max(0,matched-suffix);start<=Math.min(prefix,matched);start++){
+  const tail=matched-start,oldEnd=before.length-tail,insertion=next.slice(start,next.length-tail);
+  if(raw.slice(rawOffset(raw,start),rawOffset(raw,oldEnd)).includes('\r')&&insertion.includes('\n'))throw Error('Replacement edit ambiguous');
+  const candidate=spliceModelText(raw,start,oldEnd,insertion);
+  if(result!==null&&result!==candidate)throw Error('Replacement edit ambiguous');result=candidate;
+ }
+ if(result===null||displayModelText(result)!==next)throw Error('Replacement edit refused');return result;
 }
 export class ModelDraft {
  private raw:Record<ModelKey,string>={model:'',base_url:''};private version=0;
@@ -33,7 +44,15 @@ export class ModelDraft {
    if(before?.key===key&&before.version===this.version){
     if(before.type==='insertText'&&before.data!==null)candidate=spliceModelText(this.raw[key],before.start,before.end,before.data);
     else if(['insertLineBreak','insertParagraph'].includes(before.type))candidate=spliceModelText(this.raw[key],before.start,before.end,'\n');
-    else if(before.type.startsWith('delete')&&before.start!==before.end)candidate=spliceModelText(this.raw[key],before.start,before.end,'');
+    else if(before.type.startsWith('delete')){
+     if(before.start!==before.end)candidate=spliceModelText(this.raw[key],before.start,before.end,'');
+     else{
+      const removed=this.display(key).length-next.length;if(removed<0)throw Error('Replacement edit refused');
+      if(before.type.endsWith('Backward'))candidate=spliceModelText(this.raw[key],before.start-removed,before.end,'');
+      else if(before.type.endsWith('Forward'))candidate=spliceModelText(this.raw[key],before.start,before.end+removed,'');
+      else if(removed===0)candidate=this.raw[key];else throw Error('Replacement edit ambiguous');
+     }
+    }
    }
    if(candidate===null){
     if(next===this.display(key)&&before&&(before.start!==before.end||before.type!=='insertCompositionText'))throw Error('Replacement edit ambiguous');
