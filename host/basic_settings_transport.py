@@ -105,10 +105,12 @@ def report_shape(report, selector):
 
 def request(raw):
     v = parse(raw, MAX_REQUEST)
-    if (not isinstance(v, dict) or set(v) != {'connection_id', 'boot_id', 'selector', 'input_base64'}
+    if (not isinstance(v, dict) or set(v) != {'connection_id', 'boot_id', 'selector', 'input_base64', 'budget_ms'}
             or not isinstance(v['connection_id'], str) or not re.fullmatch('[a-f0-9]{64}', v['connection_id'])
             or not isinstance(v['boot_id'], str) or not re.fullmatch('[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', v['boot_id'])
             or v['boot_id'] == '00000000-0000-0000-0000-000000000000'):
+        raise ValueError('input refused')
+    if type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 12000:
         raise ValueError('input refused')
     if v['selector'] not in SELECTORS:
         raise ValueError('input refused')
@@ -134,13 +136,23 @@ def request(raw):
     return v
 
 
-def execute(transport, v):
+def execute(transport, v, deadline=None):
+    if deadline is None:
+        deadline = time.monotonic() + v['budget_ms'] / 1000
+    def remaining():
+        value = deadline - time.monotonic()
+        if value <= 0:
+            raise shared.Refusal('timeout')
+        return value
+    remaining()
     before = shared.inspect(transport)
+    remaining()
     if before['boot_id'] != v['boot_id']:
         raise shared.Refusal('cable-lost')
-    channel = transport.open_session(timeout=2)
+    channel = transport.open_session(timeout=min(2, remaining()))
     try:
-        channel.settimeout(2)
+        channel.settimeout(min(2, remaining()))
+        remaining()
         channel.exec_command(PREFIX + v['selector'] + ('' if v['selector'] == 'inspect' else ' --basic-settings-input -'))
         if v['selector'] != 'inspect':
             channel.sendall(base64.b64decode(v['input_base64'], validate=True))
@@ -149,9 +161,9 @@ def execute(transport, v):
         except (OSError, EOFError):
             pass
         output, discarded = bytearray(), 0
-        deadline = time.monotonic() + 8
+        command_deadline = min(deadline, time.monotonic() + 8)
         while True:
-            if time.monotonic() > deadline:
+            if time.monotonic() >= command_deadline:
                 raise shared.Refusal('timeout')
             while channel.recv_ready():
                 output.extend(channel.recv(4096))
@@ -170,8 +182,10 @@ def execute(transport, v):
         if report is not None:
             report_shape(report, v['selector'])
         status = 'reported' if report is not None else 'unsupported' if code in (2, 126, 127) else 'unavailable'
+        remaining()
         if shared.inspect(transport) != before:
             raise shared.Refusal('cable-lost')
+        remaining()
         before['_basic_raw'] = {'status': status, 'stdout_base64': base64.b64encode(output).decode('ascii') if report is not None else None}
         return before
     finally:
@@ -192,24 +206,27 @@ def main():
                 print(json.dumps(value), flush=True)
     try:
         v = request(sys.stdin.buffer.read(MAX_REQUEST + 1))
+        deadline = time.monotonic() + v['budget_ms'] / 1000
+        def expire():
+            respond(failure('timeout'))
+            os._exit(0)
+        timer = threading.Timer(max(0, deadline - time.monotonic()), expire)
+        timer.daemon = True
+        timer.start()
         if sys.platform not in ('linux', 'win32'):
             raise shared.Refusal('unsupported-host')
         import paramiko
         if paramiko.__version__ != '5.0.0':
             raise shared.Refusal('unconfigured')
-        def expire():
-            respond(failure('timeout'))
-            os._exit(0)
-        timer = threading.Timer(12, expire)
-        timer.daemon = True
-        timer.start()
+        if time.monotonic() >= deadline:
+            raise shared.Refusal('timeout')
         if sys.platform == 'win32':
             import windows_wired
             config = windows_wired.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = windows_wired.observe(config, shared, inspection=lambda t: execute(t, v), expected_connection=v['connection_id'])
+            observation = windows_wired.observe(config, shared, inspection=lambda t: execute(t, v, deadline), expected_connection=v['connection_id'])
         else:
             config = shared.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = shared.observe(config, inspection=lambda t: execute(t, v), expected_connection=v['connection_id'])
+            observation = shared.observe(config, inspection=lambda t: execute(t, v, deadline), expected_connection=v['connection_id'])
         mode = observation.pop('_basic_raw')
         respond({'contract_version': 1, 'status': 'observed', 'observation': observation, 'basic_raw': mode})
     except shared.Refusal as error:

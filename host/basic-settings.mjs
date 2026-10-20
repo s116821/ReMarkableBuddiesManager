@@ -27,18 +27,20 @@ export class BasicSettingsHost {
  #uncertain(s){return this.#value(s.state==='unresolved'?'unresolved':'unknown',s);}
  async #owned(s,operation,handler){
   const token=this.io.acquire('basic',s.reference,operation);if(!token)return this.#value('busy',s);
-  if(operation!=='save')this.invalidate();this.beforeIO();const epoch=this.#epoch,deadline=this.now()+this.budgetMs,active={token,context:s,operation};this.#active=active;
-  const timer=setTimeout(()=>{if(this.io.owns(token)){this.invalidate();this.observer.cancel();}},this.budgetMs);
+  const deadline=this.now()+this.budgetMs;if(operation!=='save')this.invalidate();this.beforeIO();const epoch=this.#epoch,active={token,context:s,operation};this.#active=active;
+  const timer=setTimeout(()=>{if(this.io.owns(token)){this.invalidate();this.observer.cancel();}},Math.max(1,deadline-this.now()));
   try{return await handler(token,epoch,deadline);}finally{clearTimeout(timer);this.io.release(token);if(this.#active===active)this.#active=null;}
  }
- async #raw(selector,input,sample){
+ async #raw(selector,input,sample,deadline){
   if(input!==null&&input.length>16384)throw Error('Private input refused');
-  const v=await this.observer.run('basic-settings',{selector,input_base64:input===null?null:input.toString('base64'),connection_id:sample.connection_id,boot_id:sample.boot_id});
+  const budget_ms=Math.min(12000,Math.floor(deadline-this.now()));if(budget_ms<1)throw Error('Operation expired');
+  const v=await this.observer.run('basic-settings',{selector,input_base64:input===null?null:input.toString('base64'),budget_ms,connection_id:sample.connection_id,boot_id:sample.boot_id});
+  if(this.now()>=deadline)throw Error('Operation expired');
   if(!v||Object.keys(v).sort().join()!=='basic_raw,contract_version,observation,status'||Buffer.byteLength(JSON.stringify(v))>24576)throw Error('Private transport refused');
   validateResult({contract_version:v.contract_version,status:v.status,observation:v.observation});const q=v.basic_raw;
   if(!q||Object.keys(q).sort().join()!=='status,stdout_base64'||q.status!=='reported'||v.status!=='observed'||!same(v.observation,sample)){const e=Error('Private transport refused');e.unsupported=q?.status==='unsupported';throw e;}
   if(typeof q.stdout_base64!=='string')throw Error('Private transport refused');const raw=Buffer.from(q.stdout_base64,'base64');if(raw.length>16384||raw.toString('base64')!==q.stdout_base64)throw Error('Private report refused');
-  const text=new TextDecoder('utf-8',{fatal:true}).decode(raw),report=JSON.parse(text);if(!text.endsWith('\n')||text.split('\n').length!==2)throw Error('Private report framing refused');return {raw,report,sample:v.observation};
+  const text=new TextDecoder('utf-8',{fatal:true}).decode(raw),report=JSON.parse(text);if(!text.endsWith('\n')||text.split('\n').length!==2)throw Error('Private report framing refused');if(this.now()>=deadline)throw Error('Operation expired');return {raw,report,sample:v.observation};
  }
  #packet(s){const p=s.packet;if(!p||hash(p.original)!==p.originalSha||hash(p.input)!==p.inputSha)throw Error('Original packet refused');return p;}
  async request(value){
@@ -61,10 +63,10 @@ export class BasicSettingsHost {
   const sample=this.observer.lastObservation;if(!same(sample,q))return this.#value('unavailable');
   const s={reference:this.reference(),sample:structuredClone(sample),state:'inspecting',possible:false,packet:null,report:null};
   if(this.#records.has(s.reference))return this.#value('unavailable');
-  return this.#owned(s,'begin',async(token,epoch)=>{
+  return this.#owned(s,'begin',async(token,epoch,deadline)=>{
    this.#editor=s;
    try{
-    const raw=await this.#raw('inspect',null,s.sample);if(this.#stale(token,epoch))return this.#value('invalidated');const parsed=parseBasicSettingsReport(raw.report,'inspect');
+    const raw=await this.#raw('inspect',null,s.sample,deadline);if(this.#stale(token,epoch))return this.#value('invalidated');const parsed=parseBasicSettingsReport(raw.report,'inspect');if(this.#stale(token,epoch)||this.now()>=deadline){if(this.#editor===s)this.#editor=null;return this.#value('invalidated');}
     if(parsed.report.status!=='ok'){this.#editor=null;return this.#value(parsed.report.status==='unsupported'?'unsupported':parsed.report.status==='busy'?'busy':'unavailable',null,{report:parsed.report});}
     Object.assign(s,{state:'ready',current:parsed.current,base_sha256:parsed.base_sha256,config_path_sha256:parsed.config_path_sha256,deadline:this.now()+120000});return this.#value('ready',s,{current:s.current,report:parsed.report,observed:true});
    }catch(e){if(this.#stale(token,epoch))return this.#value('invalidated');this.#editor=null;return this.#value(e.unsupported?'unsupported':'unavailable');}
@@ -78,18 +80,20 @@ export class BasicSettingsHost {
    s.state='preparing';const operation=this.uuid();
    try{
     const input=Buffer.from(JSON.stringify({basic_version:1,operation,base_sha256:s.base_sha256,config_path_sha256:s.config_path_sha256,changes}));
-    const raw=await this.#raw('prepare',input,s.sample);
-    if(this.#stale(token,epoch)||this.now()>=deadline){if(this.#editor===s)this.#editor=null;return this.#value('not-dispatched',s);}
+    const raw=await this.#raw('prepare',input,s.sample,Math.min(deadline,s.deadline));
+    if(this.#stale(token,epoch)||this.now()>=deadline||this.now()>=s.deadline){if(this.#editor===s)this.#editor=null;return this.#value('not-dispatched',s);}
     const prepared=parseBasicSettingsReport(raw.report,'prepare',{...s,operation,changes});
+    if(this.#stale(token,epoch)||this.now()>=deadline||this.now()>=s.deadline){if(this.#editor===s)this.#editor=null;return this.#value('not-dispatched',s);}
     if(prepared.report.status!=='ok'){if(this.#editor===s)this.#editor=null;return this.#value('not-dispatched',s,{report:prepared.report});}
     if(!prepared.intent){if(this.#editor===s)this.#editor=null;return this.#value('no-change',s,{current:prepared.current,report:prepared.report,observed:true});}
     const packet=Buffer.from(JSON.stringify({intent:prepared.intent}));s.packet=Object.freeze({original:Buffer.from(raw.raw),input:packet,originalSha:hash(raw.raw),inputSha:hash(packet),intent:structuredClone(prepared.intent)});s.after=structuredClone(prepared.after);
-    if(this.#stale(token,epoch)||this.now()>=deadline){s.packet=null;if(this.#editor===s)this.#editor=null;return this.#value('not-dispatched',s);}
+    if(this.#stale(token,epoch)||this.now()>=deadline||this.now()>=s.deadline){s.packet=null;if(this.#editor===s)this.#editor=null;return this.#value('not-dispatched',s);}
     // One irreversible same-host claim; exact original bytes are retained first.
     s.possible=true;s.state='unknown';this.#records.set(s.reference,s);
-    const output=await this.#raw('apply',this.#packet(s).input,s.sample);
-    if(this.#stale(token,epoch))return this.#uncertain(s);
+    const output=await this.#raw('apply',this.#packet(s).input,s.sample,deadline);
+    if(this.#stale(token,epoch)||this.now()>=deadline)return this.#uncertain(s);
     const applied=parseBasicSettingsReport(output.report,'apply',{intent:s.packet.intent,after:s.after});
+    if(this.#stale(token,epoch)||this.now()>=deadline)return this.#uncertain(s);
     if(this.#editor===s)this.#editor=null;
     if(applied.report.status==='ok'){this.#records.delete(s.reference);s.state='verified';return this.#value('verified',s,{current:applied.current,report:applied.report,observed:true});}
     if(applied.report.outcome==='not-dispatched'){this.#records.delete(s.reference);s.possible=false;s.packet=null;s.state='not-dispatched';return this.#value('not-dispatched',s,{report:applied.report});}
@@ -101,10 +105,10 @@ export class BasicSettingsHost {
  }
  async #status(q){
   const s=this.#records.get(q.reference);if(!s||!same(s.sample,q)||!same(s.sample,this.observer.lastObservation))return this.#value('unavailable',null,{reference:q.reference});
-  return this.#owned(s,'status',async(token,epoch)=>{
+  return this.#owned(s,'status',async(token,epoch,deadline)=>{
    try{
-    const raw=await this.#raw('status',this.#packet(s).input,s.sample);if(this.#stale(token,epoch))return this.#uncertain(s);
-    const parsed=parseBasicSettingsReport(raw.report,'status',{intent:s.packet.intent,after:s.after});
+    const raw=await this.#raw('status',this.#packet(s).input,s.sample,deadline);if(this.#stale(token,epoch))return this.#uncertain(s);
+    const parsed=parseBasicSettingsReport(raw.report,'status',{intent:s.packet.intent,after:s.after});if(this.#stale(token,epoch)||this.now()>=deadline)return this.#uncertain(s);
     if(parsed.report.status!=='ok')return this.#value(s.state,s,{report:parsed.report});
     if(parsed.report.outcome==='desired-file-observed'){this.#records.delete(s.reference);return this.#value('desired-file-observed',s,{current:parsed.current,report:parsed.report,observed:true});}
     s.state='unresolved';return this.#value('unresolved',s,{current:parsed.current,report:parsed.report,observed:true});

@@ -9,7 +9,10 @@ content. This editor does not expose raw JSON, arbitrary paths or credentials.
 Begin pauses automatic observations first. A ready editor expires after two minutes
 or is invalidated by refresh/navigation/other maintenance, even for the same target.
 Save internally prepares the original inspected revision and applies at most once
-under one shared deadline. A successful result verifies the saved file and says
+under one shared deadline. The original two-minute edit grant is checked again
+before apply. Lower phases receive only the remaining time; a late apply reply
+keeps the original outcome unknown even if the timeout callback has not run.
+A successful result verifies the saved file and says
 restart required; it does not restart a service or prove running/environment state.
 
 If apply may have run but its complete result is unavailable, do not repeat Save.

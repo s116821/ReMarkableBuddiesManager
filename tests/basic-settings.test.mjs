@@ -39,3 +39,17 @@ test('one total coordinator timer cancels owned apply and retains unknown origin
  const f=basicFixture({budgetMs:500}),ref=await begin(f),gate=defer();f.state.onApply=async r=>{f.state.cancelled=()=>gate.resolve();await gate.promise;return r;};const value=await save(f,ref);assert.equal(value.basic_settings.state,'unknown');assert.equal(f.io.ownerFor('basic',ref),null);assert.equal(f.calls.filter(x=>x.selector==='apply').length,1);f.state.cancelled=null;
  const g=basicFixture(),ready=await begin(g);await g.wrapped.run('basic-settings',{selector:'inspect',input_base64:null,...identity});const count=g.calls.length;assert.equal((await save(g,ready)).basic_settings.state,'unavailable');assert.equal(g.calls.length,count);
 });
+
+test('original ready expiry during prepare prevents potential apply even within Save budget',async()=>{
+ let clock=0;const f=basicFixture({now:()=>clock}),ref=await begin(f);clock=119999;f.state.onPrepare=r=>{clock=120001;return r;};const value=await save(f,ref);assert.equal(value.basic_settings.state,'not-dispatched');assert.equal(f.calls.filter(x=>x.selector==='apply').length,0);assert.equal(value.basic_settings.retained.length,0);
+});
+test('monotonic Save expiry after awaited apply retains unknown before timer callback can run',async()=>{
+ let clock=0;const f=basicFixture({now:()=>clock}),ref=await begin(f);f.state.onApply=r=>{clock=13001;return r;};const value=await save(f,ref);assert.equal(value.basic_settings.state,'unknown');assert.equal(value.basic_settings.retained[0].reference,ref);assert.equal(f.calls.filter(x=>x.selector==='apply').length,1);
+});
+test('each lower phase receives only remaining bounded Save budget',async()=>{
+ let clock=0;const f=basicFixture({now:()=>clock}),ref=await begin(f);f.state.onPrepare=r=>{clock=4000;return r;};assert.equal((await save(f,ref)).basic_settings.state,'verified');assert.deepEqual(f.calls.filter(x=>x.action==='basic-settings').map(x=>x.budget_ms),[12000,12000,9000]);
+});
+test('late inspect/status cannot create ready authority or retire original uncertainty',async()=>{
+ let clock=0;const late=basicFixture({now:()=>clock});late.state.onInspect=r=>{clock=13001;return r;};const result=await late.basic.request({action:'begin',...identity});assert.notEqual(result.basic_settings.state,'ready');assert.equal(result.basic_settings.current,null);
+ clock=0;const f=basicFixture({now:()=>clock}),ref=await begin(f);f.state.onApply=()=>{throw Error('Synthetic reply loss');};await save(f,ref);f.state.onStatus=r=>{clock=13001;return r;};const checked=await f.basic.request({action:'status',...identity,reference:ref});assert.equal(checked.basic_settings.state,'unknown');assert.equal(checked.basic_settings.retained[0].reference,ref);
+});

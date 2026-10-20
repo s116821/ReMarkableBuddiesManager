@@ -18,3 +18,13 @@ test('actual bounded child keeps exact private stdin, caps and identity refusal;
  await writeFile(record,'');const f=await fixture('timeout'),begun=await f.basic.request({action:'begin',...identity}),reference=begun.basic_settings.reference;const result=await f.basic.request({action:'save',...identity,reference,changes:prepare.changes});assert.equal(result.basic_settings.state,'unknown');assert.equal(result.basic_settings.retained[0].reference,reference);
  const requests=(await readFile(record,'utf8')).trim().split('\n').map(l=>JSON.parse(l));assert.deepEqual(requests.map(q=>q.selector),['inspect','prepare','apply']);assert.equal(requests[0].input_base64,null);assert.deepEqual(JSON.parse(Buffer.from(requests[2].input_base64,'base64')).intent,JSON.parse(row('prepare-three-fields').stdout_utf8).data.intent);
 });
+test('private child supervision inherits the remaining budget and refuses invalid budgets before launch',{timeout:5000},async t=>{
+ const folder=await mkdtemp(path.join(os.tmpdir(),'manager-basic-budget-'));t.after(()=>rm(folder,{recursive:true,force:true}));
+ const record=path.join(folder,'launched'),script=path.join(folder,'basic_settings_transport.py');
+ await writeFile(script,`require('node:fs').writeFileSync(${JSON.stringify(record)},'launched');process.stdin.resume();setInterval(()=>{},1000);`);
+ const observer=new WiredObserver({config:path.join(folder,'synthetic-config'),python:process.execPath,script:path.join(folder,'wired_observer.py'),timeoutMs:13000});
+ const request={selector:'inspect',input_base64:null,...identity};
+ for(const budget_ms of [0,true,12001])assert.equal((await observer.run('basic-settings',{...request,budget_ms})).status,'observation-unavailable');
+ await assert.rejects(readFile(record),{code:'ENOENT'});
+ const value=await observer.run('basic-settings',{...request,budget_ms:500});assert.equal(value.basic_raw.status,'unavailable');assert.equal(value.basic_raw.stdout_base64,null);assert.equal(await readFile(record,'utf8'),'launched');
+});

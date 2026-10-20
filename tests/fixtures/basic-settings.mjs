@@ -12,7 +12,7 @@ export function basicFixture(options={}){
  const calls=[],io=new MaintenanceIO();let sequence=0,revision=0;
  const state={current:{debug_dump:{origin:'default',value:null},log_level:{origin:'declared-null',value:null},trigger_corner:{origin:'declared',value:'UR'}},hash:'5'.repeat(64),path:'6'.repeat(64),prepared:new Map(),onInspect:null,onPrepare:null,onApply:null,onStatus:null,forgetLost:false,cancelled:null};
  const observer={lastObservation:structuredClone(tablet),generation:0,cancels:0,cancel(){this.generation++;this.cancels++;state.cancelled?.();return {contract_version:1,status:'cancelled',observation:null};},async observe(){this.lastObservation=structuredClone(tablet);return {contract_version:1,status:'observed',observation:this.lastObservation};},async run(action,q){
-  this.cancel();const bytes=q.input_base64===null?null:Buffer.from(q.input_base64,'base64'),body=bytes===null?null:JSON.parse(bytes);calls.push({action,selector:q.selector,bytes,body});
+  this.cancel();const bytes=q.input_base64===null?null:Buffer.from(q.input_base64,'base64'),body=bytes===null?null:JSON.parse(bytes);calls.push({action,selector:q.selector,bytes,body,budget_ms:q.budget_ms});
   if(action==='memory-forget')return rawReply(q.selector==='prepare-forget'?await prepared(body.operation,body.key):state.forgetLost&&q.selector==='forget'?failure('forget','unavailable',true,'unknown'):ack(q.selector,body.intent.operation));
   if(action!=='basic-settings')throw Error('Unexpected fixture action');let r;
   if(q.selector==='inspect'){r=report('inspect','read-only',{schema_version:1,base_sha256:state.hash,config_path_sha256:state.path,current:structuredClone(state.current)});if(state.onInspect)r=await state.onInspect(r);}

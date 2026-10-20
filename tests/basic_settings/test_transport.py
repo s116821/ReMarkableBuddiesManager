@@ -32,7 +32,7 @@ CORPUS = json.loads((root/'tests/fixtures/basic-settings-87bc8d4-corpus.json').r
 NAMES = {'inspect': 'inspect-original', 'prepare': 'prepare-three-fields', 'apply': 'apply-verified', 'status': 'status-before-apply'}
 CASES = {selector: next(c for c in CORPUS['cases'] if c['name'] == name) for selector, name in NAMES.items()}
 REPORT = CASES['inspect']['stdout_utf8'].encode()
-REQUEST = {'connection_id': IDENTITY, 'boot_id': BOOT, 'selector': 'inspect', 'input_base64': None}
+REQUEST = {'connection_id': IDENTITY, 'boot_id': BOOT, 'selector': 'inspect', 'input_base64': None, 'budget_ms': 12000}
 
 
 def command(selector):
@@ -98,7 +98,7 @@ class Transport(unittest.TestCase):
         raw = json.dumps(REQUEST).encode()
         self.assertEqual(q.request(raw), REQUEST)
         self.assertEqual(q.request(raw+b' '*(q.MAX_REQUEST-len(raw))), REQUEST)
-        for value in [dict(REQUEST, command='choose'), dict(REQUEST, path='/private'), dict(REQUEST, expected={}), dict(REQUEST, selector='choose'), dict(REQUEST, input_base64='e30='),
+        for value in [dict(REQUEST, command='choose'), dict(REQUEST, path='/private'), dict(REQUEST, expected={}), dict(REQUEST, selector='choose'), dict(REQUEST, input_base64='e30='), dict(REQUEST, budget_ms=0), dict(REQUEST, budget_ms=True), dict(REQUEST, budget_ms=12001),
                       dict(REQUEST, boot_id=BOOT+'\n'), dict(REQUEST, connection_id=IDENTITY+'\n'), {}, None]:
             with self.assertRaises(ValueError):
                 q.request(json.dumps(value).encode())
@@ -156,7 +156,10 @@ class Transport(unittest.TestCase):
         channel.recv_ready.return_value = False
         channel.recv_ready.side_effect = None
         channel.exit_status_ready.return_value = False
-        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}), patch.object(q.time, 'monotonic', side_effect=[0, 9]):
+        clock=[0]
+        def advance(_):
+            clock[0]=13
+        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}), patch.object(q.time, 'monotonic', side_effect=lambda:clock[0]), patch.object(q.time, 'sleep', side_effect=advance):
             with self.assertRaises(o.Refusal):
                 q.execute(transport, REQUEST)
         channel.close.assert_called_once()
@@ -178,6 +181,22 @@ class Transport(unittest.TestCase):
             with self.assertRaises(o.Refusal):
                 q.execute(transport, REQUEST)
         channel.close.assert_called_once()
+
+    def test_inherited_remaining_budget_caps_channel_and_prevents_late_command(self):
+        transport, channel = self.channel(REPORT)
+        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}), patch.object(q.time, 'monotonic', return_value=0):
+            q.execute(transport, dict(REQUEST, budget_ms=1500))
+        transport.open_session.assert_called_once_with(timeout=1.5)
+        channel.settimeout.assert_called_once_with(1.5)
+        transport = Mock()
+        clock=[0]
+        def late_identity(_):
+            clock[0]=2
+            return {'boot_id': BOOT}
+        with patch.object(q.shared, 'inspect', side_effect=late_identity), patch.object(q.time, 'monotonic', side_effect=lambda:clock[0]):
+            with self.assertRaises(o.Refusal):
+                q.execute(transport, dict(REQUEST, budget_ms=1000))
+        transport.open_session.assert_not_called()
 
     def test_outer_deadline_and_completion_cannot_append_two_reports(self):
         class ExpiredTimer:

@@ -60,3 +60,17 @@ test('all38 original basic reports cross typed private coordinator/shared contro
  }
  assert.deepEqual({basic,general},{basic:38,general:7});
 });
+
+test('old cancel reply cannot erase newer pending Save evidence after refresh',async()=>{
+ const f=open(),oldPrepare=defer(),oldStarted=defer(),cancelReply=defer(),cancelStarted=defer(),newApply=defer(),newStarted=defer();let first,stop,second;
+ const adapter={basicSettings:async q=>{const value=await f.basic.request(q);if(q.action==='cancel'){cancelStarted.resolve();await cancelReply.promise;}return value;}};
+ try{
+  await f.controller.begin(adapter,tablet,async()=>true);f.controller.edit('debug_dump','true');f.state.onPrepare=async r=>{oldStarted.resolve();await oldPrepare.promise;return r;};first=f.controller.save(adapter,tablet);await oldStarted.promise;stop=f.controller.stop(adapter,async()=>{});await cancelStarted.promise;
+  f.controller.clear();f.state.onPrepare=null;await f.controller.begin(adapter,tablet,async()=>true);const reference=f.controller.state.reference;f.controller.edit('debug_dump','false');f.state.onApply=async r=>{newStarted.resolve();await newApply.promise;return r;};second=f.controller.save(adapter,tablet);await newStarted.promise;
+  cancelReply.resolve();await stop;f.controller.clear();assert.equal(f.controller.state.uncertain,true);assert.equal(f.controller.state.retained.some(x=>x.reference===reference),true);
+ }finally{oldPrepare.resolve();cancelReply.resolve();newApply.resolve();await Promise.allSettled([first,stop,second].filter(Boolean));}
+});
+
+test('stopping host-only retained diagnostics remains local and does not cancel remote work',async()=>{
+ const controller=new BasicSettingsController(()=>{}),pending=defer();let cancels=0;const adapter={basicSettings:()=>pending.promise};const read=controller.retained(adapter);await controller.stop(adapter,async()=>{cancels++;});assert.equal(cancels,0);pending.resolve({contract_version:1,status:'unconfigured',observation:null,basic_settings:{state:'none',reference:null,current:null,report:null,retained:[]}});await read;
+});
