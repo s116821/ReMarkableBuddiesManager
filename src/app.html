@@ -108,7 +108,7 @@
     <p class="mt-3" role="status" data-testid="archive-export-status">{{ archiveExport().status }}</p>
     @if (!archiveExport().busy && archiveExport().view?.state !== 'ready') {
       <label class="mt-4 block" for="archive-export-destination">New absolute tablet destination</label>
-      <textarea id="archive-export-destination" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="exportText()" (beforeinput)="beforeExportInput($event)" (input)="inputExport($event)" (paste)="pasteExport($event)"></textarea>
+      <textarea id="archive-export-destination" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [disabled]="!canEditExport()" [value]="exportText()" (focus)="beginExportEdit()" (beforeinput)="beforeExportInput($event)" (input)="inputExport($event)" (paste)="pasteExport($event)"></textarea>
       <button class="ui-button ui-button-secondary mt-3" type="button" (click)="prepareExport()" [disabled]="!host.ordinaryExport || !profile().savedConfigurationProbe || !archiveExport().valid || archiveExport().retained.length >= 8">Prepare tablet archive preview</button>
     }
     @if (archiveExport().view?.summary; as summary) {

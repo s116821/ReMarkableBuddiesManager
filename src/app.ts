@@ -141,6 +141,8 @@ export class App implements OnDestroy {
   }
   async cancelMemoryInspection() { this.exportController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear('Memory inspection cancelled'); try { await this.host.cancel(); } catch { /* Already invalidated. */ } }
   exportText(){return this.exportController.text();}
+  canEditExport(){return !!this.host.ordinaryExport&&this.profile().savedConfigurationProbe&&!this.archiveExport().busy&&!this.model().busy&&!this.basic().busy&&!this.forget().busy;}
+  beginExportEdit(){if(this.canEditExport())void this.connectionController.pause();}
   beforeExportInput(event:Event){const e=event as InputEvent,field=event.target as HTMLTextAreaElement;this.exportController.beforeInput(field.selectionStart,field.selectionEnd,e.inputType,e.data);}
   inputExport(event:Event){const field=event.target as HTMLTextAreaElement;this.exportController.input(field.value);field.value=this.exportController.text();}
   pasteExport(event:Event){const e=event as ClipboardEvent;if(!e.clipboardData)return;const field=event.target as HTMLTextAreaElement,text=e.clipboardData.getData('text/plain'),start=field.selectionStart;e.preventDefault();this.exportController.paste(start,field.selectionEnd,text);field.value=this.exportController.text();const caret=Math.min(field.value.length,start+text.replace(/\r\n?/g,'\n').length);field.setSelectionRange(caret,caret);}
