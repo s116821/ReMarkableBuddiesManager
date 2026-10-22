@@ -51,7 +51,15 @@ const observed={contract_version:1,status:'observed',observation:tablet};
 const observer={lastObservation:tablet,cancel(){return {contract_version:1,status:'cancelled',observation:null};},async observe(){this.lastObservation=structuredClone(tablet);return structuredClone(observed);},async memoryQuery(){return queryReply(query());},async inspectMemory(q){return reduceMemoryInspectionResult(privateInspection(inspectionReport()),q,validateResult);},async run(action,q){assert.equal(action,'memory-forget');return rawReply(await fixtureResponse(q.selector,JSON.parse(Buffer.from(q.input_base64,'base64'))));}};
 const helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){},request:async()=>{throw Error('fixture unavailable');}}});
 const browser=await chromium.launch();
-try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.goto(helper.origin+'/preview/');await verify(page,async v=>{mode=v;completePending=null;},()=>page.locator('section[aria-labelledby="memory-forget-title"]').screenshot({path:`test-results/memory-forget-browser${packaged?'':'-development'}.png`}),async()=>{assert.equal(typeof completePending,'function');completePending();},async()=>{await expect.poll(()=>typeof completePending).toBe('function');},async button=>{
+try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.addInitScript(()=>{
+ // Trace only reader lifecycle, never response chunks or request contents.
+ const original=window.fetch.bind(window);window.forgetResponseEvents=[];
+ window.fetch=async(...args)=>{const response=await original(...args);if(args[0]!=='/manager-memory-forget'||JSON.parse(args[1]?.body??'{}').action!=='status')return response;
+  const record=event=>{if(window.forgetResponseEvents.length<32)window.forgetResponseEvents.push(event);},body=response.body,getReader=body.getReader.bind(body);record('headers');
+  body.getReader=(...options)=>{const reader=getReader(...options),read=reader.read.bind(reader),cancel=reader.cancel.bind(reader);
+   reader.read=async()=>{try{const result=await read();record(result.done?'eof':'chunk');return result;}catch(error){record('read-failed');throw error;}};
+   reader.cancel=async(...options)=>{record('cancel');try{const result=await cancel(...options);record('cancel-complete');return result;}catch(error){record('cancel-failed');throw error;}};return reader;};return response;};
+ });await page.goto(helper.origin+'/preview/');await verify(page,async v=>{mode=v;completePending=null;},()=>page.locator('section[aria-labelledby="memory-forget-title"]').screenshot({path:`test-results/memory-forget-browser${packaged?'':'-development'}.png`}),async()=>{assert.equal(typeof completePending,'function');completePending();},async()=>{await expect.poll(()=>typeof completePending).toBe('function');},async button=>{
  const started=performance.now();
  const isPrepare=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='prepare';}catch{return false;}};
  const pending=page.waitForResponse(response=>isPrepare(response.request()),{timeout:14000});
@@ -77,13 +85,13 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
   await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});
   // The renderer and retainedStatus below validate the body; do not retrieve it again through CDP after navigation.
   assert.equal(response.status(),200);
-  console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors:pageErrors.length,mainDocument,delayConsumed:!delayReloadStatus}));assert.equal(delayReloadStatus,false);
+  console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors:pageErrors.length,mainDocument,delayConsumed:!delayReloadStatus,readerEvents:await page.evaluate(()=>window.forgetResponseEvents)}));assert.equal(delayReloadStatus,false);
  }catch(error){
   const document=await page.evaluate(()=>{
    const root=document.querySelector('app-root');
    // Structural snapshots omit text/attributes; only the fixed bootstrap fallback is recognized.
    const snapshot=node=>node?{tag:node.tagName,children:node.childElementCount,tags:[...node.querySelectorAll('*')].slice(0,64).map(n=>n.tagName)}:null;
-   return {readyState:document.readyState,body:snapshot(document.body),root:snapshot(root),bootstrapFailure:document.body?.textContent?.trim()==='Manager could not start. Please reload the application.',statusPresent:!!document.querySelector('[data-testid="memory-forget-status"]')};
+   return {readyState:document.readyState,body:snapshot(document.body),root:snapshot(root),bootstrapFailure:document.body?.textContent?.trim()==='Manager could not start. Please reload the application.',statusPresent:!!document.querySelector('[data-testid="memory-forget-status"]'),unknownRendered:document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry',readerEvents:window.forgetResponseEvents};
   }).catch(()=>null);
   console.error('Reload readiness diagnostic:',JSON.stringify({events,reloadRouteEvents,pageErrors,consoleErrors,mainDocument,path:new URL(page.url()).pathname,document}));throw error;
  }finally{delayReloadStatus=false;reloadClock=0;page.off('requestfailed',onFailed);page.off('requestfinished',onFinished);page.off('request',onRequest);page.off('pageerror',onError);page.off('console',onConsole);page.off('response',onResponse);}
