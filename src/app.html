@@ -101,6 +101,37 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="memory-settings-title">
+    <h2 id="memory-settings-title">Saved memory declarations</h2>
+    <p class="text-sm text-muted">Edit saved enabled and profile declarations. This does not create profiles, change membership or activate automatic Reader memory. Runtime activation remains unverified. Saving disabled does not disable explicit maintenance.</p>
+    <p role="status" class="mt-3" data-testid="memory-settings-status">{{ memorySettings().status }}</p>
+    <button class="ui-button ui-button-secondary mt-3" type="button" (click)="beginSavedMemory()" [disabled]="!host.memorySettings || !profile().savedConfigurationProbe || memorySettings().busy || model().busy || basic().busy || forget().busy || archiveExport().busy">Begin saved memory edit</button>
+    @if (memorySettings().view?.current; as current) {
+      <dl class="my-3 text-sm"><dt>Saved enabled</dt><dd>{{ current.enabled.value ? 'Enabled' : 'Disabled' }} · {{ current.enabled.origin }}</dd><dt>Saved profile</dt><dd>{{ current.profile.present ? 'Present — value hidden' : current.profile.origin === 'declared-null' ? 'Explicitly empty' : 'Default — no declaration' }}</dd></dl>
+    }
+    @if (memorySettings().view?.state === 'ready' && !memorySettings().busy) {
+      <label class="mt-3 block" for="memory-enabled-action">Enabled action</label>
+      <select id="memory-enabled-action" class="ui-field" [value]="memorySettings().actions.enabled" (change)="memorySettingAction('enabled',$event)"><option value="keep">Keep</option><option value="replace">Set</option><option value="clear">Clear declaration</option></select>
+      @if (memorySettings().actions.enabled === 'replace') {
+        <label class="mt-3 block" for="memory-enabled-value">New saved enabled value</label>
+        <select id="memory-enabled-value" class="ui-field" [value]="memorySettings().enabledValue ? 'true' : 'false'" (change)="memoryEnabled($event)"><option value="false">Disabled</option><option value="true">Enabled</option></select>
+      }
+      <label class="mt-3 block" for="memory-profile-action">Profile action</label>
+      <select id="memory-profile-action" class="ui-field" [value]="memorySettings().actions.profile" (change)="memorySettingAction('profile',$event)"><option value="keep">Keep</option><option value="replace">Set new private profile ID</option><option value="clear">Clear declaration</option></select>
+      @if (memorySettings().actions.profile === 'replace') {
+        <label class="mt-3 block" for="memory-settings-profile">New private profile ID</label>
+        <textarea id="memory-settings-profile" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="memoryProfileText()" (beforeinput)="beforeMemoryProfile($event)" (input)="inputMemoryProfile($event)" (paste)="pasteMemoryProfile($event)"></textarea>
+        <p class="text-sm text-muted">Existing ID stays hidden. Enter the exact new ID; the tablet validates it and its saved selection. No profile is created or repaired.</p>
+      }
+      <button class="ui-button ui-button-primary mt-3" type="button" (click)="saveMemorySettings()" [disabled]="!memorySettingsCanSave()">Save memory declarations</button>
+    }
+    @if (memorySettings().busy || memorySettings().view?.state === 'ready') { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopMemorySettings()">Stop saved memory wait</button> }
+    @if (memorySettings().retained.length) {
+      <p class="ui-warning mt-3">An original save may have run. Check its desired bytes explicitly; do not retry automatically. These handles last only while this host process runs.</p>
+      @for (record of memorySettings().retained; track record.reference; let i=$index) { <div data-testid="memory-settings-retained"><button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkMemorySettings(record)" [disabled]="!canCheckMemorySettings(record)">Check original memory save {{ i + 1 }}</button></div> }
+    }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="archive-export-title">
     <h2 id="archive-export-title">Export Buddy-owned archive on this tablet</h2>
     <p class="text-sm text-muted">Create a private archive at an absolute path on the connected tablet. This is not an off-device backup: copy it elsewhere separately to protect against tablet loss. No native reMarkable documents or credential files are exported.</p>
