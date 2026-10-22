@@ -13,7 +13,7 @@ import { prepared,ack,failure,rawReply } from './fixtures/memory-forget.mjs';
 const packaged=process.argv.includes('--packaged');
 const folder=await mkdtemp(path.join(os.tmpdir(),'manager-memory-forget-ui-'));
 await mkdir('test-results',{recursive:true});
-let mode='ack',completePending,calls=[],delayReloadStatus=false;
+let mode='ack',completePending,calls=[],delayReloadStatus=false,reloadClock=0,reloadRouteEvents=[];
 const fixtureResponse=async(selector,body)=>{
  calls.push(selector);
  // Exercise legal operation latency beyond the UI matcher's five-second paint check.
@@ -24,7 +24,7 @@ const fixtureResponse=async(selector,body)=>{
  if(selector==='forget')return mode==='lost'?failure(selector,'unavailable',true,'unknown'):mode==='refused'?failure(selector,'conflict',false,'not-dispatched'):ack(selector,body.intent.operation);
  return ack(selector,body.intent.operation);
 };
-async function isolate(context,origin){await context.route('**/*',async route=>{const u=route.request().url();if(origin&&u===origin+'/manager-memory-forget'&&route.request().method()==='POST'&&delayReloadStatus&&route.request().postDataJSON()?.action==='status'){delayReloadStatus=false;await new Promise(resolve=>setTimeout(resolve,6000));}if(u.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||(origin&&new URL(u).origin===origin))return route.continue();return route.abort();});}
+async function isolate(context,origin){await context.route('**/*',async route=>{const u=route.request().url();if(origin&&u===origin+'/manager-memory-forget'&&route.request().method()==='POST'&&delayReloadStatus&&route.request().postDataJSON()?.action==='status'){delayReloadStatus=false;reloadRouteEvents.push({event:'delay-start',ms:Math.ceil(performance.now()-reloadClock)});await new Promise(resolve=>setTimeout(resolve,6000));reloadRouteEvents.push({event:'delay-finished',ms:Math.ceil(performance.now()-reloadClock)});}if(u.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||(origin&&new URL(u).origin===origin)){const tracked=reloadClock>0&&origin&&u===origin+'/manager-memory-forget'&&route.request().postDataJSON()?.action==='status';if(tracked)reloadRouteEvents.push({event:'continue-start',ms:Math.ceil(performance.now()-reloadClock)});const result=await route.continue();if(tracked)reloadRouteEvents.push({event:'continue-complete',ms:Math.ceil(performance.now()-reloadClock)});return result;}return route.abort();});}
 async function verify(page,setMode,capture,release,waitDispatch,prepareInitial=button=>button.click(),reloadReady=async()=>{await page.reload();await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});}){
  const prepare=page.getByRole('button',{name:'Prepare forget preview',exact:true});const confirm=page.getByRole('button',{name:'Confirm forget of this prepared fact',exact:true});const status=page.getByTestId('memory-forget-status');const preview=page.getByTestId('memory-forget-preview');const receipt=page.getByRole('button',{name:'Check historical receipt only',exact:true});
  const inspect=page.getByRole('button',{name:'Inspect current revisions',exact:true});
@@ -51,7 +51,15 @@ const observed={contract_version:1,status:'observed',observation:tablet};
 const observer={lastObservation:tablet,cancel(){return {contract_version:1,status:'cancelled',observation:null};},async observe(){this.lastObservation=structuredClone(tablet);return structuredClone(observed);},async memoryQuery(){return queryReply(query());},async inspectMemory(q){return reduceMemoryInspectionResult(privateInspection(inspectionReport()),q,validateResult);},async run(action,q){assert.equal(action,'memory-forget');return rawReply(await fixtureResponse(q.selector,JSON.parse(Buffer.from(q.input_base64,'base64'))));}};
 const helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){},request:async()=>{throw Error('fixture unavailable');}}});
 const browser=await chromium.launch();
-try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.goto(helper.origin+'/preview/');await verify(page,async v=>{mode=v;completePending=null;},()=>page.locator('section[aria-labelledby="memory-forget-title"]').screenshot({path:`test-results/memory-forget-browser${packaged?'':'-development'}.png`}),async()=>{assert.equal(typeof completePending,'function');completePending();},async()=>{await expect.poll(()=>typeof completePending).toBe('function');},async button=>{
+try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.addInitScript(()=>{
+ // Trace only reader lifecycle, never response chunks or request contents.
+ const original=window.fetch.bind(window);window.forgetResponseEvents=[];
+ window.fetch=async(...args)=>{const response=await original(...args);if(args[0]!=='/manager-memory-forget'||JSON.parse(args[1]?.body??'{}').action!=='status')return response;
+  const record=event=>{if(window.forgetResponseEvents.length<32)window.forgetResponseEvents.push(event);},body=response.body,getReader=body.getReader.bind(body);record('headers');
+  body.getReader=(...options)=>{const reader=getReader(...options),read=reader.read.bind(reader),cancel=reader.cancel.bind(reader);
+   reader.read=async()=>{try{const result=await read();record(result.done?'eof':'chunk');return result;}catch(error){record('read-failed');throw error;}};
+   reader.cancel=async(...options)=>{record('cancel');try{const result=await cancel(...options);record('cancel-complete');return result;}catch(error){record('cancel-failed');throw error;}};return reader;};return response;};
+ });await page.goto(helper.origin+'/preview/');await verify(page,async v=>{mode=v;completePending=null;},()=>page.locator('section[aria-labelledby="memory-forget-title"]').screenshot({path:`test-results/memory-forget-browser${packaged?'':'-development'}.png`}),async()=>{assert.equal(typeof completePending,'function');completePending();},async()=>{await expect.poll(()=>typeof completePending).toBe('function');},async button=>{
  const started=performance.now();
  const isPrepare=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='prepare';}catch{return false;}};
  const pending=page.waitForResponse(response=>isPrepare(response.request()),{timeout:14000});
@@ -65,8 +73,10 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
  const onRequest=request=>{if(isStatus(request)){requests.add(request);events.push({event:'startup-status-request',ms:Math.ceil(performance.now()-started)});}};
  const onError=error=>{if(pageErrors.length<5)pageErrors.push({name:error.name,message:error.message.slice(0,200)});};
  const onConsole=message=>{if(message.type()==='error'&&consoleErrors.length<5)consoleErrors.push(message.text().slice(0,200));};
- const onResponse=response=>{if(response.request().isNavigationRequest()&&response.frame()===page.mainFrame())mainDocument={path:new URL(response.url()).pathname,status:response.status(),ms:Math.ceil(performance.now()-started)};};
- page.on('request',onRequest);page.on('pageerror',onError);page.on('console',onConsole);page.on('response',onResponse);delayReloadStatus=true;
+ const onFailed=request=>{if(requests.has(request))events.push({event:'startup-status-failed',ms:Math.ceil(performance.now()-started),reason:request.failure()?.errorText??'unknown'});};
+ const onFinished=request=>{if(requests.has(request))events.push({event:'startup-status-finished',ms:Math.ceil(performance.now()-started)});};
+ const onResponse=response=>{if(requests.has(response.request()))events.push({event:'startup-status-headers',ms:Math.ceil(performance.now()-started),status:response.status()});if(response.request().isNavigationRequest()&&response.frame()===page.mainFrame())mainDocument={path:new URL(response.url()).pathname,status:response.status(),ms:Math.ceil(performance.now()-started)};};
+ reloadClock=started;reloadRouteEvents=[];page.on('requestfailed',onFailed);page.on('requestfinished',onFinished);page.on('request',onRequest);page.on('pageerror',onError);page.on('console',onConsole);page.on('response',onResponse);delayReloadStatus=true;
  try{
   const responsePromise=page.waitForResponse(response=>requests.has(response.request()),{timeout:14000});
   const finishedPromise=page.waitForEvent('requestfinished',{predicate:request=>requests.has(request),timeout:14000});
@@ -75,16 +85,16 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
   await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});
   // The renderer and retainedStatus below validate the body; do not retrieve it again through CDP after navigation.
   assert.equal(response.status(),200);
-  console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors:pageErrors.length,mainDocument,delayConsumed:!delayReloadStatus}));assert.equal(delayReloadStatus,false);
+  console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors:pageErrors.length,mainDocument,delayConsumed:!delayReloadStatus,readerEvents:await page.evaluate(()=>window.forgetResponseEvents)}));assert.equal(delayReloadStatus,false);
  }catch(error){
   const document=await page.evaluate(()=>{
    const root=document.querySelector('app-root');
    // Structural snapshots omit text/attributes; only the fixed bootstrap fallback is recognized.
    const snapshot=node=>node?{tag:node.tagName,children:node.childElementCount,tags:[...node.querySelectorAll('*')].slice(0,64).map(n=>n.tagName)}:null;
-   return {readyState:document.readyState,body:snapshot(document.body),root:snapshot(root),bootstrapFailure:document.body?.textContent?.trim()==='Manager could not start. Please reload the application.',statusPresent:!!document.querySelector('[data-testid="memory-forget-status"]')};
+   return {readyState:document.readyState,body:snapshot(document.body),root:snapshot(root),bootstrapFailure:document.body?.textContent?.trim()==='Manager could not start. Please reload the application.',statusPresent:!!document.querySelector('[data-testid="memory-forget-status"]'),unknownRendered:document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry',readerEvents:window.forgetResponseEvents};
   }).catch(()=>null);
-  console.error('Reload readiness diagnostic:',JSON.stringify({events,pageErrors,consoleErrors,mainDocument,path:new URL(page.url()).pathname,document}));throw error;
- }finally{delayReloadStatus=false;page.off('request',onRequest);page.off('pageerror',onError);page.off('console',onConsole);page.off('response',onResponse);}
+  console.error('Reload readiness diagnostic:',JSON.stringify({events,reloadRouteEvents,pageErrors,consoleErrors,mainDocument,path:new URL(page.url()).pathname,document}));throw error;
+ }finally{delayReloadStatus=false;reloadClock=0;page.off('requestfailed',onFailed);page.off('requestfinished',onFinished);page.off('request',onRequest);page.off('pageerror',onError);page.off('console',onConsole);page.off('response',onResponse);}
 });assert.equal(calls.filter(x=>x==='forget').length,4);console.log(`${packaged?'retained production':'development'} browser prepared forget/immutable preview/ack-only/unknown/reload/receipt/cancel pass; raw producer reports and route are synthetic`);}finally{await browser.close();await helper.close();}
 const env={...process.env};for(const n of Object.keys(env))if(n.startsWith('MANAGER_'))delete env[n];Object.assign(env,{MANAGER_TEST:'1',MANAGER_TEST_DEFER_LOAD:'1',MANAGER_TEST_PROFILE:folder});
 const app=await electron.launch({executablePath:packaged?path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform==='win32'?'ReMarkableBuddiesManager.exe':'ReMarkableBuddiesManager'}`):undefined,args:[...(packaged?[]:['.']),...(process.platform==='linux'?['--disable-gpu']:[])],env});

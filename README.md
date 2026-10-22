@@ -107,3 +107,5 @@ conditions, uncertain outcomes and the fixed manual equivalent.
 Saved model and endpoint declarations can also be deliberately replaced/cleared
 from both companions. The [private model editor guide](docs/model-settings.md)
 explains origin-only reads, exact replacement text and hash-only recovery.
+
+See [on-tablet ordinary archive export](docs/ordinary-archive-export.md) for private destination handling, explicit confirmation and manual equivalents. Off-device transfer and restore remain separate.

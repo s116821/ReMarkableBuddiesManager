@@ -101,6 +101,27 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="archive-export-title">
+    <h2 id="archive-export-title">Export Buddy-owned archive on this tablet</h2>
+    <p class="text-sm text-muted">Create a private archive at an absolute path on the connected tablet. This is not an off-device backup: copy it elsewhere separately to protect against tablet loss. No native reMarkable documents or credential files are exported.</p>
+    <p class="mt-3 text-sm text-warning">Portable configuration may include private model, endpoint or credential-reference text. Keep the archive private. Intentionally omitted media is not reconstructed.</p>
+    <p class="mt-3" role="status" data-testid="archive-export-status">{{ archiveExport().status }}</p>
+    @if (!archiveExport().busy && archiveExport().view?.state !== 'ready') {
+      <label class="mt-4 block" for="archive-export-destination">New absolute tablet destination</label>
+      <textarea id="archive-export-destination" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [disabled]="!canEditExport()" [value]="exportText()" (focus)="beginExportEdit()" (beforeinput)="beforeExportInput($event)" (input)="inputExport($event)" (paste)="pasteExport($event)"></textarea>
+      <button class="ui-button ui-button-secondary mt-3" type="button" (click)="prepareExport()" [disabled]="!host.ordinaryExport || !profile().savedConfigurationProbe || !archiveExport().valid || archiveExport().retained.length >= 8">Prepare tablet archive preview</button>
+    }
+    @if (archiveExport().view?.summary; as summary) {
+      <div class="mt-4" data-testid="archive-export-summary"><p>Owned manifests: {{ summary.manifests }} · Objects: {{ summary.objects }}</p><p>Media: {{ summary.complete_media ? 'All promised media included' : 'Some media intentionally omitted' }}</p><p>Portable configuration: {{ summary.configuration_included ? 'Included — private content' : 'Not included' }}</p></div>
+    }
+    @if (archiveExport().view?.state === 'ready') {
+      <p class="mt-3 text-sm text-muted">Confirm export once to the exact tablet destination you entered. No computer download, cloud copy or restore is performed.</p>
+      <button class="ui-button ui-button-primary mt-3" type="button" (click)="confirmExport()" [disabled]="archiveExport().busy">Confirm on-tablet archive export</button>
+    }
+    @if (archiveExport().busy || archiveExport().view?.state === 'ready') { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopExport()">Stop archive wait</button> }
+    @for (record of archiveExport().retained; track record.reference; let i = $index) { <div class="mt-3" data-testid="archive-export-retained"><p>Unconfirmed export {{ i + 1 }}. Only this host process retains its private destination; restarting the host loses these diagnostics without proving an outcome.</p><button class="ui-button ui-button-secondary" type="button" (click)="checkExport(record)" [disabled]="!canCheckExport(record)">Check original archive {{ i + 1 }}</button></div> }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="model-settings-title">
     <h2 id="model-settings-title">Saved model and endpoint</h2>
     <p class="text-sm text-muted">Read saved declaration origins only. Existing values stay private. A saved change does not verify the effective model, endpoint or provider, or restart Buddy.</p>
@@ -403,7 +424,7 @@
   <div class="grid gap-5 md:grid-cols-3">
     <section class="ui-panel" aria-labelledby="install-title"><span class="font-mono text-xs text-muted">01</span><h2 class="mt-5" id="install-title">Install &amp; update</h2><p class="text-sm text-muted">Get official Reader and Writer releases, with safe updates that preserve your work.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
     <section class="ui-panel" aria-labelledby="configure-title"><span class="font-mono text-xs text-muted">02</span><h2 class="mt-5" id="configure-title">Make it yours</h2><p class="text-sm text-muted">Choose your backends and preferences across Reader and Writer.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
-    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Read-only inventory is available above. Cleanup and restore of Buddy-owned history remain upcoming.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
+    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Read-only inventory is available above. On-tablet archive export is available above. Off-device transfer, cleanup and restore remain upcoming.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
   </div>
   <aside class="mt-8 border-t border-divider pt-5 text-sm text-muted"><h2 class="text-base">Built to work together</h2><p>Manager and the tablet application update independently. Your tablet version will appear once a connection is available.</p><a href="https://github.com/s116821/RemarkableBuddiesDocs" target="_blank" rel="noopener noreferrer">Read the project guide <span aria-hidden="true">↗</span></a></aside>
 </main>

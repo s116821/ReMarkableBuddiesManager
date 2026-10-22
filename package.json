@@ -33,7 +33,8 @@
     "test:saved-mode-hosts": "node tests/saved-mode-hosts.mjs",
     "test:model-settings-hosts": "node tests/model-settings-hosts.mjs",
     "test:basic-settings-hosts": "node tests/basic-settings-hosts.mjs",
-    "test:saved-configuration-hosts": "node tests/saved-configuration-hosts.mjs"
+    "test:saved-configuration-hosts": "node tests/saved-configuration-hosts.mjs",
+    "test:ordinary-export-hosts": "node tests/ordinary-export-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",
