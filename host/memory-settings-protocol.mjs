@@ -1,7 +1,7 @@
 // Saved-memory declarations only; replacement profile text remains private.
 import { basicDigest,basicUuid } from './basic-settings-protocol.mjs';
 const keys=v=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().join():'';
-const bytes=v=>new TextEncoder().encode(JSON.stringify(v)).length;
+const bytes=v=>{try{const raw=JSON.stringify(v);if(typeof raw!=='string')return refuse();return new TextEncoder().encode(raw).length;}catch{return refuse();}};
 const refuse=()=>{throw Error('Memory settings response refused');};
 export const memoryDigest=basicDigest,memoryUuid=basicUuid;
 export const MEMORY_KEYS=Object.freeze(['enabled','profile']);

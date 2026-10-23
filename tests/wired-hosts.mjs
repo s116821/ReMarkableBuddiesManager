@@ -71,10 +71,12 @@ try {
     const host = await page.evaluate(() => ({ contract: window.managerHost.contract_version, keys: Object.keys(window.managerHost) }));
     assert.equal(host.contract, 1);
     assert.equal(await page.evaluate(() => window.managerHost.modelSettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
+    assert.equal(await page.evaluate(() => window.managerHost.memorySettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
+    assert.equal(await page.evaluate(() => window.managerHost.memorySettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.modelSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.basicSettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.basicSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
-    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'downloads', 'driveAuth', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'kind', 'memoryForget', 'memoryQuery', 'modelSettings', 'observe', 'ordinaryExport', 'personalization', 'transport']);
+    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'downloads', 'driveAuth', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'kind', 'memoryForget', 'memoryQuery', 'memorySettings', 'modelSettings', 'observe', 'ordinaryExport', 'personalization', 'transport']);
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({}, {}).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSavedMode({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');

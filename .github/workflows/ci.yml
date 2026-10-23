@@ -139,6 +139,7 @@ jobs:
           python -m unittest discover -s tests/saved_configuration -v
           python -m unittest discover -s tests/basic_settings -v
           python -m unittest discover -s tests/model_settings -v
+          python -m unittest discover -s tests/memory_settings -v
           python -m unittest discover -s tests/ordinary_export -v
           python -m unittest discover -s tests/memory_inspection -v
           python -m unittest discover -s tests/memory_forget -v
