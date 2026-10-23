@@ -1,3 +1,4 @@
+import {completeForgetReload} from './fixtures/forget-reload-completion.mjs';
 import { chromium,_electron as electron,expect } from '@playwright/test';
 import { mkdtemp,mkdir,rm,readFile,writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -68,22 +69,26 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
  // The renderer and exact preview assertions below validate the body; avoid a second CDP body read.
  console.log('Initial browser preparation public response complete before unchanged UI assertions:',Math.ceil(performance.now()-started),'ms; existing14s request bound');
 },async()=>{
- const started=performance.now(),requests=new Set(),events=[],pageErrors=[],consoleErrors=[];let mainDocument=null;
+ const started=performance.now(),requests=new Set(),events=[],pageErrors=[],consoleErrors=[];let mainDocument=null,terminalResolve,terminalTimer;
  const isStatus=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='status';}catch{return false;}};
  const onRequest=request=>{if(isStatus(request)){requests.add(request);events.push({event:'startup-status-request',ms:Math.ceil(performance.now()-started)});}};
  const onError=error=>{if(pageErrors.length<5)pageErrors.push({name:error.name,message:error.message.slice(0,200)});};
  const onConsole=message=>{if(message.type()==='error'&&consoleErrors.length<5)consoleErrors.push(message.text().slice(0,200));};
- const onFailed=request=>{if(requests.has(request))events.push({event:'startup-status-failed',ms:Math.ceil(performance.now()-started),reason:request.failure()?.errorText??'unknown'});};
- const onFinished=request=>{if(requests.has(request))events.push({event:'startup-status-finished',ms:Math.ceil(performance.now()-started)});};
+ const onFailed=request=>{if(requests.has(request)){events.push({event:'startup-status-failed',ms:Math.ceil(performance.now()-started),reason:request.failure()?.errorText??'unknown'});terminalResolve?.(request);}};
+ const onFinished=request=>{if(requests.has(request)){events.push({event:'startup-status-finished',ms:Math.ceil(performance.now()-started)});terminalResolve?.(request);}};
  const onResponse=response=>{if(requests.has(response.request()))events.push({event:'startup-status-headers',ms:Math.ceil(performance.now()-started),status:response.status()});if(response.request().isNavigationRequest()&&response.frame()===page.mainFrame())mainDocument={path:new URL(response.url()).pathname,status:response.status(),ms:Math.ceil(performance.now()-started)};};
  reloadClock=started;reloadRouteEvents=[];page.on('requestfailed',onFailed);page.on('requestfinished',onFinished);page.on('request',onRequest);page.on('pageerror',onError);page.on('console',onConsole);page.on('response',onResponse);delayReloadStatus=true;
  try{
   const responsePromise=page.waitForResponse(response=>requests.has(response.request()),{timeout:14000});
-  const finishedPromise=page.waitForEvent('requestfinished',{predicate:request=>requests.has(request),timeout:14000});
-  const [response,finishedRequest]=await Promise.all([responsePromise,finishedPromise,page.reload()]);assert.equal(finishedRequest,response.request());
+  const terminalPromise=new Promise((resolve,reject)=>{terminalResolve=resolve;terminalTimer=setTimeout(()=>reject(Error('Reload status did not terminate within14s')),14000);});
+  const [response,terminalRequest]=await Promise.all([responsePromise,terminalPromise,page.reload()]);assert.equal(terminalRequest,response.request());assert.equal(requests.size,1);
+  const remaining=()=>Math.max(1,14000-(performance.now()-started));
+  await page.waitForFunction(()=>window.forgetResponseEvents?.includes('eof')&&window.forgetResponseEvents?.at(-1)==='cancel-complete'&&document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry',null,{timeout:remaining()});
+  const consumed=await page.evaluate(()=>({readerEvents:[...window.forgetResponseEvents],unknownRendered:document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry'}));
+  assert.equal(completeForgetReload({events,...consumed}),true);assert.ok(performance.now()-started<14000);
   events.push({event:'startup-status-response',ms:Math.ceil(performance.now()-started)});
-  await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:14000});
-  // The renderer and retainedStatus below validate the body; do not retrieve it again through CDP after navigation.
+  await page.getByRole('heading',{name:'Forget one prepared fact',exact:true}).waitFor({timeout:remaining()});
+  // Renderer EOF/exact state plus retainedStatus below validate the body; do not retrieve it again through CDP after navigation.
   assert.equal(response.status(),200);
   console.log('Reload browser startup status complete before unchanged UI assertions:',JSON.stringify({events,pageErrors:pageErrors.length,mainDocument,delayConsumed:!delayReloadStatus,readerEvents:await page.evaluate(()=>window.forgetResponseEvents)}));assert.equal(delayReloadStatus,false);
  }catch(error){
@@ -94,7 +99,7 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
    return {readyState:document.readyState,body:snapshot(document.body),root:snapshot(root),bootstrapFailure:document.body?.textContent?.trim()==='Manager could not start. Please reload the application.',statusPresent:!!document.querySelector('[data-testid="memory-forget-status"]'),unknownRendered:document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry',readerEvents:window.forgetResponseEvents};
   }).catch(()=>null);
   console.error('Reload readiness diagnostic:',JSON.stringify({events,reloadRouteEvents,pageErrors,consoleErrors,mainDocument,path:new URL(page.url()).pathname,document}));throw error;
- }finally{delayReloadStatus=false;reloadClock=0;page.off('requestfailed',onFailed);page.off('requestfinished',onFinished);page.off('request',onRequest);page.off('pageerror',onError);page.off('console',onConsole);page.off('response',onResponse);}
+ }finally{clearTimeout(terminalTimer);terminalResolve=null;delayReloadStatus=false;reloadClock=0;page.off('requestfailed',onFailed);page.off('requestfinished',onFinished);page.off('request',onRequest);page.off('pageerror',onError);page.off('console',onConsole);page.off('response',onResponse);}
 });assert.equal(calls.filter(x=>x==='forget').length,4);console.log(`${packaged?'retained production':'development'} browser prepared forget/immutable preview/ack-only/unknown/reload/receipt/cancel pass; raw producer reports and route are synthetic`);}finally{await browser.close();await helper.close();}
 const env={...process.env};for(const n of Object.keys(env))if(n.startsWith('MANAGER_'))delete env[n];Object.assign(env,{MANAGER_TEST:'1',MANAGER_TEST_DEFER_LOAD:'1',MANAGER_TEST_PROFILE:folder});
 const app=await electron.launch({executablePath:packaged?path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform==='win32'?'ReMarkableBuddiesManager.exe':'ReMarkableBuddiesManager'}`):undefined,args:[...(packaged?[]:['.']),...(process.platform==='linux'?['--disable-gpu']:[])],env});
