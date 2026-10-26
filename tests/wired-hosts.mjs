@@ -74,7 +74,9 @@ try {
     assert.equal(await page.evaluate(() => window.managerHost.modelSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.basicSettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.basicSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
-    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'downloads', 'driveAuth', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'kind', 'memoryForget', 'memoryQuery', 'modelSettings', 'observe', 'ordinaryExport', 'personalization', 'transport']);
+    assert.equal(await page.evaluate(() => window.managerHost.researchSettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
+    assert.equal(await page.evaluate(() => window.managerHost.researchSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
+    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'downloads', 'driveAuth', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'kind', 'memoryForget', 'memoryQuery', 'modelSettings', 'observe', 'ordinaryExport', 'personalization', 'researchSettings', 'transport']);
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({}, {}).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSavedMode({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');

@@ -1,0 +1,11 @@
+# Saved research policy
+
+The shared browser/Electron section edits only the saved root research_policy declaration using the dedicated bounded research-settings producer. Read tablet state, begin an edit, choose Set Required, Set Disabled or Clear, then explicitly save. Keep changes nothing. Clear removes the declaration and resolves to the saved Required default. Existing explicit null remains visible as declared-null/Required until deliberately set or cleared. Equal resolved values do not imply a no-op.
+
+A verified save proves exact saved disk bytes only; runtime activation remains unverified. This interface does not acquire research, change request-level NoInternet, restart a service or promise adoption on a later request. Broad saved-configuration v1 inspection remains unchanged, including its unsupported research-policy entry; this editor uses a separate capability. Older hosts/unsupported producers refuse without raw-file or runtime fallback.
+
+If a save outcome is unknown, do not retry automatically. Stop is not rollback. Check the original desired file explicitly; that proves only whether its desired bytes are currently present, not historical authorship. Up to eight unresolved originals remain in the surviving host process across renderer reload. They are not durable recovery after a host restart and are never silently evicted to admit another save.
+
+Public setup and wired authentication follow the existing Manager guides. The host uses only its fixed config path and exact allowlisted inspect/prepare/apply/status selectors, with no Buddy admin API. No tablet or account is needed for synthetic local verification. Normal development checks include npm run lint, npm test, npm run build:development, npm run build, Python -m unittest discover -s tests/research_settings -v and npm run test:research-settings-hosts under an offscreen display on Linux. Existing CI additionally runs --packaged on frozen retained browser/Electron artifacts on Windows and Linux and checks upload-byte identity. Synthetic checks do not qualify actual tablet/runtime/provider behavior.
+
+The complete consumer lifecycle lives in the central Docs change edit-saved-research-policy-companion. Implementation review, normal retained CI and publication must finish before claiming delivery.

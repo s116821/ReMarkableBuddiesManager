@@ -1,3 +1,5 @@
+import type {ResearchSettingsAdapter} from './research-settings';
+import type {ResearchSettingsResult} from '../host/research-settings-protocol.mjs';
 import type {OrdinaryExportAdapter} from './ordinary-export';
 import type {ExportResult} from '../host/ordinary-export-protocol.mjs';
 import type { ModelSettingsAdapter } from './model-settings';
@@ -19,6 +21,7 @@ import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
+  readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
   readonly modelSettings?: ModelSettingsAdapter['modelSettings'];
   readonly basicSettings?: BasicSettingsAdapter['basicSettings'];
   readonly memoryForget?: ForgetAdapter['memoryForget'];
@@ -74,6 +77,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Ordinary export unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Export response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ExportResult;
+    },
+    researchSettings: async (request: import('../host/research-settings-protocol.mjs').ResearchSettingsRequest|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Research settings helper unavailable');
+      const pending=fetch('/manager-research-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Research settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Research response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ResearchSettingsResult;
     },
     modelSettings: async (request: import('../host/model-settings-protocol.mjs').ModelSettingsRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Model settings helper unavailable');
