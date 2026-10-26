@@ -16,7 +16,7 @@ export class SourceCacheInventoryController {
   try{
    const value=await Promise.race([(async()=>{if(!await pause()||g!==this.generation)return null;const q=parseSourceCacheRequest({connection_id:tablet.connection_id,boot_id:tablet.boot_id}),v=await adapter.inspectSourceCache(q);if(g!==this.generation)return null;parseSourceCacheResult(v,q,validateResult);return v;})(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Inventory wait expired')),14000);})]);
    if(g!==this.generation)return;if(!value){this.clear();return;}const result=value.source_cache_inventory;this.publish({busy:false,view:result.view,checkedAt:result.status==='reported'?new Date().toISOString():null,status:result.status==='reported'?label(result.view!):`Source-cache inventory ${result.status}`});
-  }catch{if(g===this.generation)this.publish({status:'Source-cache inventory unavailable - no candidate list admitted',busy:false,view:null,checkedAt:null});}
+  }catch{if(g===this.generation){this.generation++;this.publish({status:'Source-cache inventory unavailable - no candidate list admitted',busy:false,view:null,checkedAt:null});}}
   finally{clearTimeout(timer);}
  }
 }
