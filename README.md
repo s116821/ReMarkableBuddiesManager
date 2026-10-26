@@ -113,3 +113,6 @@ Saved memory enabled/profile declarations use the shared [saved-memory editor](d
 See [on-tablet ordinary archive export](docs/ordinary-archive-export.md) for private destination handling, explicit confirmation and manual equivalents. Off-device transfer and restore remain separate.
 
 See [saved research-policy editing](docs/research-settings.md) for the separate saved-only policy interface and verification boundaries.
+
+The [saved credential-reference guide](docs/credential-reference.md) explains the
+private reference editor and its separation from credential-file operations.

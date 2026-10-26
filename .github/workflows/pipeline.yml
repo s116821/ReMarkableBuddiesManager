@@ -174,7 +174,9 @@ jobs:
           xvfb-run -a npm run test:research-settings-hosts
           xvfb-run -a npm run test:research-settings-hosts -- --packaged
           xvfb-run -a npm run test:memory-settings-hosts
+          xvfb-run -a npm run test:credential-reference-hosts
           xvfb-run -a npm run test:memory-settings-hosts -- --packaged
+          xvfb-run -a npm run test:credential-reference-hosts -- --packaged
           xvfb-run -a npm run test:ordinary-export-hosts
           xvfb-run -a npm run test:ordinary-export-hosts -- --packaged
       - if: runner.os == 'Windows'
@@ -211,7 +213,9 @@ jobs:
           npm run test:research-settings-hosts
           npm run test:research-settings-hosts -- --packaged
           npm run test:memory-settings-hosts
+          npm run test:credential-reference-hosts
           npm run test:memory-settings-hosts -- --packaged
+          npm run test:credential-reference-hosts -- --packaged
           npm run test:ordinary-export-hosts
           npm run test:ordinary-export-hosts -- --packaged
       - name: Confirm integration preserved upload bytes

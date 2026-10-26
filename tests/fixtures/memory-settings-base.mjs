@@ -1,4 +1,5 @@
 // Synthetic POSIX transport reports; never producer/device qualification.
+import {addCredentialFixture} from './credential-reference-base.mjs';
 import {createHash} from 'node:crypto';
 import {MemorySettingsHost} from '../../host/memory-settings.mjs';
 import {MEMORY_CONFIG} from '../../host/memory-settings-protocol.mjs';
@@ -11,7 +12,7 @@ export const report=(operation,outcome,data=null,status='ok')=>({report_version:
 export const rawReply=r=>({contract_version:1,status:'observed',observation:structuredClone(tablet),memory_settings_raw:{status:'reported',stdout_base64:Buffer.from(typeof r==='string'?r:JSON.stringify(r)+'\n').toString('base64')}});
 const canonical=v=>v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 export const patchHash=v=>hash('urn:remarkable-buddies:memory-settings-patch:v1:'+JSON.stringify(canonical(v)));
-export function addMemoryFixture(f,options={}){
+export function addMemoryFixture(f,options={},credentialOptions={}){
  const rawRun=f.observer.run;let sequence=0,revision=0;
  const state={document:{memory:{enabled:false,profile:'123e4567-e89b-12d3-a456-426614174000',selection:null},reader:'SYNTHETIC_READER_DRAFT',writer:'SYNTHETIC_WRITER_DRAFT'},hash:'9'.repeat(64),path:hash('urn:remarkable-buddies:memory-settings-path:v1:'+MEMORY_CONFIG),prepared:new Map(),onInspect:null,onPrepare:null,onApply:null,onStatus:null,hooks:0,refusePrepare:false};
  const fields=raw=>({enabled:{origin:Object.hasOwn(raw.memory??{},'enabled')?'declared':'default',value:raw.memory?.enabled??false},profile:{origin:!Object.hasOwn(raw.memory??{},'profile')?'default':raw.memory.profile===null?'declared-null':'declared',present:typeof raw.memory?.profile==='string'}});
@@ -33,7 +34,7 @@ export function addMemoryFixture(f,options={}){
  };
  const memory=new MemorySettingsHost({observer:f.observer,io:f.io,reference:()=>String(++sequence).padStart(64,'d'),...options}),lanes={...f.lanes,memory};
  for(const [name,host] of Object.entries(lanes))host.beforeIO=()=>{state.hooks++;f.researchState.hooks++;for(const [other,h] of Object.entries(lanes))if(other!==name)h.invalidate();};
- return {...f,memory,memoryState:state,lanes};
+ return addCredentialFixture({...f,memory,memoryState:state,lanes},credentialOptions);
 }
 export const begin=async f=>(await f.memory.request({action:'begin',...identity})).memory_settings.reference;
 export const save=(f,reference,changes={profile:{action:'set',value:profile}})=>f.memory.request({action:'save',...identity,reference,changes});

@@ -35,8 +35,8 @@ test('eight memory originals survive stale cancel/status refusal; capacity dispa
  const g=memoryFixture(),r=await begin(g),gate=defer(),entered=defer(),changes={profile:{action:'set',value:profile}};g.memoryState.onPrepare=async v=>{entered.resolve();await gate.promise;return v;};const pending=save(g,r,changes);await entered.promise;changes.profile.value='MUTATED';gate.resolve();assert.equal((await pending).memory_settings.state,'verified');assert.equal(g.calls.find(x=>x.action==='memory-settings'&&x.selector==='apply').body.changes.profile.value,profile);assert.equal(changes.profile.value,'MUTATED');g.memory.invalidate();
 });
 
-test('all30 Busy acquisitions across six actual coordinators perform no hook/cancel/I/O',async()=>{
- const {lanes}=await import('./fixtures/maintenance-six-lanes.mjs'),names={memorySettings:'memory',researchSettings:'research',modelSettings:'model',basicSettings:'basic',memoryForget:'forget',ordinaryExport:'export'};
+test('all42 Busy acquisitions across seven actual coordinators perform no hook/cancel/I/O',async()=>{
+ const {lanes}=await import('./fixtures/maintenance-seven-lanes.mjs'),names={credentialReference:'credential',memorySettings:'memory',researchSettings:'research',modelSettings:'model',basicSettings:'basic',memoryForget:'forget',ordinaryExport:'export'};
  for(const old of Object.keys(lanes)){
   const f=memoryFixture(),raw=f.observer.run,entered=defer(),gate=defer();
   f.observer.run=async function(...args){entered.resolve();await gate.promise;return raw.apply(this,args);};

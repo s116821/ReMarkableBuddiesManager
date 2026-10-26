@@ -11,7 +11,7 @@ export const hash=v=>createHash('sha256').update(v).digest('hex');
 export const report=(operation,outcome,data=null,status='ok')=>({report_version:1,operation,status,outcome,disk_readback_verified:operation==='apply'&&status==='ok',runtime_activation:'unverified',data});
 export const rawReply=r=>({contract_version:1,status:'observed',observation:structuredClone(tablet),research_settings_raw:{status:'reported',stdout_base64:Buffer.from(typeof r==='string'?r:JSON.stringify(r)+'\n').toString('base64')}});
 export const patchHash=v=>hash('urn:remarkable-buddies:research-settings-patch:v1:'+JSON.stringify({research_policy:v.research_policy.action==='clear'?{action:'clear'}:{action:'set',value:v.research_policy.value}}));
-export function researchFixture(options={},memoryOptions={}){
+export function researchFixture(options={},memoryOptions={},credentialOptions={}){
  const f=modelFixture(),rawRun=f.observer.run,e=exportFixture({observer:f.observer,io:f.io});let sequence=0;
  const state={document:{research_policy:null,reader:'SYNTHETIC_READER_DRAFT',writer:'SYNTHETIC_WRITER_DRAFT'},hash:'9'.repeat(64),path:hash('urn:remarkable-buddies:research-settings-path:v1:'+RESEARCH_CONFIG),prepared:new Map(),onInspect:null,onPrepare:null,onApply:null,onStatus:null,hooks:0};
  const fields=raw=>({research_policy:{origin:!Object.hasOwn(raw,'research_policy')?'default':raw.research_policy===null?'declared-null':'declared',value:raw.research_policy??'required'}});
@@ -31,7 +31,7 @@ export function researchFixture(options={},memoryOptions={}){
  };
  const research=new ResearchSettingsHost({observer:f.observer,io:f.io,reference:()=>String(++sequence).padStart(64,'d'),...options}),lanes={model:f.model,basic:f.basic,forget:f.forget,export:e.host,research};
  for(const [name,host] of Object.entries(lanes))host.beforeIO=()=>{state.hooks++;for(const [other,h] of Object.entries(lanes))if(other!==name)h.invalidate();};
- return addMemoryFixture({...f,research,researchState:state,archive:e.host,exportState:e.state,lanes},memoryOptions);
+ return addMemoryFixture({...f,research,researchState:state,archive:e.host,exportState:e.state,lanes},memoryOptions,credentialOptions);
 }
 export const begin=async f=>(await f.research.request({action:'begin',...identity})).research_settings.reference;
 export const save=(f,reference,value='disabled')=>f.research.request({action:'save',...identity,reference,changes:{research_policy:value==='clear'?{action:'clear'}:{action:'set',value}}});
