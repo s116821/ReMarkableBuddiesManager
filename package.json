@@ -38,7 +38,8 @@
     "test:saved-configuration-hosts": "node tests/saved-configuration-hosts.mjs",
     "test:ordinary-export-hosts": "node tests/ordinary-export-hosts.mjs",
     "test:credential-reference-hosts": "node tests/credential-reference-hosts.mjs",
-    "test:model-credential-hosts": "node tests/model-credential-hosts.mjs"
+    "test:model-credential-hosts": "node tests/model-credential-hosts.mjs",
+    "test:source-cache-inventory-hosts": "node tests/source-cache-inventory-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

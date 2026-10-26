@@ -143,6 +143,7 @@ jobs:
           python -m unittest discover -s tests/memory_settings -v
           python -m unittest discover -s tests/credential_reference -v
           python -m unittest discover -s tests/model_credential -v
+          python -m unittest discover -s tests/source_cache_inventory -v
           python -m unittest discover -s tests/ordinary_export -v
           python -m unittest discover -s tests/memory_inspection -v
           python -m unittest discover -s tests/memory_forget -v

@@ -1,3 +1,4 @@
+import {addSourceCacheFixture} from './source-cache-inventory-base.mjs';
 import {isDeepStrictEqual} from 'node:util';
 // Deliberately synthetic producer transport. No filesystem/device operation.
 import {ModelCredentialHost} from '../../host/model-credential.mjs';
@@ -25,5 +26,5 @@ export function addModelCredentialFixture(f,options={}){
  };
  const modelCredential=new ModelCredentialHost({observer:f.observer,io:f.io,reference:()=>String(++sequence).padStart(64,'f'),...options}),lanes={...f.lanes,modelCredential};
  for(const [name,h] of Object.entries(lanes))h.beforeIO=()=>{state.hooks++;f.credentialState.hooks++;f.memoryState.hooks++;f.researchState.hooks++;for(const [other,peer] of Object.entries(lanes))if(other!==name)peer.invalidate();};
- return {...f,modelCredential,modelCredentialState:state,lanes};
+ return addSourceCacheFixture({...f,modelCredential,modelCredentialState:state,lanes},options.sourceCache??{});
 }

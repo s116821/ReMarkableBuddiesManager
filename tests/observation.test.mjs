@@ -162,3 +162,6 @@ test('supervisor cancels and bounds an actual owned stalled child without publis
     assert.equal(bounded.active, null);
   } finally { await rm(root, { recursive: true }); }
 });
+test('repeated maintenance pause preserves a newer owner; explicit connect restores observation cancellation',async()=>{
+ let cancels=0,owner=false;const controller=new ConnectionController({observe:async()=>observed(observation),cancel:async()=>{cancels++;owner=false;return cancelled();}},()=>{});await controller.connect();await controller.pause();const before=cancels;owner=true;await controller.pause();assert.equal(cancels,before);assert.equal(owner,true);await controller.connect();assert.equal(owner,false);const connected=cancels;await controller.pause();assert.equal(cancels,connected+1);controller.dispose();
+});

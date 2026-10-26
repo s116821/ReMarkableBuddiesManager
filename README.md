@@ -119,3 +119,5 @@ private reference editor and its separation from credential-file operations.
 
 The [saved credential-file guide](docs/model-credential.md) covers deliberate
 install/replace/remove, confidential original checks and their bounded lifetime.
+
+See [source-cache slot inventory](docs/source-cache-inventory.md) for the explicit read-only metadata snapshot and its limits.

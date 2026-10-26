@@ -23,6 +23,7 @@ export class ConnectionController {
   private identity: string | null = null;
   private disposed = false;
   private cancellation: Promise<unknown> = Promise.resolve();
+  private maintenancePaused = false;
   private adapter: ObservationAdapter;
   private changed: (state: ConnectionState) => void;
   private pollMs: number;
@@ -32,7 +33,7 @@ export class ConnectionController {
   private update(state: ConnectionState) { this.state = state; this.changed(state); }
   async connect() {
     if (this.disposed) return;
-    this.stop(); this.identity = null;
+    this.stop(); this.maintenancePaused = false; this.identity = null;
     const generation = this.generation;
     this.update({ status: 'checking', observation: null, checkedAt: null });
     await this.cancellation;
@@ -62,7 +63,11 @@ export class ConnectionController {
     this.timer = null;
     this.cancellation = this.cancellation.then(() => this.adapter.cancel()).catch(() => undefined);
   }
-  async pause() { this.stop(); await this.cancellation; }
+  async pause() {
+    // Reusing an already paused connection must not cancel a maintenance owner.
+    if (!this.maintenancePaused) { this.maintenancePaused = true; this.stop(); }
+    await this.cancellation;
+  }
   disconnect() { this.stop(); this.identity = null; this.update({ status: 'cancelled', observation: null, checkedAt: null }); }
   dispose() { this.disposed = true; this.stop(); }
 }
