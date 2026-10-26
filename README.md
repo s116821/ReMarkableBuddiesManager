@@ -108,6 +108,8 @@ Saved model and endpoint declarations can also be deliberately replaced/cleared
 from both companions. The [private model editor guide](docs/model-settings.md)
 explains origin-only reads, exact replacement text and hash-only recovery.
 
+Saved memory enabled/profile declarations use the shared [saved-memory editor](docs/memory-settings.md), with private profile input and runtime activation always unverified.
+
 See [on-tablet ordinary archive export](docs/ordinary-archive-export.md) for private destination handling, explicit confirmation and manual equivalents. Off-device transfer and restore remain separate.
 
 See [saved research-policy editing](docs/research-settings.md) for the separate saved-only policy interface and verification boundaries.

@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {memoryFixture,begin,save,identity} from './fixtures/memory-settings.mjs';
+const count=(f,s)=>f.calls.filter(x=>x.action==='memory-settings'&&x.selector===s).length;
+for(const followup of ['cancel','failed-status','late-status'])test(`unresolved original followed by ${followup} returns valid uncertainty without a fresh read claim or write`,async()=>{
+ let now=0;const f=memoryFixture({now:()=>now}),reference=await begin(f);f.memoryState.onApply=()=>{throw Error('Synthetic lost apply response');};assert.equal((await save(f,reference)).memory_settings.state,'unknown');const apply=f.calls.find(x=>x.action==='memory-settings'&&x.selector==='apply'),original=structuredClone(apply.body.intent);
+ f.memoryState.hash='e'.repeat(64);const unresolved=await f.memory.request({action:'status',...identity,reference});assert.equal(unresolved.memory_settings.state,'unresolved');assert.equal(unresolved.memory_settings.report.outcome,'unresolved');assert.deepEqual(f.calls.findLast(x=>x.action==='memory-settings'&&x.selector==='status').body,{intent:original});
+ const calls=f.calls.length;if(followup==='failed-status')f.memoryState.onStatus=()=>{throw Error('Synthetic lost status response');};if(followup==='late-status')f.memoryState.onStatus=r=>{now+=13001;return r;};
+ const fallback=await f.memory.request(followup==='cancel'?{action:'cancel',reference}:{action:'status',...identity,reference});assert.equal(fallback.memory_settings.state,'unknown');assert.equal(fallback.memory_settings.report,null);assert.equal(fallback.memory_settings.current,null);assert.equal(fallback.memory_settings.reference,reference);assert.deepEqual(fallback.memory_settings.retained,[{reference,...identity,state:'unresolved'}]);assert.equal(f.calls.length,calls+(followup==='cancel'?0:1));assert.equal(count(f,'apply'),1);
+ if(followup!=='cancel')assert.deepEqual(f.calls.findLast(x=>x.action==='memory-settings'&&x.selector==='status').body,{intent:original});assert.deepEqual(f.calls.find(x=>x.action==='memory-settings'&&x.selector==='apply').body.intent,original);f.memory.invalidate();
+});

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   memoryQuery: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory query input refused')) : ipcRenderer.invoke('manager:memoryQuery', args[0]),
   ordinaryExport: (...args) => args.length===1?ipcRenderer.invoke('manager:ordinaryExport',args[0]):Promise.reject(new Error('Ordinary export arity refused')),
   researchSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:researchSettings',args[0]):Promise.reject(new Error('Research settings arity refused')),
+  memorySettings: (...args) => args.length===1?ipcRenderer.invoke('manager:memorySettings',args[0]):Promise.reject(new Error('Memory settings arity refused')),
   modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
   basicSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:basicSettings',args[0]):Promise.reject(new Error('Basic settings arity refused')),
   memoryForget: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory forget input refused')) : ipcRenderer.invoke('manager:memoryForget', args[0]),
