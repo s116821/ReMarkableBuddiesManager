@@ -122,6 +122,30 @@
     @for (record of archiveExport().retained; track record.reference; let i = $index) { <div class="mt-3" data-testid="archive-export-retained"><p>Unconfirmed export {{ i + 1 }}. Only this host process retains its private destination; restarting the host loses these diagnostics without proving an outcome.</p><button class="ui-button ui-button-secondary" type="button" (click)="checkExport(record)" [disabled]="!canCheckExport(record)">Check original archive {{ i + 1 }}</button></div> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="research-settings-title">
+    <h2 id="research-settings-title">Saved research policy</h2>
+    <p>Edit only the saved declaration. Runtime activation remains unverified. This does not acquire research or change a request's NoInternet choice.</p>
+    @if (!host.researchSettings) { <p class="ui-warning">This Manager host does not support saved research-policy editing.</p> }
+    <button class="ui-button ui-button-secondary my-3" type="button" (click)="beginResearch()" [disabled]="!canBeginResearch()">Begin research policy edit</button>
+    <p role="status" data-testid="research-settings-status">{{ research().status }}</p>
+    @if (research().view?.current; as fields) {
+      <p>Saved policy: {{ fields.research_policy.value === 'required' ? 'Required' : 'Disabled' }} · {{ fields.research_policy.origin }}</p>
+      @if (fields.research_policy.origin === 'declared-null') { <p>Declared null; saved default is Required.</p> }
+      @if (research().view?.state === 'ready') {
+        <label class="block my-3" for="research-choice">Policy action</label>
+        <select class="ui-field w-full md:w-auto" id="research-choice" [value]="research().choice" (change)="researchChoice($event)" [disabled]="research().busy">
+          <option value="keep">Keep declaration</option><option value="required">Set Required</option><option value="disabled">Set Disabled</option><option value="clear">Clear declaration</option>
+        </select>
+        <p class="my-3">Clear removes the saved declaration; the saved default is Required.</p>
+        <button class="ui-button ui-button-primary my-3" type="button" (click)="saveResearch()" [disabled]="!research().valid || research().busy || research().retained.length >= 8">Save research policy</button>
+      }
+    }
+    <button class="ui-button ui-button-secondary my-3" type="button" (click)="stopResearch()" [disabled]="!host.researchSettings">Stop research policy wait</button>
+    @for (record of research().retained; track record.reference; let i = $index) {
+      <article class="ui-panel my-3" data-testid="research-settings-retained"><h3>Unconfirmed policy save {{ i + 1 }}</h3><p>Original outcome remains {{ record.state }}. No automatic retry.</p><button class="ui-button ui-button-secondary" type="button" (click)="checkResearch(record)" [disabled]="research().busy || !researchTarget(record)">Check original policy save {{ i + 1 }}</button></article>
+    }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="model-settings-title">
     <h2 id="model-settings-title">Saved model and endpoint</h2>
     <p class="text-sm text-muted">Read saved declaration origins only. Existing values stay private. A saved change does not verify the effective model, endpoint or provider, or restart Buddy.</p>

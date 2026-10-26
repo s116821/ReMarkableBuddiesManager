@@ -1,3 +1,5 @@
+import {ResearchSettingsHost} from './research-settings.mjs';
+import {parseResearchSettingsRequest,parseResearchSettingsResult,researchResponseContext} from './research-settings-protocol.mjs';
 import {OrdinaryExportHost} from './ordinary-export.mjs';
 import {parseExportRequest,parseExportResult,exportResponseContext} from './ordinary-export-protocol.mjs';
 import { ModelSettingsHost } from './model-settings.mjs';
@@ -25,11 +27,12 @@ import { DRIVE_ACTIONS } from './drive-protocol.mjs';
 
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
-  const io=new MaintenanceIO();let basic,model,archive;
-  const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>{basic?.invalidate();model?.invalidate();archive?.invalidate();} });
-  basic=new BasicSettingsHost({observer,io,beforeIO:()=>{forget.invalidate();model?.invalidate();archive?.invalidate();}});
-  model=new ModelSettingsHost({observer,io,beforeIO:()=>{forget.invalidate();basic.invalidate();archive?.invalidate();}});
-  archive=new OrdinaryExportHost({observer,io,beforeIO:()=>{forget.invalidate();basic.invalidate();model.invalidate();}});
+  const io=new MaintenanceIO();let basic,model,archive,research;
+  const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>{research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
+  basic=new BasicSettingsHost({observer,io,beforeIO:()=>{research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
+  model=new ModelSettingsHost({observer,io,beforeIO:()=>{research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
+  archive=new OrdinaryExportHost({observer,io,beforeIO:()=>{research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
+  research=new ResearchSettingsHost({observer:observer,io,beforeIO:()=>{forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -54,6 +57,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       const chunks=[];let bytes=0,request;
       try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384)return refuse(413);chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseExportRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
       try{const context=exportResponseContext(request),pending=archive.request(request);request=null;const value=parseExportResult(await pending,context,validateResult);archive.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
+    }
+    if(url.pathname==='/manager-research-settings'){
+      if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
+      const chunks=[];let bytes=0,request;
+      try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384)return refuse(413);chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseResearchSettingsRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
+      try{const context=researchResponseContext(request),pending=research.request(request);request=null;const value=parseResearchSettingsResult(await pending,context,validateResult);research.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
     }
     if(url.pathname==='/manager-model-settings'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
