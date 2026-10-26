@@ -1,3 +1,5 @@
+import type {ModelCredentialAdapter} from './model-credential';
+import type {ModelCredentialResult} from '../host/model-credential-protocol.mjs';
 import type {CredentialReferenceAdapter} from './credential-reference';
 import type {CredentialReferenceResult} from '../host/credential-reference-protocol.mjs';
 import type {ResearchSettingsAdapter} from './research-settings';
@@ -27,6 +29,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
   readonly memorySettings?:MemorySettingsAdapter['memorySettings'];
+  readonly modelCredential?:ModelCredentialAdapter['modelCredential'];
   readonly credentialReference?:CredentialReferenceAdapter['credentialReference'];
   readonly modelSettings?: ModelSettingsAdapter['modelSettings'];
   readonly basicSettings?: BasicSettingsAdapter['basicSettings'];
@@ -97,6 +100,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Memory settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Memory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as MemorySettingsResult;
+    },
+    modelCredential: async (request: import('../host/model-credential-protocol.mjs').ModelCredentialRequest|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Model credential helper unavailable');
+      const pending=fetch('/manager-model-credential',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Model credential unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model credential response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelCredentialResult;
     },
     credentialReference: async (request: import('../host/credential-reference-protocol.mjs').CredentialReferenceRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Credential reference helper unavailable');

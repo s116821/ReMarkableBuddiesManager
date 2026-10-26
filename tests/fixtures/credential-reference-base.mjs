@@ -1,3 +1,4 @@
+import {addModelCredentialFixture} from './model-credential-base.mjs';
 // Synthetic POSIX transport reports; never producer/device qualification.
 import {createHash} from 'node:crypto';
 import {CredentialReferenceHost} from '../../host/credential-reference.mjs';
@@ -31,7 +32,7 @@ export function addCredentialFixture(f,options={}){
  };
  const credential=new CredentialReferenceHost({observer:f.observer,io:f.io,reference:()=>String(++sequence).padStart(64,'c'),...options}),lanes={...f.lanes,credential};
  for(const [name,host] of Object.entries(lanes))host.beforeIO=()=>{state.hooks++;f.researchState.hooks++;f.memoryState.hooks++;for(const [other,h] of Object.entries(lanes))if(other!==name)h.invalidate();};
- return {...f,credential,credentialState:state,lanes};
+ return addModelCredentialFixture({...f,credential,credentialState:state,lanes},options.modelCredential??{});
 }
 export const begin=async f=>(await f.credential.request({action:'begin',...identity})).credential_reference.reference;
 export const save=(f,reference,change={action:'set',value:name})=>f.credential.request({action:'save',...identity,reference,change});

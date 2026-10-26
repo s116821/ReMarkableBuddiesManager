@@ -1,3 +1,5 @@
+import {ModelCredentialHost} from './model-credential.mjs';
+import {parseModelCredentialRequest,parseModelCredentialResult,modelCredentialContext} from './model-credential-protocol.mjs';
 import {CredentialReferenceHost} from './credential-reference.mjs';
 import {parseCredentialReferenceRequest,parseCredentialReferenceResult,credentialResponseContext} from './credential-reference-protocol.mjs';
 import {ResearchSettingsHost} from './research-settings.mjs';
@@ -31,14 +33,15 @@ import { DRIVE_ACTIONS } from './drive-protocol.mjs';
 
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
-  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings,credential;
-  const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
-  basic=new BasicSettingsHost({observer,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
-  model=new ModelSettingsHost({observer,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
-  archive=new OrdinaryExportHost({observer,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
-  research=new ResearchSettingsHost({observer:observer,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  memorySettings=new MemorySettingsHost({observer:observer,io,beforeIO:()=>{credential?.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  credential=new CredentialReferenceHost({observer:observer,io,beforeIO:()=>{memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings,credential,modelCredential;
+  const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
+  basic=new BasicSettingsHost({observer,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
+  model=new ModelSettingsHost({observer,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
+  archive=new OrdinaryExportHost({observer,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
+  research=new ResearchSettingsHost({observer:observer,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  memorySettings=new MemorySettingsHost({observer:observer,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  credential=new CredentialReferenceHost({observer:observer,io,beforeIO:()=>{modelCredential?.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  modelCredential=new ModelCredentialHost({observer:observer,io,beforeIO:()=>{credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -75,6 +78,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       const chunks=[];let bytes=0,request;
       try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384)return refuse(413);chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseMemorySettingsRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
       try{const context=memoryResponseContext(request),pending=memorySettings.request(request);request=null;const value=parseMemorySettingsResult(await pending,context,validateResult);memorySettings.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
+    }
+    if(url.pathname==='/manager-model-credential'){
+      if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
+      const chunks=[];let bytes=0,request;
+      try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384)return refuse(413);chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseModelCredentialRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
+      try{const context=modelCredentialContext(request),pending=modelCredential.request(request);request=null;const value=parseModelCredentialResult(await pending,context,validateResult);modelCredential.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
     }
     if(url.pathname==='/manager-credential-reference'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);

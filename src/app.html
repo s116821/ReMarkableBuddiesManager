@@ -101,7 +101,35 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
-  <section class="ui-panel my-6" aria-labelledby="credential-reference-title">
+    <section class="ui-panel my-6" aria-labelledby="model-credential-title">
+    <h2 id="model-credential-title">Saved model credential file</h2>
+    <p class="text-sm text-muted">Manage only the declared protected file. Authentication and runtime activation remain unverified. Reference setup is separate; remove an old file before switching its reference if removal is wanted.</p>
+    <p data-testid="model-credential-status" class="mt-3" role="status">{{ fileCredential().status }}</p>
+    <button class="ui-button ui-button-secondary mt-3" type="button" (click)="beginFileCredential()" [disabled]="!canBeginFileCredential()">Begin saved credential file edit</button>
+    @if (fileCredential().view?.state === 'ready') {
+      <p class="mt-2">Saved file: {{ fileCredential().view?.current?.present ? 'present' : 'absent' }}</p>
+      <label class="mt-3 block" for="model-credential-action">Saved file action</label>
+      <select id="model-credential-action" class="ui-field" [value]="fileCredential().actions.model_credential" (change)="fileCredentialAction($event)">
+        <option value="keep">Keep</option><option value="install" [disabled]="fileCredential().view?.current?.present">Install new file</option><option value="replace" [disabled]="!fileCredential().view?.current?.present">Replace file</option><option value="remove">Remove file</option>
+      </select>
+      @if (fileCredential().actions.model_credential === 'install' || fileCredential().actions.model_credential === 'replace') {
+        <label class="mt-3 block" for="model-credential-value">New private credential</label>
+        <textarea id="model-credential-value" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="fileCredentialText()" (beforeinput)="beforeFileCredential($event)" (input)="inputFileCredential($event)" (paste)="pasteFileCredential($event)"></textarea>
+        <p class="text-sm text-muted">Existing contents stay hidden. New text is saved exactly as entered.</p>
+      }
+      <button class="ui-button ui-button-primary mt-3" type="button" (click)="saveFileCredential()" [disabled]="!fileCredentialCanSave()">Save credential file</button>
+    }
+    @if (fileCredential().busy || fileCredential().view?.state === 'ready') { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopFileCredential()">Stop credential file wait</button> }
+    @if (fileCredential().retained.length) {
+      <p class="ui-warning mt-3">An original operation may have run. Checking observes its original desired file only; it cannot prove historical publication. Do not retry automatically.</p>
+      @for (record of fileCredential().retained; track record.reference; let i=$index) {
+        <div data-testid="model-credential-retained"><button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkFileCredential(record)" [disabled]="!canCheckFileCredential(record)">Check original credential file {{ i+1 }}</button>
+        @if (!record.status_available) { <p>Outcome unknown. Original check is no longer available; the current saved file cannot prove what this operation did.</p> }</div>
+      }
+    }
+  </section>
+
+<section class="ui-panel my-6" aria-labelledby="credential-reference-title">
     <h2 id="credential-reference-title">Saved credential reference</h2>
     @if (!host.credentialReference) { <p class="ui-warning">This Manager host does not support saved-reference editing.</p> }
     <p class="text-sm text-muted">Choose the saved model credential reference. This does not install or remove a credential file, verify authentication or revoke access. Runtime activation remains unverified. Reference and file changes are separate operations.</p>

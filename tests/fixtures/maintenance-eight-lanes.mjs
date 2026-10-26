@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';
+import {lanes as seven} from './maintenance-seven-lanes.mjs';
+import {identity} from './model-settings.mjs';
+export const lanes={...seven,modelCredential:{key:'model_credential',begin:()=>({action:'begin',...identity}),change:{action:'install',value:'SYNTHETIC_PRIVATE_FILE'}}};
+export async function verifyFiftySixDirections(request){let pairs=0;for(const [old,a] of Object.entries(lanes))for(const [newer,b] of Object.entries(lanes)){if(old===newer)continue;const ready=(await request(old,a.begin()))[a.key];assert.ok(ready.reference,old);assert.ok((await request(newer,b.begin()))[b.key].reference,newer);const q=a.change?{action:'save',...identity,reference:ready.reference,change:a.change}:a.changes?{action:'save',...identity,reference:ready.reference,changes:a.changes}:old==='memoryForget'?{action:'confirm',reference:ready.reference}:{action:'confirm',...identity,reference:ready.reference};const result=(await request(old,q))[a.key];assert.ok(['invalidated','unavailable','not-dispatched'].includes(result.state),`${old} after ${newer}: ${result.state}`);pairs++;}assert.equal(pairs,56);return pairs;}

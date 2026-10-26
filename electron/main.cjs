@@ -27,14 +27,17 @@ app.whenReady().then(async () => {
   const { MaintenanceIO }=await import(pathToFileURL(path.join(hostRoot,'maintenance-io.mjs')).href);
   const { parseBasicSettingsRequest,parseBasicSettingsResult }=await import(pathToFileURL(path.join(hostRoot,'basic-settings-protocol.mjs')).href);
   const rawObserver = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
-  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings,credential;
-  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
-  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
-  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
-  archive=new OrdinaryExportHost({observer:rawObserver,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
-  research=new ResearchSettingsHost({observer:rawObserver,io,beforeIO:()=>{credential?.invalidate();memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  memorySettings=new MemorySettingsHost({observer:rawObserver,io,beforeIO:()=>{credential?.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  credential=new CredentialReferenceHost({observer:rawObserver,io,beforeIO:()=>{memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  const {ModelCredentialHost}=await import(pathToFileURL(path.join(hostRoot,'model-credential.mjs')).href);
+  const {parseModelCredentialRequest,parseModelCredentialResult,modelCredentialContext}=await import(pathToFileURL(path.join(hostRoot,'model-credential-protocol.mjs')).href);
+  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings,credential,modelCredential;
+  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
+  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
+  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
+  archive=new OrdinaryExportHost({observer:rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
+  research=new ResearchSettingsHost({observer:rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  memorySettings=new MemorySettingsHost({observer:rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();credential?.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  credential=new CredentialReferenceHost({observer:rawObserver,io,beforeIO:()=>{modelCredential?.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  modelCredential=new ModelCredentialHost({observer:rawObserver,io,beforeIO:()=>{credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
   const observer = forget.wrap();
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
@@ -77,6 +80,11 @@ app.whenReady().then(async () => {
     if(!authorized(event,[])||args.length!==1)throw Error('Memory settings caller refused');
     let request=parseMemorySettingsRequest(args[0]);args.length=0;
     try{const context=memoryResponseContext(request),pending=memorySettings.request(request);request=null;const value=parseMemorySettingsResult(await pending,context,validateResult);return memorySettings.assertCurrent(value);}finally{request=null;}
+  });
+  ipcMain.handle('manager:modelCredential',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Model credential caller refused');
+    let request=parseModelCredentialRequest(args[0]);args.length=0;
+    try{const context=modelCredentialContext(request),pending=modelCredential.request(request);request=null;const value=parseModelCredentialResult(await pending,context,validateResult);return modelCredential.assertCurrent(value);}finally{request=null;}
   });
   ipcMain.handle('manager:credentialReference',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Credential reference caller refused');
