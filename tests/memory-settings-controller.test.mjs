@@ -30,3 +30,12 @@ test('memory expiry clears actual-input hook; late retained/Stop callbacks canno
  t.mock.timers.enable({apis:['setTimeout']});let dom='';const f=open(()=>{dom='';});await start(f);paste(f.controller,profile);dom=profile;t.mock.timers.tick(120001);assert.equal(f.controller.text('profile'),'');assert.equal(dom,'');assert.equal(f.controller.state.view,null);
  const gate=defer(),old=f.controller.retained({memorySettings:()=>gate.promise});await f.controller.stop(f.adapter);await start(f);paste(f.controller,'{'+profile+'}');dom=f.controller.text('profile');gate.resolve(await f.memory.request({action:'retained'}));await old;assert.equal(f.controller.text('profile'),'{'+profile+'}');assert.equal(dom,'{'+profile+'}');f.controller.clear();f.memory.invalidate();
 });
+
+test('repeated Begin owns a new reference and ignores actions/paste aimed at the old ready editor while reading',async()=>{
+ const f=open();await start(f);paste(f.controller,profile);const old=f.controller.state.reference,entered=defer(),reply=defer();
+ f.memoryState.onInspect=async r=>{entered.resolve();await reply.promise;return r;};const pending=start(f);await entered.promise;
+ assert.equal(f.controller.state.busy,true);assert.equal(f.controller.state.reference,null);assert.equal(f.controller.state.view,null);assert.equal(f.controller.text('profile'),'');
+ paste(f.controller,'{'+profile+'}');assert.equal(f.controller.state.actions.profile,'keep');assert.equal(f.controller.state.valid,false);assert.equal(f.controller.text('profile'),'');
+ reply.resolve();await pending;assert.equal(f.controller.state.view.state,'ready');assert.equal(typeof f.controller.state.reference,'string');assert.notEqual(f.controller.state.reference,old);assert.equal(f.controller.state.actions.profile,'keep');assert.equal(f.controller.state.valid,false);
+ paste(f.controller,'{'+profile+'}');assert.equal(f.controller.state.valid,true);assert.equal(f.controller.text('profile'),'{'+profile+'}');f.controller.clear();f.memory.invalidate();
+});

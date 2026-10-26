@@ -7,7 +7,15 @@ async function isolate(context,origin){await context.route('**/*',route=>{const 
 async function verify(page,control,capture){
  const status=page.getByTestId('memory-settings-status'),field=page.locator('#memory-settings-profile'),begin=page.getByRole('button',{name:'Begin saved memory edit',exact:true}),save=page.getByRole('button',{name:'Save memory declarations',exact:true});
  const read=async()=>{const stamp=page.locator('section[aria-labelledby="connection-title"] p').filter({hasText:/^Observed at /}),old=await stamp.count()?await stamp.textContent():null;await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await expect(stamp).toBeVisible();if(old!==null)await expect(stamp).not.toHaveText(old);};
- const edit=async()=>{await begin.click();await expect(status).toContainText('origins ready');await page.locator('#memory-profile-action').selectOption('replace');};
+ const edit=async()=>{
+  // A repeated ready label is not a new-Begin receipt. End an existing editor
+  // explicitly before using that label to synchronize the next setup.
+  if(await save.count()){
+   const before=await control.snapshot();await page.getByRole('button',{name:'Stop saved memory wait',exact:true}).click();await expect(status).toContainText('Memory editor invalidated - no save was requested');await expect(save).toHaveCount(0);
+   const after=await control.snapshot();assert.equal(after.cancels,before.cancels);assert.equal(after.applies,before.applies);
+  }
+  await begin.click();await expect(status).toContainText('origins ready');await page.locator('#memory-profile-action').selectOption('replace');
+ };
  const paste=async text=>{await field.focus();await field.evaluate((field,text)=>{const clipboardData=new DataTransfer();clipboardData.setData('text/plain',text);field.dispatchEvent(new ClipboardEvent('paste',{clipboardData,bubbles:true,cancelable:true}));},text);};
  const probe=()=>page.evaluate(()=>{const fetch=window.fetch.bind(window);window.memoryInputResidue=false;window.fetch=(...args)=>{if(args[0]==='/manager-memory-settings'&&JSON.parse(args[1]?.body??'{}').action==='save'&&document.querySelector('#memory-settings-profile')?.value)window.memoryInputResidue=true;return fetch(...args);};});await probe();
  await expect(begin).toBeDisabled();await read();await page.locator('#memory-query').fill('SYNTHETIC_QUERY_DRAFT');await edit();await page.locator('#memory-enabled-action').selectOption('replace');await page.locator('#memory-enabled-value').selectOption('true');
