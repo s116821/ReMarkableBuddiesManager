@@ -116,3 +116,6 @@ See [saved research-policy editing](docs/research-settings.md) for the separate 
 
 The [saved credential-reference guide](docs/credential-reference.md) explains the
 private reference editor and its separation from credential-file operations.
+
+The [saved credential-file guide](docs/model-credential.md) covers deliberate
+install/replace/remove, confidential original checks and their bounded lifetime.

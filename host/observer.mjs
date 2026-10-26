@@ -1,3 +1,4 @@
+import {strictJson} from './strict-json.mjs';
 import { parseSavedConfigurationRequest, reduceSavedConfigurationResult } from './saved-configuration.mjs';
 import { parseMemoryInspectionRequest, reduceMemoryInspectionResult } from './memory-inspection.mjs';
 import { spawn } from 'node:child_process';
@@ -93,6 +94,7 @@ export class WiredObserver {
   async run(action, request) {
     this.cancel();
     const research=action==='research-settings';
+    const modelCredential=action==='model-credential';
     const credential=action==='credential-reference';
     const memorySettings=action==='memory-settings';
     const archive=action==='ordinary-export';
@@ -101,39 +103,40 @@ export class WiredObserver {
     const configuration = action === 'saved-configuration';
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
-    const refusal = status => credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
-    if((basic||model||archive||research||memorySettings||credential)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>12000))return refusal('observation-unavailable');
+    const refusal = status => modelCredential ? {...result(status),model_credential_raw:{status:'unavailable',stdout_base64:null}} : credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    if((basic||model||archive||research||memorySettings||credential||modelCredential)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>12000))return refusal('observation-unavailable');
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
-      const script = credential ? path.join(path.dirname(this.script),'credential_reference_transport.py') : memorySettings ? path.join(path.dirname(this.script),'memory_settings_transport.py') : research ? path.join(path.dirname(this.script),'research_settings_transport.py') : archive ? path.join(path.dirname(this.script), 'ordinary_export_transport.py') : model ? path.join(path.dirname(this.script), 'model_settings_transport.py') : basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || basic || model || archive || research || memorySettings || credential || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || basic || model || archive || research || memorySettings || credential ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      const script = modelCredential ? path.join(path.dirname(this.script),'model_credential_transport.py') : credential ? path.join(path.dirname(this.script),'credential_reference_transport.py') : memorySettings ? path.join(path.dirname(this.script),'memory_settings_transport.py') : research ? path.join(path.dirname(this.script),'research_settings_transport.py') : archive ? path.join(path.dirname(this.script), 'ordinary_export_transport.py') : model ? path.join(path.dirname(this.script), 'model_settings_transport.py') : basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || basic || model || archive || research || memorySettings || credential || modelCredential || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || basic || model || archive || research || memorySettings || credential || modelCredential ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
-      if (personal || runtime || memory || saved || detail || forget || configuration || basic || model || archive || research || memorySettings || credential) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      if (personal || runtime || memory || saved || detail || forget || configuration || basic || model || archive || research || memorySettings || credential || modelCredential) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
-      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (basic||model||archive||research||memorySettings||credential)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
+      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (basic||model||archive||research||memorySettings||credential||modelCredential)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
       child.stdout.on('data', data => {
+        if(modelCredential&&(oversized||expired||generation!==this.generation||outputBytes+data.length>24576)){data.fill(0);oversized=true;child.kill('SIGKILL');return;}
         chunks.push(data); outputBytes += data.length;
-        if (outputBytes > (basic || model || archive || research || memorySettings || credential ? 24576 : configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
+        if (outputBytes > (basic || model || archive || research || memorySettings || credential || modelCredential ? 24576 : configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
       const finish = async code => {
         clearTimeout(timer);
         if (this.active === child) this.active = null;
+        try {
         if (generation !== this.generation) return resolve(refusal('cancelled'));
         if (expired) return resolve(refusal('timeout'));
         if (code !== 0 || oversized) return resolve(refusal('observation-unavailable'));
-        try {
-          const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
+          const input=Buffer.concat(chunks);let value;try{if(modelCredential)strictJson(input);value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(input));}finally{if(modelCredential)input.fill(0);}
           if (action === 'observe') return resolve(validateResult(value));
           if (configuration) {
             const reduced=reduceSavedConfigurationResult(value,request,validateResult);
             return resolve(generation===this.generation?reduced:refusal('cancelled'));
           }
-          if (basic || model || archive || research || memorySettings || credential) {
-            const rawKey=credential?'credential_reference_raw':memorySettings?'memory_settings_raw':research?'research_settings_raw':archive?'export_raw':model?'model_raw':'basic_raw',wanted=credential?'contract_version,credential_reference_raw,observation,status':memorySettings?'contract_version,memory_settings_raw,observation,status':research?'contract_version,observation,research_settings_raw,status':archive?'contract_version,export_raw,observation,status':model?'contract_version,model_raw,observation,status':'basic_raw,contract_version,observation,status';
+          if (basic || model || archive || research || memorySettings || credential || modelCredential) {
+            const rawKey=modelCredential?'model_credential_raw':credential?'credential_reference_raw':memorySettings?'memory_settings_raw':research?'research_settings_raw':archive?'export_raw':model?'model_raw':'basic_raw',wanted=modelCredential?'contract_version,model_credential_raw,observation,status':credential?'contract_version,credential_reference_raw,observation,status':memorySettings?'contract_version,memory_settings_raw,observation,status':research?'contract_version,observation,research_settings_raw,status':archive?'contract_version,export_raw,observation,status':model?'contract_version,model_raw,observation,status':'basic_raw,contract_version,observation,status';
             if(Object.keys(value).sort().join()!==wanted)throw Error('Private response refused');
             validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});
             const q=value[rawKey];if(!q||Object.keys(q).sort().join()!=='status,stdout_base64'||!['reported','unsupported','unavailable'].includes(q.status)||(q.status==='reported'?value.status!=='observed'||typeof q.stdout_base64!=='string':q.stdout_base64!==null))throw Error('Private response refused');
@@ -184,7 +187,7 @@ export class WiredObserver {
             } else if (i.report !== null) throw new Error('Invalid inspection');
           }
           resolve(value);
-        } catch { resolve(refusal('observation-unavailable')); }
+        } catch { resolve(refusal('observation-unavailable')); }finally{if(modelCredential){for(const chunk of chunks)chunk.fill(0);chunks.length=0;}}
       };
       child.once('error', () => finish(-1));
       child.once('close', finish);
