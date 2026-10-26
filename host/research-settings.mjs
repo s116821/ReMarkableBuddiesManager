@@ -25,7 +25,9 @@ export class ResearchSettingsHost {
   if(value.research_settings.state==='ready'&&(!this.#editor||this.#editor.state!=='ready'||value.research_settings.reference!==this.#editor.reference||JSON.stringify(value.research_settings.current)!==JSON.stringify(this.#editor.current)))throw Error('Editor invalidated');return value;
  }
  #stale(token,epoch){return epoch!==this.#epoch||!this.io.owns(token);}
- #uncertain(s){return this.#value(s.state==='unresolved'?'unresolved':'unknown',s);}
+ // No fresh status report is available on this fallback. Preserve the original
+ // and its last retained observation, but publish only current uncertainty.
+ #uncertain(s){return this.#value('unknown',s);}
  async #owned(s,operation,handler){
   const token=this.io.acquire('research-settings',s.reference,operation);if(!token)return this.#value('busy',s);
   const deadline=this.now()+this.budgetMs;if(operation!=='save')this.invalidate();this.beforeIO();const epoch=this.#epoch,active={token,context:s,operation,buffers:[]};this.#active=active;
