@@ -474,6 +474,35 @@
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
     <p class="mt-4 text-sm text-muted">Backup browsing and tablet restore are not available yet. Signing in does not change tablet settings or back up data.</p>
   </section>
+  <section class="ui-panel my-6" aria-labelledby="cache-cleanup-title">
+    <h2 id="cache-cleanup-title">Clean up a derived cache slot</h2>
+    <p class="text-sm text-muted">Remove only one validated derived source-cache slot. Original documents and source history are preserved. No payload is displayed; apparent length is not reclaimable space. Source freshness and runtime remain unverified.</p>
+    @if (cacheInventory().view?.entries?.length) {
+      <label class="block mt-3" for="cache-cleanup-choice">Choose an ID from this tablet’s metadata snapshot</label>
+      <select id="cache-cleanup-choice" class="ui-field block w-full max-w-full" [value]="cacheCleanup().selection" (change)="selectCleanup($event)" [disabled]="cacheCleanup().busy||cleanupPeerBusy()">
+        <option value="">No derived cache slot selected</option>
+        @for (entry of cacheInventory().view!.entries!; track entry.document) { <option [value]="entry.document">{{ entry.document }}</option> }
+      </select>
+    }
+    <label class="block mt-3" for="cache-cleanup-document">Or enter the canonical document ID</label>
+    <input id="cache-cleanup-document" class="ui-field block w-full max-w-full font-mono" type="text" maxlength="36" autocomplete="off" spellcheck="false" [value]="cacheCleanup().selection" (input)="selectCleanup($event)" [disabled]="cacheCleanup().busy||cleanupPeerBusy()">
+    <p class="text-sm text-muted mt-2">Selection grants no permission. Prepare a fresh preview to validate the selected derived slot.</p>
+    <div class="flex flex-wrap gap-3 mt-3">
+      <button class="ui-button ui-button-primary" type="button" (click)="prepareCleanup()" [disabled]="!canPrepareCleanup()">Prepare cleanup preview</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopCleanup()" [disabled]="cleanupPeerBusy()">Stop cleanup wait</button>
+    </div>
+    <p role="status" class="mt-3" data-testid="cache-cleanup-status">{{ cacheCleanup().status }}</p>
+    @if (cacheCleanup().view?.preview; as preview) {
+      <div class="mt-3" data-testid="cache-cleanup-preview"><p class="font-mono break-all">{{ preview.document }}</p><p>{{ bytes(preview.entry_bytes) }} prepared apparent file length</p>
+      <button class="ui-button ui-button-secondary mt-3" type="button" (click)="confirmCleanup()" [disabled]="!canConfirmCleanup()">Confirm cache cleanup</button></div>
+    }
+    @for (record of cacheCleanup().retained; track record.reference) {
+      <div class="mt-3" data-testid="cache-cleanup-original"><p class="font-mono break-all">{{ record.document }}</p><p>Original outcome: {{ record.state }} — historical deletion remains unverified</p>
+        @if (!record.status_available) { <p>Original check unavailable. Never retry confirmation from this record.</p> }
+        <button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkCleanup(record)" [disabled]="!canCheckCleanup(record)">Check original cache cleanup</button></div>
+    }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="source-cache-title">
     <h2 id="source-cache-title">Source-cache slot inventory</h2>
     <p class="text-sm text-muted">Read-only metadata for derived source-cache slots. Contents are unread and unvalidated; source freshness and runtime remain unverified. This list grants no cleanup permission.</p>
@@ -494,7 +523,7 @@
       <h2 id="owned-title">Buddy-owned data</h2>
       <button class="ui-button ui-button-primary" type="button" (click)="inspectOwned()" [disabled]="!profile().inspection || owned().status === 'Inspecting owned data…'">Inspect owned data</button>
     </div>
-    <p class="text-sm text-muted">Read-only inventory of Buddy's stored history and cache. Credentials and original tablet documents are excluded. Cleanup and restore remain unavailable.</p>
+    <p class="text-sm text-muted">Read-only inventory of Buddy's stored history and cache. Credentials and original tablet documents are excluded. One derived cache slot can be prepared for cleanup in its separate section above. General cleanup and restore remain unavailable.</p>
     <p class="mt-3 font-semibold" role="status" data-testid="inspection-status">{{ owned().status }}</p>
     @if (!profile().inspection) { <p class="text-sm text-muted">Read a wired tablet's model, architecture and consistent firmware first. The installed Buddy must support this report.</p> }
     @if (owned().report; as report) {
@@ -544,7 +573,7 @@
   <div class="grid gap-5 md:grid-cols-3">
     <section class="ui-panel" aria-labelledby="install-title"><span class="font-mono text-xs text-muted">01</span><h2 class="mt-5" id="install-title">Install &amp; update</h2><p class="text-sm text-muted">Get official Reader and Writer releases, with safe updates that preserve your work.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
     <section class="ui-panel" aria-labelledby="configure-title"><span class="font-mono text-xs text-muted">02</span><h2 class="mt-5" id="configure-title">Make it yours</h2><p class="text-sm text-muted">Choose your backends and preferences across Reader and Writer.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
-    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Read-only inventory is available above. On-tablet archive export is available above. Off-device transfer, cleanup and restore remain upcoming.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
+    <section class="ui-panel" aria-labelledby="data-title"><span class="font-mono text-xs text-muted">03</span><h2 class="mt-5" id="data-title">Care for your data</h2><p class="text-sm text-muted">Read-only inventory is available above. On-tablet archive export is available above. One derived source-cache slot can be cleaned up above. Off-device transfer, general cleanup and restore remain upcoming.</p><p class="mt-6 text-xs text-warning">Coming in a later release</p></section>
   </div>
   <aside class="mt-8 border-t border-divider pt-5 text-sm text-muted"><h2 class="text-base">Built to work together</h2><p>Manager and the tablet application update independently. Your tablet version will appear once a connection is available.</p><a href="https://github.com/s116821/RemarkableBuddiesDocs" target="_blank" rel="noopener noreferrer">Read the project guide <span aria-hidden="true">↗</span></a></aside>
 </main>
