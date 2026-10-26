@@ -32,7 +32,9 @@ unknown if apply may have run. The host retains at most eight original hash-only
 status contexts, without the replacement patch or an automatic retry/eviction.
 Check original memory save observes only whether the exact desired file is
 currently present; it does not prove historical authorship or runtime activation.
-A refused check does not settle prior uncertainty. Reload can recover only the
+A refused check does not settle prior uncertainty. A stopped, failed or late
+check returns unknown without claiming a fresh successful read; the original
+unresolved observation and digest-only intent remain available. Reload can recover only the
 running host's in-memory references; restarting that host may lose them.
 
 The fixed manual producer commands are:
@@ -51,8 +53,8 @@ only the original digest-only intent. Follow the unchanged
 for exact JSON, hashes and refusal semantics. Do not copy real private values into
 examples or substitute a fresh intent for an uncertain original.
 
-Memory settings, model settings, basic settings, prepared forgetting and ordinary
-export share one maintenance owner. Old targeted cancellation cannot revoke a
+Memory settings, research policy, model settings, basic settings, prepared
+forgetting and ordinary export share one maintenance owner. Old targeted cancellation cannot revoke a
 new owner. Existing Reader/Writer/selected-memory drafts and manual commands are
 preserved. Host fixtures and historical Windows reports are distinct from Linux
 durability, wired tablet, provider or automatic Reader qualification.

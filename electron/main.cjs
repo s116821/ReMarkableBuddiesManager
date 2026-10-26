@@ -17,18 +17,21 @@ app.whenReady().then(async () => {
   const {parseExportRequest,parseExportResult,exportResponseContext}=await import(pathToFileURL(path.join(hostRoot,'ordinary-export-protocol.mjs')).href);
   const { ModelSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'model-settings.mjs')).href);
   const { parseModelSettingsRequest,parseModelSettingsResult,modelResponseContext }=await import(pathToFileURL(path.join(hostRoot,'model-settings-protocol.mjs')).href);
+  const {ResearchSettingsHost}=await import(pathToFileURL(path.join(hostRoot,'research-settings.mjs')).href);
+  const {parseResearchSettingsRequest,parseResearchSettingsResult,researchResponseContext}=await import(pathToFileURL(path.join(hostRoot,'research-settings-protocol.mjs')).href);
   const {MemorySettingsHost}=await import(pathToFileURL(path.join(hostRoot,'memory-settings.mjs')).href);
   const {parseMemorySettingsRequest,parseMemorySettingsResult,memoryResponseContext}=await import(pathToFileURL(path.join(hostRoot,'memory-settings-protocol.mjs')).href);
   const { BasicSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'basic-settings.mjs')).href);
   const { MaintenanceIO }=await import(pathToFileURL(path.join(hostRoot,'maintenance-io.mjs')).href);
   const { parseBasicSettingsRequest,parseBasicSettingsResult }=await import(pathToFileURL(path.join(hostRoot,'basic-settings-protocol.mjs')).href);
   const rawObserver = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
-  const io=new MaintenanceIO();let basic,model,archive,memorySettings;
-  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{basic?.invalidate();model?.invalidate();archive?.invalidate();memorySettings?.invalidate();} });
-  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{forget.invalidate();model?.invalidate();archive?.invalidate();memorySettings?.invalidate();}});
-  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{forget.invalidate();basic.invalidate();archive?.invalidate();memorySettings?.invalidate();}});
-  archive=new OrdinaryExportHost({observer:rawObserver,io,beforeIO:()=>{forget.invalidate();basic.invalidate();model.invalidate();memorySettings?.invalidate();}});
-  memorySettings=new MemorySettingsHost({observer:rawObserver,io,beforeIO:()=>{forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings;
+  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
+  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
+  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
+  archive=new OrdinaryExportHost({observer:rawObserver,io,beforeIO:()=>{memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
+  research=new ResearchSettingsHost({observer:rawObserver,io,beforeIO:()=>{memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  memorySettings=new MemorySettingsHost({observer:rawObserver,io,beforeIO:()=>{research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
   const observer = forget.wrap();
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
@@ -62,8 +65,13 @@ app.whenReady().then(async () => {
     let request=parseExportRequest(args[0]);args.length=0;
     try{const context=exportResponseContext(request),pending=archive.request(request);request=null;const value=parseExportResult(await pending,context,validateResult);return archive.assertCurrent(value);}finally{request=null;}
   });
+  ipcMain.handle('manager:researchSettings',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Research settings caller refused');
+    let request=parseResearchSettingsRequest(args[0]);args.length=0;
+    try{const context=researchResponseContext(request),pending=research.request(request);request=null;const value=parseResearchSettingsResult(await pending,context,validateResult);return research.assertCurrent(value);}finally{request=null;}
+  });
   ipcMain.handle('manager:memorySettings',async(event,...args)=>{
-    if(!authorized(event,[])||args.length!==1)throw Error('Model settings caller refused');
+    if(!authorized(event,[])||args.length!==1)throw Error('Memory settings caller refused');
     let request=parseMemorySettingsRequest(args[0]);args.length=0;
     try{const context=memoryResponseContext(request),pending=memorySettings.request(request);request=null;const value=parseMemorySettingsResult(await pending,context,validateResult);return memorySettings.assertCurrent(value);}finally{request=null;}
   });

@@ -25,7 +25,7 @@ export class MemorySettingsHost {
   if(value.memory_settings.state==='ready'&&(!this.#editor||this.#editor.state!=='ready'||value.memory_settings.reference!==this.#editor.reference||JSON.stringify(value.memory_settings.current)!==JSON.stringify(this.#editor.current)))throw Error('Editor invalidated');return value;
  }
  #stale(token,epoch){return epoch!==this.#epoch||!this.io.owns(token);}
- #uncertain(s){return this.#value(s.state==='unresolved'?'unresolved':'unknown',s);}
+ #uncertain(s){return this.#value('unknown',s);}
  async #owned(s,operation,handler){
   const token=this.io.acquire('memory-settings',s.reference,operation);if(!token)return this.#value('busy',s);
   const deadline=this.now()+this.budgetMs;if(operation!=='save')this.invalidate();this.beforeIO();const epoch=this.#epoch,active={token,context:s,operation,buffers:[]};this.#active=active;

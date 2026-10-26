@@ -31,6 +31,7 @@
     "test:memory-forget-hosts": "node tests/memory-forget-hosts.mjs",
     "test:memory-inspection-hosts": "node tests/memory-inspection-hosts.mjs",
     "test:saved-mode-hosts": "node tests/saved-mode-hosts.mjs",
+    "test:research-settings-hosts": "node tests/research-settings-hosts.mjs",
     "test:model-settings-hosts": "node tests/model-settings-hosts.mjs",
     "test:memory-settings-hosts": "node tests/memory-settings-hosts.mjs",
     "test:basic-settings-hosts": "node tests/basic-settings-hosts.mjs",

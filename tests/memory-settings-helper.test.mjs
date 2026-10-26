@@ -39,3 +39,10 @@ test('actual helper distinguishes document from resource/iframe and never publis
   response.resolve();const rejected=await late;assert.equal(rejected.memory_settings.state,'invalidated',change);assert.equal(rejected.memory_settings.current,null,change);assert.equal(rejected.memory_settings.reference,null,change);
  }
 });
+
+const routes={memorySettings:'/manager-memory-settings',researchSettings:'/manager-research-settings',modelSettings:'/manager-model-settings',basicSettings:'/manager-basic-settings',memoryForget:'/manager-memory-forget',ordinaryExport:'/manager-ordinary-export'};
+test('actual HTTP factory enforces all30 directed exclusions across six lanes',async t=>{
+ const {verifyThirtyDirections}=await import('./fixtures/maintenance-six-lanes.mjs'),f=memoryFixture(),h=await open(t,f);
+ await verifyThirtyDirections(async(name,q)=>{const response=await h.send(q,routes[name]);assert.equal(response.status,200);return response.json();});
+ assert.equal(f.calls.filter(x=>['apply','forget'].includes(x.selector)).length,0);
+});
