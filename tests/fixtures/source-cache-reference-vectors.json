@@ -1,0 +1,1475 @@
+{
+  "basis": "Independent Python synthetic reference only; no application/producer/device execution. Candidate values are fictitious and never cleanup tokens.",
+  "valid": [
+    {
+      "name": "empty",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 440,
+      "sha256": "c55ae9cfe298996d32c306b342c8adec2dfb101f27db621ccf6e419439d5239e",
+      "expected_safe_view": {
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": [],
+        "total_apparent_bytes": 0
+      }
+    },
+    {
+      "name": "zero-byte-slot",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 0
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":0}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 510,
+      "sha256": "c76233408b502b3cd57202b7839ee6a2eac577ac08a7cbcb801645f4d961119c",
+      "expected_safe_view": {
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 0
+          }
+        ],
+        "total_apparent_bytes": 0
+      }
+    },
+    {
+      "name": "one-max-slot",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 33554432
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":33554432}\n",
+      "utf8_bytes": 524,
+      "sha256": "d4e8ab3de934e361c5e5391ca6958f00d22459132453c8ae22e549592acee091",
+      "expected_safe_view": {
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 33554432
+      }
+    },
+    {
+      "name": "sixteen-max-slots",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000a",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000010",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 536870912
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000002\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000003\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000004\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000005\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000006\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000007\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000008\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000009\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000a\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000b\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000c\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000d\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000e\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000f\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000010\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":536870912}\n",
+      "utf8_bytes": 1695,
+      "sha256": "ad1f41c1c78b487b4720290d4a35b83cbf98969dbf5a156e94ac3ee8a10d01ab",
+      "expected_safe_view": {
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000a",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000010",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 536870912
+      }
+    },
+    {
+      "name": "unavailable",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "unavailable",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": null,
+        "generation": null,
+        "entries": null,
+        "total_apparent_bytes": null
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"unavailable\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":null,\"generation\":null,\"entries\":null,\"total_apparent_bytes\":null}\n",
+      "utf8_bytes": 386,
+      "sha256": "36ac04654b400d204c01d35cbcbde4113c62763a6da5244495f7a4980e724b5d",
+      "expected_safe_view": {
+        "status": "unavailable",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": null,
+        "total_apparent_bytes": null
+      }
+    },
+    {
+      "name": "unsupported",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "unsupported",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": null,
+        "generation": null,
+        "entries": null,
+        "total_apparent_bytes": null
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"unsupported\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":null,\"generation\":null,\"entries\":null,\"total_apparent_bytes\":null}\n",
+      "utf8_bytes": 386,
+      "sha256": "402c2c15f92d69b9bf9a65128ce193de86238a3c82153fefe66e623a06490cd5",
+      "expected_safe_view": {
+        "status": "unsupported",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": null,
+        "total_apparent_bytes": null
+      }
+    },
+    {
+      "name": "busy",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "busy",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": null,
+        "generation": null,
+        "entries": null,
+        "total_apparent_bytes": null
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"busy\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":null,\"generation\":null,\"entries\":null,\"total_apparent_bytes\":null}\n",
+      "utf8_bytes": 379,
+      "sha256": "57a4fde7275af5c6330d3ad4f1a12bd7f0928b834655dd3c136c63ea4b50f947",
+      "expected_safe_view": {
+        "status": "busy",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": null,
+        "total_apparent_bytes": null
+      }
+    },
+    {
+      "name": "conflict",
+      "synthetic_only": true,
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "conflict",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": null,
+        "generation": null,
+        "entries": null,
+        "total_apparent_bytes": null
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"conflict\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":null,\"generation\":null,\"entries\":null,\"total_apparent_bytes\":null}\n",
+      "utf8_bytes": 383,
+      "sha256": "19f11f4fa487195a35b899a197067d17fcb4cc60ea8b92800cb032a638e568f1",
+      "expected_safe_view": {
+        "status": "conflict",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "entries": null,
+        "total_apparent_bytes": null
+      }
+    }
+  ],
+  "semantic_refusals": [
+    {
+      "name": "nil-actor",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "00000000-0000-0000-0000-000000000000",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"00000000-0000-0000-0000-000000000000\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 440,
+      "sha256": "9c818bb9d0f3420031f311f4dfc2bc2aaf98e46d27154ee484431cda9edfe936",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "nil-document",
+      "base": "zero-byte-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-0000-0000-000000000000",
+            "apparent_bytes": 0
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-0000-0000-000000000000\",\"apparent_bytes\":0}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 510,
+      "sha256": "444cae8525eeb78284ceb5b72726a6c9e53727ba02689604795e67f9c7fb6112",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "uppercase-document",
+      "base": "sixteen-max-slots",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000A",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000010",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 536870912
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000002\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000003\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000004\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000005\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000006\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000007\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000008\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000009\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000A\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000b\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000c\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000d\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000e\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000f\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000010\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":536870912}\n",
+      "utf8_bytes": 1695,
+      "sha256": "2b4ab21e16730a63451801621728fea7330c80a0449d41cf502b56a170bb1a68",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "duplicate-document",
+      "base": "sixteen-max-slots",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000a",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 536870912
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000002\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000003\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000004\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000005\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000006\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000007\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000008\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000009\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000a\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000b\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000c\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000d\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000e\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000f\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":536870912}\n",
+      "utf8_bytes": 1695,
+      "sha256": "e2c14dc57f8df51eb8323c4f8ca357fadfca5f05a545f5f4cab84b6ba8747570",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "unsorted",
+      "base": "sixteen-max-slots",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000010",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000a",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 536870912
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000010\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000f\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000e\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000d\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000c\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000b\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000a\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000009\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000008\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000007\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000006\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000005\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000004\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000003\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000002\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":536870912}\n",
+      "utf8_bytes": 1695,
+      "sha256": "235b86faaa7db93bbcd595ed2c485d9bae2d66354e7228a9d406f14b90fc2a8a",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "seventeen-slots",
+      "base": "sixteen-max-slots",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000a",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000010",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000011",
+            "apparent_bytes": 0
+          }
+        ],
+        "total_apparent_bytes": 536870912
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000002\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000003\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000004\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000005\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000006\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000007\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000008\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000009\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000a\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000b\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000c\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000d\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000e\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000f\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000010\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000011\",\"apparent_bytes\":0}],\"total_apparent_bytes\":536870912}\n",
+      "utf8_bytes": 1766,
+      "sha256": "718e61b21376da9373aa1e4ebbe15a3587a0b332a538285ee0285a0d99ef84f0",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "oversized-slot",
+      "base": "one-max-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554433
+          }
+        ],
+        "total_apparent_bytes": 33554433
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554433}],\"total_apparent_bytes\":33554433}\n",
+      "utf8_bytes": 524,
+      "sha256": "8bc84cd4d47c1bbdfb01885dbe096ae5d772e897b5df507a1bb7c97e1db48d4a",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "negative-size",
+      "base": "zero-byte-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": -1
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":-1}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 511,
+      "sha256": "465132e4a6d1942445d0cad68b3e380fceaab7075dd3f7cb7700bd37869fc966",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "fractional-size",
+      "base": "zero-byte-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 0.5
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":0.5}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 512,
+      "sha256": "9a883eceee2b97529682ef84e589ab189fe3b3885a3d5e49676b9df3c2f57006",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "boolean-size",
+      "base": "zero-byte-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": false
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":false}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 514,
+      "sha256": "854dd474d3c81c793d84435ca88411049c6b552afd6f9012642ab05b475de028",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "unsafe-size",
+      "base": "zero-byte-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 9007199254740992
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":9007199254740992}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 525,
+      "sha256": "91166485a3d5c6b24647a7cfbab8bd0ccea2d71f93e27cb28d410df8249a4867",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "wrong-total",
+      "base": "one-max-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 517,
+      "sha256": "78b5f0304292b4af69dc78230ff4dfcc86a47741d1f30fdf469fccbe16551f9a",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "oversized-total",
+      "base": "sixteen-max-slots",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000002",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000003",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000004",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000005",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000006",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000007",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000008",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000009",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000a",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000b",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000c",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000d",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000e",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-00000000000f",
+            "apparent_bytes": 33554432
+          },
+          {
+            "document": "00000000-0000-4000-8000-000000000010",
+            "apparent_bytes": 33554432
+          }
+        ],
+        "total_apparent_bytes": 536870913
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000002\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000003\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000004\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000005\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000006\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000007\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000008\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000009\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000a\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000b\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000c\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000d\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000e\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-00000000000f\",\"apparent_bytes\":33554432},{\"document\":\"00000000-0000-4000-8000-000000000010\",\"apparent_bytes\":33554432}],\"total_apparent_bytes\":536870913}\n",
+      "utf8_bytes": 1695,
+      "sha256": "95cdab219486c2e8b47c843385baacea4efa0a369e64094dfd1d3d2a3fb9a131",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "ok-null",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": null,
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":null,\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 442,
+      "sha256": "52ab76c403d3afd7e87beacb7dbe4486bcf29142649c82951eb8ace4f0c1a555",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "refusal-success-list",
+      "base": "busy",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "busy",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": null,
+        "generation": null,
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"busy\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":null,\"generation\":null,\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 374,
+      "sha256": "5be56c0ed9b0db216d97ac1ab7399007c1b74383f7c5868bee9c3860aab27df3",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "refusal-actor-present",
+      "base": "conflict",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "conflict",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": null,
+        "entries": null,
+        "total_apparent_bytes": null
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"conflict\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":null,\"entries\":null,\"total_apparent_bytes\":null}\n",
+      "utf8_bytes": 417,
+      "sha256": "387a62a854b0955f63154ad9ec143b10219ce176d5b3ed8cb725981707ab0d74",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "false-authority-cleanup_authority",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": true,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":true,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 439,
+      "sha256": "6c15d28358b1d0ff8350d0d2987e52905ecdb82fcd7fc85c72052a073c1d87df",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "false-authority-entry_payloads_read",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": true,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":true,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 439,
+      "sha256": "81844e1357aa68530530bffed3b266402798610b9ac8c6d782c7ec71750b7b8c",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "false-authority-entry_payloads_validated",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": true,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":true,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 439,
+      "sha256": "a72cb48c21d7ccb75acc0a2a7f3637e458079885682ff1845bd16ad4dbb23941",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "false-authority-source_freshness_verified",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": true,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":true,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 439,
+      "sha256": "6b664bcaecf1ad5b3c2c2ba0cf3ff623ec8c2ee287ca340701ae4067c93f072e",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "runtime-false",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": false,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":false,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 441,
+      "sha256": "b9696a501a95742fa5b7974bfba83ec9e3c5e1b7b4c0b301b45bb3be1c5477d5",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "changed-byte-basis",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "SYNTHETIC_RECLAIMABLE_CLAIM",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"SYNTHETIC_RECLAIMABLE_CLAIM\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 397,
+      "sha256": "e1465de5434a6db77286396f8a44ca13f33cd3dc0314dd3f7a4d9a645d8b6455",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "unknown-root-field",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0,
+        "SYNTHETIC_PRIVATE_ERROR": "SYNTHETIC_CANARY"
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0,\"SYNTHETIC_PRIVATE_ERROR\":\"SYNTHETIC_CANARY\"}\n",
+      "utf8_bytes": 485,
+      "sha256": "0cc2af9c4b10452367a094f3445b1c89228ac8255f5bd06e2c1e775e8c00f674",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "unknown-entry-field",
+      "base": "zero-byte-slot",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [
+          {
+            "document": "00000000-0000-4000-8000-000000000001",
+            "apparent_bytes": 0,
+            "path": "SYNTHETIC_PRIVATE_PATH"
+          }
+        ],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":0,\"path\":\"SYNTHETIC_PRIVATE_PATH\"}],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 542,
+      "sha256": "5884bea393e46adc64e44fd6dda24a78f06231595a368c6198945b078e5aa721",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "wrong-operation",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 1,
+        "operation": "source-cache-cleanup",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":1,\"operation\":\"source-cache-cleanup\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 440,
+      "sha256": "45bec86642a26b68831d6aa73d517a7b2b724a761ee989c27e74749548e295fa",
+      "expected_wrapper_status": "unavailable",
+      "expected_view": null
+    },
+    {
+      "name": "future-version",
+      "base": "empty",
+      "producer_report": {
+        "report_version": 2,
+        "operation": "inspect-source-cache",
+        "status": "ok",
+        "runtime_unverified": true,
+        "cleanup_authority": false,
+        "entry_payloads_read": false,
+        "entry_payloads_validated": false,
+        "source_freshness_verified": false,
+        "byte_basis": "apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim",
+        "actor": "11111111-1111-4111-8111-111111111111",
+        "generation": "22222222-2222-4222-8222-222222222222",
+        "entries": [],
+        "total_apparent_bytes": 0
+      },
+      "producer_wire_utf8": "{\"report_version\":2,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "utf8_bytes": 440,
+      "sha256": "c9267c81fadaad66ae9d02bb878d9fe05065512094b4bc434c732e59cb95495a",
+      "expected_wrapper_status": "unsupported",
+      "expected_view": null
+    }
+  ],
+  "framing_and_raw": [
+    {
+      "name": "recursive-duplicate",
+      "wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "expected": "unavailable",
+      "utf8_bytes": 454,
+      "sha256": "6a05629cf112e48622ba447dcea280e373166329d6e39ede352ee130a580ef8f"
+    },
+    {
+      "name": "nested-duplicate",
+      "wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[{\"document\":\"00000000-0000-4000-8000-000000000001\",\"apparent_bytes\":0,\"apparent_bytes\":0}],\"total_apparent_bytes\":0}\n",
+      "expected": "unavailable",
+      "utf8_bytes": 529,
+      "sha256": "b41200bacf956d1c888fb12bdb660049816a5e62b784aecd445544ff0380ce0c"
+    },
+    {
+      "name": "two-reports",
+      "wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}\n",
+      "expected": "unavailable",
+      "utf8_bytes": 880,
+      "sha256": "f5eeab9138ba94451a68ccc8f06e520e5fd4931b70949a4ef3581c90c038ce35"
+    },
+    {
+      "name": "no-final-newline",
+      "wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}",
+      "expected": "unavailable",
+      "utf8_bytes": 439,
+      "sha256": "304c3c1ce8df8c248b4084a217259a74d4bf52549259debfbebccb9682423890"
+    },
+    {
+      "name": "exact-8192-padded-report",
+      "wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \n",
+      "expected": "reported",
+      "utf8_bytes": 8192,
+      "sha256": "b3beb4dccf9d5772e66f5dd2ddea71ccec13287f3d23a0f8d16bce55009c3551"
+    },
+    {
+      "name": "over-8193-padded-report",
+      "wire_utf8": "{\"report_version\":1,\"operation\":\"inspect-source-cache\",\"status\":\"ok\",\"runtime_unverified\":true,\"cleanup_authority\":false,\"entry_payloads_read\":false,\"entry_payloads_validated\":false,\"source_freshness_verified\":false,\"byte_basis\":\"apparent-file-length-per-owned-slot; no-allocated-or-reclaimable-claim\",\"actor\":\"11111111-1111-4111-8111-111111111111\",\"generation\":\"22222222-2222-4222-8222-222222222222\",\"entries\":[],\"total_apparent_bytes\":0}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         \n",
+      "expected": "unavailable",
+      "utf8_bytes": 8193,
+      "sha256": "0165dbcaa9ce3b5c3b94e2a28cd9f3f5f14600bcdae2ec711d82996ad05adc4e"
+    },
+    {
+      "name": "invalid-utf8",
+      "hex": "ff0a",
+      "expected": "unavailable",
+      "utf8_bytes": 2,
+      "sha256": "e4688624e5f1ad0629505e6768e3bb36244f2f3e33e751215afa820334a76ed3"
+    },
+    {
+      "name": "BOM-not-silently-stripped",
+      "hex": "efbbbf7b227265706f72745f76657273696f6e223a312c226f7065726174696f6e223a22696e73706563742d736f757263652d6361636865222c22737461747573223a226f6b222c2272756e74696d655f756e7665726966696564223a747275652c22636c65616e75705f617574686f72697479223a66616c73652c22656e7472795f7061796c6f6164735f72656164223a66616c73652c22656e7472795f7061796c6f6164735f76616c696461746564223a66616c73652c22736f757263655f66726573686e6573735f7665726966696564223a66616c73652c22627974655f6261736973223a226170706172656e742d66696c652d6c656e6774682d7065722d6f776e65642d736c6f743b206e6f2d616c6c6f63617465642d6f722d7265636c61696d61626c652d636c61696d222c226163746f72223a2231313131313131312d313131312d343131312d383131312d313131313131313131313131222c2267656e65726174696f6e223a2232323232323232322d323232322d343232322d383232322d323232323232323232323232222c22656e7472696573223a5b5d2c22746f74616c5f6170706172656e745f6279746573223a307d0a",
+      "expected": "unavailable",
+      "utf8_bytes": 443,
+      "sha256": "2dff027992980e2cf0c16ddb33efd8d93f533ce182746664d867ef7486f32023"
+    }
+  ],
+  "reference_source": "Accepted Docs96c7c44293f91ac10c5f68781065e8fd28fdfbb8 vectors; independent synthetic input, no producer execution."
+}

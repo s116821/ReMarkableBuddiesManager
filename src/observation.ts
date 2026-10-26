@@ -23,6 +23,7 @@ export class ConnectionController {
   private identity: string | null = null;
   private disposed = false;
   private cancellation: Promise<unknown> = Promise.resolve();
+  private readonly observations = new Set<Promise<ObservationResult>>();
   private adapter: ObservationAdapter;
   private changed: (state: ConnectionState) => void;
   private pollMs: number;
@@ -40,8 +41,12 @@ export class ConnectionController {
   }
   private async read(generation: number) {
     // connect() shows explicit progress; scheduled reads retain the last verified sample.
+    if (this.disposed || generation !== this.generation) return;
+    let pending: Promise<ObservationResult> | null = null;
     try {
-      const result = await this.adapter.observe();
+      pending = this.adapter.observe();
+      this.observations.add(pending);
+      const result = await pending;
       if (this.disposed || generation !== this.generation) return;
       if (result.contract_version !== 1 || (result.status === 'observed') !== !!result.observation) throw new Error('Invalid host result');
       const identity = result.observation ? `${result.observation.connection_id}:${result.observation.boot_id}` : null;
@@ -54,6 +59,8 @@ export class ConnectionController {
       // Any failure stops observations. Reattachment requires an explicit user action.
     } catch {
       if (!this.disposed && generation === this.generation) this.update({ status: 'observation-unavailable', observation: null, checkedAt: null });
+    } finally {
+      if (pending) this.observations.delete(pending);
     }
   }
   private stop() {
@@ -63,6 +70,23 @@ export class ConnectionController {
     this.cancellation = this.cancellation.then(() => this.adapter.cancel()).catch(() => undefined);
   }
   async pause() { this.stop(); await this.cancellation; }
+  async pauseObservation() {
+    // Local polling quiescence only: a global cancel could revoke another owner.
+    this.generation++;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    // Include queued host invocations, not just already-dispatched observations.
+    const sample = this.state.observation, pending = [...this.observations];
+    const results = await Promise.allSettled(pending);
+    await this.cancellation;
+    // An adapter timeout/abort is not successful quiescence of a queued read.
+    for (const result of results) {
+      if (result.status !== 'fulfilled' || result.value.contract_version !== 1 || result.value.status !== 'observed' || !result.value.observation ||
+          sample && (result.value.observation.connection_id !== sample.connection_id || result.value.observation.boot_id !== sample.boot_id)) {
+        throw new Error('Observation did not quiesce');
+      }
+    }
+  }
   disconnect() { this.stop(); this.identity = null; this.update({ status: 'cancelled', observation: null, checkedAt: null }); }
   dispose() { this.disposed = true; this.stop(); }
 }

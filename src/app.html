@@ -474,6 +474,21 @@
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
     <p class="mt-4 text-sm text-muted">Backup browsing and tablet restore are not available yet. Signing in does not change tablet settings or back up data.</p>
   </section>
+  <section class="ui-panel my-6" aria-labelledby="source-cache-title">
+    <h2 id="source-cache-title">Source-cache slot inventory</h2>
+    <p class="text-sm text-muted">Read-only metadata for derived source-cache slots. Contents are unread and unvalidated; source freshness and runtime remain unverified. This list grants no cleanup permission.</p>
+    <button class="ui-button ui-button-primary mt-3" type="button" (click)="inspectSourceCache()" [disabled]="!canInspectSourceCache()">Inspect source-cache slots</button>
+    @if (cacheInventory().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopSourceCache()">Stop waiting for cache inventory</button> }
+    <p class="mt-3" role="status" data-testid="source-cache-status">{{ cacheInventory().status }}</p>
+    @if (cacheInventory().checkedAt) { <p class="text-sm text-muted">Snapshot from explicit inspection at {{ cacheInventory().checkedAt }}</p> }
+    @if (cacheInventory().view; as view) {
+      @if (view.status === 'ok') {
+        <p data-testid="source-cache-total">{{ bytes(view.total_apparent_bytes!) }} apparent file length in this namespace</p>
+        <p class="text-sm text-muted">These sizes are neither allocated nor reclaimable space. Do not add them to the aggregate owned-data total. Empty or corrupt slot contents may still appear as metadata.</p>
+        @for (entry of view.entries; track entry.document) { <div class="mt-3" data-testid="source-cache-entry"><p class="font-mono break-all">{{ entry.document }}</p><p>{{ bytes(entry.apparent_bytes) }} apparent file length</p></div> }
+      }
+    }
+  </section>
   <section class="ui-panel my-6" aria-labelledby="owned-title">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <h2 id="owned-title">Buddy-owned data</h2>

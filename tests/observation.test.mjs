@@ -162,3 +162,10 @@ test('supervisor cancels and bounds an actual owned stalled child without publis
     assert.equal(bounded.active, null);
   } finally { await rm(root, { recursive: true }); }
 });
+test('local observation pause waits for queued invocation and suppresses late reply without any cancel',async()=>{
+ let complete,entered,reads=0,cancels=0;const gate=new Promise(r=>{entered=r;}),controller=new ConnectionController({observe:()=>++reads===1?Promise.resolve(observed(observation)):new Promise(r=>{complete=r;entered();}),cancel:async()=>{cancels++;return cancelled();}},()=>{},1);
+ await controller.connect();await gate;const before=cancels,sample=controller.state;let settled=false;const pause=controller.pauseObservation().then(()=>{settled=true;});await Promise.resolve();assert.equal(settled,false);assert.equal(cancels,before);complete(observed({...observation,firmware:'LATE'}));await pause;assert.equal(controller.state,sample);assert.equal(cancels,before);await controller.pauseObservation();assert.equal(cancels,before);await controller.pause();assert.equal(cancels,before+1);await controller.pause();assert.equal(cancels,before+2,'old consumers retain ordinary cancellation behavior');controller.dispose();
+});
+test('local observation pause refuses a queued adapter abort instead of dispatching from a cached observation',async()=>{
+ let finish,entered,reads=0;const gate=new Promise(r=>{entered=r;}),controller=new ConnectionController({observe:()=>++reads===1?Promise.resolve(observed(observation)):new Promise(r=>{finish=r;entered();}),cancel:cancelled},()=>{},1);await controller.connect();await gate;const pause=controller.pauseObservation();finish({contract_version:1,status:'unconfigured',observation:null});await assert.rejects(pause,/did not quiesce/);assert.equal(controller.state.observation,observation);controller.dispose();
+});
