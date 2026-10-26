@@ -101,12 +101,33 @@
     @if (!host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="credential-reference-title">
+    <h2 id="credential-reference-title">Saved credential reference</h2>
+    @if (!host.credentialReference) { <p class="ui-warning">This Manager host does not support saved-reference editing.</p> }
+    <p class="text-sm text-muted">Choose the saved model credential reference. This does not install or remove a credential file, verify authentication or revoke access. Runtime activation remains unverified. Reference and file changes are separate operations.</p>
+    <p role="status" class="mt-3" data-testid="credential-reference-status">{{ credential().status }}</p>
+    <button class="ui-button ui-button-secondary mt-3" type="button" (click)="beginCredential()" [disabled]="!canBeginCredential()">Begin saved credential reference edit</button>
+    @if (credential().view?.current; as current) { <p class="my-3 text-sm">Saved reference: {{ current.model_credential.present ? 'Present — name hidden' : current.model_credential.origin === 'declared-null' ? 'Explicitly empty' : 'Default — no declaration' }}</p> }
+    @if (credential().view?.state === 'ready' && !credential().busy) {
+      <label class="mt-3 block" for="credential-reference-action">Reference action</label>
+      <select id="credential-reference-action" class="ui-field" [value]="credential().actions.model_credential" (change)="credentialAction($event)"><option value="keep">Keep</option><option value="replace">Set new private reference</option><option value="clear">Clear declaration</option></select>
+      @if (credential().actions.model_credential === 'replace') {
+        <label class="mt-3 block" for="credential-reference-name">New private reference name</label>
+        <textarea id="credential-reference-name" class="ui-field block w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="credentialText()" (beforeinput)="beforeCredential($event)" (input)="inputCredential($event)" (paste)="pasteCredential($event)"></textarea>
+        <p class="text-sm text-muted">Use 1–80 letters, digits, hyphens or underscores. Exact case is preserved; whitespace and line endings are not removed.</p>
+      }
+      <button class="ui-button ui-button-primary mt-3" type="button" (click)="saveCredential()" [disabled]="!credentialCanSave()">Save credential reference</button>
+    }
+    @if (credential().busy || credential().view?.state === 'ready') { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopCredential()">Stop credential reference wait</button> }
+    @for (record of credential().retained; track record.reference; let n=$index) { <p class="ui-warning mt-3" data-testid="credential-reference-retained">An original reference save may have run. This is separate from any credential-file uncertainty.</p><button class="ui-button ui-button-secondary my-2" type="button" (click)="checkCredential(record)" [disabled]="!canCheckCredential(record)">Check original reference save {{ n+1 }}</button> }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="memory-settings-title">
     <h2 id="memory-settings-title">Saved memory declarations</h2>
     @if (!host.memorySettings) { <p class="ui-warning">This Manager host does not support saved-memory editing.</p> }
     <p class="text-sm text-muted">Edit saved enabled and profile declarations. This does not create profiles, change membership or activate automatic Reader memory. Runtime activation remains unverified. Saving disabled does not disable explicit maintenance.</p>
     <p role="status" class="mt-3" data-testid="memory-settings-status">{{ memorySettings().status }}</p>
-    <button class="ui-button ui-button-secondary mt-3" type="button" (click)="beginSavedMemory()" [disabled]="!host.memorySettings || !profile().savedConfigurationProbe || memorySettings().busy || research().busy || model().busy || basic().busy || forget().busy || archiveExport().busy">Begin saved memory edit</button>
+    <button class="ui-button ui-button-secondary mt-3" type="button" (click)="beginSavedMemory()" [disabled]="!host.memorySettings || !profile().savedConfigurationProbe || credential().busy || memorySettings().busy || research().busy || model().busy || basic().busy || forget().busy || archiveExport().busy">Begin saved memory edit</button>
     @if (memorySettings().view?.current; as current) {
       <dl class="my-3 text-sm"><dt>Saved enabled</dt><dd>{{ current.enabled.value ? 'Enabled' : 'Disabled' }} · {{ current.enabled.origin }}</dd><dt>Saved profile</dt><dd>{{ current.profile.present ? 'Present — value hidden' : current.profile.origin === 'declared-null' ? 'Explicitly empty' : 'Default — no declaration' }}</dd></dl>
     }
