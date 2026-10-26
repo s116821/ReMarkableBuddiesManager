@@ -100,7 +100,8 @@ export class ModelCredentialController {
  }
  async stop(adapter:ModelCredentialAdapter){
   const g=++this.generation,reference=this.state.reference,original=this.original,pending=this.pendingAction;this.pendingAction=null;this.resetDraft();if(this.possible)this.keepOriginal();this.publish({busy:true,actions:empty(),valid:false,status:'Stopping credential file wait; replacement text cleared...'});const owns=()=>g===this.generation&&this.state.reference===reference&&this.original===original;
-  try{if(reference&&pending!=='retained'){const request={action:'cancel' as const,reference},value=await adapter.modelCredential(request);if(!owns())return;parseModelCredentialResult(value,request,validateResult);if(!owns())return;if(['not-dispatched','invalidated'].includes(value.model_credential.state)){this.possible=false;this.original=null;this.publish({retained:this.state.retained.filter(x=>x.reference!==reference)});}}}catch{if(!owns())return;}
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{if(reference&&pending!=='retained'){const request={action:'cancel' as const,reference},value=await Promise.race([adapter.modelCredential(request),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Model credential stop wait expired')),14000);})]);if(!owns())return;parseModelCredentialResult(value,request,validateResult);if(!owns())return;if(['not-dispatched','invalidated'].includes(value.model_credential.state)){this.possible=false;this.original=null;this.publish({retained:this.state.retained.filter(x=>x.reference!==reference)});}}}catch{if(!owns())return;}finally{clearTimeout(timer);}
   if(g===this.generation&&this.state.reference===reference)this.publish({busy:false,view:null,status:this.possible?'Model credential file save outcome unknown - stopping is not rollback':pending==='retained'?'Retained credential file read stopped':'Model credential file editor invalidated - no save was requested',uncertain:this.possible});
  }
 }
