@@ -82,7 +82,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
     if(url.pathname==='/manager-model-credential'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
       const chunks=[];let bytes=0,request;
-      try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384)return refuse(413);chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseModelCredentialRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
+      try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384){chunk.fill(0);return refuse(413);}chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseModelCredentialRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
       try{const context=modelCredentialContext(request),pending=modelCredential.request(request);request=null;const value=parseModelCredentialResult(await pending,context,validateResult);modelCredential.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
     }
     if(url.pathname==='/manager-credential-reference'){
