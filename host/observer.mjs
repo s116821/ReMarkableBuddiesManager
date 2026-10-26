@@ -118,6 +118,7 @@ export class WiredObserver {
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (basic||model||archive||research||memorySettings||credential||modelCredential)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
       child.stdout.on('data', data => {
+        if(modelCredential&&(oversized||expired||generation!==this.generation||outputBytes+data.length>24576)){data.fill(0);oversized=true;child.kill('SIGKILL');return;}
         chunks.push(data); outputBytes += data.length;
         if (outputBytes > (basic || model || archive || research || memorySettings || credential || modelCredential ? 24576 : configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
