@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { startHelper } from '../host/browser-helper.mjs';
-import { ownedReport, tablet, inspection } from './fixtures/owned-report.mjs';
+import { ownedReport, tablet, inspection, feedbackReportVectors } from './fixtures/owned-report.mjs';
 const root = await mkdtemp(path.join(os.tmpdir(), 'manager-owned-ui-'));
 await mkdir('test-results', { recursive: true });
 const api = 'https://api.github.com/repos/s116821/ReMarkableBuddies/releases/latest';
@@ -42,6 +42,30 @@ async function verify(page, publish, host) {
   await page.screenshot({ path: `test-results/owned-${host}-partial.png`, fullPage: true });
   await check(inspection(ownedReport('complete')), /^Inspection complete$/);
   assert.equal(await page.getByTestId('complete-bytes').textContent(), '1,024 bytes');
+  await check(inspection(feedbackReportVectors.feedback3), /^Inspection complete$/);
+  const feedback = page.getByTestId('domain-unassociated-feedback');
+  assert.match(await feedback.textContent(), /1 observed records · 128 bytes/);
+  assert.equal(await feedback.getByRole('button').count(), 0);
+  assert.match(await feedback.textContent(), /Historical observations only/);
+  assert.match(await page.getByTestId('generation-formats').textContent(), /current storage format: 3/);
+  assert.match(await page.getByTestId('generation-formats').textContent(), /retained storage formats: 1/);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  await page.screenshot({ path: `test-results/owned-${host}-report2.png`, fullPage: true });
+  const sparse = { ...feedbackReportVectors.invalid_feature3, current_generation_format: null,
+    retained_generation_formats: [], observed_domains: {}, issues: { 'unsupported-generation': 1 } };
+  await check(inspection(sparse), /^Inspection partial$/);
+  assert.match(await feedback.textContent(), /Not inspected \/ no category observation/);
+  assert.doesNotMatch(await feedback.textContent(), /0 observed records/);
+  assert.match(await page.getByTestId('generation-formats').textContent(), /Not inspected \/ unknown/);
+  assert.match(await page.getByTestId('complete-bytes').textContent(), /inventory incomplete/);
+  await check(inspection({ ...feedbackReportVectors.feedback3, observed_domains: {} }), /^Owned-data report unavailable$/);
+  assert.equal(await feedback.count(), 0);
+  await check(inspection(ownedReport('complete')), /^Inspection complete$/);
+  assert.equal(await feedback.count(), 0);
+  assert.equal(await page.getByTestId('generation-formats').count(), 0);
   await check(inspection(ownedReport('busy')), /^Inspection busy$/);
   await page.getByText(/No service was stopped/).waitFor();
   for (const status of ['unavailable', 'unsupported']) await check(inspection(ownedReport(status)), new RegExp(`^Inspection ${status}$`));
@@ -58,7 +82,7 @@ async function verify(page, publish, host) {
   assert.equal(await page.getByTestId('inspection-status').textContent(), 'Not inspected');
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
-  console.log(`${host}: partial/complete/busy/unavailable/unsupported/future/malformed/session-change/disconnect and 390/1280 layout pass`);
+  console.log(`${host}: report1/report2-complete/sparse/readonly/formats/partial/busy/unavailable/unsupported/future/malformed/session-change/disconnect and 390/1280 layout pass`);
 }
 let value = inspection(ownedReport());
 const browser = await chromium.launch();
