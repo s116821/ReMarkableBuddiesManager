@@ -136,6 +136,9 @@ export class App implements OnDestroy {
     { key: 'subject-memory', label: 'Subject memory', consequence: 'Stored memory records; presence does not establish current selected membership.' },
     { key: 'handwriting', label: 'Handwriting learning', consequence: 'Buddy-owned learning records; native ink remains separate.' },
   ];
+  readonly feedbackDomainCategories = [...this.domainCategories,
+    { key: 'unassociated-feedback', label: 'Unassociated feedback history', consequence: 'Historical observations only; counts do not establish display, current operation state or cleanup permission.' },
+  ];
   issues() { return Object.entries(this.owned().report?.issues ?? {}).map(([code, count]) => ({ label: code.replaceAll('-', ' '), count })); }
   bytes(value: number) { return `${new Intl.NumberFormat().format(value)} bytes`; }
   readonly blockers = INSTALL_BLOCKERS;

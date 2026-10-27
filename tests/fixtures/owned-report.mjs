@@ -20,3 +20,304 @@ export const tablet = { connection_id: 'a'.repeat(64), boot_id: '11111111-1111-1
   firmware: '3.28.0.172', firmware_conflict: false, architecture: 'armv7l', installed_version: null, provenance: 'unknown',
   service: { LoadState: 'not-found', ActiveState: 'inactive', SubState: 'dead' } };
 export const inspection = report => ({ contract_version: 1, status: 'observed', observation: tablet, inspection: { status: 'reported', report } });
+
+// Exact synthetic report vectors from accepted Docs87860; not producer execution evidence.
+export const feedbackReportVectors = {
+  "legacy1": {
+    "report_version": 1,
+    "status": "complete",
+    "owner_actor": "11111111-1111-4111-8111-111111111111",
+    "current_generation": "22222222-2222-4222-8222-222222222222",
+    "observed_files": 4,
+    "observed_apparent_bytes": 2000,
+    "complete_apparent_bytes": 2000,
+    "storage": {
+      "structural": {
+        "files": 3,
+        "apparent_bytes": 1872
+      },
+      "record-metadata": {
+        "files": 1,
+        "apparent_bytes": 128
+      }
+    },
+    "observed_domains": {
+      "conversation": {
+        "observed_record_files": 1,
+        "observed_record_bytes": 128,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "source": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "export-association": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "subject-memory": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "handwriting": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      }
+    },
+    "domain_accounting_complete": true,
+    "cache_inspected": false,
+    "shared_media_files": 0,
+    "shared_media_apparent_bytes": 0,
+    "issues": {},
+    "byte_basis": "apparent-file-length-per-owned-path; data-and-cache-only; no-allocated-or-reclaimable-claim",
+    "reference_totals_additive": false,
+    "media_content_verified": false,
+    "logical_liveness_evaluated": false,
+    "credentials_inspected": false,
+    "native_documents_inspected": false,
+    "lease_identity_check": "device-inode",
+    "excluded_scopes": [
+      "credentials",
+      "native-documents",
+      "legacy-cache",
+      "external-transient-diagnostics"
+    ]
+  },
+  "feedback3": {
+    "report_version": 2,
+    "status": "complete",
+    "owner_actor": "11111111-1111-4111-8111-111111111111",
+    "current_generation": "22222222-2222-4222-8222-222222222222",
+    "observed_files": 4,
+    "observed_apparent_bytes": 2000,
+    "complete_apparent_bytes": 2000,
+    "storage": {
+      "structural": {
+        "files": 3,
+        "apparent_bytes": 1872
+      },
+      "record-metadata": {
+        "files": 1,
+        "apparent_bytes": 128
+      }
+    },
+    "observed_domains": {
+      "conversation": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "source": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "export-association": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "subject-memory": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "handwriting": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "unassociated-feedback": {
+        "observed_record_files": 1,
+        "observed_record_bytes": 128,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      }
+    },
+    "domain_accounting_complete": true,
+    "cache_inspected": false,
+    "shared_media_files": 0,
+    "shared_media_apparent_bytes": 0,
+    "issues": {},
+    "byte_basis": "apparent-file-length-per-owned-path; data-and-cache-only; no-allocated-or-reclaimable-claim",
+    "reference_totals_additive": false,
+    "media_content_verified": false,
+    "logical_liveness_evaluated": false,
+    "credentials_inspected": false,
+    "native_documents_inspected": false,
+    "lease_identity_check": "device-inode",
+    "excluded_scopes": [
+      "credentials",
+      "native-documents",
+      "legacy-cache",
+      "external-transient-diagnostics"
+    ],
+    "current_generation_format": 3,
+    "retained_generation_formats": [
+      1
+    ]
+  },
+  "invalid_feature3": {
+    "report_version": 2,
+    "status": "partial",
+    "owner_actor": "11111111-1111-4111-8111-111111111111",
+    "current_generation": "22222222-2222-4222-8222-222222222222",
+    "observed_files": 4,
+    "observed_apparent_bytes": 2000,
+    "complete_apparent_bytes": null,
+    "storage": {
+      "structural": {
+        "files": 3,
+        "apparent_bytes": 1872
+      },
+      "record-metadata": {
+        "files": 1,
+        "apparent_bytes": 128
+      }
+    },
+    "observed_domains": {
+      "conversation": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "source": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "export-association": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "subject-memory": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "handwriting": {
+        "observed_record_files": 0,
+        "observed_record_bytes": 0,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      },
+      "unassociated-feedback": {
+        "observed_record_files": 1,
+        "observed_record_bytes": 128,
+        "declared_media_bytes": 0,
+        "present_referenced_media_bytes": 0,
+        "missing_references": 0,
+        "uninspected_references": 0,
+        "size_mismatched_references": 0,
+        "omitted_references": 0
+      }
+    },
+    "domain_accounting_complete": false,
+    "cache_inspected": false,
+    "shared_media_files": 0,
+    "shared_media_apparent_bytes": 0,
+    "issues": {
+      "invalid-metadata": 1
+    },
+    "byte_basis": "apparent-file-length-per-owned-path; data-and-cache-only; no-allocated-or-reclaimable-claim",
+    "reference_totals_additive": false,
+    "media_content_verified": false,
+    "logical_liveness_evaluated": false,
+    "credentials_inspected": false,
+    "native_documents_inspected": false,
+    "lease_identity_check": "device-inode",
+    "excluded_scopes": [
+      "credentials",
+      "native-documents",
+      "legacy-cache",
+      "external-transient-diagnostics"
+    ],
+    "current_generation_format": 3,
+    "retained_generation_formats": [
+      1
+    ]
+  }
+};
