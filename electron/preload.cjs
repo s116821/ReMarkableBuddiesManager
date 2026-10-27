@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   memorySettings: (...args) => args.length===1?ipcRenderer.invoke('manager:memorySettings',args[0]):Promise.reject(new Error('Memory settings arity refused')),
   credentialReference: (...args) => args.length===1?ipcRenderer.invoke('manager:credentialReference',args[0]):Promise.reject(new Error('Credential reference arity refused')),
   modelCredential: (...args) => args.length===1?ipcRenderer.invoke('manager:modelCredential',args[0]):Promise.reject(new Error('Model credential arity refused')),
+  sourceCacheCleanup: (...args) => args.length===1?ipcRenderer.invoke('manager:sourceCacheCleanup',args[0]):Promise.reject(new Error('Cache cleanup arity refused')),
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
   modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
   basicSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:basicSettings',args[0]):Promise.reject(new Error('Basic settings arity refused')),
