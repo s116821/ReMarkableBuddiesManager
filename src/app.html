@@ -503,6 +503,22 @@
     }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="conversation-inventory-title">
+    <h2 id="conversation-inventory-title">Conversations</h2>
+    <p class="text-sm text-muted">Read-only Buddy conversation IDs from bounded owned-history inspection. Persisted payloads are read; eligibility is not evaluated. IDs do not establish native page bindings, runtime health or reclaimable space. No conversation is selected or changed.</p>
+    <button class="ui-button ui-button-primary mt-3" type="button" (click)="inspectConversations()" [disabled]="!canInspectConversations()">Inspect conversation IDs</button>
+    @if (conversationInventory().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopConversations()">Stop waiting for conversation IDs</button> }
+    <p class="mt-3" role="status" data-testid="conversation-inventory-status">{{ conversationInventory().status }}</p>
+    @if (conversationInventory().checkedAt) { <p class="text-sm text-muted">Explicit snapshot at {{ conversationInventory().checkedAt }}; current service and page state remain unverified.</p> }
+    @if (conversationInventory().view; as view) {
+      @if (view.status === 'complete') {
+        <p data-testid="conversation-inventory-count">{{ view.candidate_count }} current supported conversation IDs observed</p>
+        @for (id of view.candidates; track id) { <p class="mt-3 font-mono break-all" data-testid="conversation-inventory-id">{{ id }}</p> }
+        <p class="text-sm text-muted">An empty result does not mean storage or retained history is empty. Later management requires separate explicit selection and a fresh inspection.</p>
+      }
+    }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="source-cache-title">
     <h2 id="source-cache-title">Source-cache slot inventory</h2>
     <p class="text-sm text-muted">Read-only metadata for derived source-cache slots. Contents are unread and unvalidated; source freshness and runtime remain unverified. This list grants no cleanup permission.</p>

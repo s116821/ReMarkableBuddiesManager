@@ -75,7 +75,9 @@ try {
     assert.equal(await page.evaluate(() => window.managerHost.memorySettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.credentialReference({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSourceCache({},{}).then(()=>'accepted',()=>'refused')),'refused');
+    assert.equal(await page.evaluate(() => window.managerHost.inspectConversations({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSourceCache({path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
+    assert.equal(await page.evaluate(() => window.managerHost.inspectConversations({path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.modelCredential({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.modelCredential({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.modelSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
@@ -83,7 +85,7 @@ try {
     assert.equal(await page.evaluate(() => window.managerHost.basicSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.researchSettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.researchSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
-    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'credentialReference', 'downloads', 'driveAuth', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'inspectSourceCache', 'kind', 'memoryForget', 'memoryQuery', 'memorySettings', 'modelCredential', 'modelSettings', 'observe', 'ordinaryExport', 'personalization', 'researchSettings', 'sourceCacheCleanup', 'transport']);
+    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'credentialReference', 'downloads', 'driveAuth', 'inspectConversations', 'inspectMemory', 'inspectOwned', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'inspectSourceCache', 'kind', 'memoryForget', 'memoryQuery', 'memorySettings', 'modelCredential', 'modelSettings', 'observe', 'ordinaryExport', 'personalization', 'researchSettings', 'sourceCacheCleanup', 'transport']);
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({}, {}).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSavedMode({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');

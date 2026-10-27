@@ -143,6 +143,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install -r host/requirements.txt
+          python -m unittest discover -s tests/conversation_inventory -v
           xvfb-run -a npm run test:hosts
           xvfb-run -a npm run test:package
           xvfb-run -a npm run test:wired-hosts
@@ -177,11 +178,13 @@ jobs:
           xvfb-run -a npm run test:credential-reference-hosts
           xvfb-run -a npm run test:model-credential-hosts
           xvfb-run -a npm run test:source-cache-inventory-hosts
+          xvfb-run -a npm run test:conversation-inventory-hosts
           xvfb-run -a npm run test:source-cache-cleanup-hosts
           xvfb-run -a npm run test:memory-settings-hosts -- --packaged
           xvfb-run -a npm run test:credential-reference-hosts -- --packaged
           xvfb-run -a npm run test:model-credential-hosts -- --packaged
           xvfb-run -a npm run test:source-cache-inventory-hosts -- --packaged
+          xvfb-run -a npm run test:conversation-inventory-hosts -- --packaged
           xvfb-run -a npm run test:source-cache-cleanup-hosts -- --packaged
           xvfb-run -a npm run test:ordinary-export-hosts
           xvfb-run -a npm run test:ordinary-export-hosts -- --packaged
@@ -222,11 +225,13 @@ jobs:
           npm run test:credential-reference-hosts
           npm run test:model-credential-hosts
           npm run test:source-cache-inventory-hosts
+          npm run test:conversation-inventory-hosts
           npm run test:source-cache-cleanup-hosts
           npm run test:memory-settings-hosts -- --packaged
           npm run test:credential-reference-hosts -- --packaged
           npm run test:model-credential-hosts -- --packaged
           npm run test:source-cache-inventory-hosts -- --packaged
+          npm run test:conversation-inventory-hosts -- --packaged
           npm run test:source-cache-cleanup-hosts -- --packaged
           npm run test:ordinary-export-hosts
           npm run test:ordinary-export-hosts -- --packaged
@@ -238,6 +243,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install -r host/requirements.txt
+          python -m unittest discover -s tests/conversation_inventory -v
           python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
           python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
       - uses: actions/download-artifact@v4

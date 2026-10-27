@@ -30,20 +30,23 @@ app.whenReady().then(async () => {
   const {ModelCredentialHost}=await import(pathToFileURL(path.join(hostRoot,'model-credential.mjs')).href);
   const {parseModelCredentialRequest,parseModelCredentialResult,modelCredentialContext}=await import(pathToFileURL(path.join(hostRoot,'model-credential-protocol.mjs')).href);
   const {SourceCacheInventoryHost}=await import(pathToFileURL(path.join(hostRoot,'source-cache-inventory.mjs')).href);
+  const {ConversationInventoryHost}=await import(pathToFileURL(path.join(hostRoot,'conversation-inventory.mjs')).href);
   const {parseSourceCacheRequest,parseSourceCacheResult}=await import(pathToFileURL(path.join(hostRoot,'source-cache-inventory-protocol.mjs')).href);
+  const {parseConversationRequest,parseConversationResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-inventory-protocol.mjs')).href);
   const {SourceCacheCleanupHost}=await import(pathToFileURL(path.join(hostRoot,'source-cache-cleanup.mjs')).href);
   const {parseCleanupRequest,parseCleanupResult}=await import(pathToFileURL(path.join(hostRoot,'source-cache-cleanup-protocol.mjs')).href);
-  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup;
-  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
-  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
-  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
-  archive=new OrdinaryExportHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
-  research=new ResearchSettingsHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  memorySettings=new MemorySettingsHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  credential=new CredentialReferenceHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  modelCredential=new ModelCredentialHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();sourceCache?.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  sourceCache=new SourceCacheInventoryHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup?.invalidate();modelCredential.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
-  cacheCleanup=new SourceCacheCleanupHost({observer:rawObserver,io,beforeIO:()=>{sourceCache.invalidate();modelCredential.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  const io=new MaintenanceIO();let basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations;
+  const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();basic?.invalidate();model?.invalidate();archive?.invalidate();} });
+  basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();model?.invalidate();archive?.invalidate();}});
+  model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();archive?.invalidate();}});
+  archive=new OrdinaryExportHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();research?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();}});
+  research=new ResearchSettingsHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();memorySettings?.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  memorySettings=new MemorySettingsHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();credential?.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  credential=new CredentialReferenceHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();modelCredential?.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  modelCredential=new ModelCredentialHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();sourceCache?.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  sourceCache=new SourceCacheInventoryHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();cacheCleanup?.invalidate();modelCredential.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  cacheCleanup=new SourceCacheCleanupHost({observer:rawObserver,io,beforeIO:()=>{conversations?.invalidate();sourceCache.invalidate();modelCredential.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
+  conversations=new ConversationInventoryHost({observer:rawObserver,io,beforeIO:()=>{cacheCleanup.invalidate();sourceCache.invalidate();modelCredential.invalidate();credential.invalidate();memorySettings.invalidate();research.invalidate();forget.invalidate();basic.invalidate();model.invalidate();archive.invalidate();}});
   const observer = forget.wrap();
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
@@ -91,6 +94,11 @@ app.whenReady().then(async () => {
     if(!authorized(event,[])||args.length!==1)throw Error('Cache cleanup caller refused');
     let request=parseCleanupRequest(args[0]);args.length=0;
     try{const context=request,pending=cacheCleanup.request(request);request=null;const value=parseCleanupResult(await pending,context,validateResult);return cacheCleanup.assertCurrent(value);}finally{request=null;}
+  });
+  ipcMain.handle('manager:inspectConversations',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Conversation inventory caller refused');
+    let request=parseConversationRequest(args[0]);args.length=0;
+    try{const context=request,pending=conversations.request(request);request=null;const value=parseConversationResult(await pending,context,validateResult);return conversations.assertCurrent(value);}finally{request=null;}
   });
   ipcMain.handle('manager:inspectSourceCache',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Source cache inventory caller refused');
