@@ -27,7 +27,7 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   await page.getByRole('button', { name: 'Cancel', exact: true }).click(); await status.filter({ hasText: 'cancelled' }).waitFor();
   await publish(connected()); await sign.click(); await status.filter({ hasText: 'Google Drive connected' }).waitFor();
   assert.equal(await page.getByTestId('drive-account').textContent(), 'fixture@example.invalid');
-  await page.getByText(/Backup browsing and tablet restore are not available yet/).waitFor();
+  await page.getByText('Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.', { exact: true }).waitFor();
   for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
   await page.locator('#drive-title').scrollIntoViewIfNeeded(); await capture();
   page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Remove Google access…', exact: true }).click(); assert.equal(await status.textContent(), 'Google Drive connected');
