@@ -127,3 +127,5 @@ The bounded [derived source-cache cleanup guide](docs/source-cache-cleanup.md) d
 The [ordinary archive restore guide](docs/ordinary-restore.md) covers deliberate
 additive restore of an archive already on the tablet, original-only checks and
 its existing-Store/media/configuration limits in both companions.
+
+For whole-archive checks and deliberate selected-history export in both companions, see [the archive guide](docs/selected-archives.md). Selected/cloud/replacement restore and native/runtime health remain separate.

@@ -147,6 +147,7 @@ jobs:
           python -m unittest discover -s tests/conversation_inventory -v
           python -m unittest discover -s tests/conversation_management -v
           python -m unittest discover -s tests/ordinary_restore -v
+          python -m unittest discover -s tests/selected_archive -v
           python -m unittest discover -s tests/source_cache_cleanup -v
           python -m unittest discover -s tests/ordinary_export -v
           python -m unittest discover -s tests/memory_inspection -v
