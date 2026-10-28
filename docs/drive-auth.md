@@ -2,9 +2,11 @@
 
 Owning central change: `manager-drive-auth` in ReMarkableBuddiesDocs. This is
 explicit sign-in/credential lifecycle on the computer running the local helper
-or Electron. It works without a connected tablet. Backup browsing, publication,
-restore, group selection and tablet credential/configuration installation remain
-separate unfinished contracts. Signing in does not enable them.
+or Electron. It works without a connected tablet. Cloud backup browsing and
+publication, replacement-device restore, group selection and tablet
+credential/configuration installation remain separate unfinished contracts.
+Signing in does not enable them. Ordinary local archive restore is a separate
+flow described in [the restore guide](ordinary-restore.md).
 
 Use supported Node24.21, Python3.12, and the existing Windows host requirements
 (pinned pywin32312) when running on Windows. The static browser uses the explicit
