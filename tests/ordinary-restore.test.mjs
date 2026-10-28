@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {parseRestoreRaw,RestoreUnsupported} from '../host/ordinary-restore-private.mjs';
+import {parseRestoreRequest,parseRestoreResult} from '../host/ordinary-restore-protocol.mjs';
+import {validateResult} from '../host/observation-protocol.mjs';
+const vectors=JSON.parse(readFileSync(new URL('./fixtures/ordinary-restore-reference-vectors.json',import.meta.url)));
+for(const c of vectors.raw_cases)test('restore literal raw '+c.id,()=>{const parse=()=>parseRestoreRaw(Buffer.from(c.stdout_utf8),c.selector,c.context);if(c.expect==='accept')assert.doesNotThrow(parse);else assert.throws(parse,c.expect==='unsupported'?RestoreUnsupported:Error);});
+for(const c of vectors.request_cases)test('restore literal request '+c.id,()=>{const parse=()=>parseRestoreRequest(c.request);if(c.expect==='accept')assert.doesNotThrow(parse);else assert.throws(parse);});
+for(const c of vectors.public_cases)test('restore independent literal public '+c.id,()=>{const parse=()=>parseRestoreResult(c.result,c.request,validateResult);if(c.expect==='accept')assert.doesNotThrow(parse);else assert.throws(parse);});

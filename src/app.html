@@ -472,8 +472,39 @@
       <button class="ui-button ui-button-secondary" type="button" (click)="revokeDrive()" [disabled]="!drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(drive().status)">Remove Google access…</button>
     </div>
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
-    <p class="mt-4 text-sm text-muted">Backup browsing and tablet restore are not available yet. Signing in does not change tablet settings or back up data.</p>
+    <p class="mt-4 text-sm text-muted">Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.</p>
   </section>
+  <section class="ui-panel mt-6" aria-labelledby="ordinary-restore-title">
+    <h2 id="ordinary-restore-title" class="ui-heading">Restore an archive already on this tablet</h2>
+    <p class="mt-2">Additive restore into the existing supported ordinary local Store. This does not transfer an archive, initialize a replacement tablet, restore native pages or activate portable settings or credentials.</p>
+    <label class="block mt-3" for="ordinary-restore-source">Archive path on this tablet</label>
+    <textarea id="ordinary-restore-source" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="restoreSourceText()" (beforeinput)="beforeRestoreSource($event)" (input)="updateRestoreSource($event)" (paste)="pasteRestoreSource($event)" [disabled]="ordinaryRestore().busy || restorePeerBusy()" aria-describedby="ordinary-restore-input-help"></textarea>
+    <p id="ordinary-restore-input-help" class="mt-2">Enter an explicit absolute tablet path. It clears when submitted and is not saved or shown in the preview.</p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button class="ui-button ui-button-primary" type="button" (click)="prepareRestore()" [disabled]="!canPrepareRestore()">Prepare additive restore preview</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopRestore()" [disabled]="restorePeerBusy()">Stop restore wait</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="showRestoreOriginals()">Show original restores on this computer</button>
+    </div>
+    <p class="mt-3" role="status" data-testid="ordinary-restore-status">{{ ordinaryRestore().status }}</p>
+    @if (ordinaryRestore().view?.preview; as preview) {
+      <div class="mt-3" data-testid="ordinary-restore-preview">
+        <p>Source: {{ preview.source.manifests }} manifests and {{ preview.source.objects }} objects. Media complete: {{ preview.source.complete_media ? 'yes' : 'no' }}.</p>
+        <p>Target union: {{ preview.target.manifests }} manifests and {{ preview.target.objects }} objects; {{ preview.additional_manifests }} additional manifests. Media complete: {{ preview.target.complete_media ? 'yes' : 'no' }}.</p>
+        <p>Inactive configuration snapshot included: {{ preview.target.configuration_included ? 'yes' : 'no' }}. Configuration and credentials will not be activated. Intentionally omitted media remains disclosed; native pages are separate.</p>
+        <button class="ui-button ui-button-secondary mt-3" type="button" (click)="confirmRestore()" [disabled]="!canConfirmRestore()">Confirm additive restore</button>
+      </div>
+    }
+    @if (ordinaryRestore().view?.inspection; as inspection) {
+      <p class="mt-3" data-testid="ordinary-restore-inspection">Observed target: {{ inspection.manifests }} manifests, {{ inspection.objects }} objects. Media complete: {{ inspection.complete_media ? 'yes' : 'no' }}; inactive configuration included: {{ inspection.configuration_included ? 'yes' : 'no' }}. Runtime remains unverified.</p>
+    }
+    @if (ordinaryRestore().view?.apply_outcome; as outcome) { <p class="mt-2" data-testid="ordinary-restore-history">Original Apply evidence: {{ outcome }}. A desired-state check does not prove historical publisher identity or rollback.</p> }
+    @for (record of ordinaryRestore().retained; track record.reference) {
+      <div class="mt-3" data-testid="ordinary-restore-original"><p>Earlier restore: {{ record.state }}; original Apply evidence: {{ record.apply_outcome }}. Staging may remain. Never retry that original Apply or automatically clean its stage.</p>
+        <button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkRestore(record)" [disabled]="!canCheckRestore(record)">Check original desired restore state</button>
+      </div>
+    }
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="conversation-management-title">
     <h2 id="conversation-management-title">Conversation management</h2>
     <p class="text-sm text-muted">Local logical removal preserves history, turns, source media, export associations and native pages. It does not reclaim physical space or synchronize deletion. Runtime remains unverified. The Buddy service must already be inactive; Manager does not stop it.</p>

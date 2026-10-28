@@ -123,3 +123,7 @@ install/replace/remove, confidential original checks and their bounded lifetime.
 See [source-cache slot inventory](docs/source-cache-inventory.md) for the explicit read-only metadata snapshot and its limits.
 
 The bounded [derived source-cache cleanup guide](docs/source-cache-cleanup.md) describes deliberate preview/confirmation, original-only checks and finite private custody in both hosts. Inventory remains metadata-only.
+
+The [ordinary archive restore guide](docs/ordinary-restore.md) covers deliberate
+additive restore of an archive already on the tablet, original-only checks and
+its existing-Store/media/configuration limits in both companions.
