@@ -1,0 +1,1091 @@
+{
+  "classification": "synthetic contract arithmetic; no consumer/producer/host/device execution",
+  "format": 1,
+  "producer_report_fields": [
+    "report_version",
+    "status",
+    "scope",
+    "complete",
+    "candidates",
+    "candidate_count",
+    "eligibility_evaluated",
+    "mutation_authority",
+    "native_authority",
+    "runtime_unverified",
+    "physical_reclamation",
+    "local_only",
+    "service_observation"
+  ],
+  "valid": [
+    {
+      "name": "complete-empty",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 324,
+      "sha256": "ce010848aeea2b192e89ce4c3c991ee693c78c903a11e1ea4422c272ee74722d"
+    },
+    {
+      "name": "complete-one",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 362,
+      "sha256": "04fc89acba5408971f544286178e8fc1e2ff3dbf3bf669fc7fcb67b56ddc361a"
+    },
+    {
+      "name": "complete-sixteen",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-00000000000a",
+          "00000000-0000-4000-8000-00000000000b",
+          "00000000-0000-4000-8000-00000000000c",
+          "00000000-0000-4000-8000-00000000000d",
+          "00000000-0000-4000-8000-00000000000e",
+          "00000000-0000-4000-8000-00000000000f",
+          "00000000-0000-4000-8000-000000000010"
+        ],
+        "candidate_count": 16,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\",\"00000000-0000-4000-8000-000000000002\",\"00000000-0000-4000-8000-000000000003\",\"00000000-0000-4000-8000-000000000004\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000006\",\"00000000-0000-4000-8000-000000000007\",\"00000000-0000-4000-8000-000000000008\",\"00000000-0000-4000-8000-000000000009\",\"00000000-0000-4000-8000-00000000000a\",\"00000000-0000-4000-8000-00000000000b\",\"00000000-0000-4000-8000-00000000000c\",\"00000000-0000-4000-8000-00000000000d\",\"00000000-0000-4000-8000-00000000000e\",\"00000000-0000-4000-8000-00000000000f\",\"00000000-0000-4000-8000-000000000010\"],\"candidate_count\":16,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 948,
+      "sha256": "6fdde84f1da2ed41f84d2c64a4680a089a65ae548320f06747a6694aa5a1b516"
+    },
+    {
+      "name": "too-large",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "too-large",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": null,
+        "candidate_count": null,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"too-large\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":null,\"candidate_count\":null,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 333,
+      "sha256": "3de783a6d6ee83c8d88a134304e5708920a60f460fddba843c0eb522ce844ad6"
+    },
+    {
+      "name": "unsupported",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "unsupported",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": null,
+        "candidate_count": null,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"unsupported\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":null,\"candidate_count\":null,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 335,
+      "sha256": "0bf64c0fb9e8571731d076c0da19841c33637a16fd0a1c0af894f8ed55d1a135"
+    },
+    {
+      "name": "busy",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "busy",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": null,
+        "candidate_count": null,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"busy\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":null,\"candidate_count\":null,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 328,
+      "sha256": "37f73e52ae73b50d9f542ca4fc47b56d567792f2e24762b0bf9b0c78f1d3b9e6"
+    },
+    {
+      "name": "unavailable",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "unavailable",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": null,
+        "candidate_count": null,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"unavailable\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":null,\"candidate_count\":null,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 335,
+      "sha256": "140c0759bb6cd2989e3e79a296c29891b3e1feedb8fb2b5524d49ee968b3750e"
+    },
+    {
+      "name": "conflict",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "conflict",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": null,
+        "candidate_count": null,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"conflict\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":null,\"candidate_count\":null,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 332,
+      "sha256": "bc8d14980ab17ac79901fac0a54900f6e59d1147b0318e6c10726d01041d71cd"
+    },
+    {
+      "name": "exact8192",
+      "expected": "accept",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \n",
+      "bytes": 8192,
+      "sha256": "05d33b6741fdef8acec10f663ad74737949f3775a6da0bbbc677a5108bee150d"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "seventeen",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000003",
+          "00000000-0000-4000-8000-000000000004",
+          "00000000-0000-4000-8000-000000000005",
+          "00000000-0000-4000-8000-000000000006",
+          "00000000-0000-4000-8000-000000000007",
+          "00000000-0000-4000-8000-000000000008",
+          "00000000-0000-4000-8000-000000000009",
+          "00000000-0000-4000-8000-00000000000a",
+          "00000000-0000-4000-8000-00000000000b",
+          "00000000-0000-4000-8000-00000000000c",
+          "00000000-0000-4000-8000-00000000000d",
+          "00000000-0000-4000-8000-00000000000e",
+          "00000000-0000-4000-8000-00000000000f",
+          "00000000-0000-4000-8000-000000000010",
+          "00000000-0000-4000-8000-000000000011"
+        ],
+        "candidate_count": 17,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\",\"00000000-0000-4000-8000-000000000002\",\"00000000-0000-4000-8000-000000000003\",\"00000000-0000-4000-8000-000000000004\",\"00000000-0000-4000-8000-000000000005\",\"00000000-0000-4000-8000-000000000006\",\"00000000-0000-4000-8000-000000000007\",\"00000000-0000-4000-8000-000000000008\",\"00000000-0000-4000-8000-000000000009\",\"00000000-0000-4000-8000-00000000000a\",\"00000000-0000-4000-8000-00000000000b\",\"00000000-0000-4000-8000-00000000000c\",\"00000000-0000-4000-8000-00000000000d\",\"00000000-0000-4000-8000-00000000000e\",\"00000000-0000-4000-8000-00000000000f\",\"00000000-0000-4000-8000-000000000010\",\"00000000-0000-4000-8000-000000000011\"],\"candidate_count\":17,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 987,
+      "sha256": "2f99dd09f304a36aee8bfb729b28012354f46785179dd3af31efa8c7c45feae4"
+    },
+    {
+      "name": "duplicate",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 2,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\",\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":2,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 401,
+      "sha256": "00b705663e7503b7b69a4ee416da79c4b59646c0e232f81de4de968a14f05d22"
+    },
+    {
+      "name": "unsorted",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 2,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000002\",\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":2,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 401,
+      "sha256": "d2fc74ee3f985446077788c237817d7114dfcd3c7ca3dcd905661e805f6f36a3"
+    },
+    {
+      "name": "nil",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-0000-0000-000000000000"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-0000-0000-000000000000\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 362,
+      "sha256": "755a5f548f340f3e1703fb8526fa7dfeb3c28a1cabdcc250925fae956fc15eff"
+    },
+    {
+      "name": "uppercase",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 362,
+      "sha256": "a31c35cbe3237dcc255cd220a98cf84af47b440739d6862fcbaa9976a495f762"
+    },
+    {
+      "name": "bad-count",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 362,
+      "sha256": "d0f05099b353d1885d735731c154449a9000728589e360f0051f0686dfe5e4c7"
+    },
+    {
+      "name": "bool-count",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": true,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":true,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 365,
+      "sha256": "ea9f4149c3ed34c90caedd95ea23a3316f22c53a27db7c99e9bf95f23dcb2c7d"
+    },
+    {
+      "name": "fraction-count",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1.5,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1.5,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 364,
+      "sha256": "717728ce248f6f9e56fed153a048d362f24e13b77603793ac4119d3f6fe007b7"
+    },
+    {
+      "name": "null-list",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": null,
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":null,\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 326,
+      "sha256": "9f3b86710100d82348683f396db99c283e428a91e435a148bd09319d31b50a8c"
+    },
+    {
+      "name": "wrong-scope",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "selected",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"selected\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 338,
+      "sha256": "95099716f2f63f1fefe6f1fdf9f485328d0f6980e1d2682088480859642f8c55"
+    },
+    {
+      "name": "incomplete-complete",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 363,
+      "sha256": "5ea567cca38f90a90937d0854154384b2f92f8ceb82608e64e5b524302be35a7"
+    },
+    {
+      "name": "wrong-service",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 364,
+      "sha256": "a371866eeca371736f4f7fcbcdfe18c43df8bbe27ecb7fe1272341fa5cc175a1"
+    },
+    {
+      "name": "mutation-authority",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": true,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":true,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 361,
+      "sha256": "488e5c7e374587a54f6642dee6ae1fc6905705692193f502dff9844775e1d21c"
+    },
+    {
+      "name": "native-authority",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": true,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":true,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 361,
+      "sha256": "8e787402ae4a23148051bad0ece9dc1a3b26c1f1ce2879e756a3a030e77fe936"
+    },
+    {
+      "name": "eligibility",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": true,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":true,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 361,
+      "sha256": "9547a4b73ecb482b7767a0adaba0c97427992c0869cc94f4b3455dd58c2bd89f"
+    },
+    {
+      "name": "runtime",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": false,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":false,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 363,
+      "sha256": "d2d5e093586b1274dc132efa78ad6ae5d9c145e5ab1515dfd60ecd8bd9539dbc"
+    },
+    {
+      "name": "reclamation",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": true,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":true,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 361,
+      "sha256": "be87ddee423011485fd358eb4fce87bb6eed88d6d7837cd91e2c104832681eaf"
+    },
+    {
+      "name": "remote",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": false,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":false,\"service_observation\":\"inactive\"}\n",
+      "bytes": 363,
+      "sha256": "57d114cce8b206d7b8839e3df6f2451c7ab98a0def6080c26e533ca6bb061039"
+    },
+    {
+      "name": "unknown-key",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive",
+        "error": "SYNTHETIC_DIAGNOSTIC_CANARY"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\",\"error\":\"SYNTHETIC_DIAGNOSTIC_CANARY\"}\n",
+      "bytes": 400,
+      "sha256": "2e887b9a7510f17a08bbe1555b7db47cd9d951958c9b2cec2307641a5761d9fa"
+    },
+    {
+      "name": "too-large-false-empty",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "too-large",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": [],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"too-large\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":[],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 328,
+      "sha256": "f3c80b1aa99e3996397d0604610e5789ec3b7f9efef8e195f6bfe9d0560f4459"
+    },
+    {
+      "name": "unsupported-false-empty",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "unsupported",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": [],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"unsupported\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":[],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 330,
+      "sha256": "d7182ce9133ec3c8681af747493fa6c20118551ca585051815a2445e3663b5b9"
+    },
+    {
+      "name": "busy-false-empty",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "busy",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": [],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"busy\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":[],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 323,
+      "sha256": "9fe7d9676e62097775c64b18f46638eb43a94c45c1857da359ac1c405465011c"
+    },
+    {
+      "name": "unavailable-false-empty",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "unavailable",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": [],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"unavailable\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":[],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 330,
+      "sha256": "055cbc49d18266a8772a74fd1b6827f50fa17522f6273b44b768dbfc7fdc655d"
+    },
+    {
+      "name": "conflict-false-empty",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "conflict",
+        "scope": "ordinary-current-root-candidates",
+        "complete": false,
+        "candidates": [],
+        "candidate_count": 0,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "unverified"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"conflict\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":false,\"candidates\":[],\"candidate_count\":0,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"unverified\"}\n",
+      "bytes": 327,
+      "sha256": "6451745400ac5d4049a86187864415bf81ea65e4a7cfa0c73f2940224d4d4801"
+    },
+    {
+      "name": "missing-field",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 319,
+      "sha256": "ae3e8e6e726e1f03f2fd0a3c7d567875759797437dff0b923e33cb8ef04217a0"
+    },
+    {
+      "name": "future-version",
+      "expected": "unsupported",
+      "report": {
+        "report_version": 2,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":2,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "bytes": 362,
+      "sha256": "f5ed45907c1ae00ae458cc39e6cf14b8dfb1ad49d9ae4a99e234c653661053df"
+    },
+    {
+      "name": "oversize8193",
+      "expected": "unavailable",
+      "report": {
+        "report_version": 1,
+        "status": "complete",
+        "scope": "ordinary-current-root-candidates",
+        "complete": true,
+        "candidates": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "candidate_count": 1,
+        "eligibility_evaluated": false,
+        "mutation_authority": false,
+        "native_authority": false,
+        "runtime_unverified": true,
+        "physical_reclamation": false,
+        "local_only": true,
+        "service_observation": "inactive"
+      },
+      "encoded_utf8": "{\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       \n",
+      "bytes": 8193,
+      "sha256": "b80f8878dd8ef6f46c30ed806f7cb3dab99219926a2b542440bf74d832b893a4"
+    }
+  ],
+  "invalid_framing": [
+    {
+      "name": "duplicate-member",
+      "encoded_utf8": "{\"report_version\":1,\"report_version\":1,\"status\":\"complete\",\"scope\":\"ordinary-current-root-candidates\",\"complete\":true,\"candidates\":[\"00000000-0000-4000-8000-000000000001\"],\"candidate_count\":1,\"eligibility_evaluated\":false,\"mutation_authority\":false,\"native_authority\":false,\"runtime_unverified\":true,\"physical_reclamation\":false,\"local_only\":true,\"service_observation\":\"inactive\"}\n",
+      "expected": "unavailable",
+      "bytes": 381,
+      "sha256": "324371f938243a47ced51adbd0e9be9de3652196db03615312f13fcdc1df343e"
+    },
+    {
+      "name": "two-frames",
+      "encoded_utf8": "{\"report_version\": 1, \"status\": \"complete\", \"scope\": \"ordinary-current-root-candidates\", \"complete\": true, \"candidates\": [\"00000000-0000-4000-8000-000000000001\"], \"candidate_count\": 1, \"eligibility_evaluated\": false, \"mutation_authority\": false, \"native_authority\": false, \"runtime_unverified\": true, \"physical_reclamation\": false, \"local_only\": true, \"service_observation\": \"inactive\"}\n{\"report_version\": 1, \"status\": \"complete\", \"scope\": \"ordinary-current-root-candidates\", \"complete\": true, \"candidates\": [\"00000000-0000-4000-8000-000000000001\"], \"candidate_count\": 1, \"eligibility_evaluated\": false, \"mutation_authority\": false, \"native_authority\": false, \"runtime_unverified\": true, \"physical_reclamation\": false, \"local_only\": true, \"service_observation\": \"inactive\"}\n",
+      "expected": "unavailable",
+      "bytes": 774,
+      "sha256": "525e49ffa8e4dcb8bc963166a02bbc01b6fc3e1b037024e72a8155449cbd32d3"
+    },
+    {
+      "name": "missing-final-LF",
+      "encoded_utf8": "{\"report_version\": 1, \"status\": \"complete\", \"scope\": \"ordinary-current-root-candidates\", \"complete\": true, \"candidates\": [\"00000000-0000-4000-8000-000000000001\"], \"candidate_count\": 1, \"eligibility_evaluated\": false, \"mutation_authority\": false, \"native_authority\": false, \"runtime_unverified\": true, \"physical_reclamation\": false, \"local_only\": true, \"service_observation\": \"inactive\"}",
+      "expected": "unavailable",
+      "bytes": 386,
+      "sha256": "f4aab154f0a2412c8d6348cb365f4c602bfc1c05355833551bca5c403863ae9a"
+    },
+    {
+      "name": "bom",
+      "encoded_utf8": "﻿{\"report_version\": 1, \"status\": \"complete\", \"scope\": \"ordinary-current-root-candidates\", \"complete\": true, \"candidates\": [\"00000000-0000-4000-8000-000000000001\"], \"candidate_count\": 1, \"eligibility_evaluated\": false, \"mutation_authority\": false, \"native_authority\": false, \"runtime_unverified\": true, \"physical_reclamation\": false, \"local_only\": true, \"service_observation\": \"inactive\"}\n",
+      "expected": "unavailable",
+      "bytes": 390,
+      "sha256": "46ddd353154b17d893e6cf3799a1bd71b31fcd03a728b0911328a4f82773b638"
+    },
+    {
+      "name": "truncated",
+      "encoded_utf8": "{\"report_version\":1\n",
+      "expected": "unavailable",
+      "bytes": 20,
+      "sha256": "03cce06b78b9ce75d422f7143b2f50aca96b9da817ee6243dbca48f1fad23de2"
+    }
+  ],
+  "request": {
+    "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "boot_id": "11111111-1111-4111-8111-111111111111"
+  },
+  "owners": [
+    "model-settings",
+    "basic-settings",
+    "memory-forget",
+    "ordinary-export",
+    "research-settings",
+    "memory-settings",
+    "credential-reference",
+    "model-credential",
+    "source-cache-inventory",
+    "source-cache-cleanup",
+    "conversation-inventory"
+  ],
+  "incoming_boundaries": [
+    {
+      "method": "beginModel",
+      "argument": null
+    },
+    {
+      "method": "saveModel",
+      "argument": null
+    },
+    {
+      "method": "checkModel",
+      "argument": null
+    },
+    {
+      "method": "beginBasic",
+      "argument": null
+    },
+    {
+      "method": "saveBasic",
+      "argument": null
+    },
+    {
+      "method": "checkBasic",
+      "argument": null
+    },
+    {
+      "method": "beginResearch",
+      "argument": null
+    },
+    {
+      "method": "saveResearch",
+      "argument": null
+    },
+    {
+      "method": "checkResearch",
+      "argument": null
+    },
+    {
+      "method": "beginSavedMemory",
+      "argument": null
+    },
+    {
+      "method": "saveMemorySettings",
+      "argument": null
+    },
+    {
+      "method": "checkMemorySettings",
+      "argument": null
+    },
+    {
+      "method": "beginCredential",
+      "argument": null
+    },
+    {
+      "method": "saveCredential",
+      "argument": null
+    },
+    {
+      "method": "checkCredential",
+      "argument": null
+    },
+    {
+      "method": "beginFileCredential",
+      "argument": null
+    },
+    {
+      "method": "saveFileCredential",
+      "argument": null
+    },
+    {
+      "method": "checkFileCredential",
+      "argument": null
+    },
+    {
+      "method": "prepareExport",
+      "argument": null
+    },
+    {
+      "method": "confirmExport",
+      "argument": null
+    },
+    {
+      "method": "checkExport",
+      "argument": null
+    },
+    {
+      "method": "prepareForget",
+      "argument": null
+    },
+    {
+      "method": "forgetAction",
+      "argument": "confirm"
+    },
+    {
+      "method": "forgetAction",
+      "argument": "status"
+    },
+    {
+      "method": "inspectSourceCache",
+      "argument": null
+    },
+    {
+      "method": "prepareCleanup",
+      "argument": null
+    },
+    {
+      "method": "confirmCleanup",
+      "argument": null
+    },
+    {
+      "method": "checkCleanup",
+      "argument": "retained-original"
+    }
+  ],
+  "separate_forget_receipt": {
+    "method": "forgetAction",
+    "argument": "receipt"
+  },
+  "outgoing_idle_controllers": [
+    "modelController",
+    "basicController",
+    "forgetController",
+    "exportController",
+    "researchController",
+    "memorySettingsController",
+    "credentialController",
+    "fileCredentialController",
+    "cacheController",
+    "cleanupController"
+  ],
+  "bounds": {
+    "request": 256,
+    "raw": 8192,
+    "private_envelope": 16384,
+    "public_result": 8192,
+    "host_ms": 13000,
+    "child_ms": 12000,
+    "renderer_ms": 14000,
+    "original_pairs": 90,
+    "new_pairs": 110
+  }
+}
