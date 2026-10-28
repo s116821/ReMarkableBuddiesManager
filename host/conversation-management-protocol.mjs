@@ -26,6 +26,9 @@ export function parseManagementResult(v,request,validate){
  else if(c.reference!==q.reference)refuse();
  const allowed={retained:['none'],inspect:['inspected','invalidated','capacity','busy','unsupported','unavailable'],prepare:['ready','invalidated','capacity','busy','unsupported','unavailable'],confirm:['acknowledged','unknown','unresolved','not-dispatched','capacity','busy'],status:['acknowledged','unknown','unchanged','unresolved','capacity','busy','unsupported','unavailable'],cancel:['invalidated','not-dispatched','unknown','unchanged','unresolved','unavailable']};
  if(!allowed[q.action].includes(c.state))refuse();
+ const selected=c.retained.find(row=>row.reference===c.reference);
+ if(selected&&'connection_id' in q&&!same(selected,q))refuse();
+ if(['inspected','ready','acknowledged'].includes(c.state)&&selected)refuse();
  const r=c.report;
  if(r===null){if(v.status!=='unconfigured'||v.observation!==null)refuse();}
  else{
@@ -38,8 +41,8 @@ export function parseManagementResult(v,request,validate){
  case 'acknowledged':if(!match('acknowledged',true)||r.service_observation!=='inactive'||r.current_state===null)refuse();break;
  case 'unknown':case 'unchanged':case 'unresolved':{
   const row=c.retained.find(x=>x.reference===c.reference);if(!row||row.state!==c.state)refuse();
-  if(c.state==='unknown'){if(r!==null&&(!match(['unknown','conflict'],true)||r.status==='conflict'&&(r.service_observation!=='inactive'||r.current_state!==null)))refuse();}
-  else if(!(q.action==='cancel'&&r===null)&&(r===null||r.status!==c.state||r.service_observation!=='inactive'||c.state==='unchanged'&&(r.possible_effect||r.current_state!=='live-original')||c.state==='unresolved'&&r.current_state===null))refuse();break;
+  if(c.state==='unknown'){if(r!==null&&(!match(['unknown','conflict'],true)||r.status==='conflict'&&(r.service_observation!=='inactive'||r.current_state!==null)||r.status==='unknown'&&!(r.service_observation==='unverified'&&r.current_state===null||q.action==='confirm'&&r.service_observation==='inactive'&&r.current_state==='live-original')))refuse();}
+  else if(!(q.action==='cancel'&&r===null)&&(r===null||r.status!==c.state||r.service_observation!=='inactive'||c.state==='unchanged'&&(r.possible_effect||r.current_state!=='live-original')||c.state==='unresolved'&&(r.current_state===null||q.action==='confirm'&&!r.possible_effect)))refuse();break;
  }
  case 'not-dispatched':if(r!==null&&(!match(['invalid-input','unavailable','unsupported','busy','conflict'],false)||r.current_state!==null))refuse();break;
  case 'busy':case 'unsupported':case 'unavailable':
