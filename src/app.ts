@@ -1,4 +1,4 @@
-import {OrdinaryRestoreController} from './ordinary-restore';
+import {OrdinaryRestoreController,restoreAttemptMessage} from './ordinary-restore';
 import type {RestoreRetained} from '../host/ordinary-restore-protocol.mjs';
 import {ConversationManagementController} from './conversation-management';
 import type {ManagementRetained} from '../host/conversation-management-protocol.mjs';
@@ -181,6 +181,7 @@ export class App implements OnDestroy {
     await this.memoryInspectionController.inspect({ inspectMemory: request => this.host.inspectMemory!(request) }, tablet, key);
   }
   async cancelMemoryInspection() { this.exportController.clear();this.cleanupController.clear();this.restoreController.clear();this.managementController.clear();this.conversationController.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.modelController.clear();this.basicController.clear(); this.forgetController.clear(); this.memoryInspectionController.clear('Memory inspection cancelled'); try { await this.host.cancel(); } catch { /* Already invalidated. */ } }
+  restoreAttemptMessage=restoreAttemptMessage;
   restorePeerBusy(){return this.conversationManagement().busy||this.conversationInventory().busy||this.cacheInventory().busy||this.cacheCleanup().busy||this.fileCredential().busy||this.credential().busy||this.memorySettings().busy||this.research().busy||this.model().busy||this.basic().busy||this.forget().busy||this.archiveExport().busy;}
   updateRestoreSource(event:Event){if(this.restorePeerBusy()||this.ordinaryRestore().busy)return;const field=event.target as HTMLTextAreaElement;this.restoreController.input(field.value);field.value=this.restoreController.text();}
   restoreSourceText(){return this.restoreController.text();}
