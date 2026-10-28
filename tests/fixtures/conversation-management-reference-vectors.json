@@ -1,0 +1,1209 @@
+{
+  "vector_version": 1,
+  "status": "proposed; exact-current source compared; independent review pending",
+  "basis": "Synthetic contract examples, not producer/service/device execution. Matrix compared read-only against supplied Buddy68e42968 tracked source.",
+  "producer_digest_source_sha256": "03affe4524552943ae50e84d6fd0100ebed8a0df30803c49d5cd52f148f8525f",
+  "intent_fixtures": [
+    {
+      "name": "unbound",
+      "intent": {
+        "intent_version": 1,
+        "operation": "11111111-1111-4111-8111-111111111111",
+        "conversation": "22222222-2222-4222-8222-222222222222",
+        "config_path_sha256": "54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923",
+        "config_bytes_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "roots_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "actor": "33333333-3333-4333-8333-333333333333",
+        "generation": "44444444-4444-4444-8444-444444444444",
+        "mode_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "target_history_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "root": {
+          "revision": "55555555-5555-4555-8555-555555555555",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        "binding": null,
+        "summary": {
+          "turns": 2,
+          "source_records": 1,
+          "export_associations": 0
+        },
+        "intent_sha256": "6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c"
+      },
+      "input": "{\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"}}",
+      "input_sha256": "c9734544b12a1cfe0250ac2e5dc46a891657818392bf4b3a5ccbf21e40a1f301",
+      "receipt": {
+        "operation": "11111111-1111-4111-8111-111111111111",
+        "transaction": "ccf1f488-c06d-5e36-85e1-304b28a5c14b",
+        "root_revision": "6e504255-1011-5671-b426-ec24a11cc0d6",
+        "binding_revision": null
+      }
+    },
+    {
+      "name": "bound",
+      "intent": {
+        "intent_version": 1,
+        "operation": "11111111-1111-4111-8111-111111111111",
+        "conversation": "22222222-2222-4222-8222-222222222222",
+        "config_path_sha256": "54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923",
+        "config_bytes_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "roots_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "actor": "33333333-3333-4333-8333-333333333333",
+        "generation": "44444444-4444-4444-8444-444444444444",
+        "mode_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "target_history_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "root": {
+          "revision": "55555555-5555-4555-8555-555555555555",
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        "binding": {
+          "id": "66666666-6666-4666-8666-666666666666",
+          "revision": "77777777-7777-4777-8777-777777777777",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "summary": {
+          "turns": 2,
+          "source_records": 1,
+          "export_associations": 0
+        },
+        "intent_sha256": "c2950ff293b561e87b0d1d24be9b923f1a575d2146beb1d0fba3a2c75fbcaabd"
+      },
+      "input": "{\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":{\"id\":\"66666666-6666-4666-8666-666666666666\",\"revision\":\"77777777-7777-4777-8777-777777777777\",\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"c2950ff293b561e87b0d1d24be9b923f1a575d2146beb1d0fba3a2c75fbcaabd\"}}",
+      "input_sha256": "3a824d78df1baa217159623a6d32601980d64b90a00d2e8bb5b438d8528ac166",
+      "receipt": {
+        "operation": "11111111-1111-4111-8111-111111111111",
+        "transaction": "ccf1f488-c06d-5e36-85e1-304b28a5c14b",
+        "root_revision": "6e504255-1011-5671-b426-ec24a11cc0d6",
+        "binding_revision": "d6dce57b-8d44-5472-8bd8-b833a452c9ef"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "inspect-ready",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "inspected"
+      }
+    },
+    {
+      "name": "prepared-unbound",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "ready"
+      }
+    },
+    {
+      "name": "apply-ack-unbound-live-original",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "live-original"
+      }
+    },
+    {
+      "name": "apply-ack-unbound-desired-tombstones",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "desired-tombstones"
+      }
+    },
+    {
+      "name": "apply-ack-unbound-changed",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "changed"
+      }
+    },
+    {
+      "name": "status-ack-unbound-live-original",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "live-original"
+      }
+    },
+    {
+      "name": "status-ack-unbound-desired-tombstones",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "desired-tombstones"
+      }
+    },
+    {
+      "name": "status-ack-unbound-changed",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "changed"
+      }
+    },
+    {
+      "name": "prepared-bound",
+      "fixture": "bound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":{\"id\":\"66666666-6666-4666-8666-666666666666\",\"revision\":\"77777777-7777-4777-8777-777777777777\",\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"c2950ff293b561e87b0d1d24be9b923f1a575d2146beb1d0fba3a2c75fbcaabd\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "ready"
+      }
+    },
+    {
+      "name": "apply-ack-bound-live-original",
+      "fixture": "bound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "live-original"
+      }
+    },
+    {
+      "name": "apply-ack-bound-desired-tombstones",
+      "fixture": "bound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "desired-tombstones"
+      }
+    },
+    {
+      "name": "apply-ack-bound-changed",
+      "fixture": "bound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "changed"
+      }
+    },
+    {
+      "name": "status-ack-bound-live-original",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "live-original"
+      }
+    },
+    {
+      "name": "status-ack-bound-desired-tombstones",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "desired-tombstones"
+      }
+    },
+    {
+      "name": "status-ack-bound-changed",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "acknowledged",
+        "current_state": "changed"
+      }
+    },
+    {
+      "name": "apply-unresolved-live-original-True",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "apply-unresolved-desired-tombstones-True",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "apply-unresolved-changed-True",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unresolved-live-original-False",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unresolved-live-original-True",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unresolved-desired-tombstones-False",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unresolved-desired-tombstones-True",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"desired-tombstones\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unresolved-changed-False",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unresolved-changed-True",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unresolved\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unresolved",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "status-unchanged",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unchanged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unchanged",
+        "retains_original": true,
+        "retry_allowed": false
+      }
+    },
+    {
+      "name": "apply-unknown-custody-loss",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unknown\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unknown",
+        "retains_original": true
+      }
+    },
+    {
+      "name": "apply-conflict-after-receipt-read-failure",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"conflict\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unknown",
+        "retains_original": true
+      }
+    },
+    {
+      "name": "status-unknown-custody-loss",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unknown\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unknown",
+        "retains_original": true
+      }
+    },
+    {
+      "name": "status-conflict-after-receipt-read-failure",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"conflict\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unknown",
+        "retains_original": true
+      }
+    },
+    {
+      "name": "apply-unknown-publication-failure",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unknown\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unknown",
+        "retains_original": true
+      }
+    },
+    {
+      "name": "inspect-invalid-input",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"invalid-input\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "inspect-unavailable",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "inspect-unsupported",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unsupported\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unsupported"
+      }
+    },
+    {
+      "name": "inspect-busy",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"busy\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "busy"
+      }
+    },
+    {
+      "name": "inspect-conflict",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"conflict\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "prepare-invalid-input",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"invalid-input\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "prepare-unavailable",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"unavailable\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "prepare-unsupported",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"unsupported\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unsupported"
+      }
+    },
+    {
+      "name": "prepare-busy",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"busy\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "busy"
+      }
+    },
+    {
+      "name": "prepare-conflict",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"conflict\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "apply-invalid-input",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"invalid-input\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "not-dispatched"
+      }
+    },
+    {
+      "name": "apply-unavailable",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unavailable\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "not-dispatched"
+      }
+    },
+    {
+      "name": "apply-unsupported",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unsupported\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "not-dispatched"
+      }
+    },
+    {
+      "name": "apply-busy",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"busy\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "not-dispatched"
+      }
+    },
+    {
+      "name": "apply-conflict",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"conflict\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "not-dispatched"
+      }
+    },
+    {
+      "name": "status-invalid-input",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"invalid-input\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "status-unavailable",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unavailable\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "status-unsupported",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unsupported\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unsupported"
+      }
+    },
+    {
+      "name": "status-busy",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"busy\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "busy"
+      }
+    },
+    {
+      "name": "status-conflict",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"conflict\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":null,\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": true,
+        "consumer_state": "unavailable"
+      }
+    },
+    {
+      "name": "extra-raw-field",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"debug\":\"never public\"}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "wrong-selector",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "inspect-positive-effect",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "prepared-null-intent",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "prepared-count-mismatch",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":3,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "invalid-intent-digest",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "wrong-config-path-digest",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "missing-binding-field",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "unknown-nested-summary",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0,\"bytes\":1},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "fractional-count",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":0.5,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "bool-count",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":true,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "too-large-count",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":4097,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "false-ack-effect",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "wrong-original-operation",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"99999999-9999-4999-8999-999999999999\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "wrong-transaction",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"99999999-9999-4999-8999-999999999999\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "wrong-root-revision",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"99999999-9999-4999-8999-999999999999\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "bound-null-binding-revision",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "ack-null-current-state",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "ack-with-summary",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":{\"turns\":0,\"source_records\":0,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "nil-conversation",
+      "fixture": "bound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"00000000-0000-0000-0000-000000000000\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "future-extra-authority",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":true,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "nonlocal",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":false,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "status-prepared",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "prepare-acknowledged",
+      "fixture": "bound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":\"d6dce57b-8d44-5472-8bd8-b833a452c9ef\"},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "apply-unchanged",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"unchanged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "unknown-false-effect",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unknown\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "status-unknown-live-original",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unknown\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "invalid-input-with-target",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"invalid-input\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"unverified\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":null,\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "future-report",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":2,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "wrapper": "unsupported",
+        "after_possible_apply": "preserve-original-unknown"
+      }
+    },
+    {
+      "name": "bool-report-version",
+      "fixture": "unbound",
+      "selector": "inspect",
+      "raw": "{\"report_version\":true,\"operation\":\"inspect\",\"status\":\"ready\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "after_possible_apply": "preserve-original-unknown",
+        "fallback": false
+      }
+    },
+    {
+      "name": "duplicate-root",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "duplicate-nested",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "bom",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "﻿{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "missing-lf",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "two-reports",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "extra-lf",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "trailing-json",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"54360f40a9b9b8c1c4beafee2360ca36f484988cb9c4418ec27eeb2ce0b0c923\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"6751d6df01942511360aa95ad4d432f3f98e0362a8b717a556edc6723585a03c\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}{}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "captured-status-valid-apply-ack",
+      "fixture": "unbound",
+      "selector": "status",
+      "raw": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "captured-apply-valid-status-ack",
+      "fixture": "unbound",
+      "selector": "apply",
+      "raw": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"acknowledged\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":true,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":null,\"receipt\":{\"operation\":\"11111111-1111-4111-8111-111111111111\",\"transaction\":\"ccf1f488-c06d-5e36-85e1-304b28a5c14b\",\"root_revision\":\"6e504255-1011-5671-b426-ec24a11cc0d6\",\"binding_revision\":null},\"current_state\":\"changed\",\"summary\":null}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    },
+    {
+      "name": "wrong-path-valid-intent-hash",
+      "fixture": "unbound",
+      "selector": "prepare",
+      "raw": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"prepared\",\"runtime_unverified\":true,\"local_only\":true,\"physical_reclamation\":false,\"service_observation\":\"inactive\",\"possible_effect\":false,\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"intent\":{\"intent_version\":1,\"operation\":\"11111111-1111-4111-8111-111111111111\",\"conversation\":\"22222222-2222-4222-8222-222222222222\",\"config_path_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"config_bytes_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"roots_sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"actor\":\"33333333-3333-4333-8333-333333333333\",\"generation\":\"44444444-4444-4444-8444-444444444444\",\"mode_sha256\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"target_history_sha256\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"root\":{\"revision\":\"55555555-5555-4555-8555-555555555555\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"binding\":null,\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0},\"intent_sha256\":\"85d1bb343d1d12701fac3fc6ab3f0fa2dc4b888fbd7e3c8b1be1139b672b9ed3\"},\"receipt\":null,\"current_state\":\"live-original\",\"summary\":{\"turns\":2,\"source_records\":1,\"export_associations\":0}}\n",
+      "expected": {
+        "admit": false,
+        "fallback": false
+      }
+    }
+  ],
+  "boundary_vectors": [
+    {
+      "name": "public-request-bytes",
+      "limit": 384,
+      "at_limit": "validate complete shape; never truncate",
+      "over_limit": "refuse"
+    },
+    {
+      "name": "public-response-bytes",
+      "limit": 8192,
+      "at_limit": "validate complete shape; never truncate",
+      "over_limit": "refuse"
+    },
+    {
+      "name": "helper-request-bytes",
+      "limit": 24576,
+      "at_limit": "validate complete shape; never truncate",
+      "over_limit": "refuse"
+    },
+    {
+      "name": "producer-input-bytes",
+      "limit": 16384,
+      "at_limit": "validate complete shape; never truncate",
+      "over_limit": "refuse"
+    },
+    {
+      "name": "producer-report-bytes",
+      "limit": 32768,
+      "at_limit": "validate complete shape; never truncate",
+      "over_limit": "refuse"
+    },
+    {
+      "name": "private-response-bytes",
+      "limit": 49152,
+      "at_limit": "validate complete shape; never truncate",
+      "over_limit": "refuse"
+    }
+  ],
+  "lifecycle_vectors": [
+    {
+      "name": "blank-selection",
+      "stimulus": "render initial complete candidates",
+      "expected": "no selected value; no automatic inspect/prepare"
+    },
+    {
+      "name": "inventory-cleared-after-capture",
+      "stimulus": "explicit selected Inspect admitted",
+      "expected": "capture exact UUID before peer invalidation clears discovery"
+    },
+    {
+      "name": "prepare-without-inspect",
+      "stimulus": "direct prepare with unknown reference",
+      "expected": "no helper launch"
+    },
+    {
+      "name": "confirm-inspected-only",
+      "stimulus": "confirm inspected reference",
+      "expected": "not-dispatched; no helper launch"
+    },
+    {
+      "name": "fresh-prepare",
+      "stimulus": "inspect summary2 then prepare summary3",
+      "expected": "ready shows3; no stale comparison authority"
+    },
+    {
+      "name": "once-confirm",
+      "stimulus": "two invocations confirm same ready reference",
+      "expected": "at most one apply launch"
+    },
+    {
+      "name": "lost-apply-reply",
+      "stimulus": "apply launch then transport loss",
+      "expected": "same reference unknown; exact-input status only"
+    },
+    {
+      "name": "receipt-later-changed",
+      "stimulus": "status exact original receipt with changed heads",
+      "expected": "historical acknowledgment plus current changed; no new apply"
+    },
+    {
+      "name": "tombstone-no-receipt",
+      "stimulus": "status unresolved/desired-tombstones",
+      "expected": "unresolved; not acknowledged"
+    },
+    {
+      "name": "partial-original",
+      "stimulus": "apply/status unresolved/effect true",
+      "expected": "retain original; no repeat publication"
+    },
+    {
+      "name": "unchanged-no-retry",
+      "stimulus": "status unchanged",
+      "expected": "retain original; no new confirm/prepare recovery"
+    },
+    {
+      "name": "same-reference-late-cancel",
+      "stimulus": "old invocation cancel after newer status owns token",
+      "expected": "newer child/token/deadline unchanged"
+    },
+    {
+      "name": "cancel-before-request",
+      "stimulus": "cancel tuple before matching invocation arrives",
+      "expected": "fenced matching invocation never launches"
+    },
+    {
+      "name": "busy",
+      "stimulus": "any peer currently owns token",
+      "expected": "no hooks/ledger/grant/timer/cancel/child changes"
+    },
+    {
+      "name": "stage-expiry",
+      "stimulus": "inspect/ready120000ms deadline elapsed",
+      "expected": "no confirm; no deadline renewal"
+    },
+    {
+      "name": "original-expiry",
+      "stimulus": "1800000ms after possible apply dispatch",
+      "expected": "wipe bytes; status unavailable; no replacement operation"
+    },
+    {
+      "name": "capacity",
+      "stimulus": "8 retained originals or32 per-reference ledger entries",
+      "expected": "capacity refusal; no eviction/renewal"
+    },
+    {
+      "name": "stop-before-reference",
+      "stimulus": "stop initial inspect/lost reply",
+      "expected": "local detach only; host keeps original bounded ownership"
+    },
+    {
+      "name": "stop-queued-observation",
+      "stimulus": "stop before quiescence resolves",
+      "expected": "no later operation dispatch"
+    },
+    {
+      "name": "old-finally",
+      "stimulus": "older operation finally after successor acquired",
+      "expected": "no successor token release/cancel"
+    },
+    {
+      "name": "peer-invalidates-preview",
+      "stimulus": "each of11 peers admitted",
+      "expected": "clear idle management grant; preserve originals"
+    },
+    {
+      "name": "outgoing-peer-clear",
+      "stimulus": "management admitted",
+      "expected": "all11 peer idle/private DOM erased before pause; preserve drafts/originals"
+    },
+    {
+      "name": "reload-originals",
+      "stimulus": "renderer reload same host",
+      "expected": "metadata only query; no expiry renewal"
+    },
+    {
+      "name": "host-restart",
+      "stimulus": "retained list after new host process",
+      "expected": "no original recovery grant; no persisted intent import"
+    }
+  ]
+}

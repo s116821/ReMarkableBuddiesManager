@@ -1,3 +1,6 @@
+import type {ManagementAdapter} from './conversation-management';
+import type {ManagementResult} from '../host/conversation-management-protocol.mjs';
+import {parseManagementJson} from '../host/conversation-management-protocol.mjs';
 import type {ConversationAdapter} from './conversation-inventory';
 import type {ConversationResult} from '../host/conversation-inventory-protocol.mjs';
 import type {CleanupAdapter} from './source-cache-cleanup';
@@ -35,6 +38,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
   readonly memorySettings?:MemorySettingsAdapter['memorySettings'];
+  readonly conversationManagement?:ManagementAdapter['conversationManagement'];
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
@@ -109,6 +113,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Memory settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Memory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as MemorySettingsResult;
+    },
+    conversationManagement: async (request: import('../host/conversation-management-protocol.mjs').ManagementRequest|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Conversation management helper unavailable');
+      const pending=fetch('/manager-conversation-management',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Conversation management unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Conversation management response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseManagementJson(raw) as ManagementResult;
     },
     sourceCacheCleanup: async (request: import('../host/source-cache-cleanup-protocol.mjs').CleanupRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Cache cleanup helper unavailable');
