@@ -24,7 +24,7 @@ jobs:
       artifact_id: ${{ steps.artifacts.outputs.artifact-id }}
       development_artifact_id: ${{ steps.development.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
@@ -44,10 +44,10 @@ jobs:
           eligibility=()
           if test "$MAIN_RELEASE" = true; then eligibility+=(--require-semantic-source); fi
           python cicd/release/freeze.py candidate --tag "$tag" --sha "$SOURCE_SHA" "${eligibility[@]}"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
@@ -66,14 +66,14 @@ jobs:
         env:
           TAG: ${{ steps.freeze.outputs.tag }}
           SHA: ${{ steps.freeze.outputs.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: artifacts
         with:
           name: candidate-${{ inputs.source_sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/packages/*
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: development
         with:
           name: development-browser-${{ inputs.source_sha }}-${{ github.run_attempt }}
@@ -97,19 +97,19 @@ jobs:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: ${{ runner.temp }}/packages
@@ -129,7 +129,7 @@ jobs:
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP/packages/manager-browser.zip" -DestinationPath dist/manager/browser
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP/packages/manager-win32-x64.zip" -DestinationPath out/packages/ReMarkableBuddiesManager-win32-x64
           Copy-Item -LiteralPath dist/manager/browser/build-info.json -Destination electron/build-info.json
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
           path: test-results/development/browser
@@ -280,7 +280,7 @@ jobs:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
@@ -310,7 +310,7 @@ jobs:
         env:
           RELEASE_OBSERVATION: ${{ steps.merged.outputs.data }}
         run: python cicd/release/admission.py merge --sha "$SHA"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: ${{ runner.temp }}/packages
