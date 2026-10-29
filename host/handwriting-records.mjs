@@ -209,7 +209,7 @@ export class HandwritingRecordsHost {
         this.invalidate();
         this.observer.cancel();
         return possible ? this.#value(q, 'unknown', s) : this.#value(q, 'not-dispatched');
-    } const s = this.#ready; if (s && s.reference === q.reference && same(s.sample, q) && s.creator === q.invocation) {
+    } const s = this.#ready; if (s && same(s.sample, q) && (s.reference === q.reference || q.reference === null && s.creator === q.invocation)) {
         this.#wipe(s);
         this.#ready = null;
         this.#epoch++;

@@ -40,9 +40,9 @@ separately. There is no automatic retry, new-head substitution or resume on relo
 
 Private inputs clear on submission; content and confirmation clear on Stop,
 refresh, disconnect, identity changes, another admitted maintenance action or page
-lifetime changes. Prepared authority lasts at most two minutes. Minimal original
-private identity for status lasts thirty minutes without renewal, at most eight
-attempts and thirty-two checks per attempt. Expired safe metadata remains for the
+lifetime changes. You have at most two minutes to confirm a prepared removal. This computer keeps
+the original request IDs privately for status checks for thirty minutes without
+extending that limit, at most eight attempts and thirty-two checks per attempt. Expired safe metadata remains for the
 host session; restarting does not reconstruct mutation authority. Another active
 maintenance operation returns Busy without interrupting its owner.
 

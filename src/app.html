@@ -387,7 +387,7 @@
   }
   @for (row of handwritingRecords().retained; track row.reference) {
     <article class="mt-4 rounded-lg border border-divider p-3"><p>Original attempt: {{ handwritingAttemptMessage(row.original_outcome) }}</p><p class="break-all text-sm">Reference {{ row.reference }}</p>
-      @if (row.expired) { <p>Private original custody expired.</p> }
+      @if (row.expired) { <p>The time limit for checking this original request has expired.</p> }
       <button class="ui-button ui-button-secondary" type="button" (click)="checkHandwriting(row)" [disabled]="!canCheckHandwriting(row)">Check original correction removal</button>
     </article>
   }

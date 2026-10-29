@@ -21,7 +21,7 @@ type Target = {
     invocation: string;
     reference: string | null;
 };
-const labels: Record<string, string> = { queried: 'Saved corrections checked. These records do not prove improved recognition.', inspected: 'Captured record inspected. Source links are caller assertions.', partial: 'Some records or samples could not be included. This is not a complete empty result.', prepared: 'Review this exact correction and confirm removal separately. Historical text and samples will remain.', 'not-removable': 'This record cannot be prepared for removal. Inspect its heads and media state.', unknown: 'The removal result is unknown. Check this original operation; do not repeat it.', 'removal-observed': 'Removal from active use was observed. Historical text, samples and backups remain.', 'historical-removal-observed': 'The original removal was found in retained history. Its current head may have changed.', unresolved: 'The original removal is still unconfirmed. Absence does not prove rollback.', 'not-dispatched': 'This removal was not dispatched.', busy: 'Another operation is running.', unsupported: 'The installed Buddy or its selected mode does not support this operation.', unavailable: 'Saved correction management is unavailable.', expired: 'Original private custody expired. No request was sent.', capacity: 'This session already retains eight removal attempts. No new removal was prepared.', invalidated: 'Private content and prepared authority cleared.' };
+const labels: Record<string, string> = { queried: 'Saved corrections checked. These records do not prove improved recognition.', inspected: 'Captured record inspected. Source links are caller assertions.', partial: 'Some records or samples could not be included. This is not a complete empty result.', prepared: 'Review this exact correction and confirm removal separately. Historical text and samples will remain.', 'not-removable': 'This record cannot be prepared for removal. Inspect its heads and media state.', unknown: 'The removal result is unknown. Check this original operation; do not repeat it.', 'removal-observed': 'Removal from active use was observed. Historical text, samples and backups remain.', 'historical-removal-observed': 'The original removal was found in retained history. Its current head may have changed.', unresolved: 'The original removal is still unconfirmed. Absence does not prove rollback.', 'not-dispatched': 'This removal was not dispatched.', busy: 'Another operation is running.', unsupported: 'The installed Buddy or its selected mode does not support this operation.', unavailable: 'Saved correction management is unavailable.', expired: 'The time limit for checking this original request has expired. No new request was sent.', capacity: 'This session already retains eight removal attempts. No new removal was prepared.', invalidated: 'The draft and displayed record details were cleared.' };
 export class HandwritingRecordsController {
     state: HandwritingUiState = { profile: '', correction: '', query: '', busy: false, status: 'Enter an explicit profile UUID to inspect saved corrections.', result: null, retained: [] };
     private generation = 0;
@@ -143,8 +143,17 @@ export class HandwritingRecordsController {
         return; let timer: ReturnType<typeof setTimeout> | undefined; this.publish({ busy: true, status: 'Stopping this wait...' }); try {
         const q = parseHandwritingRequest({ action: 'cancel', ...target }), r = await Promise.race([a.handwritingRecords(q), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Error('Stop expired')), 14000); })]);
         const v = await parseHandwritingResult(r, handwritingContext(q), validateResult);
-        if (g === this.generation)
+        if (g === this.generation) {
+            // A matching unconsumed preparation was revoked, rather than an
+            // uncertain mutation rolled back. Keep real host originals intact.
+            if (!read && target.reference && this.state.retained.some(row => row.reference === target.reference && row.original_outcome === 'unknown') && ['invalidated', 'not-dispatched'].includes(v.handwriting_records.state) && !v.handwriting_records.retained.some(row => row.reference === target.reference)) {
+                clearTimeout(this.expiryTimers.get(target.reference));
+                this.expiryTimers.delete(target.reference);
+                this.expiries.delete(target.reference);
+                this.publish({ retained: this.state.retained.filter(row => row.reference !== target.reference || row.original_outcome !== 'unknown') });
+            }
             this.publish({ busy: false, result: v.handwriting_records, retained: this.rows(v.handwriting_records.retained), status: read ? 'Stopped waiting for records. Earlier removal history is unchanged.' : labels[v.handwriting_records.state] ?? labels['invalidated'] });
+        }
     }
     catch {
         if (g === this.generation)
