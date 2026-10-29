@@ -129,3 +129,7 @@ additive restore of an archive already on the tablet, original-only checks and
 its existing-Store/media/configuration limits in both companions.
 
 For whole-archive checks and deliberate selected-history export in both companions, see [the archive guide](docs/selected-archives.md). Selected/cloud/replacement restore and native/runtime health remain separate.
+
+Both companions can inspect saved handwriting corrections and separately confirm
+removal from active use. See the [correction management guide](docs/handwriting-corrections.md)
+for explicit profile selection, retained history and unknown-operation checks.

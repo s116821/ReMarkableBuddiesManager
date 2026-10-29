@@ -1,0 +1,2899 @@
+{
+  "fixture_version": 1,
+  "notice": "Synthetic literal precode expectations; not executed consumer acceptance. Artificial descriptor is not a PNG fixture.",
+  "identities": {
+    "profile": "00000000-0000-0000-0000-000000000001",
+    "correction": "00000000-0000-0000-0000-000000000002",
+    "operation": "00000000-0000-0000-0000-000000000003",
+    "expected_head": "00000000-0000-0000-0000-000000000004",
+    "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+    "fingerprint": "e3f86272592c2f9f4ba1cee57efc5690434f83b1dd1b276b486ed1d0b319d9e6",
+    "tombstone_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+  },
+  "cases": [
+    {
+      "id": "inspect-single",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-single",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-new-tombstone",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "status-historical-tombstone",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-accepted-replay",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-complete-empty",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"complete-empty\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-complete-empty",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete-empty\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "status-complete-empty",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete-empty\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"unknown\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-partial-empty-omitted",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"partial\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":1,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-partial-empty-conflicted",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"partial\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":1,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-partial-empty-unsupported",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"partial\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":1,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-partial-empty-missing_media",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"partial\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":1,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-head-state-tombstone",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-head-state-unsupported",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"unsupported\",\"failure\":\"unsupported-record\",\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"unsupported\",\"value\":null,\"sample_availability\":\"not-examined\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":1,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-busy",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"busy\",\"failure\":\"ownership-busy\",\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-unsupported",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"unsupported\",\"failure\":\"unsupported-mode\",\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-unavailable",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"unavailable\",\"failure\":\"store-unavailable\",\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "query-invalid-input",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"invalid-input\",\"failure\":\"invalid-identity\",\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-busy",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"busy\",\"failure\":\"ownership-busy\",\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-unsupported",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"unsupported\",\"failure\":\"unsupported-mode\",\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-unavailable",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"unavailable\",\"failure\":\"store-unavailable\",\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "inspect-invalid-input",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"invalid-input\",\"failure\":\"invalid-identity\",\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-busy",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"busy\",\"failure\":\"ownership-busy\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-dispatched\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-unsupported",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"unsupported\",\"failure\":\"unsupported-mode\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-dispatched\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-unavailable",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"unavailable\",\"failure\":\"store-unavailable\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-dispatched\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-invalid-input",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"invalid-input\",\"failure\":\"invalid-identity\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-dispatched\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "status-busy",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"busy\",\"failure\":\"ownership-busy\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"unknown\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "status-unsupported",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"unsupported\",\"failure\":\"unsupported-mode\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"unknown\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "status-unavailable",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"unavailable\",\"failure\":\"store-unavailable\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"unknown\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "status-invalid-input",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"invalid-input\",\"failure\":\"invalid-identity\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":0,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"unknown\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-cas-refusal",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"conflict\",\"failure\":\"heads-conflict\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-dispatched\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "forget-commit-unknown",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"failed\",\"failure\":\"commit-unknown\",\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"unknown\"}}\n",
+      "expected": "admit"
+    },
+    {
+      "id": "wrong-version",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":2,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "wrong-record",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"00000000-0000-0000-0000-000000000063\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "wrong-profile",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000063\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "wrong-derived-fact-record",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"00000000-0000-0000-0000-000000000063\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "nil-correction",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000000\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "extra-nested-value",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1,\"future\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "missing-sample-size",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":0,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "sample-one-over",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":524289,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "wrong-media-type",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/jpeg\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "dimension-one-over",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":2049,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "nonsafe-u64",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":9007199254740992,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "nil-time",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":0,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "wrong-provenance",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"native-verified\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "partial-source",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":[\"00000000-0000-0000-0000-000000000001\"]},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "text-nul",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"bad\\u0000text\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "text-one-over",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "description-one-over",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "query-unsafe-count",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":9007199254740992,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "complete-with-omission",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":1,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "query-conflict-value",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":true,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "query-unavailable-value",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"query\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":null,\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"unavailable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "read-operation",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "read-historical",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "read-transaction",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-current-head",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":true,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-wrong-operation",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000063\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-wrong-revision",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000063\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-wrong-parent",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000063\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-nonhistorical",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-forbidden-transaction",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":null,\"conflicted\":null,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "status-accepted-value",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"status\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":true,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "forget-wrong-parent",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000063\"],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "forget-wrong-revision",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000063\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "forget-null-transaction",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "forget-tombstone-payload",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"observed\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "forget-false-not-dispatched",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002",
+        "operation": "00000000-0000-0000-0000-000000000003",
+        "expected_heads": [
+          "00000000-0000-0000-0000-000000000004"
+        ],
+        "expected_revision": "76796b25-d809-52e7-a9e7-d287f9e0f16f"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"forget\",\"status\":\"complete\",\"failure\":null,\"operation\":\"00000000-0000-0000-0000-000000000003\",\"transaction\":\"00000000-0000-0000-0000-000000000005\",\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"76796b25-d809-52e7-a9e7-d287f9e0f16f\",\"parents\":[\"00000000-0000-0000-0000-000000000004\"],\"head\":true,\"conflicted\":false,\"state\":\"tombstone\",\"value\":null,\"sample_availability\":\"not-applicable\"}],\"diagnostics\":{\"scanned\":1,\"matched\":0,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-dispatched\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "duplicate-top",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "duplicate-nested",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "bom",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "﻿{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "two-reports",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "no-final-lf",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}",
+      "expected": "refuse"
+    },
+    {
+      "id": "trailing-physical-lf",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "unsafe-float",
+      "kind": "raw",
+      "context": {
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "input_json": "{\"handwriting_version\":1,\"command\":\"inspect\",\"status\":\"complete\",\"failure\":null,\"operation\":null,\"transaction\":null,\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"historical\":false,\"facts\":[{\"record\":\"c02bc2cb-ee41-5660-88ee-41d07cdb3706\",\"revision\":\"00000000-0000-0000-0000-000000000004\",\"parents\":[],\"head\":true,\"conflicted\":false,\"state\":\"value\",\"value\":{\"kind\":\"confirmed-correction\",\"profile\":\"00000000-0000-0000-0000-000000000001\",\"correction\":\"00000000-0000-0000-0000-000000000002\",\"original_text\":\"SYNTHETIC: α\\nWyck0ff\",\"corrected_text\":\"SYNTHETIC: α\\nWyckoff\",\"confirmed_ms\":1e309,\"provenance\":{\"kind\":\"caller-confirmed-sample\",\"description\":\"Synthetic caller assertion only\",\"source\":null},\"sample\":{\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bytes\":67,\"media_type\":\"image/png\"},\"width\":1,\"height\":1},\"sample_availability\":\"available\"}],\"diagnostics\":{\"scanned\":1,\"matched\":1,\"omitted\":0,\"conflicted\":0,\"unsupported\":0,\"missing_media\":0,\"mutation_outcome\":\"not-requested\"}}\n",
+      "expected": "refuse"
+    },
+    {
+      "id": "prepare-confirm-once",
+      "kind": "lifecycle",
+      "steps": [
+        "inspect-complete",
+        "prepare",
+        "confirm",
+        "confirm-again"
+      ],
+      "expected": "removal-observed",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "lost-output-absent-status",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "confirm-lost",
+        "check-absent"
+      ],
+      "expected": "unknown",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "lost-output-retained-status",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "confirm-lost",
+        "check-accepted"
+      ],
+      "expected": "unknown+historical-removal-observed",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "stale-cas",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "producer-changed-head",
+        "confirm-cas-conflict"
+      ],
+      "expected": "not-dispatched",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "ready-expired",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "advance-120000",
+        "confirm"
+      ],
+      "expected": "unavailable",
+      "forget_dispatches": 0
+    },
+    {
+      "id": "original-expired",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "confirm-lost",
+        "advance-1800000",
+        "check"
+      ],
+      "expected": "expired",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "cancel-prearrival",
+      "kind": "lifecycle",
+      "steps": [
+        "cancel-invocation",
+        "delayed-prepare-arrives"
+      ],
+      "expected": "invalidated",
+      "forget_dispatches": 0
+    },
+    {
+      "id": "stale-cancel-successor",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare-A",
+        "invalidate-A",
+        "prepare-B",
+        "cancel-A"
+      ],
+      "expected": "B-preserved",
+      "forget_dispatches": 0
+    },
+    {
+      "id": "peer-busy-before-hook",
+      "kind": "lifecycle",
+      "steps": [
+        "peer-acquired",
+        "prepare"
+      ],
+      "expected": "busy+peer-preserved",
+      "forget_dispatches": 0
+    },
+    {
+      "id": "eight-original-capacity",
+      "kind": "lifecycle",
+      "steps": [
+        "consume-eight-originals",
+        "prepare-ninth"
+      ],
+      "expected": "capacity",
+      "forget_dispatches": 8
+    },
+    {
+      "id": "unknown-no-retry",
+      "kind": "lifecycle",
+      "steps": [
+        "confirm-lost",
+        "check-absent",
+        "check-absent"
+      ],
+      "expected": "unknown",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "unknown-history-forgery",
+      "kind": "lifecycle",
+      "steps": [
+        "confirm-lost",
+        "check-rewrites-original-and-row"
+      ],
+      "expected": "refuse",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "content-clearing",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "confirm-lost"
+      ],
+      "expected": "no-private-content-in-DOM",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "new-boot",
+      "kind": "lifecycle",
+      "steps": [
+        "prepare",
+        "boot-changed",
+        "confirm"
+      ],
+      "expected": "invalidated",
+      "forget_dispatches": 0
+    },
+    {
+      "id": "checks-cannot-renew",
+      "kind": "lifecycle",
+      "steps": [
+        "confirm-lost",
+        "check-accepted",
+        "original-deadline"
+      ],
+      "expected": "expired",
+      "forget_dispatches": 1
+    },
+    {
+      "id": "partial-no-prepare",
+      "kind": "lifecycle",
+      "steps": [
+        "inspect-partial-missing-sample",
+        "prepare"
+      ],
+      "expected": "not-removable",
+      "forget_dispatches": 0
+    },
+    {
+      "id": "public-prepared-exact",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-queried",
+      "kind": "public",
+      "request": {
+        "action": "query",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "query_text": null
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "queried",
+          "reference": null,
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "query",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": null,
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-query-partial-empty",
+      "kind": "public",
+      "request": {
+        "action": "query",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "query_text": null
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "partial",
+          "reference": null,
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "query",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": null,
+            "heads": [],
+            "partial": true
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 1,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "partial",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-inspected",
+      "kind": "public",
+      "request": {
+        "action": "inspect",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "inspected",
+          "reference": null,
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "inspect",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-inspect-partial-empty",
+      "kind": "public",
+      "request": {
+        "action": "inspect",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "partial",
+          "reference": null,
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "inspect",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [],
+            "partial": true
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 1,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "partial",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-confirm-unknown",
+      "kind": "public",
+      "request": {
+        "action": "confirm-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unknown",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": null,
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-confirm-removal-observed",
+      "kind": "public",
+      "request": {
+        "action": "confirm-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "removal-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "removal-observed",
+          "check_outcome": null,
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "removal-observed",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-confirm-historical-removal-observed",
+      "kind": "public",
+      "request": {
+        "action": "confirm-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "historical-removal-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "historical-removal-observed",
+          "check_outcome": null,
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "historical-removal-observed",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-confirm-not-dispatched",
+      "kind": "public",
+      "request": {
+        "action": "confirm-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "not-dispatched",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "not-dispatched",
+          "check_outcome": null,
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "not-dispatched",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-check-historical-removal-observed",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "historical-removal-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "historical-removal-observed",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-check-unresolved",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "admit"
+    },
+    {
+      "id": "public-history-and-row-forgery",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "removal-observed",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "removal-observed",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-check-mismatched-ref",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-check-new-invocation",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000099",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-check-wrong-target",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000099",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-check-content-leak",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-private-operation-leak",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ],
+          "operation": "00000000-0000-0000-0000-000000000003"
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-unknown-state",
+      "kind": "public",
+      "request": {
+        "action": "check-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "captured_original": {
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "original_outcome": "unknown"
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "erased",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "diagnostics": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000000-0000-0000-0000-000000000006",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-prepare-wrong-correction",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": {
+        "expected_confirmation_view": {
+          "kind": "confirmation",
+          "profile": "00000000-0000-0000-0000-000000000001",
+          "correction": "00000000-0000-0000-0000-000000000002",
+          "heads": [
+            {
+              "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+              "revision": "00000000-0000-0000-0000-000000000004",
+              "parents": [],
+              "state": "value",
+              "conflicted": false,
+              "sample_availability": "available",
+              "content": {
+                "correction": "00000000-0000-0000-0000-000000000002",
+                "original_text": "SYNTHETIC: α\nWyck0ff",
+                "corrected_text": "SYNTHETIC: α\nWyckoff",
+                "confirmed_ms": 1,
+                "provenance": {
+                  "kind": "caller-confirmed-sample",
+                  "description": "Synthetic caller assertion only",
+                  "source": null
+                },
+                "sample": {
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "bytes": 67,
+                  "media_type": "image/png"
+                },
+                "width": 1,
+                "height": 1
+              }
+            }
+          ],
+          "partial": false
+        }
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000099",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-prepare-conflict",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": {
+        "expected_confirmation_view": {
+          "kind": "confirmation",
+          "profile": "00000000-0000-0000-0000-000000000001",
+          "correction": "00000000-0000-0000-0000-000000000002",
+          "heads": [
+            {
+              "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+              "revision": "00000000-0000-0000-0000-000000000004",
+              "parents": [],
+              "state": "value",
+              "conflicted": false,
+              "sample_availability": "available",
+              "content": {
+                "correction": "00000000-0000-0000-0000-000000000002",
+                "original_text": "SYNTHETIC: α\nWyck0ff",
+                "corrected_text": "SYNTHETIC: α\nWyckoff",
+                "confirmed_ms": 1,
+                "provenance": {
+                  "kind": "caller-confirmed-sample",
+                  "description": "Synthetic caller assertion only",
+                  "source": null
+                },
+                "sample": {
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "bytes": 67,
+                  "media_type": "image/png"
+                },
+                "width": 1,
+                "height": 1
+              }
+            }
+          ],
+          "partial": false
+        }
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": true,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-prepare-partial",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": {
+        "expected_confirmation_view": {
+          "kind": "confirmation",
+          "profile": "00000000-0000-0000-0000-000000000001",
+          "correction": "00000000-0000-0000-0000-000000000002",
+          "heads": [
+            {
+              "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+              "revision": "00000000-0000-0000-0000-000000000004",
+              "parents": [],
+              "state": "value",
+              "conflicted": false,
+              "sample_availability": "available",
+              "content": {
+                "correction": "00000000-0000-0000-0000-000000000002",
+                "original_text": "SYNTHETIC: α\nWyck0ff",
+                "corrected_text": "SYNTHETIC: α\nWyckoff",
+                "confirmed_ms": 1,
+                "provenance": {
+                  "kind": "caller-confirmed-sample",
+                  "description": "Synthetic caller assertion only",
+                  "source": null
+                },
+                "sample": {
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "bytes": 67,
+                  "media_type": "image/png"
+                },
+                "width": 1,
+                "height": 1
+              }
+            }
+          ],
+          "partial": false
+        }
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": true
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-prepare-missing-media",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": {
+        "expected_confirmation_view": {
+          "kind": "confirmation",
+          "profile": "00000000-0000-0000-0000-000000000001",
+          "correction": "00000000-0000-0000-0000-000000000002",
+          "heads": [
+            {
+              "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+              "revision": "00000000-0000-0000-0000-000000000004",
+              "parents": [],
+              "state": "value",
+              "conflicted": false,
+              "sample_availability": "available",
+              "content": {
+                "correction": "00000000-0000-0000-0000-000000000002",
+                "original_text": "SYNTHETIC: α\nWyck0ff",
+                "corrected_text": "SYNTHETIC: α\nWyckoff",
+                "confirmed_ms": 1,
+                "provenance": {
+                  "kind": "caller-confirmed-sample",
+                  "description": "Synthetic caller assertion only",
+                  "source": null
+                },
+                "sample": {
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "bytes": 67,
+                  "media_type": "image/png"
+                },
+                "width": 1,
+                "height": 1
+              }
+            }
+          ],
+          "partial": false
+        }
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "unavailable",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-prepare-unsafe-time",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": {
+        "expected_confirmation_view": {
+          "kind": "confirmation",
+          "profile": "00000000-0000-0000-0000-000000000001",
+          "correction": "00000000-0000-0000-0000-000000000002",
+          "heads": [
+            {
+              "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+              "revision": "00000000-0000-0000-0000-000000000004",
+              "parents": [],
+              "state": "value",
+              "conflicted": false,
+              "sample_availability": "available",
+              "content": {
+                "correction": "00000000-0000-0000-0000-000000000002",
+                "original_text": "SYNTHETIC: α\nWyck0ff",
+                "corrected_text": "SYNTHETIC: α\nWyckoff",
+                "confirmed_ms": 1,
+                "provenance": {
+                  "kind": "caller-confirmed-sample",
+                  "description": "Synthetic caller assertion only",
+                  "source": null
+                },
+                "sample": {
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "bytes": 67,
+                  "media_type": "image/png"
+                },
+                "width": 1,
+                "height": 1
+              }
+            }
+          ],
+          "partial": false
+        }
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 9007199254740992,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-prepare-extra-private-hash",
+      "kind": "public",
+      "request": {
+        "action": "prepare-remove",
+        "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "boot_id": "00000000-0000-0000-0000-000000000006",
+        "invocation": "00000000-0000-0000-0000-000000000007",
+        "profile": "00000000-0000-0000-0000-000000000001",
+        "correction": "00000000-0000-0000-0000-000000000002"
+      },
+      "captured_original": {
+        "expected_confirmation_view": {
+          "kind": "confirmation",
+          "profile": "00000000-0000-0000-0000-000000000001",
+          "correction": "00000000-0000-0000-0000-000000000002",
+          "heads": [
+            {
+              "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+              "revision": "00000000-0000-0000-0000-000000000004",
+              "parents": [],
+              "state": "value",
+              "conflicted": false,
+              "sample_availability": "available",
+              "content": {
+                "correction": "00000000-0000-0000-0000-000000000002",
+                "original_text": "SYNTHETIC: α\nWyck0ff",
+                "corrected_text": "SYNTHETIC: α\nWyckoff",
+                "confirmed_ms": 1,
+                "provenance": {
+                  "kind": "caller-confirmed-sample",
+                  "description": "Synthetic caller assertion only",
+                  "source": null
+                },
+                "sample": {
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "bytes": 67,
+                  "media_type": "image/png"
+                },
+                "width": 1,
+                "height": 1
+              }
+            }
+          ],
+          "partial": false
+        }
+      },
+      "input": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000000-0000-0000-0000-000000000006",
+          "model": "Synthetic tablet",
+          "firmware": "3.0",
+          "architecture": "armv7l",
+          "firmware_conflict": false,
+          "installed_version": null,
+          "provenance": "unknown",
+          "service": {
+            "ActiveState": "inactive",
+            "LoadState": "loaded",
+            "SubState": "dead"
+          }
+        },
+        "handwriting_records": {
+          "state": "prepared",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000000-0000-0000-0000-000000000007",
+          "view": {
+            "kind": "confirmation",
+            "profile": "00000000-0000-0000-0000-000000000001",
+            "correction": "00000000-0000-0000-0000-000000000002",
+            "heads": [
+              {
+                "record": "c02bc2cb-ee41-5660-88ee-41d07cdb3706",
+                "revision": "00000000-0000-0000-0000-000000000004",
+                "parents": [],
+                "state": "value",
+                "conflicted": false,
+                "sample_availability": "available",
+                "content": {
+                  "correction": "00000000-0000-0000-0000-000000000002",
+                  "original_text": "SYNTHETIC: α\nWyck0ff",
+                  "corrected_text": "SYNTHETIC: α\nWyckoff",
+                  "confirmed_ms": 1,
+                  "provenance": {
+                    "kind": "caller-confirmed-sample",
+                    "description": "Synthetic caller assertion only",
+                    "source": null
+                  },
+                  "sample": {
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "bytes": 67,
+                    "media_type": "image/png"
+                  },
+                  "width": 1,
+                  "height": 1
+                }
+              }
+            ],
+            "partial": false,
+            "packet_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": {
+            "scanned": 1,
+            "matched": 1,
+            "omitted": 0,
+            "conflicted": 0,
+            "unsupported": 0,
+            "missing_media": 0,
+            "status": "complete",
+            "failure": null
+          },
+          "retained": []
+        }
+      },
+      "expected": "refuse"
+    },
+    {
+      "id": "public-retained-empty",
+      "kind": "public",
+      "request": {
+        "action": "retained"
+      },
+      "captured_original": null,
+      "input": {
+        "contract_version": 1,
+        "status": "unconfigured",
+        "observation": null,
+        "handwriting_records": {
+          "state": "idle",
+          "reference": null,
+          "invocation": null,
+          "view": null,
+          "original_outcome": null,
+          "check_outcome": null,
+          "diagnostics": null,
+          "retained": []
+        }
+      },
+      "expected": "admit"
+    }
+  ]
+}
