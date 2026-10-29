@@ -1,0 +1,2853 @@
+{
+  "schema": 1,
+  "purpose": "Independent literal proposed admission and lifecycle oracles, no implementation/producer replay",
+  "context": {
+    "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "boot_id": "00000007-1111-4111-8111-000000000007",
+    "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "invocation": "00000001-1111-4111-8111-000000000001",
+    "path": "/home/root/backups/selected-history",
+    "summary": {
+      "format": 2,
+      "manifests": 2,
+      "objects": 7,
+      "selected_scopes": 1,
+      "selection_receipts": 2,
+      "complete_media": true,
+      "configuration_included": false
+    }
+  },
+  "raw_cases": [
+    {
+      "id": "inspect-format1-True",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Pinned whole-archive validator supports this format and media truth",
+      "stdout_bytes": 261,
+      "stdout_sha256": "0fc61820e7d36e2a2148a30f1cf3424788b319f8dae816413ac6a4943a2951ad",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":1,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":0,\"complete_media\":true,\"configuration_included\":true}}}\n"
+    },
+    {
+      "id": "inspect-format1-False",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Pinned whole-archive validator supports this format and media truth",
+      "stdout_bytes": 261,
+      "stdout_sha256": "6849ac8212c33a7cb11cb3330df181ade4eacb5aa961470bcd2a9c3e8e089ac5",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":true,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":1,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":0,\"complete_media\":false,\"configuration_included\":true}}}\n"
+    },
+    {
+      "id": "inspect-format2-True",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Pinned whole-archive validator supports this format and media truth",
+      "stdout_bytes": 262,
+      "stdout_sha256": "9c4cf5e5f215f221646bcc969da7829dac9a6aa37d554e1b94c0e342623e2085",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "inspect-format2-False",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Pinned whole-archive validator supports this format and media truth",
+      "stdout_bytes": 262,
+      "stdout_sha256": "d1fec67081660e25fcc9561988cfe1960bb49a153184d20b6eca00bd1409463d",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":true,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":false,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "inspect-format3-True",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Pinned whole-archive validator supports this format and media truth",
+      "stdout_bytes": 261,
+      "stdout_sha256": "86620d9aba87d2ba07a83f1733ec1664a24ca72bae6b1338aef943bfaf2c37d1",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":3,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":0,\"complete_media\":true,\"configuration_included\":true}}}\n"
+    },
+    {
+      "id": "inspect-format3-False",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Pinned whole-archive validator supports this format and media truth",
+      "stdout_bytes": 261,
+      "stdout_sha256": "ffcbb99dddf936004947a5b3321ff78847d8f77ed7177539b619633277770e91",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":true,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":3,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":0,\"complete_media\":false,\"configuration_included\":true}}}\n"
+    },
+    {
+      "id": "export-selected-True",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Export only format2, settings excluded",
+      "stdout_bytes": 270,
+      "stdout_sha256": "2f2275a2a2dac352ae5139ee9099e8b3eb6bc7c44fa7bb193af5bc1dc2d451b9",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "export-selected-False",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Export only format2, settings excluded",
+      "stdout_bytes": 270,
+      "stdout_sha256": "e150099ff6c012d5fe39a175321ee54254cf4dcf0cfab84dc9091c4a60e68e78",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"ok\",\"incomplete\":true,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":false,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "inspect-invalid-input",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 128,
+      "stdout_sha256": "996395a7308582cfd73081b24a0e5412ecd2b44e4f12bce0fe180948e2b42beb",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"invalid-input\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "inspect-unavailable",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 125,
+      "stdout_sha256": "7b360b752234fa501a80187ede489b9bd711c98ed5aff15e6a666883df34f4cb",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"incomplete\":true,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "inspect-unsupported",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 126,
+      "stdout_sha256": "e3008c13497b009b3824003ebd7360034c5a1fa793fc2836fb46e30014a76740",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unsupported\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "export-selected-invalid-input",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 136,
+      "stdout_sha256": "974c9ce5c8c7271810fcdaf1dd3e70ffe716bd63f911c41ca22dff75cda04baa",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"invalid-input\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "export-selected-unavailable",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 133,
+      "stdout_sha256": "44c5cbb71a93a22b6017835bea4a696888e646fb7a4b6b7211a73ac8f7d2921e",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"unavailable\",\"incomplete\":true,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "export-selected-unsupported",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 134,
+      "stdout_sha256": "643f75d8f92b8eb60080cb6cd6f73905c8abf27b7f27b41ede7b586da1b86430",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"unsupported\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "export-selected-busy",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 127,
+      "stdout_sha256": "7c891011ee6130ec014870927cd83c73245f7e780648c1cc2f6646bc92d105b1",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"busy\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "export-selected-failed",
+      "operation": "export-selected",
+      "expect": "accept",
+      "basis": "Exact refusal incomplete/data truth",
+      "stdout_bytes": 128,
+      "stdout_sha256": "e4a25df6ca5c3967254ced23d5632e8f0bae99d1c08fcda1cc6419e03215f08b",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"failed\",\"incomplete\":true,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "wrong-version",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 262,
+      "stdout_sha256": "e467756de74fa53d265a9667724d983b3306526f89e338fb7cd66f860f2590d5",
+      "stdout_utf8": "{\"report_version\":2,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "wrong-operation",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 270,
+      "stdout_sha256": "2f2275a2a2dac352ae5139ee9099e8b3eb6bc7c44fa7bb193af5bc1dc2d451b9",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "activation-claim",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 261,
+      "stdout_sha256": "779bef1292fe4ba39678637fa2c9352a774b693a053336a88541bf912cc8336c",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":true,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "numeric-incomplete",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 258,
+      "stdout_sha256": "e62344eb58c98bca1553fb0374f4b6995cdcfab701568a268b355b96df79d769",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":0,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-status",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 268,
+      "stdout_sha256": "cb96fb1d660e2a43cc6634e9e2696527076c298836dd4ed0d26f9be379241e44",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"complete\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "success-with-null",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 117,
+      "stdout_sha256": "246edc17f9758ccecc7086f3ef64535a994752b22ae068db3c18d35982bb8503",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "false-incomplete",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Closed header/phase relation",
+      "stdout_bytes": 261,
+      "stdout_sha256": "aecc75e66e3758f9ed50e7428eeb6ea8072fd74956f840811141fff7fea228f2",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":true,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "extra-private-key",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "No extra/raw credential fields",
+      "stdout_bytes": 299,
+      "stdout_sha256": "eaba559fb9ded300cf2a329d1022f2a2e6885dac43b64a5a25f463c5b836dec1",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}},\"token\":\"SYNTHETIC_PRIVATE_SENTINEL\"}\n"
+    },
+    {
+      "id": "inspect-refusal-with-data",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Refusal cannot carry success",
+      "stdout_bytes": 271,
+      "stdout_sha256": "bfffcec228705cffab3215eef26e118fde5368f1bca312b026804894fcfc8126",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unsupported\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "inspect-wrong-unavailable-flag",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact flag mapping",
+      "stdout_bytes": 126,
+      "stdout_sha256": "ecb3bc0a564c64ce5d4046369de0c8e09a241845f815f1dab7b3a8de56ba47c3",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "export-selected-refusal-with-data",
+      "operation": "export-selected",
+      "expect": "refuse",
+      "basis": "Refusal cannot carry success",
+      "stdout_bytes": 279,
+      "stdout_sha256": "0e29039b73d93cfca9c598c09d0003f7e88b84260c527e52b76a499978c608c0",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"unsupported\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "export-selected-wrong-unavailable-flag",
+      "operation": "export-selected",
+      "expect": "refuse",
+      "basis": "Exact flag mapping",
+      "stdout_bytes": 134,
+      "stdout_sha256": "71780438faf113b199115b3b86c7237c13975660ed3e45835d1c8a7948cef465",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"unavailable\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "inspect-impossible-busy",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Current inspect code never emits this phase",
+      "stdout_bytes": 119,
+      "stdout_sha256": "bc6a5c97371d4f292a339211509add5a25ce703031c81fbf7bd8ee810ade7f0d",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"busy\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "inspect-impossible-failed",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Current inspect code never emits this phase",
+      "stdout_bytes": 120,
+      "stdout_sha256": "6b149a4c58722a7e6b91a1b95c1e69684d9b7a4fa633de70016d135894d7279e",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"failed\",\"incomplete\":true,\"activation_performed\":false,\"data\":null}\n"
+    },
+    {
+      "id": "bad-summary-format-0",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 262,
+      "stdout_sha256": "5b94d5db07a49674b30c7abbbf8082146bc77176b36039916ed58bb1e654b01f",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":0,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-format-4",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 262,
+      "stdout_sha256": "0469244353e2dc5628c7ad8c293e0b568d56a8a1cd9fcd31fb56bd2c31fc2453",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":4,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-format-99",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 263,
+      "stdout_sha256": "98060fc014dc0be4232f56120db0ea96495b45f6e7954e6f43436c652bdf73b1",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":99,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-manifests--1",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 263,
+      "stdout_sha256": "90b33f9a41b74f0942b0bcf9dacd6ab9048da901fa15fb0b5d309067d3316b08",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":-1,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-objects-4097",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 265,
+      "stdout_sha256": "c8206c905c3954ce4676488a536da3f0ed877994199a23c8730f171a6e580458",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":4097,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-objects-1.5",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 264,
+      "stdout_sha256": "75a72124bff6ee4f35b51a636d294ac3951ab820e95778294bd3584cc11412e5",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":1.5,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-selected_scopes-0",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 262,
+      "stdout_sha256": "38afff1e5d9216893e6ef1c5ff8af69a42ede5da91673a616e136c5c34d14354",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-selection_receipts-4097",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 265,
+      "stdout_sha256": "8502d235fc7bd680d072faf71aa4f4e855c7ac586ac29f5302ddd0065bf13db4",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":4097,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-complete_media-yes",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 263,
+      "stdout_sha256": "caf1b388f6e574636e8b3ea472b1e28fbea4a284afd7c79a902280317e084cb4",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":\"yes\",\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "bad-summary-configuration_included-True",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact supported types/bounds/format2 relation",
+      "stdout_bytes": 261,
+      "stdout_sha256": "db9e8f308b37cfef834a6bcd039c993bd7d3be09994f1cf29a60163e2e16df5e",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":true}}}\n"
+    },
+    {
+      "id": "export-wrong-format1",
+      "operation": "export-selected",
+      "expect": "refuse",
+      "basis": "Selected export cannot claim another format",
+      "stdout_bytes": 270,
+      "stdout_sha256": "10d719186f20a90e6b4f91fc60194e3d30f8b4707c68c04b31b1436a339a0081",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":1,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":0,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "nonselected-format1-has-scope",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Nonselected format cannot carry selected counts",
+      "stdout_bytes": 262,
+      "stdout_sha256": "1e02002ab05f799e90c259216f9894131e2442fc6ba3014ef0951b06ba00e6b6",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":1,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":0,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "export-wrong-format3",
+      "operation": "export-selected",
+      "expect": "refuse",
+      "basis": "Selected export cannot claim another format",
+      "stdout_bytes": 270,
+      "stdout_sha256": "184aa382b94897d310c97abfb8ba90879f810be337b48cf5c9ca25aa73d31064",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export-selected\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":3,\"manifests\":2,\"objects\":7,\"selected_scopes\":0,\"selection_receipts\":0,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "nonselected-format3-has-scope",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Nonselected format cannot carry selected counts",
+      "stdout_bytes": 262,
+      "stdout_sha256": "25deae24e2bb7655b5f877d1ce1f4b676a2b00a6f949d82e8daf0498cb43b421",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":3,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":0,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "private-summary-path",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "No path in reduced summary",
+      "stdout_bytes": 307,
+      "stdout_sha256": "12ff79dbe7434c42f99bdca2601815fc0fc5e1687329d4658b1796088d38f879",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false,\"path\":\"/home/root/backups/selected-history\"}}}\n"
+    },
+    {
+      "id": "duplicate-root",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Duplicate keys at any depth",
+      "stdout_bytes": 281,
+      "stdout_sha256": "6dffa18378f40b2dc0a8284de08236e1ea342e59f38dbdf863311725204ed8d9",
+      "stdout_utf8": "{\"report_version\":1,\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "duplicate-nested",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Nested duplicate keys",
+      "stdout_bytes": 274,
+      "stdout_sha256": "114fd629ab2d9f12e92c5128205b44827508d7535d98bf79e2ff776b8b4e818f",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "missing-lf",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact UTF8 one-line framing",
+      "stdout_bytes": 261,
+      "stdout_sha256": "950124d84e99cd4944450142d32c66280548b26c3b94e97141e0d809f4abc7b0",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}"
+    },
+    {
+      "id": "double-line",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact UTF8 one-line framing",
+      "stdout_bytes": 524,
+      "stdout_sha256": "66684386e515f5cb7ec3ca68fc13f98f35f6612dff4fa216374b2dd0c2c18cb2",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "crlf-line",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact UTF8 one-line framing",
+      "stdout_bytes": 263,
+      "stdout_sha256": "790c74d29243788a11147549abbddfd07df527e62be1cbab4b4ba4a1bf03412a",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\r\n"
+    },
+    {
+      "id": "trailing-json",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact UTF8 one-line framing",
+      "stdout_bytes": 265,
+      "stdout_sha256": "5f66406d221c40c55b99dbbe444e68a203d90eed472f8a57caaf8a87e1893c99",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}} {}\n"
+    },
+    {
+      "id": "bom",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact UTF8 one-line framing",
+      "stdout_bytes": 265,
+      "stdout_sha256": "615e802f52055a3dd137154cdc8f8b100fd2dc82ab366b6e61bddf716f465053",
+      "stdout_utf8": "\ufeff{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    },
+    {
+      "id": "prefix",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Exact UTF8 one-line framing",
+      "stdout_bytes": 41,
+      "stdout_sha256": "9f2189ad6a64dfa772ca9b34086c20dce930c511c2d13bd3da3b1ffaa3ba8600",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\n"
+    },
+    {
+      "id": "noncanonical-spaces",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Harmless JSON spaces not canonicalized",
+      "stdout_bytes": 289,
+      "stdout_sha256": "345c77543a9babb39db95e1255aec12187348bd26a2b501dd2cfc60d8a1c9ede",
+      "stdout_utf8": "{\"report_version\": 1, \"operation\": \"inspect\", \"status\": \"ok\", \"incomplete\": false, \"activation_performed\": false, \"data\": {\"inspection\": {\"format\": 2, \"manifests\": 2, \"objects\": 7, \"selected_scopes\": 1, \"selection_receipts\": 2, \"complete_media\": true, \"configuration_included\": false}}}  \n"
+    },
+    {
+      "id": "invalid-utf8",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Invalid UTF8 never replacement-decoded",
+      "stdout_bytes": 2,
+      "stdout_sha256": "e4688624e5f1ad0629505e6768e3bb36244f2f3e33e751215afa820334a76ed3",
+      "stdout_hex": "ff0a"
+    },
+    {
+      "id": "report-bytes-16384",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Inclusive raw report cap",
+      "stdout_bytes": 16384,
+      "stdout_sha256": "3a95914627cc4f87cbdbf780a8402a29947180d9e932dd700f8c20c4e19b9803",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \n"
+    },
+    {
+      "id": "report-bytes-16385",
+      "operation": "inspect",
+      "expect": "refuse",
+      "basis": "Inclusive raw report cap",
+      "stdout_bytes": 16385,
+      "stdout_sha256": "aa7eda985fceb8f57acf46b43426cfc4a51044783d13438060f7d8ffde8a162c",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":2,\"objects\":7,\"selected_scopes\":1,\"selection_receipts\":2,\"complete_media\":true,\"configuration_included\":false}}}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           \n"
+    },
+    {
+      "id": "count-exact-bound",
+      "operation": "inspect",
+      "expect": "accept",
+      "basis": "Independent count bounds, no invented arithmetic",
+      "stdout_bytes": 274,
+      "stdout_sha256": "b4ab83ac8784784e474b0a83bff2e89c778522e41b61d68b2af431e41c7656ed",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"inspection\":{\"format\":2,\"manifests\":4096,\"objects\":4096,\"selected_scopes\":4096,\"selection_receipts\":4096,\"complete_media\":true,\"configuration_included\":false}}}\n"
+    }
+  ],
+  "request_cases": [
+    {
+      "id": "inspect-valid",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "accept",
+      "basis": "Initial bounded untrusted path only"
+    },
+    {
+      "id": "prepare-export-valid",
+      "request": {
+        "action": "prepare-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "accept",
+      "basis": "Initial bounded untrusted path only"
+    },
+    {
+      "id": "confirm-export-valid",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expect": "accept",
+      "basis": "Opaque original only"
+    },
+    {
+      "id": "check-export-valid",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expect": "accept",
+      "basis": "Opaque original only"
+    },
+    {
+      "id": "cancel-exact-target",
+      "request": {
+        "action": "cancel",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expect": "accept",
+      "basis": "Cancel names existing executing invocation"
+    },
+    {
+      "id": "cancel-before-reference",
+      "request": {
+        "action": "cancel",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": null
+      },
+      "expect": "accept",
+      "basis": "Exact invocation fencing before known host reference"
+    },
+    {
+      "id": "retained-valid",
+      "request": {
+        "action": "retained"
+      },
+      "expect": "accept",
+      "basis": "Local safe metadata only"
+    },
+    {
+      "id": "path-root",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/"
+      },
+      "expect": "refuse",
+      "basis": "Scalar path admission"
+    },
+    {
+      "id": "path-relative",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "backup/x"
+      },
+      "expect": "refuse",
+      "basis": "Scalar path admission"
+    },
+    {
+      "id": "path-nul",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/a\u0000b"
+      },
+      "expect": "refuse",
+      "basis": "Scalar path admission"
+    },
+    {
+      "id": "path-surrogate",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/a\ud800"
+      },
+      "expect": "refuse",
+      "basis": "Scalar path admission"
+    },
+    {
+      "id": "path-path-over",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expect": "refuse",
+      "basis": "Scalar path admission"
+    },
+    {
+      "id": "path-exact",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expect": "accept",
+      "basis": "4096inclusive UTF8 bytes"
+    },
+    {
+      "id": "path-opaque-crlf",
+      "request": {
+        "action": "prepare-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/a\r\n "
+      },
+      "expect": "accept",
+      "basis": "Exact protected path, no trim/normalization"
+    },
+    {
+      "id": "confirm-export-substitute-path",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "refuse",
+      "basis": "Original-only followup, closed keys"
+    },
+    {
+      "id": "confirm-export-substitute-intent",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "intent": {
+          "operation": "00000001-1111-4111-8111-000000000001"
+        }
+      },
+      "expect": "refuse",
+      "basis": "No caller conditions"
+    },
+    {
+      "id": "check-export-substitute-path",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "refuse",
+      "basis": "Original-only followup, closed keys"
+    },
+    {
+      "id": "check-export-substitute-intent",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "intent": {
+          "operation": "00000001-1111-4111-8111-000000000001"
+        }
+      },
+      "expect": "refuse",
+      "basis": "No caller conditions"
+    },
+    {
+      "id": "cancel-substitute-path",
+      "request": {
+        "action": "cancel",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "refuse",
+      "basis": "Original-only followup, closed keys"
+    },
+    {
+      "id": "cancel-substitute-intent",
+      "request": {
+        "action": "cancel",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "intent": {
+          "operation": "00000001-1111-4111-8111-000000000001"
+        }
+      },
+      "expect": "refuse",
+      "basis": "No caller conditions"
+    },
+    {
+      "id": "bad-reference",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "00000009-1111-4111-8111-000000000009"
+      },
+      "expect": "refuse",
+      "basis": "Exact shape/identity/action"
+    },
+    {
+      "id": "bad-invocation",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "000000000000000000000000000000000000",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "refuse",
+      "basis": "Exact shape/identity/action"
+    },
+    {
+      "id": "uppercase-identity",
+      "request": {
+        "action": "inspect",
+        "connection_id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "refuse",
+      "basis": "Exact shape/identity/action"
+    },
+    {
+      "id": "retained-with-identity",
+      "request": {
+        "action": "retained",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expect": "refuse",
+      "basis": "Exact shape/identity/action"
+    },
+    {
+      "id": "unknown-action",
+      "request": {
+        "action": "restore",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "expect": "refuse",
+      "basis": "Exact shape/identity/action"
+    },
+    {
+      "id": "renderer-cannot-supply-expected-history",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "expected_original_outcome": "unknown"
+      },
+      "expect": "refuse",
+      "basis": "Expected history belongs only to private response context"
+    }
+  ],
+  "public_cases": [
+    {
+      "id": "ready-policy-only",
+      "request": {
+        "action": "prepare-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "ready",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": null,
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": []
+        }
+      },
+      "expect": "accept",
+      "basis": "No producer counts/receipt"
+    },
+    {
+      "id": "ready-invented-counts",
+      "request": {
+        "action": "prepare-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "ready",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": []
+        }
+      },
+      "expect": "refuse",
+      "basis": "Preview has no frozen data"
+    },
+    {
+      "id": "inspected-valid",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "inspected",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": []
+        }
+      },
+      "expect": "accept",
+      "basis": "Phase-specific current custody, history separate"
+    },
+    {
+      "id": "exported-valid",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "exported",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "exported",
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "exported",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Phase-specific current custody, history separate"
+    },
+    {
+      "id": "archive-observed-valid",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Phase-specific current custody, history separate",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "partial-media-inspect",
+      "request": {
+        "action": "inspect",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "path": "/home/root/backups/selected-history"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "partial-media",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": false,
+            "configuration_included": false
+          },
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": []
+        }
+      },
+      "expect": "accept",
+      "basis": "Explicit intentional omission"
+    },
+    {
+      "id": "partial-media-confirm-export",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "partial-media",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": false,
+            "configuration_included": false
+          },
+          "original_outcome": "partial-media",
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "partial-media",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Explicit intentional omission"
+    },
+    {
+      "id": "incomplete-media-observed-check-export",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "incomplete-media-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": false,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "incomplete-media-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Explicit intentional omission",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "unknown-original",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "unknown",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": null,
+          "original_outcome": "unknown",
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Possible dispatch without receipt"
+    },
+    {
+      "id": "known-not-dispatched",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "not-dispatched",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": null,
+          "original_outcome": "not-dispatched",
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "not-dispatched",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Only exact valid pre-export refusal"
+    },
+    {
+      "id": "unresolved-keeps-unknown",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "unresolved",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": null,
+          "original_outcome": "unknown",
+          "check_outcome": "unresolved",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "No rollback/history inference",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "check-upgrades-history-row-mismatch",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "exported",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Original and matching row agree, immutable original enforced in lifecycle",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "wrong-invocation",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000009-1111-4111-8111-000000000009",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Closed phase/context/private fields",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "wrong-reference",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Closed phase/context/private fields",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "wrong-identity",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Closed phase/context/private fields",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "missing-summary",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": null,
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Closed phase/context/private fields",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "invented-check-exported",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "exported",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Closed phase/context/private fields",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "private-path",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ],
+          "path": "/home/root/backups/selected-history"
+        }
+      },
+      "expect": "refuse",
+      "basis": "Closed phase/context/private fields",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "unknown-with-summary",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "unknown",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Unknown cannot carry invented custody"
+    },
+    {
+      "id": "check-returns-export-action",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "exported",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "exported",
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "exported",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Read-only check cannot report export execution",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "retained-expired-safe-row",
+      "request": {
+        "action": "retained"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "unconfigured",
+        "observation": null,
+        "selected_archive": {
+          "state": "idle",
+          "reference": null,
+          "invocation": null,
+          "summary": null,
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Expired metadata stays bounded, no private authority"
+    },
+    {
+      "id": "retained-8-distinct",
+      "request": {
+        "action": "retained"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "unconfigured",
+        "observation": null,
+        "selected_archive": {
+          "state": "idle",
+          "reference": null,
+          "invocation": null,
+          "summary": null,
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000001",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000002",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000003",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000004",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000005",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000006",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000007",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000008",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Independent row-capacity boundary; all references distinct and valid"
+    },
+    {
+      "id": "retained-9-distinct",
+      "request": {
+        "action": "retained"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "unconfigured",
+        "observation": null,
+        "selected_archive": {
+          "state": "idle",
+          "reference": null,
+          "invocation": null,
+          "summary": null,
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000001",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000002",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000003",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000004",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000005",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000006",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000007",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000008",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            },
+            {
+              "reference": "0000000000000000000000000000000000000000000000000000000000000009",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": true
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Independent row-capacity boundary; all references distinct and valid"
+    },
+    {
+      "id": "retained-two-duplicates",
+      "request": {
+        "action": "retained"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "unconfigured",
+        "observation": null,
+        "selected_archive": {
+          "state": "idle",
+          "reference": null,
+          "invocation": null,
+          "summary": null,
+          "original_outcome": null,
+          "check_outcome": null,
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            },
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Uniqueness independent of capacity: two rows only"
+    },
+    {
+      "id": "check-forged-self-consistent-upgrade",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "exported",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "exported",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Both result and row say exported, captured original remains unknown",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "check-row-wrong-connection_id",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Matching reference is insufficient: captured original row identity must match",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "check-row-wrong-boot_id",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "unknown",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000063-1111-4111-8111-000000000063",
+              "original_outcome": "unknown",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "refuse",
+      "basis": "Matching reference is insufficient: captured original row identity must match",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "unknown",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "check-known-exported-history",
+      "request": {
+        "action": "check-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "archive-observed",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": {
+            "format": 2,
+            "manifests": 2,
+            "objects": 7,
+            "selected_scopes": 1,
+            "selection_receipts": 2,
+            "complete_media": true,
+            "configuration_included": false
+          },
+          "original_outcome": "exported",
+          "check_outcome": "archive-observed",
+          "retained": [
+            {
+              "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "boot_id": "00000007-1111-4111-8111-000000000007",
+              "original_outcome": "exported",
+              "expired": false
+            }
+          ]
+        }
+      },
+      "expect": "accept",
+      "basis": "Captured known history remains known without inventing it",
+      "response_context": {
+        "action": "check-export",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "expected_original_outcome": "exported",
+        "source": "Previously retained immutable original captured privately before awaiting, not renderer authority or returned data"
+      }
+    },
+    {
+      "id": "original-without-row",
+      "request": {
+        "action": "confirm-export",
+        "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "boot_id": "00000007-1111-4111-8111-000000000007",
+        "invocation": "00000001-1111-4111-8111-000000000001",
+        "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "result": {
+        "contract_version": 1,
+        "status": "observed",
+        "observation": {
+          "model": "reMarkable 1",
+          "firmware": "3.0.0",
+          "firmware_conflict": false,
+          "architecture": "armv7l",
+          "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "boot_id": "00000007-1111-4111-8111-000000000007",
+          "service": {
+            "LoadState": "loaded",
+            "ActiveState": "inactive",
+            "SubState": "dead"
+          },
+          "installed_version": null,
+          "provenance": "unknown"
+        },
+        "selected_archive": {
+          "state": "unknown",
+          "reference": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "invocation": "00000001-1111-4111-8111-000000000001",
+          "summary": null,
+          "original_outcome": "unknown",
+          "check_outcome": null,
+          "retained": []
+        }
+      },
+      "expect": "refuse",
+      "basis": "Every attempted original has matching retained metadata"
+    }
+  ],
+  "lifecycle_cases": [
+    {
+      "id": "policy-preview-no-producer",
+      "steps": [
+        "prepare-export(A)"
+      ],
+      "expected": {
+        "producer_calls": [],
+        "summary": null,
+        "ready_seconds": 120
+      }
+    },
+    {
+      "id": "one-export-only",
+      "steps": [
+        "prepare-export(A)",
+        "confirm-export(A,x)",
+        "confirm-export(A,y)"
+      ],
+      "expected": {
+        "export_calls": 1,
+        "second": "refuse",
+        "original_unchanged": true
+      }
+    },
+    {
+      "id": "unknown-then-valid-check",
+      "steps": [
+        "confirm(A):lost-output",
+        "check(A):valid-format2"
+      ],
+      "expected": {
+        "original_outcome": "unknown",
+        "check_outcome": "archive-observed",
+        "export_calls": 1,
+        "publisher_proven": false
+      }
+    },
+    {
+      "id": "unknown-then-refused-check",
+      "steps": [
+        "confirm(A):lost-output",
+        "check(A):unsupported"
+      ],
+      "expected": {
+        "original_outcome": "unknown",
+        "rollback_proven": false,
+        "export_calls": 1
+      }
+    },
+    {
+      "id": "late-identity",
+      "steps": [
+        "inspect(A):pending",
+        "refresh(same-IDs)",
+        "complete(A)"
+      ],
+      "expected": {
+        "late_view_ignored": true,
+        "draft_dom_empty": true
+      }
+    },
+    {
+      "id": "identity-change",
+      "steps": [
+        "preview(A)",
+        "connect(B)",
+        "confirm(A)"
+      ],
+      "expected": {
+        "export_calls": 0,
+        "A_original_not_rebound": true
+      }
+    },
+    {
+      "id": "ready-expiry",
+      "steps": [
+        "preview(A,t0)",
+        "confirm(A,t0+120s)"
+      ],
+      "expected": {
+        "export_calls": 0,
+        "authority_expired": true
+      }
+    },
+    {
+      "id": "original-nonrenewal",
+      "steps": [
+        "confirm(A,t0):unknown",
+        "check(A,t0+29m)",
+        "check(A,t0+30m)"
+      ],
+      "expected": {
+        "last_dispatch": false,
+        "private_buffers_erased": true,
+        "safe_row_kept": true
+      }
+    },
+    {
+      "id": "new-with-room",
+      "steps": [
+        "confirm(A):unknown",
+        "preview(B,same-target)",
+        "confirm(B)"
+      ],
+      "expected": {
+        "A_bytes_deadline_history_unchanged": true,
+        "new_operation_distinct": true
+      }
+    },
+    {
+      "id": "expired-row-with-room",
+      "steps": [
+        "A:expired-row",
+        "preview(B)"
+      ],
+      "expected": {
+        "A_slot_still_occupied": true,
+        "B_may_reserve_room": true
+      }
+    },
+    {
+      "id": "eight-rows-full",
+      "steps": [
+        "8retained-including-expired",
+        "preview(B)"
+      ],
+      "expected": {
+        "status": "capacity",
+        "producer_calls": 0,
+        "evictions": 0
+      }
+    },
+    {
+      "id": "invocation-full",
+      "steps": [
+        "A:32entries",
+        "check(A,new)"
+      ],
+      "expected": {
+        "dispatch": false,
+        "deadline_renewed": false
+      }
+    },
+    {
+      "id": "cancel-before-ref",
+      "steps": [
+        "inspect(A,x):queued",
+        "cancel(null,x)",
+        "admit(x)"
+      ],
+      "expected": {
+        "dispatch": false,
+        "exact_invocation_fenced": true
+      }
+    },
+    {
+      "id": "cancel-stale-successor",
+      "steps": [
+        "confirm(A,x):settled",
+        "check(A,y):owner",
+        "cancel(A,x)"
+      ],
+      "expected": {
+        "successor_y_untouched": true,
+        "global_cancel_calls": 0
+      }
+    },
+    {
+      "id": "cancel-after-export-dispatch",
+      "steps": [
+        "confirm(A,x):possible-dispatch",
+        "cancel(A,x)"
+      ],
+      "expected": {
+        "original_outcome": "unknown",
+        "cleanup": false,
+        "reexport": false
+      }
+    },
+    {
+      "id": "cancel-completed-export",
+      "steps": [
+        "confirm(A):exported",
+        "cancel(A,old)"
+      ],
+      "expected": {
+        "original_outcome": "exported",
+        "cancel_status": "unavailable",
+        "reexport": false
+      }
+    },
+    {
+      "id": "corrupt-input-custody",
+      "steps": [
+        "preview(A)",
+        "flip-original-input-byte",
+        "confirm(A)"
+      ],
+      "expected": {
+        "export_calls": 0,
+        "no_reconstruction": true
+      }
+    },
+    {
+      "id": "corrupt-retained-custody",
+      "steps": [
+        "confirm(A):unknown",
+        "flip-path-buffer",
+        "check(A)"
+      ],
+      "expected": {
+        "inspect_calls": 0,
+        "original_outcome": "unknown"
+      }
+    },
+    {
+      "id": "busy-before-hooks",
+      "steps": [
+        "peer-owner",
+        "prepare-export(A)"
+      ],
+      "expected": {
+        "hooks": 0,
+        "cancel_calls": 0,
+        "dispatch": 0,
+        "known_busy_draft_preserved": true
+      }
+    },
+    {
+      "id": "quiescence-queued-observation",
+      "steps": [
+        "observation:queued",
+        "archive-admitted",
+        "observation:late"
+      ],
+      "expected": {
+        "late_observation_no_dispatch": true,
+        "archive_owner_preserved": true
+      }
+    },
+    {
+      "id": "sensitive-boundaries",
+      "steps": [
+        "paste-exact-CRLF",
+        "admit-before-await",
+        "pagehide-bfcache",
+        "destroy"
+      ],
+      "expected": {
+        "signal_empty": true,
+        "actual_DOM_empty": true,
+        "no_url_log_persistence": true
+      }
+    },
+    {
+      "id": "check-not-same-publisher",
+      "steps": [
+        "confirm(A):unknown",
+        "external-valid-archive-at-original-path",
+        "check(A):ok"
+      ],
+      "expected": {
+        "original_outcome": "unknown",
+        "publisher_proven": false
+      }
+    },
+    {
+      "id": "gen3-vs-pending4",
+      "steps": [
+        "inspect:format3-ok",
+        "export-selected:unsupported-feedback3",
+        "future-format4-report"
+      ],
+      "expected": {
+        "inspect3_admitted": true,
+        "export_no_fallback": true,
+        "format4_refused": true
+      }
+    },
+    {
+      "id": "read-inspect-not-original",
+      "steps": [
+        "inspect(A):ok",
+        "inspect(B):ok"
+      ],
+      "expected": {
+        "export_rows_allocated": 0,
+        "private_paths_dropped": true
+      }
+    },
+    {
+      "id": "known-reference-cancel-remains-fenced",
+      "steps": [
+        "original(A):retained",
+        "cancel(A,check-x):before-arrival",
+        "15seconds-pass",
+        "check(A,x)"
+      ],
+      "expected": {
+        "inspect_dispatch": false,
+        "original_history_unchanged": true,
+        "fence_in_original_ledger": true,
+        "session_fence_expiry_not_new_authority": true
+      }
+    }
+  ]
+}

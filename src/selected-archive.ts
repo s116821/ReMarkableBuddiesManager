@@ -1,0 +1,59 @@
+import {displayModelText,spliceModelText,reconcileModelText} from '../host/opaque-text.mjs';
+import {archivePath,parseArchiveRequest,archiveResponseContext,parseArchiveResult,type ArchiveRequest,type ArchiveResult,type ArchiveRetained,type ArchiveView} from '../host/selected-archive-protocol.mjs';
+import {validateResult} from '../host/observation-protocol.mjs';
+import type {TabletObservation} from './observation';
+export interface ArchiveAdapter {selectedArchive(request:ArchiveRequest):Promise<ArchiveResult>}
+export interface ArchiveUiState {draft:string;busy:boolean;status:string;view:ArchiveView|null;retained:ArchiveRetained[]}
+export function archiveAttemptMessage(outcome:string){return outcome==='exported'?'This archive export completed.':outcome==='partial-media'?'This archive export completed with some media intentionally omitted.':outcome==='not-dispatched'?'This export did not start.':'This export result is unconfirmed. Check its original folder instead of repeating the export.';}
+const labels:Record<string,string>={ready:'Review what will be copied before confirming.',inspected:'The archive was checked. This does not restore or apply its data.',exported:'The archive export completed. Current Buddy data was kept.','partial-media':'The archive was checked, with some media intentionally omitted.','archive-observed':'A valid archive is in the original folder now. This does not change the earlier export result.','incomplete-media-observed':'An archive with some media omitted is in the original folder. The earlier result is unchanged.',unknown:'The export result is unconfirmed. Check this attempt instead of exporting again.',unresolved:'A valid archive could not be confirmed. This does not prove an earlier export was undone.','not-dispatched':'This export did not start.',unsupported:'The installed Buddy version or data does not support this archive operation.',unavailable:'The archive operation is unavailable. Earlier results have been kept.',busy:'Another operation is running. Wait for it to finish.',capacity:'This computer is keeping the maximum number of earlier attempts. No export was started.','invalid-input':'Enter a supported full folder path on this tablet.',invalidated:'The draft and preview were cleared.'};
+interface Target {reference:string|null;connection_id:string;boot_id:string;invocation:string}
+export class SelectedArchiveController {
+ state:ArchiveUiState={draft:'',busy:false,status:'Enter an archive folder already on the tablet, or a new folder for export.',view:null,retained:[]};
+ private generation=0;private active:Target|null=null;private ready:Target|null=null;private timer:ReturnType<typeof setTimeout>|undefined;
+ private expiries=new Map<string,number>();private expiryTimers=new Map<string,ReturnType<typeof setTimeout>>();
+ private invalid=false;private version=0;private before:{version:number;start:number;end:number;type:string;data:string|null}|null=null;
+ private readonly changed:(s:ArchiveUiState)=>void;private readonly erase:()=>void;private readonly now:()=>number;private readonly uuid:()=>string;
+ constructor(changed:(s:ArchiveUiState)=>void,erase:()=>void=()=>{},now:()=>number=()=>performance.now(),uuid:()=>string=()=>crypto.randomUUID()){this.changed=changed;this.erase=erase;this.now=now;this.uuid=uuid;}
+ private publish(p:Partial<ArchiveUiState>){this.state={...this.state,...p};this.changed(this.state);}
+ valid(){return !this.invalid&&archivePath(this.state.draft);}
+ text(){return displayModelText(this.state.draft);}
+ setDraft(value:string){if(this.state.busy)return false;if([...value].some(c=>{const n=c.codePointAt(0)!;return n>=0xd800&&n<=0xdfff;})||new TextEncoder().encode(value).length>4096){this.invalid=true;this.publish({status:'Path edit refused. Enter a fresh full path.'});return false;}this.invalid=false;this.version++;this.before=null;clearTimeout(this.timer);this.ready=null;this.publish({draft:value,view:null});return true;}
+ beforeInput(start:number,end:number,type:string,data:string|null){if(!this.state.busy)this.before={version:this.version,start,end,type,data};}
+ paste(start:number,end:number,text:string){if(this.state.busy)return false;try{return this.setDraft(spliceModelText(this.state.draft,start,end,text));}catch{this.invalid=true;return false;}}
+ input(next:string){if(this.state.busy)return;const b=this.before;try{let candidate:string|null=null;
+  if(b?.version===this.version){if(b.type==='insertText'&&b.data!==null)candidate=spliceModelText(this.state.draft,b.start,b.end,b.data);else if(['insertLineBreak','insertParagraph'].includes(b.type))candidate=spliceModelText(this.state.draft,b.start,b.end,'\n');else if(b.type.startsWith('delete')){if(b.start!==b.end)candidate=spliceModelText(this.state.draft,b.start,b.end,'');else{const n=this.text().length-next.length;if(n<0)throw Error('Edit refused');if(b.type.endsWith('Backward'))candidate=spliceModelText(this.state.draft,b.start-n,b.end,'');else if(b.type.endsWith('Forward'))candidate=spliceModelText(this.state.draft,b.start,b.end+n,'');else if(n===0)candidate=this.state.draft;else throw Error('Edit refused');}}}
+  if(candidate===null){if(next===this.text()&&b&&(b.start!==b.end||b.type!=='insertCompositionText'))throw Error('Edit refused');candidate=reconcileModelText(this.state.draft,next);}if(displayModelText(candidate)!==next)throw Error('Edit refused');this.setDraft(candidate);
+ }catch{this.invalid=true;this.version++;this.before=null;this.publish({status:'Path edit refused. Enter a fresh exact path.'});}}
+ private rows(incoming:ArchiveRetained[]){const rows=new Map(this.state.retained.map(r=>[r.reference,r]));for(const r of incoming)rows.set(r.reference,{...r,expired:r.expired||(this.expiries.get(r.reference)??Infinity)<=this.now()});return [...rows.values()];}
+ private expire(reference:string){if(this.expiries.has(reference))return;const deadline=this.now()+1800000;this.expiries.set(reference,deadline);const timer=setTimeout(()=>{this.expiryTimers.delete(reference);this.publish({retained:this.state.retained.map(r=>r.reference===reference?{...r,expired:true}:r)});},1800000);this.expiryTimers.set(reference,timer);(timer as unknown as {unref?:()=>void}).unref?.();}
+ canCheck(row:ArchiveRetained){return !row.expired&&(this.expiries.get(row.reference)??Infinity)>this.now();}
+ clear(){this.generation++;clearTimeout(this.timer);this.active=null;this.ready=null;this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:false,view:null,status:labels['invalidated']});}
+ dispose(){this.clear();for(const t of this.expiryTimers.values())clearTimeout(t);this.expiryTimers.clear();}
+ private accept(view:ArchiveView){this.publish({busy:false,view,retained:this.rows(view.retained),status:labels[view.state]??'Archive operation unavailable.'});}
+ async retained(adapter:ArchiveAdapter){const g=this.generation;try{const r=await adapter.selectedArchive({action:'retained'});if(g===this.generation)this.publish({retained:this.rows(parseArchiveResult(r,{action:'retained'},validateResult).selected_archive.retained)});}catch{/* Safe host metadata cannot reconstruct original input. */}}
+ async inspect(adapter:ArchiveAdapter,tablet:TabletObservation,pause:()=>Promise<boolean>){if(!this.state.busy&&this.valid())await this.run(adapter,tablet,'inspect',null,pause);}
+ async prepare(adapter:ArchiveAdapter,tablet:TabletObservation,pause:()=>Promise<boolean>){if(!this.state.busy&&this.valid()&&this.state.retained.length<8)await this.run(adapter,tablet,'prepare-export',null,pause);}
+ async confirm(adapter:ArchiveAdapter,tablet:TabletObservation,pause:()=>Promise<boolean>){if(!this.state.busy&&this.state.view?.state==='ready'&&this.state.view.reference)await this.run(adapter,tablet,'confirm-export',this.state.view.reference,pause);}
+ async check(adapter:ArchiveAdapter,tablet:TabletObservation,row:ArchiveRetained,pause:()=>Promise<boolean>){if(!this.state.busy&&this.canCheck(row)&&row.connection_id===tablet.connection_id&&row.boot_id===tablet.boot_id)await this.run(adapter,tablet,'check-export',row.reference,pause);}
+ private async run(adapter:ArchiveAdapter,tablet:TabletObservation,action:'inspect'|'prepare-export'|'confirm-export'|'check-export',reference:string|null,pause:()=>Promise<boolean>){
+  const invocation=this.uuid(),g=++this.generation,identity={connection_id:tablet.connection_id,boot_id:tablet.boot_id},started=this.now();
+  let q:ArchiveRequest|null=parseArchiveRequest(['inspect','prepare-export'].includes(action)?{action,...identity,invocation,path:this.state.draft}:{action,...identity,invocation,reference});
+  // Capture history from our existing record, never from a future result or caller grant.
+  const original=this.state.retained.find(r=>r.reference===reference),context=archiveResponseContext(q,original?.original_outcome??null);
+  this.active={reference,...identity,invocation};this.ready=null;clearTimeout(this.timer);this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:true,view:null,status:action==='confirm-export'?'Exporting Buddy history to a new folder...':action==='prepare-export'?'Preparing the export explanation...':'Checking the archive...'});
+  let possible=false,timer:ReturnType<typeof setTimeout>|undefined;
+  try{
+   const result=await Promise.race([(async()=>{if(!await pause()||g!==this.generation)return null;
+    if(action==='confirm-export'&&reference){possible=true;this.expire(reference);this.publish({retained:this.rows([{reference,...identity,original_outcome:'unknown',expired:false}])});}
+    const pending=adapter.selectedArchive(q!);q=null;const r=await pending;if(g!==this.generation)return null;return parseArchiveResult(r,context,validateResult);
+   })(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Archive wait expired')),14000);})]);
+   if(g!==this.generation)return;this.active=null;if(!result){this.clear();return;}
+   const view=result.selected_archive;
+   if(action==='confirm-export'&&reference&&['busy','unavailable','invalidated'].includes(view.state)&&!view.retained.some(r=>r.reference===reference)){clearTimeout(this.expiryTimers.get(reference));this.expiryTimers.delete(reference);this.expiries.delete(reference);this.publish({retained:this.state.retained.filter(r=>r.reference!==reference)});}
+   this.accept(view);
+   if(action==='prepare-export'&&view.state==='ready'&&view.reference){this.ready={reference:view.reference,...identity,invocation};this.timer=setTimeout(()=>{if(g===this.generation)this.clear();},Math.max(1,120000-(this.now()-started)));}
+  }catch{if(g===this.generation){this.generation++;this.active=null;if(possible&&reference){const row:ArchiveRetained={reference,...identity,original_outcome:'unknown',expired:!this.canCheck({reference,...identity,original_outcome:'unknown',expired:false})};this.publish({busy:false,view:null,retained:this.rows([row]),status:labels['unknown']});}else this.publish({busy:false,view:null,status:labels['unavailable']});}}
+  finally{q=null;clearTimeout(timer);}
+ }
+ async stop(adapter:ArchiveAdapter){const target=this.active??this.ready,wasRead=this.active?.reference===null;this.clear();const g=this.generation;if(!target)return;let timer:ReturnType<typeof setTimeout>|undefined;this.publish({busy:true,status:'Stopping this wait...'});try{const q=parseArchiveRequest({action:'cancel',...target}),r=await Promise.race([adapter.selectedArchive(q),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Stop wait expired')),14000);})]);if(g===this.generation){this.accept(parseArchiveResult(r,archiveResponseContext(q),validateResult).selected_archive);if(wasRead)this.publish({status:'Stopped waiting. The archive check may still finish.'});}}catch{if(g===this.generation)this.publish({busy:false,status:'Stopped waiting. An export may still have finished; earlier results were kept.'});}finally{clearTimeout(timer);}}
+}

@@ -474,6 +474,34 @@
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
     <p class="mt-4 text-sm text-muted">Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.</p>
   </section>
+  <section class="ui-panel mt-6" aria-labelledby="selected-archive-title">
+    <h2 id="selected-archive-title" class="ui-heading">Check an archive or export Buddy history</h2>
+    <p class="mt-2">Check an existing archive, or copy supported Buddy history and media to a new folder on this tablet. Current data is kept. This does not download a backup, restore selected history, or set up cloud sync.</p>
+    <label class="block mt-3" for="selected-archive-path">Archive folder path on this tablet</label>
+    <textarea id="selected-archive-path" class="ui-field block w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="selectedPathText()" (beforeinput)="beforeSelectedPath($event)" (input)="updateSelectedPath($event)" (paste)="pasteSelectedPath($event)" [disabled]="selectedArchive().busy || selectedPeerBusy()" aria-describedby="selected-archive-help"></textarea>
+    <p id="selected-archive-help" class="mt-2">Enter a full tablet path, not a folder on this computer. It clears on submission and is not saved or shown in results. Export requires a new folder outside Buddy data.</p>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="inspectArchive()" [disabled]="!canInspectArchive()">Inspect archive</button>
+      <button class="ui-button ui-button-primary" type="button" (click)="previewArchive()" [disabled]="!canPreviewArchive()">Preview history export</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="confirmArchive()" [disabled]="!canConfirmArchive()">Confirm history export</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopArchive()" [disabled]="selectedPeerBusy()">Stop archive wait</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="showArchiveOriginals()">Show earlier exports</button>
+    </div>
+    <p role="status" class="mt-3" data-testid="selected-archive-status">{{ selectedArchive().status }}</p>
+    @if (selectedArchive().view?.state === 'ready') {
+      <p class="mt-3" data-testid="selected-archive-preview">Confirming copies supported Buddy history and media to a new folder while keeping current records. Saved settings, credentials, native documents and native pages are excluded. This explanation does not freeze the source or guarantee success; the archive is not transferred to this computer. Counts are known only after export.</p>
+    }
+    @if (selectedArchive().view?.summary; as summary) {
+      <p class="mt-3" data-testid="selected-archive-summary">Media: {{ summary.complete_media ? 'complete' : 'some intentionally omitted' }}. Saved settings included: {{ summary.configuration_included ? 'yes; kept private and not applied or approved as portable' : 'no' }}. This checks archive data; running Buddy and native pages have not been checked.</p>
+      <details class="mt-3" data-testid="selected-archive-technical"><summary>Technical details</summary><p>Archive format {{ summary.format }}; {{ summary.manifests }} manifests, {{ summary.objects }} objects, {{ summary.selected_scopes }} selected scopes and {{ summary.selection_receipts }} historical receipts.</p></details>
+    }
+    @for (record of selectedArchive().retained; track record.reference) {
+      <div class="mt-3" data-testid="selected-archive-original"><p>{{ archiveAttemptMessage(record.original_outcome) }}</p>
+        <button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkArchive(record)" [disabled]="!canCheckArchive(record)">Check export folder</button>
+        @if (record.expired) { <p>Private check details expired; this earlier result is kept without retry permission.</p> }
+      </div>
+    }
+  </section>
   <section class="ui-panel mt-6" aria-labelledby="ordinary-restore-title">
     <h2 id="ordinary-restore-title" class="ui-heading">Restore an archive already on this tablet</h2>
     <p class="mt-2">Add archived Buddy data to the data already on this tablet, keeping current records. The archive must already be on this tablet. This cannot download an archive, set up an empty or replacement tablet, or restore native pages.</p>

@@ -180,6 +180,7 @@ jobs:
           xvfb-run -a npm run test:conversation-inventory-hosts
           xvfb-run -a npm run test:conversation-management-hosts
           xvfb-run -a npm run test:ordinary-restore-hosts
+          xvfb-run -a npm run test:selected-archive-hosts
           xvfb-run -a npm run test:source-cache-cleanup-hosts
           xvfb-run -a npm run test:memory-settings-hosts -- --packaged
           xvfb-run -a npm run test:credential-reference-hosts -- --packaged
@@ -188,6 +189,7 @@ jobs:
           xvfb-run -a npm run test:conversation-inventory-hosts -- --packaged
           xvfb-run -a npm run test:conversation-management-hosts -- --packaged
           xvfb-run -a npm run test:ordinary-restore-hosts -- --packaged
+          xvfb-run -a npm run test:selected-archive-hosts -- --packaged
           xvfb-run -a npm run test:source-cache-cleanup-hosts -- --packaged
           xvfb-run -a npm run test:ordinary-export-hosts
           xvfb-run -a npm run test:ordinary-export-hosts -- --packaged
@@ -231,6 +233,7 @@ jobs:
           npm run test:conversation-inventory-hosts
           npm run test:conversation-management-hosts
           npm run test:ordinary-restore-hosts
+          npm run test:selected-archive-hosts
           npm run test:source-cache-cleanup-hosts
           npm run test:memory-settings-hosts -- --packaged
           npm run test:credential-reference-hosts -- --packaged
@@ -239,6 +242,7 @@ jobs:
           npm run test:conversation-inventory-hosts -- --packaged
           npm run test:conversation-management-hosts -- --packaged
           npm run test:ordinary-restore-hosts -- --packaged
+          npm run test:selected-archive-hosts -- --packaged
           npm run test:source-cache-cleanup-hosts -- --packaged
           npm run test:ordinary-export-hosts
           npm run test:ordinary-export-hosts -- --packaged
