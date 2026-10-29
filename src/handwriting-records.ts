@@ -26,6 +26,7 @@ export class HandwritingRecordsController {
     state: HandwritingUiState = { profile: '', correction: '', query: '', busy: false, status: 'Enter an explicit profile UUID to inspect saved corrections.', result: null, retained: [] };
     private generation = 0;
     private active: Target | null = null;
+    private activeMutation = false;
     private ready: Target | null = null;
     private timer: ReturnType<typeof setTimeout> | undefined;
     private expiries = new Map<string, number>();
@@ -64,7 +65,7 @@ export class HandwritingRecordsController {
     }).unref?.(); }
     canCheck(r: HandwritingRetained) { return !r.expired && (this.expiries.get(r.reference) ?? Infinity) > this.now(); }
     canPrepare() { const r = this.state.result; return !this.state.busy && r?.state === 'inspected' && r.view?.heads.length === 1 && r.view.heads[0].state === 'value' && r.view.heads[0].sample_availability === 'available'; }
-    clear() { this.generation++; clearTimeout(this.timer); this.active = null; this.ready = null; this.erase(); this.publish({ profile: '', correction: '', query: '', busy: false, result: null, status: labels['invalidated'] }); }
+    clear() { this.generation++; clearTimeout(this.timer); this.active = null; this.activeMutation = false; this.ready = null; this.erase(); this.publish({ profile: '', correction: '', query: '', busy: false, result: null, status: labels['invalidated'] }); }
     dispose() { this.clear(); for (const t of this.expiryTimers.values())
         clearTimeout(t); this.expiryTimers.clear(); }
     async retained(a: HandwritingAdapter) { const g = this.generation; try {
@@ -91,6 +92,7 @@ export class HandwritingRecordsController {
         let q: HandwritingRequest | null = parseHandwritingRequest({ ...body, ...identity, invocation });
         const action = q.action, reference = 'reference' in q ? q.reference : null, original = this.state.retained.find(r => r.reference === reference), context = handwritingContext(q, original?.original_outcome ?? null);
         this.active = { ...identity, invocation, reference };
+        this.activeMutation = action === 'confirm-remove';
         this.ready = null;
         clearTimeout(this.timer);
         this.erase();
@@ -137,12 +139,12 @@ export class HandwritingRecordsController {
             clearTimeout(timer);
         }
     }
-    async stop(a: HandwritingAdapter) { const target = this.active ?? this.ready; this.clear(); const g = this.generation; if (!target)
+    async stop(a: HandwritingAdapter) { const target = this.active ?? this.ready, read = this.active !== null && !this.activeMutation; this.clear(); const g = this.generation; if (!target)
         return; let timer: ReturnType<typeof setTimeout> | undefined; this.publish({ busy: true, status: 'Stopping this wait...' }); try {
         const q = parseHandwritingRequest({ action: 'cancel', ...target }), r = await Promise.race([a.handwritingRecords(q), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Error('Stop expired')), 14000); })]);
         const v = await parseHandwritingResult(r, handwritingContext(q), validateResult);
         if (g === this.generation)
-            this.publish({ busy: false, result: v.handwriting_records, retained: this.rows(v.handwriting_records.retained), status: labels[v.handwriting_records.state] ?? labels['invalidated'] });
+            this.publish({ busy: false, result: v.handwriting_records, retained: this.rows(v.handwriting_records.retained), status: read ? 'Stopped waiting for records. Earlier removal history is unchanged.' : labels[v.handwriting_records.state] ?? labels['invalidated'] });
     }
     catch {
         if (g === this.generation)

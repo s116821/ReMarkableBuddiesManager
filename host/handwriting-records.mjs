@@ -198,6 +198,11 @@ export class HandwritingRecordsHost {
         throw Error('Handwriting unavailable'); const raw = Buffer.from(r.stdout_base64, 'base64'); a.buffers.push(raw); if (raw.length > 262145 || raw.toString('base64') !== r.stdout_base64)
         throw Error('Handwriting report refused'); return raw; }
     #cancel(q) { const a = this.#active; if (a && same(a.s.sample, q) && a.q.invocation === q.invocation && (q.reference === null || a.s.reference === q.reference) && this.io.owns(a.token)) {
+        if (a.q.action === 'check-remove') {
+            this.invalidate();
+            this.observer.cancel();
+            return this.#value(q, 'invalidated');
+        }
         const s = a.s, possible = s.possible;
         if (possible && s.outcome !== 'unknown')
             return this.#value(q, 'unavailable');
