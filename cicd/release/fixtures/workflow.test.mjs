@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { Parser, Lexer, Evaluator, data } from '@actions/expressions';
-const root = fileURLToPath(new URL('../..', import.meta.url));
+const root = fileURLToPath(new URL('../../..', import.meta.url));
 const workflow = name => parse(readFileSync(path.join(root, '.github/workflows', name + '.yml'), 'utf8'));
 const expr = text => String.fromCharCode(36) + '{{ ' + text + ' }}';
 const manager = true;
@@ -135,10 +135,10 @@ test('main skipped-title and failed or canceled prerequisites keep real stage ga
 test('common source and dependency checks have exactly one owning job', () => {
   const checks = workflow('ci').jobs.checks;
   const pipeline = workflow('pipeline');
-  const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test release\/fixtures\/workflow/;
+  const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test cicd\/release\/fixtures\/workflow/;
   const sourceChecks = checks.steps.filter(step => common.test(step.run ?? ''));
   assert.ok(sourceChecks.length >= 4);
-  assert.equal(checks.steps.filter(step => step.run === 'npm audit --prefix release/fixtures').length, 1);
+  assert.equal(checks.steps.filter(step => step.run === 'npm audit --prefix cicd/release/fixtures').length, 1);
   const tools = checks.steps.find(step => step.uses === './.github/actions/release-tools');
   assert.notEqual(tools.with?.['audit-dependencies'], 'false');
   for (const [jobName, job] of Object.entries(pipeline.jobs)) {
@@ -184,22 +184,22 @@ test('only release may publish and it consumes the exact build artifacts without
     if (name !== 'release') assert.notEqual(job.permissions?.contents, 'write');
   const build = pipeline.jobs.build, integration = pipeline.jobs.integration, release = pipeline.jobs.release;
   const freeze = build.steps.findIndex(s => s.id === 'freeze');
-  const compile = build.steps.findIndex(s => /release\/build.py build/.test(s.run ?? ''));
+  const compile = build.steps.findIndex(s => /npm run build/.test(s.run ?? ''));
   assert.ok(freeze >= 0 && compile > freeze);
   assert.match(build.steps[freeze].run, /version --print-tag/);
   assert.ok(!build.steps.some(s => /--push|PATCH |POST /.test(s.run ?? '')));
-  assert.ok(!integration.steps.some(s => /release\/build.py build|cargo build|npm run build/.test(s.run ?? '')));
+  assert.ok(!integration.steps.some(s => /cicd\/release\/build.py build|cargo build|npm run build/.test(s.run ?? '')));
   for (const job of [integration, release]) {
     const downloads = job.steps.filter(s => s.uses?.startsWith('actions/download-artifact'));
     assert.ok(downloads.some(s => s.with['artifact-ids'] === expr('needs.build.outputs.artifact_id')));
-    assert.ok(downloads.some(s => s.with['artifact-ids'] === expr('needs.build.outputs.uploader_artifact_id')));
+    assert.ok(!downloads.some(s => String(s.with['artifact-ids']).includes('uploader')));
   }
   assert.equal(release.env.TAG, expr('needs.build.outputs.tag'));
   assert.equal(release.env.SHA, expr('needs.build.outputs.sha'));
   const tag = release.steps.findIndex(s => s.name === 'Official tag only after every preceding job passed');
   assert.ok(tag > release.steps.findIndex(s => s.name === 'Verify the exact integration-tested upload inventory'));
   assert.ok(!release.steps.some(s => /cross build|npm run build|coordinator\.py/.test(s.run ?? '')));
-  const upload = release.steps.find(s => s.uses === './.qualified/uploader');
+  const upload = release.steps.find(s => s.uses === 'svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de');
   assert.equal(upload.with.overwrite, false); assert.equal(upload.with.draft, true);
   assert.equal(upload.with.promote, false); assert.equal(upload.with.check_duplicates, true);
   assert.equal(upload.with.release_id, expr('steps.retained.outputs.release_id'));
@@ -224,7 +224,7 @@ if (manager) test('Windows integration stops at each failed native command', () 
 });
 
 function repeatsCommonChecks(jobName, step) {
-  const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test release\/fixtures\/workflow/;
+  const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test cicd\/release\/fixtures\/workflow/;
   const selectedWindowsControls = new Set([
     'python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v',
     'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v',
