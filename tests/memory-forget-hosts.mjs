@@ -1,4 +1,4 @@
-import {completeForgetReload} from './fixtures/forget-reload-completion.mjs';
+import {completeForgetReload,completeForgetPrepare} from './fixtures/forget-reload-completion.mjs';
 import { chromium,_electron as electron,expect } from '@playwright/test';
 import { mkdtemp,mkdir,rm,readFile,writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -54,20 +54,33 @@ const helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser
 const browser=await chromium.launch();
 try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.addInitScript(()=>{
  // Trace only reader lifecycle, never response chunks or request contents.
- const original=window.fetch.bind(window);window.forgetResponseEvents=[];
- window.fetch=async(...args)=>{const response=await original(...args);if(args[0]!=='/manager-memory-forget'||JSON.parse(args[1]?.body??'{}').action!=='status')return response;
-  const record=event=>{if(window.forgetResponseEvents.length<32)window.forgetResponseEvents.push(event);},body=response.body,getReader=body.getReader.bind(body);record('headers');
+ const original=window.fetch.bind(window);window.forgetResponseEvents=[];window.forgetPrepareResponseEvents=[];
+ window.fetch=async(...args)=>{const response=await original(...args);if(args[0]!=='/manager-memory-forget')return response;const action=JSON.parse(args[1]?.body??'{}').action;if(!['status','prepare'].includes(action))return response;
+  const events=action==='prepare'?window.forgetPrepareResponseEvents:window.forgetResponseEvents;
+  const record=event=>{if(events.length<32)events.push(event);},body=response.body,getReader=body.getReader.bind(body);record('headers');
   body.getReader=(...options)=>{const reader=getReader(...options),read=reader.read.bind(reader),cancel=reader.cancel.bind(reader);
    reader.read=async()=>{try{const result=await read();record(result.done?'eof':'chunk');return result;}catch(error){record('read-failed');throw error;}};
    reader.cancel=async(...options)=>{record('cancel');try{const result=await cancel(...options);record('cancel-complete');return result;}catch(error){record('cancel-failed');throw error;}};return reader;};return response;};
  });await page.goto(helper.origin+'/preview/');await verify(page,async v=>{mode=v;completePending=null;},()=>page.locator('section[aria-labelledby="memory-forget-title"]').screenshot({path:`test-results/memory-forget-browser${packaged?'':'-development'}.png`}),async()=>{assert.equal(typeof completePending,'function');completePending();},async()=>{await expect.poll(()=>typeof completePending).toBe('function');},async button=>{
- const started=performance.now();
+ const started=performance.now(),requests=new Set(),events=[];let terminalResolve,terminalTimer;
  const isPrepare=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='prepare';}catch{return false;}};
- const pending=page.waitForResponse(response=>isPrepare(response.request()),{timeout:14000});
- const finished=page.waitForEvent('requestfinished',{predicate:isPrepare,timeout:14000});
- const [response,request]=await Promise.all([pending,finished,button.click()]);assert.equal(request,response.request());assert.equal(response.status(),200);
- // The renderer and exact preview assertions below validate the body; avoid a second CDP body read.
- console.log('Initial browser preparation public response complete before unchanged UI assertions:',Math.ceil(performance.now()-started),'ms; existing14s request bound');
+ const onRequest=request=>{if(isPrepare(request)){requests.add(request);events.push({event:'initial-prepare-request',ms:Math.ceil(performance.now()-started)});}};
+ const onResponse=response=>{if(requests.has(response.request()))events.push({event:'initial-prepare-headers',status:response.status(),ms:Math.ceil(performance.now()-started)});};
+ const onFinished=request=>{if(requests.has(request)){events.push({event:'initial-prepare-finished',ms:Math.ceil(performance.now()-started)});terminalResolve?.(request);}};
+ const onFailed=request=>{if(requests.has(request)){events.push({event:'initial-prepare-failed',reason:request.failure()?.errorText??'unknown',ms:Math.ceil(performance.now()-started)});terminalResolve?.(request);}};
+ const consumed=()=>page.evaluate(()=>{const text=document.querySelector('[data-testid="memory-forget-preview"]')?.textContent??'';return {readerEvents:[...window.forgetPrepareResponseEvents],previewChecks:{unicode:text.includes('Café Ω'),publication:text.includes('Selected memory publication'),observed:text.includes('Observed: 9007199254740991'),asserted:text.includes('Author asserted:')}};});
+ page.on('request',onRequest);page.on('response',onResponse);page.on('requestfinished',onFinished);page.on('requestfailed',onFailed);
+ try{
+  const pending=page.waitForResponse(response=>requests.has(response.request()),{timeout:14000});
+  const terminal=new Promise((resolve,reject)=>{terminalResolve=resolve;terminalTimer=setTimeout(()=>reject(Error('Initial preparation did not terminate within14s')),14000);});
+  const [response,request]=await Promise.all([pending,terminal,button.click()]);assert.equal(request,response.request());assert.equal(requests.size,1);assert.equal(response.status(),200);
+  const remaining=()=>Math.max(1,14000-(performance.now()-started));
+  await page.waitForFunction(()=>{const text=document.querySelector('[data-testid="memory-forget-preview"]')?.textContent??'';return window.forgetPrepareResponseEvents?.includes('eof')&&window.forgetPrepareResponseEvents?.at(-1)==='cancel-complete'&&['Café Ω','Selected memory publication','Observed: 9007199254740991','Author asserted:'].every(value=>text.includes(value));},null,{timeout:remaining()});
+  const rendered=await consumed();assert.equal(completeForgetPrepare({events,...rendered}),true);assert.ok(performance.now()-started<14000);
+  // Full renderer consumption and the unchanged preview assertions validate the body; avoid a second CDP body read.
+  console.log('Initial browser preparation public response complete before unchanged UI assertions:',JSON.stringify({events,...rendered,ms:Math.ceil(performance.now()-started),bound:14000}));
+ }catch(error){console.error('Initial preparation readiness diagnostic:',JSON.stringify({events,rendered:await consumed().catch(()=>null)}));throw error;}
+ finally{clearTimeout(terminalTimer);terminalResolve=null;page.off('request',onRequest);page.off('response',onResponse);page.off('requestfinished',onFinished);page.off('requestfailed',onFailed);}
 },async()=>{
  const started=performance.now(),requests=new Set(),events=[],pageErrors=[],consoleErrors=[];let mainDocument=null,terminalResolve,terminalTimer;
  const isStatus=request=>{if(request.url()!==helper.origin+'/manager-memory-forget'||request.method()!=='POST')return false;try{return request.postDataJSON()?.action==='status';}catch{return false;}};
