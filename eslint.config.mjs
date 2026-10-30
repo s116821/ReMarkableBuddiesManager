@@ -3,7 +3,7 @@ import angular from 'angular-eslint';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'out/**', '.angular/**', 'node_modules/**', 'release/fixtures/node_modules/**', '.upstream/**'] },
+  { ignores: ['dist/**', 'out/**', '.angular/**', 'node_modules/**', 'cicd/release/fixtures/node_modules/**'] },
   { files: ['src/**/*.ts'], extends: [...tseslint.configs.recommended, ...angular.configs.tsRecommended], processor: angular.processInlineTemplates },
   { files: ['src/**/*.html'], extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility] },
   { files: ['**/*.mjs', '**/*.cjs'], languageOptions: { globals: globals.node }, rules: { 'no-unused-vars': 'error', 'no-undef': 'error' } },

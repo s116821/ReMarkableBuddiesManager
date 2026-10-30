@@ -23,10 +23,8 @@ jobs:
       sha: ${{ steps.freeze.outputs.sha }}
       artifact_id: ${{ steps.artifacts.outputs.artifact-id }}
       development_artifact_id: ${{ steps.development.outputs.artifact-id }}
-      uploader_artifact_id: ${{ steps.uploader_artifact.outputs.artifact-id }}
-      uploader_bundle_sha256: ${{ steps.uploader_build.outputs.bundle_sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
@@ -42,43 +40,40 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -B main "$SOURCE_SHA"
-          tag=$(semantic-release -c release/python-semantic-release.toml version --print-tag)
+          tag=$(semantic-release -c cicd/release/python-semantic-release.toml version --print-tag)
           eligibility=()
           if test "$MAIN_RELEASE" = true; then eligibility+=(--require-semantic-source); fi
-          python release/freeze.py candidate --tag "$tag" --sha "$SOURCE_SHA" "${eligibility[@]}"
-      - uses: actions/setup-python@v5
+          python cicd/release/freeze.py candidate --tag "$tag" --sha "$SOURCE_SHA" "${eligibility[@]}"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
-      - name: Fetch exact maintained source, not a prebuilt distribution
-        run: |
-          git clone --config core.autocrlf=false --no-checkout https://github.com/svenstaro/upload-release-action.git "$RUNNER_TEMP/uploader-source"
-          git -C "$RUNNER_TEMP/uploader-source" checkout --detach 29e53e917877a24fad85510ded594ab3c9ca12de
-      - id: uploader_build
-        run: python release/qualify_uploader.py --source "$RUNNER_TEMP/uploader-source" --output "$RUNNER_TEMP/qualified-uploader"
-      - uses: actions/upload-artifact@v4
-        id: uploader_artifact
-        with:
-          name: qualified-uploader-${{ inputs.source_sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/qualified-uploader/
-          if-no-files-found: error
-          retention-days: 14
       - run: npm ci --no-audit --no-fund
-      - run: python release/build.py build --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+      - name: Build development, production and native packages
+        env:
+          MANAGER_CANDIDATE_TAG: ${{ steps.freeze.outputs.tag }}
+          MANAGER_CANDIDATE_SHA: ${{ steps.freeze.outputs.sha }}
+        run: |
+          npm run build:development
+          npm run build
+          MANAGER_PACKAGE_PLATFORM=win32 npm run package
+          MANAGER_PACKAGE_PLATFORM=linux npm run package
+      - name: Assemble fixed release inventory
+        run: python cicd/release/build.py assemble --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
         env:
           TAG: ${{ steps.freeze.outputs.tag }}
           SHA: ${{ steps.freeze.outputs.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: artifacts
         with:
           name: candidate-${{ inputs.source_sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/packages/*
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: development
         with:
           name: development-browser-${{ inputs.source_sha }}-${{ github.run_attempt }}
@@ -102,28 +97,40 @@ jobs:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: ${{ runner.temp }}/packages
           merge-multiple: true
       - shell: bash
-        run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
-      - name: Stage downloaded build without rebuilding
-        run: python release/stage_integration.py "${{ runner.temp }}/packages"
-      - uses: actions/download-artifact@v4
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+      - name: Extract verified Linux artifacts without rebuilding
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/manager/browser out/packages/ReMarkableBuddiesManager-linux-x64
+          unzip -q "$RUNNER_TEMP/packages/manager-browser.zip" -d dist/manager/browser
+          unzip -q "$RUNNER_TEMP/packages/manager-linux-x64.zip" -d out/packages/ReMarkableBuddiesManager-linux-x64
+          cp dist/manager/browser/build-info.json electron/build-info.json
+      - name: Extract verified Windows artifacts without rebuilding
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/packages/manager-browser.zip" -DestinationPath dist/manager/browser
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/packages/manager-win32-x64.zip" -DestinationPath out/packages/ReMarkableBuddiesManager-win32-x64
+          Copy-Item -LiteralPath dist/manager/browser/build-info.json -Destination electron/build-info.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
           path: test-results/development/browser
@@ -252,7 +259,7 @@ jobs:
           npm run test:ordinary-export-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
-        run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
       - name: Preserve Windows native API and NTFS custody controls
         if: runner.os == 'Windows'
         shell: bash
@@ -260,40 +267,6 @@ jobs:
           python -m pip install -r host/requirements.txt
           python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
           python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
-      - uses: actions/download-artifact@v4
-        with:
-          artifact-ids: ${{ needs.build.outputs.uploader_artifact_id }}
-          path: .qualified/uploader
-          merge-multiple: true
-        if: runner.os == 'Linux'
-      - name: Verify built uploader identity
-        env:
-          BUNDLE_SHA: ${{ needs.build.outputs.uploader_bundle_sha256 }}
-        run: python release/qualify_uploader.py --output .qualified/uploader --expected-bundle "$BUNDLE_SHA"
-        if: runner.os == 'Linux'
-      - name: Fetch pinned upstream metadata Actions for controls
-        run: |
-          git clone --config core.autocrlf=false --no-checkout https://github.com/dorny/paths-filter.git "$RUNNER_TEMP/paths-filter"
-          git -C "$RUNNER_TEMP/paths-filter" checkout --detach ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d
-          git clone --config core.autocrlf=false --no-checkout https://github.com/octokit/graphql-action.git "$RUNNER_TEMP/graphql-action"
-          git -C "$RUNNER_TEMP/graphql-action" checkout --detach ddde8ebb2493e79f390e6449c725c21663a67505
-          git clone --config core.autocrlf=false --no-checkout https://github.com/octokit/request-action.git "$RUNNER_TEMP/request-action"
-          git -C "$RUNNER_TEMP/request-action" checkout --detach b91aabaa861c777dcdb14e2387e30eddf04619ae
-        if: runner.os == 'Linux'
-      - run: npm ci --prefix release/fixtures --ignore-scripts --no-audit --no-fund
-        if: runner.os == 'Linux'
-      - name: Exercise actual upstream metadata Actions and workflow gate wiring
-        env:
-          PATHS_ACTION: ${{ runner.temp }}/paths-filter
-          GRAPHQL_ACTION: ${{ runner.temp }}/graphql-action
-          REQUEST_ACTION: ${{ runner.temp }}/request-action
-        run: node --test release/fixtures/actions.test.mjs
-        if: runner.os == 'Linux'
-      - name: Execute actual upstream Action controls against loopback only
-        env:
-          UPLOADER_ACTION: ${{ github.workspace }}/.qualified/uploader
-        run: node --test release/fixtures/uploader.test.mjs
-        if: runner.os == 'Linux'
     defaults:
       run:
         shell: bash
@@ -312,7 +285,7 @@ jobs:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
@@ -341,26 +314,26 @@ jobs:
       - name: Require exact merged-main admission
         env:
           RELEASE_OBSERVATION: ${{ steps.merged.outputs.data }}
-        run: python release/admission.py merge --sha "$SHA"
-      - uses: actions/download-artifact@v4
+        run: python cicd/release/admission.py merge --sha "$SHA"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: ${{ runner.temp }}/packages
           merge-multiple: true
       - name: Verify the exact integration-tested upload inventory
-        run: python release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
       - name: Official tag only after every preceding job passed
         run: |
           set -euo pipefail
           git checkout -B main "$SHA"
-          python release/freeze.py candidate --require-semantic-source --tag "$TAG" --sha "$SHA"
+          python cicd/release/freeze.py candidate --require-semantic-source --tag "$TAG" --sha "$SHA"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main:refs/remotes/origin/main --tags
           git merge-base --is-ancestor "$SHA" refs/remotes/origin/main
-          test "$(semantic-release -c release/python-semantic-release.toml version --print-tag)" = "$TAG"
-          semantic-release -c release/python-semantic-release.toml version --no-commit --no-changelog --skip-build --push --no-vcs-release
-          python release/freeze.py remote --tag "$TAG" --sha "$SHA"
+          test "$(semantic-release -c cicd/release/python-semantic-release.toml version --print-tag)" = "$TAG"
+          semantic-release -c cicd/release/python-semantic-release.toml version --no-commit --no-changelog --skip-build --push --no-vcs-release
+          python cicd/release/freeze.py remote --tag "$TAG" --sha "$SHA"
       - uses: octokit/graphql-action@ddde8ebb2493e79f390e6449c725c21663a67505
         id: lookup
         env:
@@ -383,7 +356,7 @@ jobs:
         id: lookup_proof
         env:
           RELEASE_OBSERVATION: ${{ steps.lookup.outputs.data }}
-        run: python release/verify_release.py lookup --tag "$TAG" --sha "$SHA"
+        run: python cicd/release/verify_release.py lookup --tag "$TAG" --sha "$SHA"
       - uses: octokit/request-action@b91aabaa861c777dcdb14e2387e30eddf04619ae
         id: create
         if: steps.lookup_proof.outputs.absent == 'true'
@@ -410,17 +383,8 @@ jobs:
           RELEASE_OBSERVATION: ${{ steps.before_upload.outputs.data }}
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_ID: ${{ steps.create.outputs.data && fromJSON(steps.create.outputs.data).id || steps.lookup_proof.outputs.release_id }}
-        run: python release/verify_release.py retained --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages"
-      - uses: actions/download-artifact@v4
-        with:
-          artifact-ids: ${{ needs.build.outputs.uploader_artifact_id }}
-          path: .qualified/uploader
-          merge-multiple: true
-      - name: Verify qualified upstream uploader before credentialed execution
-        env:
-          BUNDLE_SHA: ${{ needs.build.outputs.uploader_bundle_sha256 }}
-        run: python release/qualify_uploader.py --output .qualified/uploader --expected-bundle "$BUNDLE_SHA"
-      - uses: ./.qualified/uploader
+        run: python cicd/release/verify_release.py retained --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages"
+      - uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de
         if: steps.retained.outputs.draft == 'true' && steps.retained.outputs.files != ''
         with:
           release_id: ${{ steps.retained.outputs.release_id }}
@@ -450,8 +414,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_ID: ${{ steps.retained.outputs.release_id }}
         run: |
-          python release/verify_release.py retained --complete --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages"
-          python release/freeze.py remote --tag "$TAG" --sha "$SHA"
+          python cicd/release/verify_release.py retained --complete --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages"
+          python cicd/release/freeze.py remote --tag "$TAG" --sha "$SHA"
       - uses: octokit/request-action@b91aabaa861c777dcdb14e2387e30eddf04619ae
         if: steps.complete.outputs.draft == 'true'
         env:

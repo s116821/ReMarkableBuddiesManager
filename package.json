@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "test": "node --test tests/*.test.mjs",
     "test:hosts": "node tests/hosts.mjs",
-    "test:release": "python -m unittest discover -s release -v",
+    "test:release": "python -m unittest discover -s cicd/release -v",
     "check": "npm run lint && npm test && npm run test:styles && npm run build && npm run test:hosts",
     "desktop": "npm run build && electron .",
     "package": "node scripts/package.mjs",
