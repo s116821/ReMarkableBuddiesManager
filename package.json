@@ -48,7 +48,8 @@
     "test:handwriting-records-hosts": "node tests/handwriting-records-hosts.mjs",
     "test:product-settings-hosts": "node tests/product-settings-hosts.mjs",
     "test:product-maintenance-hosts": "node tests/product-maintenance-hosts.mjs",
-    "test:product-lifetime-hosts": "node tests/product-lifetime-hosts.mjs"
+    "test:product-lifetime-hosts": "node tests/product-lifetime-hosts.mjs",
+    "test:local-mode-choice-hosts": "node tests/local-mode-choice-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

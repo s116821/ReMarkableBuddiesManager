@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
   inspectConversations: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectConversations',args[0]):Promise.reject(new Error('Conversation inventory arity refused')),
   modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
+  localModeChoice: (...args) => args.length===1?ipcRenderer.invoke('manager:localModeChoice',args[0]):Promise.reject(new Error('Local-only choice arity refused')),
   productSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:productSettings',args[0]):Promise.reject(new Error('Product settings arity refused')),
   basicSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:basicSettings',args[0]):Promise.reject(new Error('Basic settings arity refused')),
   memoryForget: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory forget input refused')) : ipcRenderer.invoke('manager:memoryForget', args[0]),
