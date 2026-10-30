@@ -1,11 +1,9 @@
-"""Build release-profile candidates and verify fixed ZIP inventory. No remote writes."""
+"""Assemble and verify the project-specific fixed ZIP/provenance inventory. No builds or remote writes."""
 import argparse
 import json
-import os
 from pathlib import Path
 import shutil
 import stat
-import subprocess
 import zipfile
 from artifacts import Release, sha256, source_identity, verify_identity as identity, verify_packages as packages
 TARGETS = ("browser", "win32-x64", "linux-x64")
@@ -35,21 +33,13 @@ def archive_package(source, destination, *, linux=False):
                 item.compress_type = zipfile.ZIP_DEFLATED
                 archive.writestr(item, path.read_bytes())
 
-def build(repo, release, directory):
+def assemble(repo, release, directory):
     source_identity(repo, release)
     directory.mkdir(parents=True, exist_ok=False)
-    env = dict(os.environ, MANAGER_CANDIDATE_TAG=release.tag, MANAGER_CANDIDATE_SHA=release.sha)
-    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
-    # Preserve the existing development/Tailwind check as a separate CI artifact;
-    # it never enters the fixed production release ZIP inventory.
-    subprocess.run([npm, "run", "build:development"], cwd=repo, env=env, check=True)
-    subprocess.run([npm, "run", "build"], cwd=repo, env=env, check=True)
     browser = repo / "dist/manager/browser"
     shutil.copyfile(repo / "electron/build-info.json", browser / "build-info.json")
     archive_package(browser, directory / "manager-browser.zip")
     for platform in ("win32", "linux"):
-        subprocess.run([npm, "run", "package"], cwd=repo,
-                       env=dict(env, MANAGER_PACKAGE_PLATFORM=platform), check=True)
         package = repo / f"out/packages/ReMarkableBuddiesManager-{platform}-x64"
         shutil.copyfile(repo / "electron/build-info.json", package / "build-info.json")
         archive_package(package, directory / f"manager-{platform}-x64.zip", linux=platform == "linux")
@@ -60,14 +50,14 @@ def build(repo, release, directory):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("build", "verify"))
+    parser.add_argument("mode", choices=("assemble", "verify"))
     parser.add_argument("--source", type=Path, default=Path.cwd())
     parser.add_argument("--tag", required=True)
     parser.add_argument("--sha", required=True)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     release = Release(args.tag, args.sha)
-    if args.mode == "build":
-        build(args.source.resolve(), release, args.output.resolve())
+    if args.mode == "assemble":
+        assemble(args.source.resolve(), release, args.output.resolve())
     else:
         verify_packages(args.output.resolve(), release)

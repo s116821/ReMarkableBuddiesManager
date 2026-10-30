@@ -7,6 +7,3 @@ electron/build-info.json
 __pycache__/
 *.pyc
 test-results/
-
-# Pinned upstream distributions used only by release fixtures.
-.upstream/
