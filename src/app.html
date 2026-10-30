@@ -375,35 +375,39 @@
   </section>
 
   <section aria-labelledby="local-mode-choice-title" class="ui-panel my-6">
-    <h2 id="local-mode-choice-title">Choose Local only</h2>
-    <p>Review the saved mode of an existing Buddy Store, then deliberately record a Local-only choice. This preserves stored history and media. It does not stop a service, delete a remote backup or make selected history available to ordinary Reader.</p>
+    <h2 id="local-mode-choice-title">Save Local-only mode</h2>
+    <p>This changes only the saved storage setting. It preserves your history and media, and does not stop Buddy or delete cloud backups.</p>
     <div class="flex flex-wrap gap-2 my-3">
-      <button class="ui-button ui-button-secondary" type="button" (click)="beginLocalMode()" [disabled]="!canBeginLocalMode()">Review Local-only choice</button>
-      <button class="ui-button ui-button-secondary" type="button" (click)="stopLocalMode()" [disabled]="!localModeChoice().busy && localModeChoice().view?.state !== 'ready'">Stop local mode wait</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="beginLocalMode()" [disabled]="!canBeginLocalMode()">Review change</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopLocalMode()" [disabled]="!localModeChoice().busy && localModeChoice().view?.state !== 'ready'">{{ localModeChoice().busy ? 'Stop waiting' : 'Cancel review' }}</button>
     </div>
     <p role="status" data-testid="local-mode-choice-status">{{ localModeChoice().status }}</p>
     @if (localModeChoice().view?.current; as current) {
       <div class="my-3" data-testid="local-mode-choice-current">
-        <h3 class="font-semibold">Separately observed saved mode</h3>
-        <p class="break-all">{{ current.kind }} @if (current.epoch) { · saved epoch {{ current.epoch }} }</p>
-        <p class="text-sm text-muted">This snapshot does not prove the outcome of an uncertain original choice or verify running behavior.</p>
+        <h3 class="font-semibold">Saved mode</h3>
+        <p>{{ localModeLabels[current.kind] }}</p>
       </div>
     }
     @if (localModeChoice().view?.state === 'ready') {
-      <p class="ui-warning">Confirming records a new choice and epoch, even if Local only is already saved. The reviewed preview expires after two minutes.</p>
-      <button class="ui-button ui-button-primary" type="button" (click)="chooseLocalMode()" [disabled]="!canChooseLocalMode()">Confirm saved Local-only choice</button>
+      <p class="text-sm text-muted my-3">This review expires after two minutes.</p>
+      <button class="ui-button ui-button-primary" type="button" (click)="chooseLocalMode()" [disabled]="!canChooseLocalMode()">Save Local-only</button>
     }
     @if (localModeChoice().view?.receipt; as receipt) {
-      <p data-testid="local-mode-choice-receipt">Original Local-only choice acknowledged historically. Saved epoch: <span class="break-all">{{ receipt.epoch }}</span>. @if (receipt.historical) { A later choice was observed. } Runtime remains unverified.</p>
+      <p data-testid="local-mode-choice-receipt">Local-only mode was saved. @if (receipt.historical) { A later saved setting was found. } This does not confirm which mode Buddy is currently using.</p>
+    }
+    @if (localModeChoice().busy) {
+      <p class="text-sm text-muted mt-3">Stopping the wait does not undo a save that may already have happened.</p>
+    }
+    @if (localModeHasUnconfirmed()) {
+      <p class="ui-warning mt-3">An earlier save could not be confirmed. Another change for that tablet is blocked here. Checking the saved mode or restarting Manager does not confirm whether that earlier save succeeded.</p>
     }
     @if (localModeChoice().retained.length) {
-      <h3 class="font-semibold mt-3">Retained original choices</h3>
+      <h3 class="font-semibold mt-3">Recent changes</h3>
       <ul class="space-y-3" data-testid="local-mode-choice-retained">@for (record of localModeChoice().retained; track record.reference) {
-        <li><p>Original outcome: {{ record.state }}</p><button class="ui-button ui-button-secondary" type="button" (click)="refreshLocalMode(record)" [disabled]="!canRefreshLocalMode(record)">Inspect current mode separately</button></li>
+        <li><p>{{ localModeOutcomeLabels[record.state] }}</p><button class="ui-button ui-button-secondary" type="button" (click)="refreshLocalMode(record)" [disabled]="!canRefreshLocalMode(record)">Check saved mode</button></li>
       }</ul>
     }
-    <p class="text-sm text-muted mt-3">Stopping is not rollback. An uncertain original is retained for this host lifetime and blocks another choice for that target. Inspecting current mode does not reconcile it. Restarting the host is not reconciliation. This panel never retries a choice.</p>
-    @if (!host.localModeChoice) { <p class="ui-warning">This Manager host does not support Local-only choice.</p> }
+    @if (!host.localModeChoice) { <p class="ui-warning">This version of Manager cannot save Local-only mode.</p> }
   </section>
 
   <section aria-labelledby="handwriting-title" class="ui-panel my-6">

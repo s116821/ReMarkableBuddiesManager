@@ -1,6 +1,6 @@
 # Choose a saved Local-only mode
 
-In either companion, read the connected tablet state, then choose **Review Local-only choice**. An existing valid Buddy-owned Store is required. This does not initialize or repair one. Review the separately observed saved mode and confirm **Confirm saved Local-only choice** to record one original conditional choice.
+In either companion, read the connected tablet state, then choose **Review change**. An existing valid Buddy-owned Store is required. This does not initialize or repair one. Review the separately observed saved mode and confirm **Save Local-only** to record one original conditional choice.
 
 Confirmation records a new epoch even if Local only was already saved. Stored history and media stay preserved. This action does not stop a service, delete remote backups, edit configuration/provider bindings, convert selected history for ordinary Reader, or activate/qualify runtime, sync, provider or native behavior. Existing **Read saved storage mode** remains a separate read-only capability.
 
@@ -12,7 +12,7 @@ An acknowledged original choice is a historical saved receipt. Separately displa
 
 Stopping local waiting is not rollback. A write can commit before its response fails. Lost, incomplete or untrusted output after possible dispatch remains **unknown**; an incomplete unsupported response can also follow commit. The host retains that original unknown record and prevents another choice for the same target within this host lifetime.
 
-**Inspect current mode separately** sends only inspect. It can show later saved metadata but cannot prove whether the uncertain original succeeded. There is no receipt lookup, mutation replay, retry/rebase or clear-uncertainty control in this slice. The producer's manual exact choose replay can mutate if an earlier call never arrived, so this UI does not present it as a read-only check.
+**Check saved mode** sends only inspect. It can show later saved metadata but cannot prove whether the uncertain original succeeded. There is no receipt lookup, mutation replay, retry/rebase or clear-uncertainty control in this slice. The producer's manual exact choose replay can mutate if an earlier call never arrived, so this UI does not present it as a read-only check.
 
 Up to eight possible-dispatch records are held in the host process without silently evicting unresolved originals. Browser reloads and session invalidation preserve them. Host process restart does not preserve these in-memory records and is not reconciliation; it must not be interpreted as proof that nothing changed. Durable host recovery and deliberate original-operation replay need a separate contract.
 

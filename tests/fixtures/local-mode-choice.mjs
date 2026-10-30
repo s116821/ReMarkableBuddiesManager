@@ -31,5 +31,5 @@ export function localModeFixture(options={}){
  let host;host=new LocalModeChoiceHost({observer,io,now:()=>clock,uuid:()=> '22222222-2222-4222-8222-222222222222',reference:()=>hash(String(++serial)),beforeIO:()=>options.beforeIO?.(host)});
  const begin=()=>host.request({action:'begin',...identity(observer.lastObservation)});
  const request=(action,reference)=>host.request({action,...identity(observer.lastObservation),reference});
- return {host,observer,io,calls,begin,request,setClock:v=>{clock=v;},get chooseCount(){return chooseCount;},release:()=>pending(),setCurrent:v=>{current=structuredClone(v);}};
+ return {host,observer,io,calls,begin,request,setClock:v=>{clock=v;},get chooseCount(){return chooseCount;},get savedEpoch(){return current.data.current_snapshot.epoch;},release:()=>pending(),setCurrent:v=>{current=structuredClone(v);}};
 }

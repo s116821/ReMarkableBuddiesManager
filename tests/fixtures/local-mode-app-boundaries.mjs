@@ -6,7 +6,7 @@ import {ids} from './handwriting-records.mjs';
 const reference=JSON.parse(await readFile(new URL('./conversation-inventory-reference-vectors.json',import.meta.url),'utf8'));
 export async function verifyLocalModeAppBoundaries(page){
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
- const review=page.getByRole('button',{name:'Review Local-only choice',exact:true});
+ const review=page.getByRole('button',{name:'Review change',exact:true});
  const ready=async()=>{await expect.poll(()=>page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));return a.localModePeerBusy()||a.localModeChoice().busy;})).toBe(false);const previous=await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).localModeChoice().reference);await review.click();await expect.poll(()=>page.evaluate(previous=>{const a=window.ng.getComponent(document.querySelector('app-root')),s=a.localModeChoice();return !s.busy&&s.view?.state==='ready'&&s.reference!==previous;},previous)).toBe(true);};
  const outgoing=[...reference.outgoing_idle_controllers,'conversationController','managementController','restoreController','selectedController','handwritingController','productController'];assert.equal(outgoing.length,16);
  await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.localModeClears={};for(const name of names){const c=a[name],old=c.clear.bind(c);c.clear=(...args)=>{a.localModeClears[name]=(a.localModeClears[name]??0)+1;return old(...args);};}},outgoing);
