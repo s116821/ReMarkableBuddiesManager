@@ -4,7 +4,8 @@
   <p class="ui-eyebrow">YOUR TABLET, YOUR TOOLS</p>
   <h1 class="my-4 font-serif text-4xl font-normal tracking-tight sm:text-6xl">A home for your Buddies.</h1>
   <p class="text-lg text-muted">Manage Reader and Writer from one place.<br>This foundation preview is the first step.</p>
-  <section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
+
+<section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
     <div class="grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-boundary bg-paper font-serif text-muted" aria-hidden="true"><span>rM</span></div>
     <div class="min-w-0 flex-1" aria-live="polite"><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">{{ connectionLabels[connection().status] }}</h2>
       <p>Connect the tablet by USB and read its state. Installation remains unavailable.</p>
@@ -341,6 +342,56 @@
     <p class="text-sm text-muted">Busy means the data cannot be inspected now. Try again later; this action does not stop or unlock the app.</p>
   </section>
 
+  <section aria-labelledby="handwriting-title" class="ui-panel my-6">
+  <h2 id="handwriting-title">Saved handwriting corrections</h2>
+  <p>Inspect explicit confirmed records in a profile. This does not show trained model state or prove improved recognition. Displayed text and caller-asserted provenance may be private.</p>
+  <label class="block mt-3" for="handwriting-profile">Profile UUID</label>
+  <input class="ui-field block w-full max-w-full" id="handwriting-profile" data-handwriting-private autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="handwritingText('profile')" (input)="updateHandwriting('profile',$event)" (paste)="pasteHandwriting('profile',$event)" [disabled]="!handwritingAvailable()">
+  <label class="block mt-3" for="handwriting-query">Search text (optional; blank lists a bounded subset)</label>
+  <textarea class="ui-field block w-full max-w-full" rows="2" id="handwriting-query" data-handwriting-private autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="handwritingText('query')" (input)="updateHandwriting('query',$event)" (paste)="pasteHandwriting('query',$event)" [disabled]="!handwritingAvailable()"></textarea>
+  <label class="block mt-3" for="handwriting-correction">Correction UUID for direct inspection</label>
+  <input class="ui-field block w-full max-w-full" id="handwriting-correction" data-handwriting-private autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="handwritingText('correction')" (input)="updateHandwriting('correction',$event)" (paste)="pasteHandwriting('correction',$event)" [disabled]="!handwritingAvailable()">
+  <div class="mt-3 flex flex-wrap gap-3">
+    <button class="ui-button ui-button-secondary" type="button" (click)="queryHandwriting()" [disabled]="!canQueryHandwriting()">Search saved corrections</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="inspectHandwriting()" [disabled]="!canInspectHandwriting()">Inspect correction key</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="stopHandwriting()" [disabled]="handwritingPeerBusy()">Stop correction wait</button>
+  </div>
+  <p role="status">{{ handwritingRecords().status }}</p>
+  @if (handwritingRecords().result; as result) {
+    @if (result.view; as view) {
+      <p class="break-all">Profile: {{ view.profile }}</p>
+      @if (view.correction) { <p class="break-all text-sm">Correction: {{ view.correction }}</p> }
+      @if (view.partial) { <p>Incomplete results: withheld or omitted records are not an empty corpus.</p> }
+      @if (view.heads.length === 0 && !view.partial) { <p>No active matching correction was observed in this complete result.</p> }
+      @for (head of view.heads; track head.record + head.revision) {
+        <article class="mt-4 rounded-lg border border-divider p-3">
+          @if (head.content; as content) {
+            @if (view.kind === 'confirmation') { <p class="break-all text-sm">Confirm revision: {{ head.revision }}</p> }
+            <h3 class="mt-3 font-semibold">Original interpretation</h3><pre class="whitespace-pre-wrap break-words">{{ content.original_text }}</pre>
+            <h3 class="mt-3 font-semibold">Confirmed replacement</h3><pre class="whitespace-pre-wrap break-words">{{ content.corrected_text }}</pre>
+            <p>Caller-asserted provenance: {{ content.provenance.description }}</p>
+            <p>Sample: {{ head.sample_availability }}. Image display is unavailable.</p>
+            @if (view.kind === 'query') { <button class="ui-button ui-button-secondary" type="button" (click)="inspectHandwriting({profile:view.profile,correction:content.correction})" [disabled]="!handwritingAvailable()">Inspect this correction</button> }
+          } @else { <p>Head state: {{ head.state }}; sample: {{ head.sample_availability }}.</p> }
+          @if (head.conflicted) { <p>Conflicting heads: no removal can be prepared.</p> }
+          <details><summary>Record identity</summary><p class="break-all text-sm">Record {{ head.record }}; revision {{ head.revision }}</p></details>
+        </article>
+      }
+      @if (view.kind === 'confirmation') {
+        <p>Remove this exact correction from active use? Historical text, samples and backups remain. Other records are unchanged. This is not physical erasure.</p>
+        <button class="ui-button ui-button-secondary" type="button" (click)="confirmHandwriting()" [disabled]="!handwritingAvailable()">Confirm removal from active use</button>
+      }
+    }
+    @if (result.diagnostics; as d) { <details><summary>Inspection details</summary><p>Status {{ d.status }}; scanned {{ d.scanned }}; matched {{ d.matched }}; omitted {{ d.omitted }}; conflicted {{ d.conflicted }}; unsupported {{ d.unsupported }}; examined missing samples {{ d.missing_media }}.</p></details> }
+    @if (canPrepareHandwriting()) { <button class="ui-button ui-button-secondary" type="button" (click)="prepareHandwriting()">Prepare removal of this correction</button> }
+  }
+  @for (row of handwritingRecords().retained; track row.reference) {
+    <article class="mt-4 rounded-lg border border-divider p-3"><p>Original attempt: {{ handwritingAttemptMessage(row.original_outcome) }}</p><p class="break-all text-sm">Reference {{ row.reference }}</p>
+      @if (row.expired) { <p>The time limit for checking this original request has expired.</p> }
+      <button class="ui-button ui-button-secondary" type="button" (click)="checkHandwriting(row)" [disabled]="!canCheckHandwriting(row)">Check original correction removal</button>
+    </article>
+  }
+</section>
   <section class="ui-panel my-6" aria-labelledby="memory-title">
     <h2 id="memory-title">Global subject memory</h2>
     <p class="text-sm text-muted">Search the tablet’s configured memory profile. Results are author-asserted context, not verified source facts or a complete inventory.</p>

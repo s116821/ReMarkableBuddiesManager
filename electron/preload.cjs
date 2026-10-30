@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   modelCredential: (...args) => args.length===1?ipcRenderer.invoke('manager:modelCredential',args[0]):Promise.reject(new Error('Model credential arity refused')),
   conversationManagement: (...args) => args.length===1?ipcRenderer.invoke('manager:conversationManagement',args[0]):Promise.reject(new Error('Conversation management arity refused')),
   selectedArchive: (...args) => args.length===1?ipcRenderer.invoke('manager:selectedArchive',args[0]):Promise.reject(new Error('Archive arity refused')),
+  handwritingRecords: (...args) => args.length===1?ipcRenderer.invoke('manager:handwritingRecords',args[0]):Promise.reject(new Error('Handwriting arity refused')),
   ordinaryRestore: (...args) => args.length===1?ipcRenderer.invoke('manager:ordinaryRestore',args[0]):Promise.reject(new Error('Ordinary restore arity refused')),
   sourceCacheCleanup: (...args) => args.length===1?ipcRenderer.invoke('manager:sourceCacheCleanup',args[0]):Promise.reject(new Error('Cache cleanup arity refused')),
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
