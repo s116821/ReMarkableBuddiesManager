@@ -45,7 +45,10 @@
     "test:ordinary-restore-hosts": "node tests/ordinary-restore-hosts.mjs",
     "test:conversation-management-hosts": "node tests/conversation-management-hosts.mjs",
     "test:selected-archive-hosts": "node tests/selected-archive-hosts.mjs",
-    "test:handwriting-records-hosts": "node tests/handwriting-records-hosts.mjs"
+    "test:handwriting-records-hosts": "node tests/handwriting-records-hosts.mjs",
+    "test:product-settings-hosts": "node tests/product-settings-hosts.mjs",
+    "test:product-maintenance-hosts": "node tests/product-maintenance-hosts.mjs",
+    "test:product-lifetime-hosts": "node tests/product-lifetime-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

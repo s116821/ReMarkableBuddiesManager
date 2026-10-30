@@ -100,6 +100,10 @@ Explicit prepared confirmation and historical receipt recovery: [forget one memo
 
 Saved-only settings and safe origin summaries: [configuration inspection](docs/saved-configuration.md).
 
+Reader/Writer enablement and the Mem/Disabled export backend have a separate shared
+[product-settings editor](docs/product-settings.md), with saved-file verification,
+original-only uncertain-save checks and explicit restart requirements.
+
 Saved basic settings can be deliberately edited in both companions; see the
 [basic-settings guide](docs/basic-settings.md) for supported fields, private
 conditions, uncertain outcomes and the fixed manual equivalent.
