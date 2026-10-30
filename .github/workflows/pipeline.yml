@@ -119,6 +119,7 @@ jobs:
       - name: Extract verified Linux artifacts without rebuilding
         if: runner.os == 'Linux'
         run: |
+          mkdir -p dist/manager/browser out/packages/ReMarkableBuddiesManager-linux-x64
           unzip -q "$RUNNER_TEMP/packages/manager-browser.zip" -d dist/manager/browser
           unzip -q "$RUNNER_TEMP/packages/manager-linux-x64.zip" -d out/packages/ReMarkableBuddiesManager-linux-x64
           cp dist/manager/browser/build-info.json electron/build-info.json

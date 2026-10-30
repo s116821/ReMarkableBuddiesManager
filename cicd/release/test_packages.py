@@ -4,6 +4,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -36,10 +37,20 @@ class PackageControls(unittest.TestCase):
             # Execute the actual standard Linux extractor on the generated CI ZIP.
             import os
             if os.name != "nt":
-                dest = root / "extracted"
-                subprocess.run(["unzip", "-q", str(packages / "manager-linux-x64.zip"), "-d", str(dest)], check=True)
+                # A fresh checkout has electron/, but neither generated parent chain.
+                checkout = root / "fresh-checkout"
+                (checkout / "electron").mkdir(parents=True)
+                self.assertFalse((checkout / "dist").exists())
+                self.assertFalse((checkout / "out").exists())
+                pipeline = (Path(__file__).resolve().parents[2] / ".github/workflows/pipeline.yml").read_text()
+                step = pipeline.split("      - name: Extract verified Linux artifacts without rebuilding\n", 1)[1].split("      - name:", 1)[0]
+                commands = textwrap.dedent(step.split("        run: |\n", 1)[1])
+                subprocess.run(["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", commands],
+                               cwd=checkout, env=dict(os.environ, RUNNER_TEMP=str(root)), check=True)
+                dest = checkout / "out/packages/ReMarkableBuddiesManager-linux-x64"
                 self.assertEqual(stat.S_IMODE((dest / "ReMarkableBuddiesManager").stat().st_mode), 0o755)
-                self.assertEqual(json.loads((dest / "build-info.json").read_text()), info)
+                for file in ("dist/manager/browser/build-info.json", "electron/build-info.json"):
+                    self.assertEqual(json.loads((checkout / file).read_text()), info)
             # A self-consistent manifest cannot authorize a different embedded identity.
             target = packages / "manager-browser.zip"
             with zipfile.ZipFile(target, "w") as archive:
