@@ -259,6 +259,38 @@
     <p class="text-sm text-muted">Recovery keeps only an original file fingerprint while this host runs. Stopping is not rollback; a desired-file match does not prove who saved it or running behavior.</p>
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="product-settings-title">
+    <h2 id="product-settings-title">Reader, Writer and export</h2>
+    <p class="text-sm text-muted">Choose saved role enablement and the export backend. Saving requires a Buddy restart; running behavior is not verified. Mem account and destination setup are separate.</p>
+    <div class="flex flex-wrap gap-2 my-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="beginProduct()" [disabled]="!host.productSettings || !profile().savedConfigurationProbe || product().busy || productPeerBusy()">Begin product settings edit</button>
+      <button class="ui-button ui-button-primary" type="button" (click)="saveProduct()" [disabled]="!productCanSave()">Save product settings</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopProduct()" [disabled]="!product().busy && product().view?.state !== 'ready'">{{ product().busy ? 'Stop settings wait' : 'Cancel settings edit' }}</button>
+    </div>
+    <p role="status" data-testid="product-settings-status">{{ product().status }}</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-3 min-w-0" data-testid="product-settings-fields">
+      @for (row of productRows(); track row.key) {
+        <div class="min-w-0">
+          <label class="block" [for]="'product-' + row.key">{{ row.label }}</label>
+          <select class="ui-field w-full max-w-full" [id]="'product-' + row.key" (change)="editProduct(row.key,$event)" [disabled]="product().busy || product().view?.state !== 'ready'">
+            @for (option of row.options; track option[0]) { <option [value]="option[0]" [selected]="option[0] === row.value">{{ option[1] }}</option> }
+          </select>
+          <p class="text-sm">Saved origin: {{ row.originLabel }}</p>
+          <button class="ui-button ui-button-secondary my-2 disabled:opacity-50" type="button" [attr.aria-label]="'Remove ' + row.label + ' override'" (click)="clearProduct(row.key)" [disabled]="product().busy || product().view?.state !== 'ready' || row.origin === 'default'">Remove override</button>
+        </div>
+      }
+    </div>
+    @for (record of product().retained; track record.reference; let i = $index) {
+      <article class="ui-panel my-3" data-testid="product-settings-retained">
+        <h3>Unconfirmed save {{ i + 1 }}</h3>
+        <p>Original outcome remains {{ record.state }}. A desired-file check cannot prove who saved it or whether running behavior changed.</p>
+        <button class="ui-button ui-button-secondary" type="button" (click)="checkProduct(record)" [disabled]="product().busy || !productTarget(record)">Check desired file {{ i + 1 }}</button>
+        @if (!productTarget(record)) { <p class="text-sm">Read state from the original tablet before checking.</p> }
+      </article>
+    }
+    <p class="text-sm text-muted">Unconfirmed original requests are retained only while this host runs. Stopping a wait is not rollback; a new edit is a distinct request.</p>
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="basic-settings-title">
     <h2 id="basic-settings-title">Saved basic settings</h2>
     <p class="text-sm text-muted">Edit three saved preferences. Running behavior may use other settings; saving does not restart Buddy.</p>
@@ -314,7 +346,7 @@
       </div>
       <h3 class="font-semibold">Not represented in this configuration schema</h3>
       <ul class="list-disc ml-5 text-sm" data-testid="saved-configuration-unsupported">@for (gap of configurationGaps(); track gap.key) { <li>{{ gap.label }}</li> }</ul>
-      <p class="text-sm text-muted my-3">These gaps are not false/default settings. Use the separate personalization and saved-storage-mode features for their own supported actions; this view grants no edit, reload, enable or service authority.</p>
+      <p class="text-sm text-muted my-3">These gaps are not false/default settings. Use Reader, Writer and export above, and the separate personalization and saved-storage-mode features, for their supported actions; this view grants no edit, reload, enable or service authority.</p>
     }
     @if (!host.inspectSavedConfiguration) { <p class="ui-warning">This Manager host does not support saved configuration inspection.</p> }
   </section>

@@ -1,0 +1,211 @@
+{
+  "source_head": "060d012ab60438d8bec933ff296afb3ff5fa05d8",
+  "source_clean": true,
+  "binary_sha256": "d96974681a8503e26c294e7a8d77ebd8ec6833ea884f4c0fe53e93e9bca7a2e7",
+  "binary_version": "remarkable-reader-buddy dev.unknown",
+  "platform": "Windows host CLI; no Linux/native/runtime activation qualification",
+  "bootstrap_is_local_missing_draft_refusal": true,
+  "records": [
+    {
+      "name": "local-store-bootstrap",
+      "argv": [
+        "--writer-note"
+      ],
+      "request_utf8": "{\"command\":\"prepare-export\",\"conversation\":\"7e4160c2-fa32-499b-bc65-ddcfdefb7c4e\",\"draft\":\"eae3a896-5c1a-421b-9e97-4bd81c0e71c3\",\"correlation\":\"730b18aa-d63e-4972-83e9-b70e4685d23b\",\"effect_operation\":\"fd65bb81-010c-4604-8267-6efa426e6700\"}",
+      "raw_utf8": "{\"status\":\"refused\",\"conversation\":\"7e4160c2-fa32-499b-bc65-ddcfdefb7c4e\",\"operation\":\"fd65bb81-010c-4604-8267-6efa426e6700\",\"draft\":null,\"failure\":\"storage\"}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "inspect-defaults",
+      "argv": [
+        "--product-settings-operation",
+        "inspect"
+      ],
+      "request_utf8": "",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"schema_version\":1,\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"current\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"default\",\"value\":true},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}}}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "prepare-no-change",
+      "argv": [
+        "--product-settings-operation",
+        "prepare",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"writer_enabled\":{\"action\":\"clear\"}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"no-change\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"current\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"default\",\"value\":true},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\"}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "prepare-reader-false",
+      "argv": [
+        "--product-settings-operation",
+        "prepare",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"prepared\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"before\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"default\",\"value\":true},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"after\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"declared\",\"value\":false},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "status-unresolved",
+      "argv": [
+        "--product-settings-operation",
+        "status",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"ok\",\"outcome\":\"unresolved\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"current\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"default\",\"value\":true},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"observed_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\"}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "apply-wrong-config_path_sha256",
+      "argv": [
+        "--product-settings-operation",
+        "apply",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"conflict\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "apply-wrong-target_sha256",
+      "argv": [
+        "--product-settings-operation",
+        "apply",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"invalid-input\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "apply-verified",
+      "argv": [
+        "--product-settings-operation",
+        "apply",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"ok\",\"outcome\":\"verified\",\"disk_readback_verified\":true,\"runtime_activation\":\"restart-required\",\"data\":{\"current\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"declared\",\"value\":false},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\"}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "status-desired",
+      "argv": [
+        "--product-settings-operation",
+        "status",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"ok\",\"outcome\":\"desired-file-observed\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"current\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"declared\",\"value\":false},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"observed_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\"}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "apply-stale-original",
+      "argv": [
+        "--product-settings-operation",
+        "apply",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"target_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"conflict\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "prepare-future",
+      "argv": [
+        "--product-settings-operation",
+        "prepare",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"product_settings_version\":2,\"operation\":\"c4ea8a8e-9607-4154-bba9-88440d4a281e\",\"base_sha256\":\"fd4c6e5911677c00133af027293d4bdfdd8b8a17ce8aea0768116ac3c67e3ac3\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"reader_enabled\":{\"action\":\"set\",\"value\":false}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"unsupported\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "prepare-duplicate",
+      "argv": [
+        "--product-settings-operation",
+        "prepare",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"product_settings_version\":1,\"product_settings_version\":1}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"invalid-input\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "wrong-input-selector",
+      "argv": [
+        "--product-settings-operation",
+        "prepare",
+        "--product-settings-input",
+        "private-not-a-file"
+      ],
+      "request_utf8": "",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"unsupported\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "inspect-reader-disabled",
+      "argv": [
+        "--product-settings-operation",
+        "inspect"
+      ],
+      "request_utf8": "",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"schema_version\":1,\"base_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"current\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"declared\",\"value\":false},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}}}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "prepare-multifield",
+      "argv": [
+        "--product-settings-operation",
+        "prepare",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"product_settings_version\":1,\"operation\":\"0c948815-f6a6-4108-bc8a-df7cbb91f570\",\"base_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"writer_enabled\":{\"action\":\"set\",\"value\":false},\"reader_enabled\":{\"action\":\"clear\"},\"export_destination\":{\"action\":\"set\",\"value\":\"disabled\"}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"prepared\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"before\":{\"export_destination\":{\"origin\":\"default\",\"value\":\"mem\"},\"reader_enabled\":{\"origin\":\"declared\",\"value\":false},\"writer_enabled\":{\"origin\":\"default\",\"value\":true}},\"after\":{\"export_destination\":{\"origin\":\"declared\",\"value\":\"disabled\"},\"reader_enabled\":{\"origin\":\"default\",\"value\":true},\"writer_enabled\":{\"origin\":\"declared\",\"value\":false}},\"intent\":{\"product_settings_version\":1,\"operation\":\"0c948815-f6a6-4108-bc8a-df7cbb91f570\",\"base_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"target_sha256\":\"b34452b3333f71f1dec769a7358fe4ddefd2a555da0f3bb39cbf7a9788d572ae\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"export_destination\":{\"action\":\"set\",\"value\":\"disabled\"},\"reader_enabled\":{\"action\":\"clear\"},\"writer_enabled\":{\"action\":\"set\",\"value\":false}}}}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    },
+    {
+      "name": "apply-multifield",
+      "argv": [
+        "--product-settings-operation",
+        "apply",
+        "--product-settings-input",
+        "-"
+      ],
+      "request_utf8": "{\"intent\":{\"product_settings_version\":1,\"operation\":\"0c948815-f6a6-4108-bc8a-df7cbb91f570\",\"base_sha256\":\"294178a017a5a10c368b1d854dab71978f6294380af31c1c07d42de11f378b34\",\"target_sha256\":\"b34452b3333f71f1dec769a7358fe4ddefd2a555da0f3bb39cbf7a9788d572ae\",\"config_path_sha256\":\"637e4f879666b104c3b63caeec8e42db6f925742bcd9681839dbf47ffd0a9737\",\"changes\":{\"export_destination\":{\"action\":\"set\",\"value\":\"disabled\"},\"reader_enabled\":{\"action\":\"clear\"},\"writer_enabled\":{\"action\":\"set\",\"value\":false}}}}",
+      "raw_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"ok\",\"outcome\":\"verified\",\"disk_readback_verified\":true,\"runtime_activation\":\"restart-required\",\"data\":{\"current\":{\"export_destination\":{\"origin\":\"declared\",\"value\":\"disabled\"},\"reader_enabled\":{\"origin\":\"default\",\"value\":true},\"writer_enabled\":{\"origin\":\"declared\",\"value\":false}},\"target_sha256\":\"b34452b3333f71f1dec769a7358fe4ddefd2a555da0f3bb39cbf7a9788d572ae\"}}\n",
+      "exit_code": 0,
+      "stderr_utf8": ""
+    }
+  ]
+}

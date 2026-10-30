@@ -176,6 +176,12 @@ jobs:
           xvfb-run -a npm run test:saved-configuration-hosts -- --packaged
           xvfb-run -a npm run test:basic-settings-hosts
           xvfb-run -a npm run test:basic-settings-hosts -- --packaged
+          xvfb-run -a npm run test:product-settings-hosts
+          xvfb-run -a npm run test:product-settings-hosts -- --packaged
+          xvfb-run -a npm run test:product-maintenance-hosts
+          xvfb-run -a npm run test:product-maintenance-hosts -- --packaged
+          xvfb-run -a npm run test:product-lifetime-hosts
+          xvfb-run -a npm run test:product-lifetime-hosts -- --packaged
           xvfb-run -a npm run test:model-settings-hosts
           xvfb-run -a npm run test:model-settings-hosts -- --packaged
           xvfb-run -a npm run test:research-settings-hosts
@@ -231,6 +237,12 @@ jobs:
           npm run test:saved-configuration-hosts -- --packaged
           npm run test:basic-settings-hosts
           npm run test:basic-settings-hosts -- --packaged
+          npm run test:product-settings-hosts
+          npm run test:product-settings-hosts -- --packaged
+          npm run test:product-maintenance-hosts
+          npm run test:product-maintenance-hosts -- --packaged
+          npm run test:product-lifetime-hosts
+          npm run test:product-lifetime-hosts -- --packaged
           npm run test:model-settings-hosts
           npm run test:model-settings-hosts -- --packaged
           npm run test:research-settings-hosts

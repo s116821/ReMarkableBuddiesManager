@@ -26,7 +26,9 @@ import type {OrdinaryExportAdapter} from './ordinary-export';
 import type {ExportResult} from '../host/ordinary-export-protocol.mjs';
 import type { ModelSettingsAdapter } from './model-settings';
 import type { ModelSettingsResult } from '../host/model-settings-protocol.mjs';
+import type { ProductSettingsAdapter } from './product-settings';
 import type { BasicSettingsAdapter } from './basic-settings';
+import type { ProductSettingsResult } from '../host/product-settings-protocol.mjs';
 import type { BasicSettingsResult } from '../host/basic-settings-protocol.mjs';
 import type { SavedConfigurationAdapter,SavedConfigurationResult } from './saved-configuration';
 import type { ForgetAdapter, ForgetResult } from './memory-forget';
@@ -55,6 +57,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly modelCredential?:ModelCredentialAdapter['modelCredential'];
   readonly credentialReference?:CredentialReferenceAdapter['credentialReference'];
   readonly modelSettings?: ModelSettingsAdapter['modelSettings'];
+  readonly productSettings?: ProductSettingsAdapter['productSettings'];
   readonly basicSettings?: BasicSettingsAdapter['basicSettings'];
   readonly memoryForget?: ForgetAdapter['memoryForget'];
   readonly inspectMemory?: MemoryInspectionAdapter['inspectMemory'];
@@ -193,6 +196,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Model settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelSettingsResult;
+    },
+    productSettings: async (request: import('../host/product-settings-protocol.mjs').ProductSettingsRequest) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Product settings helper unavailable');
+      const response=await fetch('/manager-product-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
+      if(!response.ok||!response.body)throw Error('Product settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Product settings response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as ProductSettingsResult;
     },
     basicSettings: async (request: import('../host/basic-settings-protocol.mjs').BasicSettingsRequest) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Basic settings helper unavailable');
