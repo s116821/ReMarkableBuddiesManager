@@ -27,3 +27,12 @@ test('controller refuses foreign begin unknown but admits genuine old-boot same-
  const good=open();await good.c.begin({storageInitialization:async()=>blocked},rebooted,async()=>true);assert.equal(good.c.state.view.state,'unknown');assert.equal(good.c.state.retained[0].boot_id,identity.boot_id);assert.equal(good.initialization.calls.length,0);
  const bad=open(),forged=structuredClone(blocked);forged.storage_initialization.retained[0].connection_id='f'.repeat(64);await bad.c.begin({storageInitialization:async()=>forged},rebooted,async()=>true);assert.equal(bad.c.state.view,null);assert.equal(bad.c.state.retained.length,0);assert.equal(bad.initialization.calls.length,0);
 });
+test('controller rejects foreign original custody for no-current confirm and refresh plus unknown/current confirm',async()=>{
+ for(const action of ['confirm','refresh'])for(const field of ['connection_id','boot_id']){
+  const f=open();await begin(f);if(action==='refresh')await f.c.confirm(f.adapter,tablet,async()=>true);
+  const adapter={storageInitialization:async q=>{let v=await f.adapter.storageInitialization(q);if(action==='confirm')v=await f.h.request({...q,invocation:invocation(99)});else {v.status='unconfigured';v.observation=null;v.storage_initialization.current=null;}v.storage_initialization.invocation=q.invocation;const row=v.storage_initialization.retained.find(r=>r.reference===q.reference);row[field]=field==='boot_id'?invocation(82):'f'.repeat(64);return v;}};
+  if(action==='confirm')await f.c.confirm(adapter,tablet,async()=>true);else await f.c.refresh(adapter,tablet,f.c.state.retained[0],async()=>true);
+  assert.equal(f.c.state.view,null);assert.ok(f.c.state.retained.every(r=>r.connection_id===identity.connection_id&&r.boot_id===identity.boot_id));
+ }
+ const f=open();await begin(f);await f.c.confirm({storageInitialization:async q=>{const v=await f.adapter.storageInitialization(q),s=v.storage_initialization;s.state='unknown';s.reason='unavailable';s.retained[0].outcome='unknown';s.retained[0].reason='unavailable';return v;}},tablet,async()=>true);assert.equal(f.c.state.view,null);assert.equal(f.c.state.retained[0].outcome,'unknown');
+});

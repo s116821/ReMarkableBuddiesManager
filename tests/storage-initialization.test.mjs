@@ -41,3 +41,21 @@ test('begin unknown must match connection, while genuine older-boot unknown and 
  const wrong=structuredClone(blocked);wrong.storage_initialization.retained[0].connection_id='f'.repeat(64);assert.throws(()=>parseStorageInitializationResult(wrong,review,validateResult));
  f.observer.lastObservation.boot_id=identity.boot_id;f.initialization.raw=null;const q=command('refresh',ref,3),checked=await f.host.request(q);assert.equal(checked.storage_initialization.state,'unknown');assert.deepEqual(checked.storage_initialization.current,{kind:'unconfigured'});parseStorageInitializationResult(checked,q,validateResult);
 });
+test('complete historical action/current/identity matrix preserves genuine controls and rejects contradictory custody',async()=>{
+ let cases=0;
+ for(const outcome of ['prepared','unknown']){
+  const f=open(),policy=await begin(f),ref=policy.storage_initialization.reference;
+  if(outcome==='unknown')f.initialization.raw='partial';await f.host.request(command('confirm',ref));f.initialization.raw=null;
+  const seed=await f.host.request(command('refresh',ref,2));assert.equal(seed.storage_initialization.state,outcome);
+  for(const action of ['begin','confirm','refresh','cancel'])for(const current of [false,true])for(const mismatch of ['same','connection','boot']){
+   const q=action==='begin'?{action,...identity}:action==='cancel'?{action,reference:ref,invocation:null}:command(action,ref,2),v=structuredClone(seed),s=v.storage_initialization;
+   s.invocation=q.invocation??null;if(!current){s.current=null;v.status='unconfigured';v.observation=null;}
+   if(mismatch==='connection')s.retained[0].connection_id='f'.repeat(64);if(mismatch==='boot')s.retained[0].boot_id=invocation(80);
+   const allowed=action==='begin'?outcome==='unknown'&&!current&&mismatch!=='connection':action==='cancel'?!current:mismatch==='same'&&(!current||action==='refresh'||outcome==='prepared');
+   const admit=()=>parseStorageInitializationResult(v,q,validateResult);if(allowed)assert.doesNotThrow(admit,`${outcome}/${action}/${current}/${mismatch}`);else assert.throws(admit,`${outcome}/${action}/${current}/${mismatch}`);cases++;
+  }
+  const retained=await f.host.request({action:'retained'});parseStorageInitializationResult(retained,{action:'retained'},validateResult);
+  for(const action of ['confirm','refresh'])for(const field of ['connection_id','boot_id']){const q={...command(action,ref,3),[field]:field==='boot_id'?invocation(81):'e'.repeat(64)},refused=await f.host.request(q);assert.equal(refused.storage_initialization.state,'unavailable');parseStorageInitializationResult(refused,q,validateResult);}
+ }
+ assert.equal(cases,48);
+});
