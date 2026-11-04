@@ -39,6 +39,11 @@ VELLUM_APK = f"{VELLUM_ROOT}/bin/apk.vellum"
 VELLUM_APK_SHA256 = "2fa969001cd8fbc8fa373b7c3dfcc99f858ceb516306d35d1b037c09861ac94a"
 VELLUM_DB = f"{VELLUM_ROOT}/lib/apk/db/installed"
 VELLUM_LAYER = f"{VELLUM_ROOT}/lib/apk/db-uvol"
+VELLUM_WORLD = f"{VELLUM_ROOT}/etc/apk/world"
+VELLUM_OFFLINE = (
+    f"APK_CONFIG=/dev/null {VELLUM_APK} --root {VELLUM_ROOT} --install-root / "
+    "--no-network --no-cache --no-logfile"
+)
 PACKAGE_VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-r(?:0|[1-9][0-9]*)")
 PACKAGE_FILES = (
     (APP, "app_sha256", "755", 128 * 1024 * 1024),
@@ -210,14 +215,26 @@ class PackageRecovery:
         database = stamp(VELLUM_DB, 16 * 1024 * 1024)
         owner = f"remarkable-buddies-{version}"
         result = self.read(
-            f"APK_CONFIG=/dev/null {VELLUM_APK} --root {VELLUM_ROOT} --install-root / "
-            f"--no-network --no-cache --no-logfile info --who-owns {' '.join(OWNER_PATHS)}", 4096)
+            f"{VELLUM_OFFLINE} info --who-owns {' '.join(OWNER_PATHS)}", 4096)
         expected = "".join(f"{path} is owned by {owner}\n" for path in OWNER_PATHS).encode("ascii")
         require(result == expected)
         require(stamp(VELLUM_DB, 16 * 1024 * 1024) == database
                 and stamp(VELLUM_APK, 16 * 1024 * 1024) == executable and self.boot() == boot)
         check_layout()
         return {"boot_id": boot, "package": owner, "database_sha256": database[1]}
+
+    def removal_plan(self, version):
+        """Accept only a read-only solver plan that purges the exact Buddy revision."""
+        ownership = self.package_ownership(version)
+        world = self.protected(VELLUM_WORLD)
+        result = self.read(
+            f'test "$(sha256sum {VELLUM_APK})" = "{VELLUM_APK_SHA256}  {VELLUM_APK}" && '
+            f'{VELLUM_OFFLINE} --repositories-file /dev/null --simulate del remarkable-buddies', 1024)
+        lines = result.splitlines()
+        require(len(lines) == 2 and lines[0] == f"(1/1) Purging remarkable-buddies ({version})".encode("ascii")
+                and re.fullmatch(rb"OK: [0-9]+(?:\.[0-9]+)? [A-Za-z]+ in [0-9]+ packages", lines[1]))
+        require(self.package_ownership(version) == ownership and self.protected(VELLUM_WORLD) == world)
+        return {"ownership": ownership, "world_sha256": sha256(world), "solver_sha256": sha256(result)}
 
     def runtime(self):
         require(self.read(f"test ! -L {RUNTIME} && test -d {RUNTIME} && "

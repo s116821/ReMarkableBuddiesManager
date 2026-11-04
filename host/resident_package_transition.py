@@ -26,11 +26,13 @@ def intent_path(config_path, boot, activation):
     return Path(config_path).parent / f"resident-stop-{boot}-{activation}.json"
 
 
-def record_intent(path, connection, activation, ownership):
+def record_intent(path, connection, activation, ownership, removal_plan=None):
     root_identity = checked_root(path.parent)
     require(root_identity is not None)
     payload = {"version": 2, "connection_id": connection, "activation": asdict(activation),
                "ownership": ownership}
+    if removal_plan is not None:
+        payload.update(version=3, removal_plan=removal_plan)
     try:
         with exclusive(path, write_through=True) as stream:
             stream.write(json.dumps(payload, separators=(",", ":")).encode("ascii"))
@@ -82,7 +84,18 @@ def require_ownership(ownership, boot, version):
             and isinstance(ownership["database_sha256"], str) and DIGEST.fullmatch(ownership["database_sha256"]))
 
 
-def recovered_with_ownership(recovery, receipt, version, expected_ownership):
+def require_removal_plan(plan, boot, version):
+    require(isinstance(plan, dict) and set(plan) == {"ownership", "world_sha256", "solver_sha256"})
+    require_ownership(plan["ownership"], boot, version)
+    require(all(isinstance(plan[field], str) and DIGEST.fullmatch(plan[field])
+                for field in ("world_sha256", "solver_sha256")))
+
+
+def recovered_with_ownership(recovery, receipt, version, expected_ownership, removal_plan=None):
+    if removal_plan is not None:
+        if recovery.removal_plan(version) != removal_plan:
+            raise RecoveryPending("Vellum removal plan changed after possible stop submission")
+        return {"recovery": receipt, "ownership": expected_ownership, "removal_plan": removal_plan}
     if recovery.package_ownership(version) != expected_ownership:
         raise RecoveryPending("Vellum ownership changed after possible stop submission")
     return {"recovery": receipt, "ownership": expected_ownership}
@@ -97,6 +110,14 @@ def observe_package_ownership(config_path, approved_version, deadline, expected_
     return on_wire(config_path, inspect, expected_connection)
 
 
+def preview_removal(config_path, approved_version, deadline, expected_connection=None):
+    """Preview the single-package Vellum removal over the verified wired route."""
+    def inspect(transport):
+        return {"removal_plan": PackageRecovery(transport, deadline).removal_plan(approved_version)}
+
+    return on_wire(config_path, inspect, expected_connection)
+
+
 def review(config_path, approved_profile_sha256, deadline):
     """Read the activation for the package identity approved by the host caller."""
     def inspect(transport):
@@ -107,7 +128,8 @@ def review(config_path, approved_profile_sha256, deadline):
     return on_wire(config_path, inspect)
 
 
-def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline, *, approved_version):
+def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline, *,
+            approved_version, removal=False):
     """Require owned bytes before recording intent and reconfirm ownership after recovery."""
     require_approved(expected, approved_profile_sha256)
     require_package_version(approved_version)
@@ -120,10 +142,16 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
     def inspect(transport):
         nonlocal possible
         recovery = PackageRecovery(transport, deadline)
-        ownership = recovery.package_ownership(approved_version)
-        require_ownership(ownership, expected.boot_id, approved_version)
+        plan = None
+        if removal:
+            plan = recovery.removal_plan(approved_version)
+            require_removal_plan(plan, expected.boot_id, approved_version)
+            ownership = plan["ownership"]
+        else:
+            ownership = recovery.package_ownership(approved_version)
+            require_ownership(ownership, expected.boot_id, approved_version)
         require(recovery.capture_activation() == expected and time.monotonic() < deadline)
-        record_intent(path, expected_connection, expected, ownership)
+        record_intent(path, expected_connection, expected, ownership, plan)
         if time.monotonic() >= deadline:
             raise shared.Refusal("timeout")
         possible = True
@@ -138,7 +166,7 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
                     raise RecoveryPending("Tablet boot changed after stop submission") from None
                 time.sleep(max(0, min(0.25, deadline - time.monotonic())))
             else:
-                return recovered_with_ownership(recovery, receipt, approved_version, ownership)
+                return recovered_with_ownership(recovery, receipt, approved_version, ownership, plan)
         raise RecoveryPending("Stock recovery could not be confirmed")
 
     try:
@@ -157,10 +185,16 @@ def observe(config_path, expected_connection, boot, activation, approved_profile
     path = intent_path(config_path, boot, activation)
     require(checked_root(path.parent) is not None)
     record = json_record(shared.private_bytes(path, parent_private=True, maximum=2048))
-    require(type(record.get("version")) is int and record["version"] in (1, 2)
+    require(type(record.get("version")) is int and record["version"] in (1, 2, 3)
             and record.get("connection_id") == expected_connection)
     fields = {"version", "connection_id", "activation"}
-    if record["version"] == 2:
+    plan = None
+    if record["version"] == 3:
+        require(set(record) == fields | {"ownership", "removal_plan"})
+        plan = record["removal_plan"]
+        require_removal_plan(plan, boot, approved_version)
+        require(plan["ownership"] == record["ownership"])
+    elif record["version"] == 2:
         require(set(record) == fields | {"ownership"})
         require_ownership(record["ownership"], boot, approved_version)
     else:
@@ -176,6 +210,6 @@ def observe(config_path, expected_connection, boot, activation, approved_profile
         receipt = recovery.observe_recovery(expected)
         if record["version"] == 1:
             return {"recovery": receipt}
-        return recovered_with_ownership(recovery, receipt, approved_version, record["ownership"])
+        return recovered_with_ownership(recovery, receipt, approved_version, record["ownership"], plan)
 
     return on_wire(config_path, inspect, expected_connection)

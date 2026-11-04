@@ -27,7 +27,9 @@ class TransitionTest(unittest.TestCase):
         self.version = "1.2.3-r2"
         self.ownership = {"boot_id": self.activation.boot_id, "package": f"remarkable-buddies-{self.version}",
                           "database_sha256": "e" * 64}
+        self.plan = {"ownership": self.ownership, "world_sha256": "a" * 64, "solver_sha256": "b" * 64}
         self.recovery.package_ownership.return_value = self.ownership
+        self.recovery.removal_plan.return_value = self.plan
         self.recovery.capture_activation.return_value = self.activation
         self.recovery.observe_recovery.return_value = {"lease_sha256": self.activation.lease_sha256}
         self.events = Mock()
@@ -44,9 +46,9 @@ class TransitionTest(unittest.TestCase):
         self.assertEqual(expected_connection, self.connection)
         return inspect("wire")
 
-    def prepare(self):
+    def prepare(self, *, removal=False):
         return transition.prepare(self.config, self.connection, self.activation, self.activation.profile_sha256,
-                                  float("inf"), approved_version=self.version)
+                                  float("inf"), approved_version=self.version, removal=removal)
 
     def test_journal_precedes_the_single_stop(self):
         receipt = self.prepare()
@@ -54,7 +56,7 @@ class TransitionTest(unittest.TestCase):
         self.assertEqual(receipt["ownership"], self.ownership)
         self.assertEqual([entry[0] for entry in self.events.mock_calls], ["record", "stop"])
         path = transition.intent_path(self.config, self.activation.boot_id, self.activation.activation_id)
-        self.events.record.assert_called_once_with(path, self.connection, self.activation, self.ownership)
+        self.events.record.assert_called_once_with(path, self.connection, self.activation, self.ownership, None)
         self.events.stop.assert_called_once_with("wire", transition.STOP_COMMAND, float("inf"), 1024)
         self.assertEqual(self.recovery.package_ownership.call_count, 2)
 
@@ -87,6 +89,29 @@ class TransitionTest(unittest.TestCase):
             self.prepare()
         self.recovery.observe_recovery.assert_called_once_with(self.activation)
         self.events.stop.assert_called_once()
+
+    def test_removal_revalidates_solver_plan_after_recovery(self):
+        self.recovery.removal_plan.side_effect = [self.plan, {**self.plan, "world_sha256": "f" * 64}]
+        with self.assertRaises(transition.RecoveryPending):
+            self.prepare(removal=True)
+        path = transition.intent_path(self.config, self.activation.boot_id, self.activation.activation_id)
+        self.events.record.assert_called_once_with(path, self.connection, self.activation, self.ownership, self.plan)
+        self.events.stop.assert_called_once()
+        self.recovery.observe_recovery.assert_called_once_with(self.activation)
+
+    def test_retained_removal_plan_is_reconciled_without_stop(self):
+        raw = json.dumps({"version": 3, "connection_id": self.connection, "activation": asdict(self.activation),
+                          "ownership": self.ownership, "removal_plan": self.plan}).encode()
+        args = (self.config, self.connection, self.activation.boot_id, self.activation.activation_id,
+                self.activation.profile_sha256, float("inf"))
+        with (patch.object(transition, "checked_root", return_value=(1, 2)),
+              patch.object(transition.shared, "private_bytes", return_value=raw)):
+            receipt = transition.observe(*args, approved_version=self.version)
+            self.assertEqual(receipt["removal_plan"], self.plan)
+            self.recovery.removal_plan.return_value = {**self.plan, "solver_sha256": "f" * 64}
+            with self.assertRaises(transition.RecoveryPending):
+                transition.observe(*args, approved_version=self.version)
+        self.events.stop.assert_not_called()
 
     def test_connection_failure_stays_pending_and_observation_does_not_stop(self):
         self.events.stop.side_effect = OSError("link lost")
