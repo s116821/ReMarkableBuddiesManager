@@ -1,7 +1,7 @@
 import {verifyOwnedV3Quiescence} from './fixtures/owned-v3-quiescence.mjs';
 import {verifyOwnedV3AppBoundaries} from './fixtures/owned-v3-app-boundaries.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
-import {mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
+import {mkdtemp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {startHelper} from '../host/browser-helper.mjs';
 import {generation4Fixture,tablet,identity,vectors} from './fixtures/owned-data-v3.mjs';
 import {lanes as sixteen} from './fixtures/maintenance-sixteen-lanes.mjs';
@@ -65,7 +65,14 @@ try{
  const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
  const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.v3Harness.v3.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.v3Harness.v3.gate?.entered)).toBe(true),snapshot:()=>app.evaluate(()=>({calls:globalThis.v3Harness.v3.calls,reads:globalThis.v3Harness.v3.reads,cancels:globalThis.v3Observer.generation})),release:()=>app.evaluate(()=>{const s=globalThis.v3Harness.v3,g=s.gate;s.gate=null;g.resolve();}),idle:()=>expect.poll(()=>app.evaluate(()=>globalThis.v3Harness.v3.active)).toBe(0),mode:id=>app.evaluate((_e,id)=>{globalThis.v3Harness.v3.raw=globalThis.v3Vectors.find(v=>v.id===id).raw_utf8;},id)};
  await app.evaluate((_e,root)=>{globalThis.v3FixtureRoot=root;},path.resolve('.'));await matrix(request,control);await preserveUnknown(request);await app.evaluate(()=>{globalThis.v3Harness.v3.reads=0;});await page.reload();
- await ui(page,control,width=>page.locator('section[aria-labelledby="owned-v3-title"]').screenshot({path:`test-results/owned-v3-electron-${packaged?'packaged':'source'}-${width}.png`}));
+ await ui(page,control,async width=>{
+  const section=page.locator('section[aria-labelledby="owned-v3-title"]'),desiredHeight=Math.ceil(await section.evaluate(el=>el.getBoundingClientRect().height))+80;
+  const content=await app.evaluate(({BrowserWindow},{width,height})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(width,height);return w.getContentSize();},{width,height:desiredHeight});
+  const capture=async suffix=>{const png=await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG().toString('base64'));await writeFile(`test-results/owned-v3-electron-${packaged?'packaged':'source'}-${width}${suffix}.png`,Buffer.from(png,'base64'));};
+  const probe=Buffer.from(await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64')),'base64'),scale=probe.readUInt32BE(16)/width,viewportHeight=Math.min(desiredHeight,content[1],Math.floor(probe.readUInt32BE(20)/scale));
+  await page.setViewportSize({width,height:viewportHeight});await section.evaluate(el=>el.scrollIntoView({block:'start'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await capture('');
+  if((await section.boundingBox()).height>viewportHeight){await section.evaluate(el=>el.scrollIntoView({block:'end'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await capture('-bottom');}
+ });
  if(packaged){const resources=await app.evaluate(()=>process.resourcesPath);for(const name of ['owned-data-v3.mjs','owned-data-v3-private.mjs','owned-data-v3-protocol.mjs','owned_data_v3_transport.py'])assert.deepEqual(await readFile(path.join(resources,'host',name)),await readFile(path.join('host',name)));}
  console.log('Actual Electron guarded IPC and all43 numeric/vector admissions, UI and lifetime controls pass; synthetic transport');
 }finally{await app.evaluate(()=>globalThis.v3Harness.v3.gate?.resolve()).catch(()=>{});await app.close();await rm(folder,{recursive:true,force:true});}
