@@ -1,3 +1,4 @@
+import {readFreshTabletState,verifyStorageInitializationReadRace} from './fixtures/storage-initialization-observation.mjs';
 import {verifyStorageInitializationAppBoundaries} from './fixtures/storage-initialization-app-boundaries.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
 import {mkdtemp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
@@ -33,7 +34,7 @@ async function preserveBothUnknowns(request){
 }
 async function ui(page,control,capture){
  const review=page.getByRole('button',{name:'Review storage setup',exact:true}),confirm=page.getByRole('button',{name:'Prepare storage',exact:true}),status=page.getByTestId('storage-initialization-status');
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await expect(review).toBeEnabled();const before=await control.snapshot();await review.focus();await page.keyboard.press('Enter');await expect(confirm).toBeEnabled();assert.equal((await control.snapshot()).all,before.all);
+ await readFreshTabletState(page);await expect(review).toBeEnabled();const before=await control.snapshot();await review.focus();await expect(review).toBeFocused();await page.keyboard.press('Enter');await expect(confirm).toBeEnabled();assert.equal((await control.snapshot()).all,before.all);
  for(const width of [390,1280]){await page.setViewportSize({width,height:1100});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await capture(width);}
  await confirm.click();await expect(status).toContainText('Buddy storage prepared');await expect(page.getByTestId('storage-initialization-current')).toContainText('Not set');
  for(const event of ['pagehide','hidden','refresh']){await review.click();await expect(confirm).toBeEnabled();const before=await control.snapshot();if(event==='pagehide')await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));else if(event==='hidden')await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));delete document.visibilityState;});else await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await expect(confirm).toHaveCount(0);assert.equal((await control.snapshot()).calls,before.calls);await expect(review).toBeEnabled();}
@@ -54,7 +55,7 @@ async function quiescence(page,control){
 }
 const f=initializationFixture(),helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer:f.observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){}}}),browser=await chromium.launch();
 try{
- const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.goto(helper.origin+'/preview/');
+ const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();if(!packaged)await page.clock.install();await page.goto(helper.origin+'/preview/');
  const request=async(name,q)=>{const r=await context.request.post(helper.origin+'/manager-'+routes[name],{headers:{Origin:helper.origin,'Content-Type':'application/json'},data:q});assert.equal(r.status(),200,name);return r.json();};
  const control={hold:async()=>{let resolve;const promise=new Promise(r=>{resolve=r;});f.initialization.gate={resolve,promise,entered:false};},entered:()=>expect.poll(()=>f.initialization.gate?.entered).toBe(true),snapshot:async()=>({all:f.initialization.all,calls:f.initialization.calls.length,cancels:f.observer.cancels}),release:async()=>{const g=f.initialization.gate;f.initialization.gate=null;g.resolve();},retained:()=>request('storageInitialization',{action:'retained'}),inspectPeer:()=>request('inspectOwnedV3',identity)};
  await matrix(request,control);
@@ -62,6 +63,8 @@ try{
  await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();
  await quiescence(page,{...control,holdPoll:async()=>{let enter,release;const entered=new Promise(r=>{enter=r;}),wait=new Promise(r=>{release=r;});const handler=async route=>{if(route.request().postDataJSON().action!=='observe')return route.continue();const response=await route.fetch();enter();await wait;await route.fulfill({response});};await page.route('**/manager-host',handler);return {entered:()=>entered,release:async()=>release(),cleanup:()=>page.unroute('**/manager-host',handler)};}});
  await verifyStorageInitializationAppBoundaries(page);
+ await page.reload();await readFreshTabletState(page);
+ await verifyStorageInitializationReadRace(page,control);
  await ui(page,control,width=>page.locator('section[aria-labelledby="storage-initialization-title"]').screenshot({path:`test-results/storage-initialization-browser-${packaged?'production':'development'}-${width}.png`}));
  await preserveBothUnknowns(request);
  console.log('Actual browser policy/confirm, guarded routes, current inspect, lifecycle, uncertainty and responsive keyboard UI pass; synthetic transport');
