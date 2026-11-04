@@ -55,6 +55,7 @@ test('complete historical action/current/identity matrix preserves genuine contr
    const admit=()=>parseStorageInitializationResult(v,q,validateResult);if(allowed)assert.doesNotThrow(admit,`${outcome}/${action}/${current}/${mismatch}`);else assert.throws(admit,`${outcome}/${action}/${current}/${mismatch}`);cases++;
   }
   const retained=await f.host.request({action:'retained'});parseStorageInitializationResult(retained,{action:'retained'},validateResult);
+  for(const action of ['begin','confirm','refresh','cancel']){const q=action==='begin'?{action,...identity}:action==='cancel'?{action,reference:ref,invocation:null}:command(action,ref,3),v=structuredClone(retained);v.storage_initialization.reference=q.reference??null;v.storage_initialization.invocation=q.invocation??null;assert.throws(()=>parseStorageInitializationResult(v,q,validateResult),'none is retained-only');}
   for(const action of ['confirm','refresh'])for(const field of ['connection_id','boot_id']){const q={...command(action,ref,3),[field]:field==='boot_id'?invocation(81):'e'.repeat(64)},refused=await f.host.request(q);assert.equal(refused.storage_initialization.state,'unavailable');parseStorageInitializationResult(refused,q,validateResult);}
  }
  assert.equal(cases,48);

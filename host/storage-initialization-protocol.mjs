@@ -16,6 +16,7 @@ export function parseStorageInitializationResult(v,request,validate){
  const q=parseStorageInitializationRequest(request),action=q.action;if(keys(v)!=='contract_version,observation,status,storage_initialization'||bytes(v)>8192)fail();
  validate({contract_version:v.contract_version,status:v.status,observation:v.observation});const s=v.storage_initialization;
  if(keys(s)!=='current,invocation,reason,reference,retained,state'||!['none','ready','invalidated','expired','busy','unavailable','unsupported','capacity','prepared','unknown'].includes(s.state)||s.reference!==null&&!basicDigest(s.reference)||s.invocation!==null&&!basicUuid(s.invocation)||!reasons.includes(s.reason))fail();
+ if(s.state==='none'&&action!=='retained')fail();
  if(q.reference&&s.reference!==q.reference||q.invocation!==undefined&&s.invocation!==q.invocation)fail();
  if(!Array.isArray(s.retained)||s.retained.length>8)fail();const seen=new Set();
  for(const r of s.retained){if(keys(r)!=='boot_id,connection_id,outcome,reason,reference'||!basicDigest(r.reference)||!basicDigest(r.connection_id)||!basicUuid(r.boot_id)||!['prepared','unknown'].includes(r.outcome)||!reasons.includes(r.reason)||r.outcome==='prepared'&&r.reason!==null||r.outcome==='unknown'&&r.reason===null||seen.has(r.reference))fail();seen.add(r.reference);}

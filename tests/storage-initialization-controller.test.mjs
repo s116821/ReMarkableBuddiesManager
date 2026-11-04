@@ -34,5 +34,5 @@ test('controller rejects foreign original custody for no-current confirm and ref
   if(action==='confirm')await f.c.confirm(adapter,tablet,async()=>true);else await f.c.refresh(adapter,tablet,f.c.state.retained[0],async()=>true);
   assert.equal(f.c.state.view,null);assert.ok(f.c.state.retained.every(r=>r.connection_id===identity.connection_id&&r.boot_id===identity.boot_id));
  }
- const f=open();await begin(f);await f.c.confirm({storageInitialization:async q=>{const v=await f.adapter.storageInitialization(q),s=v.storage_initialization;s.state='unknown';s.reason='unavailable';s.retained[0].outcome='unknown';s.retained[0].reason='unavailable';return v;}},tablet,async()=>true);assert.equal(f.c.state.view,null);assert.equal(f.c.state.retained[0].outcome,'unknown');
+ for(const state of ['unknown','none']){const f=open();await begin(f);await f.c.confirm({storageInitialization:async q=>{const v=await f.adapter.storageInitialization(q),s=v.storage_initialization;s.state=state;if(state==='unknown'){s.reason='unavailable';s.retained[0].outcome='unknown';s.retained[0].reason='unavailable';}else{s.current=null;v.status='unconfigured';v.observation=null;}return v;}},tablet,async()=>true);assert.equal(f.c.state.view,null);assert.equal(f.c.state.retained[0].outcome,'unknown');}
 });
