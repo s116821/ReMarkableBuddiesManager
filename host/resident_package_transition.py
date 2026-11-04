@@ -133,11 +133,14 @@ def review(config_path, approved_profile_sha256, deadline):
 
 
 def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline, *,
-            approved_version, removal=False):
+            approved_version, removal=False, expected_plan=None):
     """Require owned bytes before recording intent and reconfirm ownership after recovery."""
     require_approved(expected, approved_profile_sha256)
     require_package_version(approved_version)
     require(isinstance(expected_connection, str) and DIGEST.fullmatch(expected_connection))
+    if expected_plan is not None:
+        require(removal)
+        require_removal_plan(expected_plan, expected.boot_id, approved_version)
     path = intent_path(config_path, expected.boot_id, expected.activation_id)
     if os.path.lexists(path):
         raise RecoveryPending("Stop intent is already retained")
@@ -150,6 +153,8 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
         if removal:
             plan = recovery.removal_plan(approved_version)
             require_removal_plan(plan, expected.boot_id, approved_version)
+            if expected_plan is not None:
+                require(plan == expected_plan)
             ownership = plan["ownership"]
         else:
             ownership = recovery.package_ownership(approved_version)

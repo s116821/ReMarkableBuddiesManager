@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "host"))
 import resident_package_transition as transition
 import resident_package_uninstall as uninstall
 import resident_package_disable as disable
+import resident_package_removal as removal
 
 
 class TransitionTest(unittest.TestCase):
@@ -106,6 +107,25 @@ class TransitionTest(unittest.TestCase):
         self.events.record.assert_called_once_with(path, self.connection, self.activation, self.ownership, self.plan)
         self.events.stop.assert_called_once()
         self.recovery.observe_recovery.assert_called_once_with(self.activation)
+
+    def test_removal_review_drift_refuses_before_stop(self):
+        self.recovery.removal_plan.return_value = {**self.plan, "world_sha256": "f" * 64}
+        with self.assertRaises(ValueError):
+            removal.execute(self.config, self.connection, self.activation, self.plan, self.activation.profile_sha256,
+                            float("inf"), approved_version=self.version)
+        self.assertEqual(self.events.mock_calls, [])
+
+    def test_interrupted_removal_observes_the_retained_phase_without_applying(self):
+        args = (self.config, self.connection, self.activation.boot_id, self.activation.activation_id,
+                self.activation.profile_sha256, float("inf"))
+        disable.disable_path(self.config, self.activation.boot_id, self.activation.activation_id).touch()
+        with (patch.object(disable, "observe", return_value={"removal_plan": self.plan}) as observe,
+              patch.object(uninstall, "execute") as apply):
+            receipt = removal.observe(*args, approved_version=self.version)
+        self.assertEqual(receipt, {"phase": "disable", "removal_plan": self.plan})
+        observe.assert_called_once_with(*args, approved_version=self.version)
+        apply.assert_not_called()
+        self.assertEqual(self.events.mock_calls, [])
 
     def test_retained_removal_plan_is_reconciled_without_stop(self):
         raw = json.dumps({"version": 3, "connection_id": self.connection, "activation": asdict(self.activation),
