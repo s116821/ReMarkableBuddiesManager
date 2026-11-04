@@ -1,3 +1,5 @@
+import type {LocalModeAdapter} from './local-mode-choice';
+import type {LocalModeResult} from '../host/local-mode-choice-protocol.mjs';
 import type{HandwritingRequest,HandwritingResult}from'../host/handwriting-records-protocol.mjs';
 import{parseHandwritingJson}from'../host/handwriting-records-protocol.mjs';
 import type {ArchiveRequest,ArchiveResult} from '../host/selected-archive-protocol.mjs';
@@ -44,6 +46,7 @@ import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/driv
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
   readonly memorySettings?:MemorySettingsAdapter['memorySettings'];
@@ -196,6 +199,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Model settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelSettingsResult;
+    },
+    localModeChoice: async (request: import('../host/local-mode-choice-protocol.mjs').LocalModeRequest) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Local-only helper unavailable');
+      const response=await fetch('/manager-local-mode-choice',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
+      if(!response.ok||!response.body)throw Error('Local-only helper unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      try{for(;;){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;if(bytes>8192)throw Error('Local-only response refused');chunks.push(part.value);}}finally{await reader.cancel().catch(()=>{});}
+      const raw=new Uint8Array(bytes);let offset=0;for(const part of chunks){raw.set(part,offset);offset+=part.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as LocalModeResult;
     },
     productSettings: async (request: import('../host/product-settings-protocol.mjs').ProductSettingsRequest) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Product settings helper unavailable');

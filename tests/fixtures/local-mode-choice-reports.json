@@ -1,0 +1,62 @@
+[
+  {
+    "name": "missing-existing-store",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"incomplete\":true,\"activation_performed\":false,\"data\":null}\n"
+  },
+  {
+    "name": "inspect-unconfigured",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":null,\"epoch\":null,\"mode\":null,\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"c3046fd567823a597aae010608d6547c9d02e66aa3010ab401131f6f12a9de41\"}},\"receipt\":null,\"receipt_status\":null}}\n"
+  },
+  {
+    "name": "choose-local-current",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000003\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"fdf8cd786887f351da68cfb97d9dac5c971068addb277b450bbcfda8133bebd1\"}},\"receipt\":{\"operation\":\"00000000-0000-0000-0000-000000000004\",\"epoch\":\"00000000-0000-0000-0000-000000000003\",\"mode\":{\"kind\":\"local-only\"},\"expected\":\"c3046fd567823a597aae010608d6547c9d02e66aa3010ab401131f6f12a9de41\",\"request_sha256\":\"76a2db7239f19b2ea283cbc02e53bae980b257a1a0084f8329ec06e3e308b6b5\"},\"receipt_status\":\"current\"}}\n"
+  },
+  {
+    "name": "exact-original-retry",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000003\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"fdf8cd786887f351da68cfb97d9dac5c971068addb277b450bbcfda8133bebd1\"}},\"receipt\":{\"operation\":\"00000000-0000-0000-0000-000000000004\",\"epoch\":\"00000000-0000-0000-0000-000000000003\",\"mode\":{\"kind\":\"local-only\"},\"expected\":\"c3046fd567823a597aae010608d6547c9d02e66aa3010ab401131f6f12a9de41\",\"request_sha256\":\"76a2db7239f19b2ea283cbc02e53bae980b257a1a0084f8329ec06e3e308b6b5\"},\"receipt_status\":\"current\"}}\n"
+  },
+  {
+    "name": "second-deliberate-local-choice",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000005\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"a8cf472038f4e505da2defd1c21f07a6d8b95062283c47064681239247240363\"}},\"receipt\":{\"operation\":\"00000000-0000-0000-0000-000000000006\",\"epoch\":\"00000000-0000-0000-0000-000000000005\",\"mode\":{\"kind\":\"local-only\"},\"expected\":\"fdf8cd786887f351da68cfb97d9dac5c971068addb277b450bbcfda8133bebd1\",\"request_sha256\":\"0a06e0e7750163e99b4e117675cd9b948059c5ff1e3e50652a71d13ec05dc974\"},\"receipt_status\":\"current\"}}\n"
+  },
+  {
+    "name": "original-historical-retry",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000005\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"a8cf472038f4e505da2defd1c21f07a6d8b95062283c47064681239247240363\"}},\"receipt\":{\"operation\":\"00000000-0000-0000-0000-000000000004\",\"epoch\":\"00000000-0000-0000-0000-000000000003\",\"mode\":{\"kind\":\"local-only\"},\"expected\":\"c3046fd567823a597aae010608d6547c9d02e66aa3010ab401131f6f12a9de41\",\"request_sha256\":\"76a2db7239f19b2ea283cbc02e53bae980b257a1a0084f8329ec06e3e308b6b5\"},\"receipt_status\":\"historical\"}}\n"
+  },
+  {
+    "name": "stale-original-token-new-operation",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"conflict\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000005\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"a8cf472038f4e505da2defd1c21f07a6d8b95062283c47064681239247240363\"}},\"receipt\":null,\"receipt_status\":null}}\n"
+  },
+  {
+    "name": "foreign-actor",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"invalid-input\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000005\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"a8cf472038f4e505da2defd1c21f07a6d8b95062283c47064681239247240363\"}},\"receipt\":null,\"receipt_status\":null}}\n"
+  },
+  {
+    "name": "unknown-local-choice-field",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"invalid-input\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+  },
+  {
+    "name": "legacy-sync-enabled",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"unsupported\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+  },
+  {
+    "name": "existing-owner-lock",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"choose\",\"status\":\"busy\",\"incomplete\":false,\"activation_performed\":false,\"data\":null}\n"
+  },
+  {
+    "name": "inspect-after-refusals",
+    "classification": "synthetic consumer fixture derived from actual Windows emitted frame; IDs and digests replaced consistently; not original bytes",
+    "report_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"incomplete\":false,\"activation_performed\":false,\"data\":{\"current_snapshot\":{\"device\":\"00000000-0000-0000-0000-000000000002\",\"epoch\":\"00000000-0000-0000-0000-000000000005\",\"mode\":{\"kind\":\"local-only\"},\"token\":{\"actor\":\"00000000-0000-0000-0000-000000000001\",\"sha256\":\"a8cf472038f4e505da2defd1c21f07a6d8b95062283c47064681239247240363\"}},\"receipt\":null,\"receipt_status\":null}}\n"
+  }
+]

@@ -1,5 +1,27 @@
 # Owned-data inspection fixture provenance
 
+## Local-only mode choice
+
+`local-mode-choice-reports.json` contains twelve consistently sanitized synthetic
+derivatives of Windows CLI frames from Buddy source
+`4eeaabef92245173ff136e9773c0416de2653466` (tree
+`3b99733d53c2a92a99ae5725a6619e3e7301c54f`, byte-identical captured source
+`fb9afb7301427cbb308f0f9c910cc6937ed4799a`). Fixture bytes SHA256:
+`80a58ed56e453890b9d37e4be5213454aaf3286e8d52dad3c9a4854ad360a249`.
+IDs/digests were replaced consistently and original setup/request/private capture
+was excluded. These are parser/relationship inputs, not original emitted bytes,
+valid integrity tokens, native/provider or Linux execution evidence. Receipt
+fingerprints in derived fixtures are synthetic placeholders, not new integrity
+proof. `local-mode-choice.mjs` separately builds explicitly synthetic coherent
+request/receipt fingerprints and new epochs for host/controller/UI controls.
+
+Cases cover missing Store, unconfigured inspect, Local-only/current/exact/historical
+receipts with newer current snapshot, stale/foreign/extra-field refusal, legacy
+sync refusal, Windows owner Busy and unchanged final inspection. Existing producer
+source tests separately specify selected preservation and commit/output uncertainty;
+those are not newly executed/captured by these fixtures. See the public
+[choice guide](../../docs/local-only-mode-choice.md) for the consumer limits.
+
 `owned-report.mjs` is synthetic UI/reference accounting data modeled against Main's
 report_version1 contract. It is not an actual device inventory.
 
