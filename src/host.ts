@@ -1,3 +1,4 @@
+import type {OwnedV3Adapter} from './owned-data-v3';
 import type {LocalModeAdapter} from './local-mode-choice';
 import type {LocalModeResult} from '../host/local-mode-choice-protocol.mjs';
 import type{HandwritingRequest,HandwritingResult}from'../host/handwriting-records-protocol.mjs';
@@ -56,6 +57,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly conversationManagement?:ManagementAdapter['conversationManagement'];
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
+  readonly inspectOwnedV3?:OwnedV3Adapter['inspectOwnedV3'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
   readonly modelCredential?:ModelCredentialAdapter['modelCredential'];
   readonly credentialReference?:CredentialReferenceAdapter['credentialReference'];
@@ -171,6 +173,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Conversation inventory unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Conversation inventory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ConversationResult;
+    },
+    inspectOwnedV3: async (request: import('../host/owned-data-v3-protocol.mjs').OwnedV3Request|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Stored data inspection helper unavailable');
+      const pending=fetch('/manager-owned-data-v3',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Stored data inspection unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>16384)throw Error('Stored data inspection response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/owned-data-v3-protocol.mjs').OwnedV3Result;
     },
     inspectSourceCache: async (request: import('../host/source-cache-inventory-protocol.mjs').SourceCacheRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Source cache inventory helper unavailable');
