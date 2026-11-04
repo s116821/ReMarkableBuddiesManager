@@ -10,3 +10,10 @@ test('queued stop and expiry cannot dispatch late producer work',async t=>{t.moc
 test('Busy speculative original retires; genuine row/history and nonrenewing expiry stay',async t=>{t.mock.timers.enable({apis:['setTimeout']});const f=open();await ready(f);await f.c.confirm(f.adapter,tablet,pause);const old=structuredClone(f.c.state.retained[0]);await ready(f);const owner=f.io.acquire('peer','held','read');await f.c.confirm(f.adapter,tablet,pause);assert.equal(f.c.state.view.state,'busy');assert.deepEqual(f.c.state.retained,[old]);f.io.release(owner);t.mock.timers.tick(1800001);assert.equal(f.c.state.retained[0].expired,true);f.c.dispose();});
 test('ready Stop targets original creator and never exports; unknown input is not reconstructed',async()=>{const f=open();await ready(f);await f.c.stop(f.adapter);assert.equal(f.c.state.view.state,'invalidated');assert.equal(f.calls.length,0);assert.equal(f.c.state.draft,'');f.c.dispose();});
 test('protected text edit refuses malformed/oversized values without truncating; CRLF display is normalized',()=>{const f=open();f.c.paste(0,0,'/a\r\nb');assert.equal(f.c.state.draft,'/a\r\nb');assert.equal(f.c.text(),'/a\nb');assert.equal(f.c.paste(0,0,'\ud800'),false);assert.equal(f.c.valid(),false);f.c.setDraft(archivePath);assert.equal(f.c.paste(0,0,'x'.repeat(4097)),false);assert.equal(f.c.state.draft,archivePath);f.c.dispose();});
+
+test('stopped check preserves completed export and describes only the current read wait',async()=>{
+ const f=open();f.notebookState.failExport=false;await ready(f);await f.c.confirm(f.adapter,tablet,pause);
+ const row=structuredClone(f.c.state.retained[0]),gate=defer();f.notebookState.onRaw=async(r,q)=>{if(q.selector==='inspect-notebook')await gate.promise;return r;};
+ const pending=f.c.check(f.adapter,tablet,row,pause);await Promise.resolve();await Promise.resolve();await f.c.stop(f.adapter);
+ assert.match(f.c.state.status,/Earlier export results are unchanged/);assert.equal(f.c.state.retained[0].original_outcome,'exported');gate.resolve();await pending;assert.equal(f.c.state.retained[0].original_outcome,'exported');f.c.dispose();
+});

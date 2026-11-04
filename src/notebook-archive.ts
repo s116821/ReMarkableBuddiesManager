@@ -9,7 +9,7 @@ const labels:Record<string,string>={ready:'Review what will be copied before con
 interface Target {reference:string|null;connection_id:string;boot_id:string;invocation:string}
 export class NotebookArchiveController {
  state:ArchiveUiState={draft:'',busy:false,status:'Enter an archive folder already on the tablet, or a new folder for export.',view:null,retained:[]};
- private generation=0;private active:Target|null=null;private ready:Target|null=null;private timer:ReturnType<typeof setTimeout>|undefined;
+ private generation=0;private activeRead=false;private active:Target|null=null;private ready:Target|null=null;private timer:ReturnType<typeof setTimeout>|undefined;
  private expiries=new Map<string,number>();private expiryTimers=new Map<string,ReturnType<typeof setTimeout>>();
  private invalid=false;private version=0;private before:{version:number;start:number;end:number;type:string;data:string|null}|null=null;
  private readonly changed:(s:ArchiveUiState)=>void;private readonly erase:()=>void;private readonly now:()=>number;private readonly uuid:()=>string;
@@ -40,7 +40,7 @@ export class NotebookArchiveController {
   let q:ArchiveRequest|null=parseArchiveRequest(['inspect','prepare-export'].includes(action)?{action,...identity,invocation,path:this.state.draft}:{action,...identity,invocation,reference});
   // Capture history from our existing record, never from a future result or caller grant.
   const original=this.state.retained.find(r=>r.reference===reference),context=archiveResponseContext(q,original?.original_outcome??null);
-  this.active={reference,...identity,invocation};this.ready=null;clearTimeout(this.timer);this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:true,view:null,status:action==='confirm-export'?'Exporting Buddy notebook data to a new folder...':action==='prepare-export'?'Preparing the export explanation...':'Checking the archive...'});
+  this.active={reference,...identity,invocation};this.activeRead=action!=='confirm-export';this.ready=null;clearTimeout(this.timer);this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:true,view:null,status:action==='confirm-export'?'Exporting Buddy notebook data to a new folder...':action==='prepare-export'?'Preparing the export explanation...':'Checking the archive...'});
   let possible=false,timer:ReturnType<typeof setTimeout>|undefined;
   try{
    const result=await Promise.race([(async()=>{if(!await pause()||g!==this.generation)return null;
@@ -55,5 +55,5 @@ export class NotebookArchiveController {
   }catch{if(g===this.generation){this.generation++;this.active=null;if(possible&&reference){const row:ArchiveRetained={reference,...identity,original_outcome:'unknown',expired:!this.canCheck({reference,...identity,original_outcome:'unknown',expired:false})};this.publish({busy:false,view:null,retained:this.rows([row]),status:labels['unknown']});}else this.publish({busy:false,view:null,status:labels['unavailable']});}}
   finally{q=null;clearTimeout(timer);}
  }
- async stop(adapter:ArchiveAdapter){const target=this.active??this.ready,wasRead=this.active?.reference===null;this.clear();const g=this.generation;if(!target)return;let timer:ReturnType<typeof setTimeout>|undefined;this.publish({busy:true,status:'Stopping this wait...'});try{const q=parseArchiveRequest({action:'cancel',...target}),r=await Promise.race([adapter.notebookArchive(q),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Stop wait expired')),14000);})]);if(g===this.generation){this.accept(parseArchiveResult(r,archiveResponseContext(q),validateResult).notebook_archive);if(wasRead)this.publish({status:'Stopped waiting. The archive check may still finish.'});}}catch{if(g===this.generation)this.publish({busy:false,status:'Stopped waiting. An export may still have finished; earlier results were kept.'});}finally{clearTimeout(timer);}}
+ async stop(adapter:ArchiveAdapter){const target=this.active??this.ready,wasRead=this.active!==null&&this.activeRead;this.clear();const g=this.generation;if(!target)return;let timer:ReturnType<typeof setTimeout>|undefined;this.publish({busy:true,status:'Stopping this wait...'});try{const q=parseArchiveRequest({action:'cancel',...target}),r=await Promise.race([adapter.notebookArchive(q),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Stop wait expired')),14000);})]);if(g===this.generation){this.accept(parseArchiveResult(r,archiveResponseContext(q),validateResult).notebook_archive);if(wasRead)this.publish({status:'Stopped waiting. Earlier export results are unchanged.'});}}catch{if(g===this.generation)this.publish({busy:false,status:'Stopped waiting. An export may still have finished; earlier results were kept.'});}finally{clearTimeout(timer);}}
 }

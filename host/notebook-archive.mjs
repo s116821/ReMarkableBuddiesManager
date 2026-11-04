@@ -132,7 +132,7 @@ export class NotebookArchiveHost {
   #cancel(q) {
     const a = this.#active;
     if (a && same(a.s.sample, q) && a.q.invocation === q.invocation && (q.reference === null || a.s.reference === q.reference) && this.io.owns(a.token)) {
-      const s = a.s, possible = s.possible; if (possible && s.outcome !== 'unknown') return this.#value(q, 'unavailable'); this.invalidate(); this.observer.cancel();
+      const s = a.s, possible = a.q.action === 'confirm-export' && s.possible; if (possible && s.outcome !== 'unknown') return this.#value(q, 'unavailable'); this.invalidate(); this.observer.cancel();
       return possible ? this.#value(q, 'unknown', s) : this.#value(q, 'not-dispatched');
     }
     const s = this.#ready;

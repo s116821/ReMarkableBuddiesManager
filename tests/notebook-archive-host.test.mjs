@@ -151,3 +151,18 @@ test('unsupported detached check preserves completed original and every malforme
   assert.equal((await f.host.request(f.q('confirm-export',{reference:r.reference}))).notebook_archive.original_outcome,'unknown');
  }
 });
+
+test('cancel a current detached check independently of immutable completed/unknown original outcome',async()=>{
+ for(const original of ['exported','unknown','refused']){
+  const f=fixture(),ready=await preview(f);
+  if(original==='unknown')f.next(()=>{throw Error('lost');});
+  if(original==='refused')f.next({report_version:1,operation:'export-notebook',status:'busy',incomplete:false,activation_performed:false,data:null});
+  await f.host.request(f.q('confirm-export',{reference:ready.reference}));
+  let finish;f.next(()=>new Promise(resolve=>{finish=resolve;}));const q=f.q('check-export',{reference:ready.reference}),pending=f.host.request(q);await Promise.resolve();
+  assert.equal(typeof finish,'function');const before=f.stats().cancellations;
+  const stopped=(await f.host.request({...q,action:'cancel'})).notebook_archive;
+  assert.equal(stopped.state,'not-dispatched');assert.equal(stopped.original_outcome,null);assert.equal(stopped.retained[0].original_outcome,original);assert.equal(f.stats().cancellations,before+1);
+  const token=f.io.acquire('next','owner','read');assert.ok(token);finish(report('inspect-notebook'));await pending;assert.equal(f.io.owns(token),true);
+  assert.equal((await f.host.request({action:'retained'})).notebook_archive.retained[0].original_outcome,original);f.io.release(token);
+ }
+});
