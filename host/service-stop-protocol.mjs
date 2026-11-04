@@ -23,7 +23,7 @@ export function parseServiceStopResult(v,request,validate){
  const original=s.retained.find(r=>r.reference===s.reference),history=['request-accepted','unknown'].includes(s.state),use=action==='confirm'||action==='refresh',current=s.current!==null;
  if(history&&(original?.outcome!==s.state||action==='begin'&&(s.state==='request-accepted'||original.connection_id!==q.connection_id)||use&&(original.connection_id!==q.connection_id||original.boot_id!==q.boot_id)))fail();
  if(current&&(!use||!history||action==='confirm'&&s.state!=='request-accepted'||keys(s.current)!=='state'||!kinds.includes(s.current.state)))fail();
- if(s.state==='ready'&&(action!=='begin'||!s.reference||s.invocation!==null||current||s.reason!==null||v.status!=='observed'||s.retained.some(r=>r.outcome==='unknown'&&r.connection_id===q.connection_id)))fail();
+ if(s.state==='ready'&&(action!=='begin'||!s.reference||s.invocation!==null||current||s.reason!==null||v.status!=='observed'||s.retained.some(r=>r.reference===s.reference)||s.retained.some(r=>r.outcome==='unknown'&&r.connection_id===q.connection_id)))fail();
  if(v.status==='observed'){
   if(!v.observation||q.connection_id&&v.observation.connection_id!==q.connection_id||q.boot_id&&v.observation.boot_id!==q.boot_id||s.state!=='ready'&&!current)fail();
  }else if(v.status!=='unconfigured'||v.observation!==null||current)fail();

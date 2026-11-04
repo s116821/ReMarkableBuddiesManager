@@ -21,12 +21,14 @@ The source includes strict public/private boundaries, host history and cancellat
 shared maintenance ownership, guarded browser/Electron routes and a controller
 loaded on demand. Local synthetic fixtures exercise possible submission and
 uncertainty. The production transport rejects Stop before opening a channel; its
-review uses the existing read-only inspector and returns unqualified, without
-collecting or trusting new native ownership facts.
+review uses the existing read-only inspector and returns unqualified. The fixed
+sampler/submission adapter and semantic candidate matcher are implemented behind
+the empty source/release gate; they do not enroll observed metadata or transfer
+native ownership.
 
-Remaining implementation and release gates include a qualified fixed-path sampler
-and submission adapter bound to the accepted deployed tuple, exact ordinary versus
-resident artifact/policy admission, actual all-mode/native shutdown and recovery
+Remaining release gates include qualifying the fixed-path sampler, GNU stat and
+PID1 property spellings on the exact supported target, binding immutable released
+build/unit/policy/platform tuples, actual all-mode/native shutdown and recovery
 qualification, independent review and final Linux/Windows package checks. Neither
 profile is enabled by source/fixture tests. The central `stop-buddy-service` change
 remains active until those gates and coordinated delivery are complete.

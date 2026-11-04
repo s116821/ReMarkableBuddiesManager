@@ -71,7 +71,7 @@ export class App implements OnDestroy {
   readonly serviceStopAdapter={serviceStop:(q:import('../host/service-stop-protocol.mjs').ServiceStopRequest)=>this.host.serviceStop!(q)};
   readonly pauseServiceStop=async()=>{const t=this.connection().observation;await this.connectionController.pauseObservation();return !!t&&this.connection().observation===t&&this.profile().inspection;};
   prepareServiceStop(){this.prepareServiceStopPeers();}
-  private prepareServiceStopPeers(){this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.clearNotebookAndSettingsPeers();this.clearBasicSettings();this.savedModeController.clear();this.memoryInspectionController.clear();this.ownedController.clear();this.runtimeController.clear();}
+  private prepareServiceStopPeers(){this.storageInitializationController.clear();this.ownedV3Controller.clear();this.clearNotebookAndSettingsPeers();this.clearBasicSettings();this.exportController.clear();this.savedConfigurationController.clear();this.cacheController.clear();this.savedModeController.clear();this.memoryInspectionController.clear();this.memoryController.clear();this.ownedController.clear();this.runtimeController.clear();this.personalizationController.clear();}
 
   readonly drive = signal(unsupportedDriveState());
   readonly driveConsent = signal<string | null>(null);

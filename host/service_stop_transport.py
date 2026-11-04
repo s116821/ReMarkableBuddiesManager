@@ -6,9 +6,13 @@ import sys
 import threading
 import time
 import wired_observer as shared
+from service_stop_sampler import Sampler, run_fixed
 
 MAX_REQUEST = 4096
-MAX_RESPONSE = 16384
+# Source/release gate only, never device metadata or a caller-controlled flag.
+# Enablement requires reviewed same-release host tuples and actual qualification.
+QUALIFIED_PROFILES = ()
+STOP_COMMAND = '/bin/systemctl --system --no-pager --no-ask-password --no-block --job-mode=fail stop -- reader-buddy.service'
 
 
 def parse(raw, limit):
@@ -60,17 +64,15 @@ def request(raw):
     return v
 
 
-def empty_raw(selector):
-    return dict(selector=selector, command='not-submitted', reason='lifecycle-unqualified',
+def empty_raw(selector,reason='lifecycle-unqualified'):
+    return dict(selector=selector, command='not-submitted', reason=reason,
                 buddy=None, helper=None, stock=None, process=None, platform=None, artifacts=None,
                 recovery_profile_base64=None, lease_base64=None, lease_observation='not-read',
                 configuration=dict(read='not-read', effective_mode='unverified'))
 
 
-def execute(transport, v, deadline=None):
-    # The production tuple registry is empty. Reject stop before even read-only
-    # channel I/O; an observed hash/lease cannot enroll an arbitrary deployment.
-    if v['selector'] == 'stop':
+def execute(transport, v, deadline=None, on_submission=lambda:None):
+    if v['selector'] == 'stop' and v['expected']['profile'] not in QUALIFIED_PROFILES:
         raise shared.Refusal('observation-unavailable')
     if deadline is None:
         deadline = time.monotonic() + v['budget_ms'] / 1000
@@ -81,17 +83,50 @@ def execute(transport, v, deadline=None):
         raise shared.Refusal('timeout')
     if before['boot_id'] != v['boot_id']:
         raise shared.Refusal('cable-lost')
-    before['_service_stop_raw'] = empty_raw(v['selector'])
+    raw=empty_raw(v['selector'],None if v['selector']=='inspect' else 'lifecycle-unqualified')
+    # Current OS inspection stays independent of lifecycle admission and must
+    # remain useful after Buddy is inactive or an earlier stop is unknown.
+    if QUALIFIED_PROFILES and v['selector']!='inspect':
+        sampler=Sampler(transport,deadline)
+        observed=dict(before,connection_id=v['connection_id'])
+        profiles=[v['expected']['profile']] if v['selector']=='stop' else QUALIFIED_PROFILES
+        found=False
+        for profile in profiles:
+            try:
+                facts,digest=sampler.bracket(profile,observed,empty_raw)
+                found=True
+                break
+            except Exception:
+                if v['selector']=='stop':raise
+        if not found:raise shared.Refusal('observation-unavailable')
+        raw=dict(facts,selector=v['selector'])
+        if v['selector']=='stop':
+            if digest!=v['expected']['sample_sha256']:
+                raise shared.Refusal('observation-unavailable')
+            if time.monotonic()>=deadline:raise shared.Refusal('timeout')
+            on_submission()  # Original uncertainty starts before the fixed send.
+            raw['command']='unknown';raw['reason']='unavailable'
+            code,out,err=run_fixed(transport,STOP_COMMAND,deadline,1024)
+            if code==0 and not out and not err:
+                raw['command']='request-accepted';raw['reason']=None
+        after=shared.inspect(transport)
+        if after['boot_id']!=before['boot_id'] or time.monotonic()>=deadline:
+            raise shared.Refusal('cable-lost')
+        before=after
+    before['_service_stop_raw'] = raw
     return before
 
 
 def main():
     timer = None
     selector = 'inspect'
+    possible = False
     lock, responded = threading.Lock(), False
     def failure(status):
+        raw=empty_raw(selector)
+        if possible:raw.update(command='unknown',reason='unavailable')
         return {'contract_version': 1, 'status': status, 'observation': None,
-                'service_stop_raw': empty_raw(selector)}
+                'service_stop_raw': raw}
     def respond(value):
         nonlocal responded
         with lock:
@@ -101,7 +136,7 @@ def main():
     try:
         v = request(sys.stdin.buffer.read(MAX_REQUEST + 1))
         selector = v['selector']
-        if selector == 'stop':
+        if selector == 'stop' and v['expected']['profile'] not in QUALIFIED_PROFILES:
             respond(failure('unconfigured'))
             return
         deadline = time.monotonic() + v['budget_ms'] / 1000
@@ -118,13 +153,16 @@ def main():
             raise shared.Refusal('unconfigured')
         if time.monotonic() >= deadline:
             raise shared.Refusal('timeout')
+        def submitted():
+            nonlocal possible
+            possible=True
         if sys.platform == 'win32':
             import windows_wired
             config = windows_wired.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = windows_wired.observe(config, shared, inspection=lambda t: execute(t, v, deadline), expected_connection=v['connection_id'])
+            observation = windows_wired.observe(config, shared, inspection=lambda t: execute(t, v, deadline, submitted), expected_connection=v['connection_id'])
         else:
             config = shared.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = shared.observe(config, inspection=lambda t: execute(t, v, deadline), expected_connection=v['connection_id'])
+            observation = shared.observe(config, inspection=lambda t: execute(t, v, deadline, submitted), expected_connection=v['connection_id'])
         mode = observation.pop('_service_stop_raw')
         respond({'contract_version': 1, 'status': 'observed', 'observation': observation, 'service_stop_raw': mode})
     except shared.Refusal as error:

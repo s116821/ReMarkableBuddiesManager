@@ -1,0 +1,579 @@
+[
+  {
+    "observation": {
+      "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boot_id": "11111111-1111-1111-1111-111111111111",
+      "model": "reMarkable 2",
+      "firmware": "3.28.0.172",
+      "firmware_conflict": false,
+      "architecture": "armv7l",
+      "installed_version": null,
+      "provenance": "unknown",
+      "service": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead"
+      }
+    },
+    "raw": {
+      "selector": "review",
+      "command": "not-submitted",
+      "reason": null,
+      "buddy": {
+        "state": {
+          "Id": "reader-buddy.service",
+          "LoadState": "loaded",
+          "ActiveState": "active",
+          "SubState": "running",
+          "MainPID": "20",
+          "ControlPID": "0",
+          "ExecMainPID": "20",
+          "ExecMainStartTimestampMonotonic": "30",
+          "InvocationID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Job": "",
+          "ControlGroup": "/system.slice/reader-buddy.service"
+        },
+        "policy": {
+          "Type": "simple",
+          "NeedDaemonReload": "no",
+          "KillMode": "control-group",
+          "Delegate": "no",
+          "Restart": "on-failure",
+          "RestartMode": "",
+          "RestartForceExitStatus": "",
+          "FragmentPath": "/etc/systemd/system/reader-buddy.service",
+          "DropInPaths": "",
+          "OnSuccess": "",
+          "OnFailure": "",
+          "OnSuccessJobMode": "",
+          "OnFailureJobMode": "",
+          "Conflicts": "",
+          "After": "",
+          "DefaultDependencies": "yes",
+          "SendSIGKILL": "yes",
+          "WatchdogUSec": "0",
+          "TimeoutStopUSec": "1min 30s",
+          "TimeoutStartUSec": "1min 30s"
+        },
+        "stop_extra": {
+          "Names": "reader-buddy.service",
+          "ExecStop": "",
+          "ExecStopPost": "",
+          "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
+          "WorkingDirectory": "/home/root",
+          "User": "root",
+          "Group": "root",
+          "KillSignal": "15",
+          "FinalKillSignal": "9",
+          "RestartUSec": "5s",
+          "RefuseManualStop": "no",
+          "CanStop": "yes"
+        }
+      },
+      "helper": null,
+      "stock": null,
+      "process": {
+        "pid": "20",
+        "start_ticks": "40",
+        "uid": "0",
+        "gid": "0",
+        "executable": "/opt/bin/reader-buddy",
+        "argv": [
+          "/opt/bin/reader-buddy"
+        ],
+        "sha256": "0101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "platform": {
+        "firmware": "3.28.0.172",
+        "kernel": "5.4.70-v1.6.3-rm11x"
+      },
+      "artifacts": {
+        "buddy_unit": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "434d00dc6b62096b782dc85d417338a8283269f913f954af897a85cbc8ba64a6"
+        },
+        "buddy_executable": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0101010101010101010101010101010101010101010101010101010101010101"
+        },
+        "recovery_profile": null,
+        "native_profile": null,
+        "adapter": null,
+        "helper_unit": null,
+        "stock_executable": null,
+        "stock_unit": null,
+        "stock_dropin": null
+      },
+      "recovery_profile_base64": null,
+      "lease_base64": null,
+      "lease_observation": "absent-final-component",
+      "configuration": {
+        "read": "not-read",
+        "effective_mode": "unverified"
+      }
+    },
+    "tuple": {
+      "profile": "ordinary-manual",
+      "model": "reMarkable 2",
+      "platform": {
+        "firmware": "3.28.0.172",
+        "kernel": "5.4.70-v1.6.3-rm11x"
+      },
+      "artifacts": {
+        "buddy_unit": "434d00dc6b62096b782dc85d417338a8283269f913f954af897a85cbc8ba64a6",
+        "buddy_executable": "0101010101010101010101010101010101010101010101010101010101010101"
+      },
+      "buddy_policy": {
+        "Type": "simple",
+        "NeedDaemonReload": "no",
+        "KillMode": "control-group",
+        "Delegate": "no",
+        "Restart": "on-failure",
+        "RestartMode": "",
+        "RestartForceExitStatus": "",
+        "FragmentPath": "/etc/systemd/system/reader-buddy.service",
+        "DropInPaths": "",
+        "OnSuccess": "",
+        "OnFailure": "",
+        "OnSuccessJobMode": "",
+        "OnFailureJobMode": "",
+        "Conflicts": "",
+        "After": "",
+        "DefaultDependencies": "yes",
+        "SendSIGKILL": "yes",
+        "WatchdogUSec": "0",
+        "TimeoutStopUSec": "1min 30s",
+        "TimeoutStartUSec": "1min 30s"
+      },
+      "buddy_extra": {
+        "Names": "reader-buddy.service",
+        "ExecStop": "",
+        "ExecStopPost": "",
+        "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
+        "WorkingDirectory": "/home/root",
+        "User": "root",
+        "Group": "root",
+        "KillSignal": "15",
+        "FinalKillSignal": "9",
+        "RestartUSec": "5s",
+        "RefuseManualStop": "no",
+        "CanStop": "yes"
+      },
+      "helper_policy": null,
+      "stock_policy": null
+    },
+    "sample_sha256": "caa9a0641d486a4681f7fd36282dcb7ec5dcfbd9e256fc01adf23b644b4a548a"
+  },
+  {
+    "observation": {
+      "connection_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "boot_id": "11111111-1111-1111-1111-111111111111",
+      "model": "reMarkable 2",
+      "firmware": "3.28.0.172",
+      "firmware_conflict": false,
+      "architecture": "armv7l",
+      "installed_version": null,
+      "provenance": "unknown",
+      "service": {
+        "LoadState": "not-found",
+        "ActiveState": "inactive",
+        "SubState": "dead"
+      }
+    },
+    "raw": {
+      "selector": "review",
+      "command": "not-submitted",
+      "reason": null,
+      "buddy": {
+        "state": {
+          "Id": "reader-buddy.service",
+          "LoadState": "loaded",
+          "ActiveState": "active",
+          "SubState": "running",
+          "MainPID": "20",
+          "ControlPID": "0",
+          "ExecMainPID": "20",
+          "ExecMainStartTimestampMonotonic": "30",
+          "InvocationID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Job": "",
+          "ControlGroup": "/system.slice/reader-buddy.service"
+        },
+        "policy": {
+          "Type": "notify",
+          "NeedDaemonReload": "no",
+          "KillMode": "control-group",
+          "Delegate": "no",
+          "Restart": "no",
+          "RestartMode": "",
+          "RestartForceExitStatus": "",
+          "FragmentPath": "/etc/systemd/system/reader-buddy.service",
+          "DropInPaths": "",
+          "OnSuccess": "reader-buddy-stock-recovery.service",
+          "OnFailure": "reader-buddy-stock-recovery.service",
+          "OnSuccessJobMode": "fail",
+          "OnFailureJobMode": "fail",
+          "Conflicts": "shutdown.target",
+          "After": "",
+          "DefaultDependencies": "yes",
+          "SendSIGKILL": "yes",
+          "WatchdogUSec": "2min",
+          "TimeoutStopUSec": "1min 30s",
+          "TimeoutStartUSec": "1min 30s"
+        },
+        "stop_extra": {
+          "Names": "reader-buddy.service",
+          "ExecStop": "",
+          "ExecStopPost": "",
+          "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
+          "WorkingDirectory": "/home/root",
+          "User": "root",
+          "Group": "root",
+          "KillSignal": "15",
+          "FinalKillSignal": "9",
+          "RestartUSec": "5s",
+          "RefuseManualStop": "no",
+          "CanStop": "yes"
+        }
+      },
+      "helper": {
+        "state": {
+          "Id": "reader-buddy-stock-recovery.service",
+          "LoadState": "loaded",
+          "ActiveState": "inactive",
+          "SubState": "dead",
+          "MainPID": "0",
+          "ControlPID": "0",
+          "ExecMainPID": "0",
+          "ExecMainStartTimestampMonotonic": "0",
+          "InvocationID": "",
+          "Job": "",
+          "ControlGroup": ""
+        },
+        "policy": {
+          "Type": "oneshot",
+          "NeedDaemonReload": "no",
+          "KillMode": "control-group",
+          "Delegate": "no",
+          "Restart": "no",
+          "RestartMode": "",
+          "RestartForceExitStatus": "",
+          "FragmentPath": "/etc/systemd/system/reader-buddy-stock-recovery.service",
+          "DropInPaths": "",
+          "OnSuccess": "",
+          "OnFailure": "",
+          "OnSuccessJobMode": "",
+          "OnFailureJobMode": "",
+          "Conflicts": "reader-buddy.service shutdown.target",
+          "After": "reader-buddy.service",
+          "DefaultDependencies": "yes",
+          "SendSIGKILL": "yes",
+          "WatchdogUSec": "0",
+          "TimeoutStopUSec": "1min 30s",
+          "TimeoutStartUSec": "2min 10s"
+        },
+        "stop_extra": {
+          "Names": "reader-buddy-stock-recovery.service",
+          "ExecStop": "",
+          "ExecStopPost": "",
+          "EnvironmentFiles": "",
+          "WorkingDirectory": "",
+          "User": "root",
+          "Group": "root",
+          "KillSignal": "15",
+          "FinalKillSignal": "9",
+          "RestartUSec": "",
+          "RefuseManualStop": "no",
+          "CanStop": "yes"
+        }
+      },
+      "stock": {
+        "state": {
+          "Id": "xochitl.service",
+          "LoadState": "loaded",
+          "ActiveState": "inactive",
+          "SubState": "dead",
+          "MainPID": "0",
+          "ControlPID": "0",
+          "ExecMainPID": "0",
+          "ExecMainStartTimestampMonotonic": "0",
+          "InvocationID": "",
+          "Job": "",
+          "ControlGroup": ""
+        },
+        "policy": {
+          "Type": "simple",
+          "NeedDaemonReload": "no",
+          "KillMode": "control-group",
+          "Delegate": "no",
+          "Restart": "no",
+          "RestartMode": "",
+          "RestartForceExitStatus": "",
+          "FragmentPath": "/usr/lib/systemd/system/xochitl.service",
+          "DropInPaths": "/usr/lib/systemd/system/xochitl.service.d/xochitl-service-override.conf",
+          "OnSuccess": "",
+          "OnFailure": "",
+          "OnSuccessJobMode": "",
+          "OnFailureJobMode": "",
+          "Conflicts": "",
+          "After": "",
+          "DefaultDependencies": "yes",
+          "SendSIGKILL": "yes",
+          "WatchdogUSec": "0",
+          "TimeoutStopUSec": "1min 30s",
+          "TimeoutStartUSec": "1min 30s"
+        },
+        "stop_extra": {
+          "Names": "xochitl.service",
+          "ExecStop": "",
+          "ExecStopPost": "",
+          "EnvironmentFiles": "",
+          "WorkingDirectory": "",
+          "User": "root",
+          "Group": "root",
+          "KillSignal": "15",
+          "FinalKillSignal": "9",
+          "RestartUSec": "",
+          "RefuseManualStop": "no",
+          "CanStop": "yes"
+        }
+      },
+      "process": {
+        "pid": "20",
+        "start_ticks": "40",
+        "uid": "0",
+        "gid": "0",
+        "executable": "/home/root/.local/lib/reader-buddy/reader-buddy",
+        "argv": [
+          "/home/root/.local/lib/reader-buddy/reader-buddy"
+        ],
+        "sha256": "0303030303030303030303030303030303030303030303030303030303030303"
+      },
+      "platform": {
+        "firmware": "3.28.0.172",
+        "kernel": "5.4.70-v1.6.3-rm11x"
+      },
+      "artifacts": {
+        "buddy_unit": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0202020202020202020202020202020202020202020202020202020202020202"
+        },
+        "buddy_executable": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0303030303030303030303030303030303030303030303030303030303030303"
+        },
+        "recovery_profile": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "2413",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "206b77f9fc9b2072a859126af776557f2cf93938e2f2089d4f8ca6fbc1098429"
+        },
+        "native_profile": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0505050505050505050505050505050505050505050505050505050505050505"
+        },
+        "adapter": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0606060606060606060606060606060606060606060606060606060606060606"
+        },
+        "helper_unit": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0707070707070707070707070707070707070707070707070707070707070707"
+        },
+        "stock_executable": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0808080808080808080808080808080808080808080808080808080808080808"
+        },
+        "stock_unit": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0909090909090909090909090909090909090909090909090909090909090909"
+        },
+        "stock_dropin": {
+          "device": "1",
+          "inode": "2",
+          "uid": "0",
+          "gid": "0",
+          "mode": "33261",
+          "length": "128",
+          "mtime_ns": "1",
+          "ctime_ns": "1",
+          "sha256": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+        }
+      },
+      "recovery_profile_base64": "eyJ2ZXJzaW9uIjoxLCJmaXJtd2FyZSI6IjMuMjguMC4xNzIiLCJrZXJuZWwiOiI1LjQuNzAtdjEuNi4zLXJtMTF4IiwibmF0aXZlX3Byb2ZpbGVfc2hhMjU2IjpbNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1XSwiYWRhcHRlcl9zaGEyNTYiOls2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDZdLCJhcHBfc2hhMjU2IjpbMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzLDMsMywzXSwiYnVkZHlfdW5pdF9zaGEyNTYiOlsyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDIsMiwyLDJdLCJoZWxwZXJfdW5pdF9zaGEyNTYiOls3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDcsNyw3LDddLCJzdG9ja19leGVjdXRhYmxlX3NoYTI1NiI6WzgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOF0sInN0b2NrX3VuaXRfc2hhMjU2IjpbOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5XSwic3RvY2tfZHJvcGluX3NoYTI1NiI6WzEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwLDEwXSwiYnVkZHlfcG9saWN5Ijp7IlR5cGUiOiJub3RpZnkiLCJOZWVkRGFlbW9uUmVsb2FkIjoibm8iLCJLaWxsTW9kZSI6ImNvbnRyb2wtZ3JvdXAiLCJEZWxlZ2F0ZSI6Im5vIiwiUmVzdGFydCI6Im5vIiwiUmVzdGFydE1vZGUiOiIiLCJSZXN0YXJ0Rm9yY2VFeGl0U3RhdHVzIjoiIiwiRnJhZ21lbnRQYXRoIjoiL2V0Yy9zeXN0ZW1kL3N5c3RlbS9yZWFkZXItYnVkZHkuc2VydmljZSIsIkRyb3BJblBhdGhzIjoiIiwiT25TdWNjZXNzIjoicmVhZGVyLWJ1ZGR5LXN0b2NrLXJlY292ZXJ5LnNlcnZpY2UiLCJPbkZhaWx1cmUiOiJyZWFkZXItYnVkZHktc3RvY2stcmVjb3Zlcnkuc2VydmljZSIsIk9uU3VjY2Vzc0pvYk1vZGUiOiJmYWlsIiwiT25GYWlsdXJlSm9iTW9kZSI6ImZhaWwiLCJDb25mbGljdHMiOiJzaHV0ZG93bi50YXJnZXQiLCJBZnRlciI6IiIsIkRlZmF1bHREZXBlbmRlbmNpZXMiOiJ5ZXMiLCJTZW5kU0lHS0lMTCI6InllcyIsIldhdGNoZG9nVVNlYyI6IjJtaW4iLCJUaW1lb3V0U3RvcFVTZWMiOiIxbWluIDMwcyIsIlRpbWVvdXRTdGFydFVTZWMiOiIxbWluIDMwcyJ9LCJoZWxwZXJfcG9saWN5Ijp7IlR5cGUiOiJvbmVzaG90IiwiTmVlZERhZW1vblJlbG9hZCI6Im5vIiwiS2lsbE1vZGUiOiJjb250cm9sLWdyb3VwIiwiRGVsZWdhdGUiOiJubyIsIlJlc3RhcnQiOiJubyIsIlJlc3RhcnRNb2RlIjoiIiwiUmVzdGFydEZvcmNlRXhpdFN0YXR1cyI6IiIsIkZyYWdtZW50UGF0aCI6Ii9ldGMvc3lzdGVtZC9zeXN0ZW0vcmVhZGVyLWJ1ZGR5LXN0b2NrLXJlY292ZXJ5LnNlcnZpY2UiLCJEcm9wSW5QYXRocyI6IiIsIk9uU3VjY2VzcyI6IiIsIk9uRmFpbHVyZSI6IiIsIk9uU3VjY2Vzc0pvYk1vZGUiOiIiLCJPbkZhaWx1cmVKb2JNb2RlIjoiIiwiQ29uZmxpY3RzIjoicmVhZGVyLWJ1ZGR5LnNlcnZpY2Ugc2h1dGRvd24udGFyZ2V0IiwiQWZ0ZXIiOiJyZWFkZXItYnVkZHkuc2VydmljZSIsIkRlZmF1bHREZXBlbmRlbmNpZXMiOiJ5ZXMiLCJTZW5kU0lHS0lMTCI6InllcyIsIldhdGNoZG9nVVNlYyI6IjAiLCJUaW1lb3V0U3RvcFVTZWMiOiIxbWluIDMwcyIsIlRpbWVvdXRTdGFydFVTZWMiOiIybWluIDEwcyJ9LCJzdG9ja19wb2xpY3kiOnsiVHlwZSI6InNpbXBsZSIsIk5lZWREYWVtb25SZWxvYWQiOiJubyIsIktpbGxNb2RlIjoiY29udHJvbC1ncm91cCIsIkRlbGVnYXRlIjoibm8iLCJSZXN0YXJ0Ijoibm8iLCJSZXN0YXJ0TW9kZSI6IiIsIlJlc3RhcnRGb3JjZUV4aXRTdGF0dXMiOiIiLCJGcmFnbWVudFBhdGgiOiIvdXNyL2xpYi9zeXN0ZW1kL3N5c3RlbS94b2NoaXRsLnNlcnZpY2UiLCJEcm9wSW5QYXRocyI6Ii91c3IvbGliL3N5c3RlbWQvc3lzdGVtL3hvY2hpdGwuc2VydmljZS5kL3hvY2hpdGwtc2VydmljZS1vdmVycmlkZS5jb25mIiwiT25TdWNjZXNzIjoiIiwiT25GYWlsdXJlIjoiIiwiT25TdWNjZXNzSm9iTW9kZSI6IiIsIk9uRmFpbHVyZUpvYk1vZGUiOiIiLCJDb25mbGljdHMiOiIiLCJBZnRlciI6IiIsIkRlZmF1bHREZXBlbmRlbmNpZXMiOiJ5ZXMiLCJTZW5kU0lHS0lMTCI6InllcyIsIldhdGNoZG9nVVNlYyI6IjAiLCJUaW1lb3V0U3RvcFVTZWMiOiIxbWluIDMwcyIsIlRpbWVvdXRTdGFydFVTZWMiOiIxbWluIDMwcyJ9fQ==",
+      "lease_base64": "eyJ2ZXJzaW9uIjoyLCJhY3RpdmF0aW9uIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwiZ3JvdXAiOnsibW91bnRfcGF0aCI6Ii9zeXMvZnMvY2dyb3VwL3VuaWZpZWQiLCJ1bml0IjoicmVhZGVyLWJ1ZGR5LnNlcnZpY2UiLCJjb250ZXh0Ijp7ImJvb3QiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJtb3VudF9uYW1lc3BhY2UiOnsiZGV2aWNlIjoxLCJpbm9kZSI6NiwidWlkIjowLCJtb2RlIjozMzA2MH0sImNncm91cF9uYW1lc3BhY2UiOnsiZGV2aWNlIjoxLCJpbm9kZSI6NywidWlkIjowLCJtb2RlIjozMzA2MH0sIm1vdW50X3JlY29yZCI6IjEgMiAwOjEgLyAvc3lzL2ZzL2Nncm91cC91bmlmaWVkIHJ3IC0gY2dyb3VwMiBjZ3JvdXAgcnciLCJtb3VudCI6eyJkZXZpY2UiOjEsImlub2RlIjoyLCJ1aWQiOjAsIm1vZGUiOjE2ODc3fSwic2xpY2UiOnsiZGV2aWNlIjoxLCJpbm9kZSI6MywidWlkIjowLCJtb2RlIjoxNjg3N319LCJncm91cCI6eyJkZXZpY2UiOjEsImlub2RlIjo1LCJ1aWQiOjAsIm1vZGUiOjE2ODc3fSwicGFyZW50Ijp7InBpZCI6MjAsInN0YXJ0X3RpY2tzIjo0MH19LCJidWRkeV9pbnZvY2F0aW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJidWRkeV9zdGFydF9taWNyb3MiOjMwLCJzdG9jayI6eyJwcm9jZXNzIjp7InBpZCI6MjEsInN0YXJ0X3RpY2tzIjo0MX0sImludm9jYXRpb24iOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsImV4ZWN1dGFibGVfc2hhMjU2IjpbOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4LDgsOCw4XSwidW5pdF9zaGEyNTYiOls5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDksOSw5LDldLCJkcm9waW5fc2hhMjU2IjpbMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTAsMTBdfSwicHJvZmlsZV9zaGEyNTYiOls1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDUsNSw1LDVdLCJhZGFwdGVyX3NoYTI1NiI6WzYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNiw2LDYsNl0sInJlY292ZXJ5X3Byb2ZpbGVfc2hhMjU2IjpbMzIsMTA3LDExOSwyNDksMjUyLDE1NSwzMiwxMTQsMTY4LDg5LDE4LDEwNiwyNDcsMTE4LDg1LDEyNyw0NCwyNDksNTcsNTYsMjI2LDI0Miw4LDE1Nyw3OSwxNDAsMTY2LDI1MSwxOTMsOSwxMzIsNDFdfQ==",
+      "lease_observation": "occupied",
+      "configuration": {
+        "read": "not-read",
+        "effective_mode": "unverified"
+      }
+    },
+    "tuple": {
+      "profile": "resident-installed",
+      "model": "reMarkable 2",
+      "platform": {
+        "firmware": "3.28.0.172",
+        "kernel": "5.4.70-v1.6.3-rm11x"
+      },
+      "artifacts": {
+        "buddy_unit": "0202020202020202020202020202020202020202020202020202020202020202",
+        "buddy_executable": "0303030303030303030303030303030303030303030303030303030303030303",
+        "recovery_profile": "206b77f9fc9b2072a859126af776557f2cf93938e2f2089d4f8ca6fbc1098429",
+        "native_profile": "0505050505050505050505050505050505050505050505050505050505050505",
+        "adapter": "0606060606060606060606060606060606060606060606060606060606060606",
+        "helper_unit": "0707070707070707070707070707070707070707070707070707070707070707",
+        "stock_executable": "0808080808080808080808080808080808080808080808080808080808080808",
+        "stock_unit": "0909090909090909090909090909090909090909090909090909090909090909",
+        "stock_dropin": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+      },
+      "buddy_policy": {
+        "Type": "notify",
+        "NeedDaemonReload": "no",
+        "KillMode": "control-group",
+        "Delegate": "no",
+        "Restart": "no",
+        "RestartMode": "",
+        "RestartForceExitStatus": "",
+        "FragmentPath": "/etc/systemd/system/reader-buddy.service",
+        "DropInPaths": "",
+        "OnSuccess": "reader-buddy-stock-recovery.service",
+        "OnFailure": "reader-buddy-stock-recovery.service",
+        "OnSuccessJobMode": "fail",
+        "OnFailureJobMode": "fail",
+        "Conflicts": "shutdown.target",
+        "After": "",
+        "DefaultDependencies": "yes",
+        "SendSIGKILL": "yes",
+        "WatchdogUSec": "2min",
+        "TimeoutStopUSec": "1min 30s",
+        "TimeoutStartUSec": "1min 30s"
+      },
+      "buddy_extra": {
+        "Names": "reader-buddy.service",
+        "ExecStop": "",
+        "ExecStopPost": "",
+        "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
+        "WorkingDirectory": "/home/root",
+        "User": "root",
+        "Group": "root",
+        "KillSignal": "15",
+        "FinalKillSignal": "9",
+        "RestartUSec": "5s",
+        "RefuseManualStop": "no",
+        "CanStop": "yes"
+      },
+      "helper_policy": {
+        "Type": "oneshot",
+        "NeedDaemonReload": "no",
+        "KillMode": "control-group",
+        "Delegate": "no",
+        "Restart": "no",
+        "RestartMode": "",
+        "RestartForceExitStatus": "",
+        "FragmentPath": "/etc/systemd/system/reader-buddy-stock-recovery.service",
+        "DropInPaths": "",
+        "OnSuccess": "",
+        "OnFailure": "",
+        "OnSuccessJobMode": "",
+        "OnFailureJobMode": "",
+        "Conflicts": "reader-buddy.service shutdown.target",
+        "After": "reader-buddy.service",
+        "DefaultDependencies": "yes",
+        "SendSIGKILL": "yes",
+        "WatchdogUSec": "0",
+        "TimeoutStopUSec": "1min 30s",
+        "TimeoutStartUSec": "2min 10s"
+      },
+      "stock_policy": {
+        "Type": "simple",
+        "NeedDaemonReload": "no",
+        "KillMode": "control-group",
+        "Delegate": "no",
+        "Restart": "no",
+        "RestartMode": "",
+        "RestartForceExitStatus": "",
+        "FragmentPath": "/usr/lib/systemd/system/xochitl.service",
+        "DropInPaths": "/usr/lib/systemd/system/xochitl.service.d/xochitl-service-override.conf",
+        "OnSuccess": "",
+        "OnFailure": "",
+        "OnSuccessJobMode": "",
+        "OnFailureJobMode": "",
+        "Conflicts": "",
+        "After": "",
+        "DefaultDependencies": "yes",
+        "SendSIGKILL": "yes",
+        "WatchdogUSec": "0",
+        "TimeoutStopUSec": "1min 30s",
+        "TimeoutStartUSec": "1min 30s"
+      }
+    },
+    "sample_sha256": "27e93fc8f11f2212a0af8674d023ad085d656b0014039d1a047ece11fb249064"
+  }
+]

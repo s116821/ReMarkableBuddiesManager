@@ -16,9 +16,9 @@ export class ServiceStopHost{
  #rows(){return [...this.#records.values()].map(s=>({reference:s.reference,connection_id:s.sample.connection_id,boot_id:s.sample.boot_id,outcome:s.outcome,reason:s.reason}));}
  #lookup(ref){return this.#editor?.reference===ref?this.#editor:this.#records.get(ref);}
  #value(state,q={},s=null,current=null,reason=null){const observed=state==='ready'||current!==null;const v={contract_version:1,status:observed?'observed':'unconfigured',observation:observed?structuredClone(s.sample):null,service_stop:{state,reference:q.reference??s?.reference??null,invocation:q.invocation??null,current:current?{...current}:null,reason,retained:this.#rows()}};this.#issued.set(v,{epoch:this.#epoch,s,deadline:current?this.#active?.deadline:null});return v;}
- assertCurrent(v){this.#expire();const w=this.#issued.get(v),s=v.service_stop;if(!w||w.epoch!==this.#epoch||w.deadline!=null&&this.now()>=w.deadline)throw Error('Service stop invalidated');if(s.state==='ready'&&(this.#editor!==w.s||this.now()>=w.s.deadline)||v.status==='observed'&&!same(w.s.sample,this.observer.lastObservation))throw Error('Service stop invalidated');return v;}
+ assertCurrent(v){if(v.service_stop.state!=='none')this.#expire();const w=this.#issued.get(v),s=v.service_stop;if(!w||w.epoch!==this.#epoch||w.deadline!=null&&this.now()>=w.deadline)throw Error('Service stop invalidated');if(s.state==='ready'&&(this.#editor!==w.s||this.now()>=w.s.deadline)||v.status==='observed'&&!same(w.s.sample,this.observer.lastObservation))throw Error('Service stop invalidated');return v;}
  #original(q,s,reason=s.reason){return this.#value(s.outcome,q,s,null,reason);}
- async request(value){const q=parseServiceStopRequest(value);this.#expire();let v;
+ async request(value){const q=parseServiceStopRequest(value);if(q.action!=='retained')this.#expire();let v;
   if(q.action==='retained')v=this.#value('none');
   else if(q.action==='begin')v=await this.#begin(q);
   else if(q.action==='cancel')v=this.#cancel(q);
@@ -34,7 +34,7 @@ export class ServiceStopHost{
    const reference=this.reference();if(this.#lookup(reference))return this.#value('unavailable',q,null,null,'unavailable');
    this.invalidate();this.beforeIO();const s={reference,sample:structuredClone(sample),deadline:this.now()+120000,ledger:new Map(),possible:false,outcome:null,reason:null,expected:null};
    a={s,token,epoch:this.#epoch,invocation:null,operation:'begin',deadline:started+this.budgetMs,buffers:[]};this.#active=a;
-   const parsed=await Promise.race([this.#raw(a),new Promise((_,reject)=>{timer=setTimeout(()=>{if(this.#current(a)){this.invalidate('expired');this.observer.cancel();}reject(Error('Service stop expired'));},Math.max(1,a.deadline-this.now()));})]);
+   const parsed=await Promise.race([this.#raw(a),new Promise((_,reject)=>{timer=setTimeout(()=>{if(this.#active===a&&a.epoch===this.#epoch&&this.io.owns(token)){this.invalidate('expired');this.observer.cancel();}reject(Error('Service stop expired'));},Math.max(1,a.deadline-this.now()));})]);
    if(!this.#current(a))return this.#value('invalidated',q);
    const profile=this.admitProfile(sample,parsed.raw);if(!['ordinary-manual','resident-installed'].includes(profile))return this.#value('unsupported',q,null,null,'lifecycle-unqualified');
    s.expected={profile,sample_sha256:serviceStopSampleDigest(sample,profile,parsed.raw)};this.#editor=s;return this.#value('ready',q,s);

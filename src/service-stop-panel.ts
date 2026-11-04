@@ -6,7 +6,7 @@ import type {ServiceStopRetained} from '../host/service-stop-protocol.mjs';
 @Component({selector:'service-stop-panel',standalone:true,changeDetection:ChangeDetectionStrategy.OnPush,template:`
  <h2>Stop Buddy</h2>
  <p>Request a stop of the fixed Buddy service. Native recovery and saved data remain unverified. No automatic retry.</p>
- <button class="ui-button ui-button-primary" (click)="review()" [disabled]="!allowed() || state().busy">Review stopping Buddy</button>
+ <button class="ui-button ui-button-primary" (click)="review()" [disabled]="!canReview()">Review stopping Buddy</button>
  @if(state().busy){<button class="ui-button" (click)="stop()">Stop waiting for Buddy stop</button>}
  <p role="status" data-testid="service-stop-status">{{state().status}}</p>
  @if(state().view?.state==='ready'){
@@ -27,17 +27,18 @@ export class ServiceStopPanel implements OnDestroy{
  constructor(){effect(()=>{this.epoch();this.clear();});}
  private clear(){this.generation++;this.loading=false;this.controller?.clear();this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}
  stop(){this.generation++;this.loading=false;this.controller?.stop();this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}
+ canReview(){const t=this.tablet();return !!t&&this.allowed()&&!this.state().busy&&this.state().retained.length<8&&!this.state().retained.some(r=>r.connection_id===t.connection_id&&r.outcome==='unknown');}
  private async run(action:'review'|'confirm'|'check',r?:ServiceStopRetained){
-  const t=this.tablet();if(!t||!this.allowed()||this.state().busy||this.loading)return;
-  const g=++this.generation;this.loading=true;this.state.update(s=>({...s,busy:true}));this.busy.emit(true);
-  try{const {ServiceStopController}=await import('./service-stop');if(g!==this.generation)return;
+  const t=this.tablet();if(!t||!this.allowed()||this.state().busy||this.loading||action==='review'&&!this.canReview())return;
+  const g=++this.generation,deadline=performance.now()+14000;let timer:ReturnType<typeof setTimeout>|undefined;this.loading=true;this.state.update(s=>({...s,busy:true}));this.busy.emit(true);
+  try{const {ServiceStopController}=await Promise.race([import('./service-stop'),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Buddy stop wait expired')),Math.max(1,deadline-performance.now()));})]);clearTimeout(timer);if(g!==this.generation)return;if(performance.now()>=deadline)throw Error('Buddy stop wait expired');
    this.controller??=new ServiceStopController(s=>{this.state.set(s);this.busy.emit(s.busy);});
    if(action!=='confirm')this.starting.emit();
-   if(action==='review')await this.controller.begin(this.adapter(),t,this.pause());
-   else if(action==='confirm')await this.controller.confirm(this.adapter(),t,this.pause());
-   else if(r)await this.controller.refresh(this.adapter(),t,r,this.pause());
-  }catch{if(g===this.generation)this.state.update(s=>({...s,status:'Buddy stop unavailable',busy:false}));}
-  finally{if(g===this.generation){this.loading=false;this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}}
+   if(action==='review')await this.controller.begin(this.adapter(),t,this.pause(),deadline);
+   else if(action==='confirm')await this.controller.confirm(this.adapter(),t,this.pause(),deadline);
+   else if(r)await this.controller.refresh(this.adapter(),t,r,this.pause(),deadline);
+  }catch{if(g===this.generation){this.controller?.clear();this.state.update(s=>({...s,status:'Buddy stop unavailable',busy:false,view:null}));}}
+  finally{clearTimeout(timer);if(g===this.generation){this.loading=false;this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}}
  }
  async review(){await this.run('review');}
  async confirm(){await this.run('confirm');}

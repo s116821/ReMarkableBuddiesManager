@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {matchesCandidateStopProfile} from './service-stop-profiles.mjs';
 import {strictJson} from './strict-json.mjs';
 import {basicDigest,basicUuid} from './basic-settings-protocol.mjs';
 import {readFileSync} from 'node:fs';
@@ -22,7 +23,7 @@ function record(value){
 const u=(v,bits=64)=>typeof v==='bigint'&&v>=0n&&v<(1n<<BigInt(bits));
 function hashArray(v){if(!Array.isArray(v)||v.length!==32||!v.every(x=>u(x,8))||v.every(x=>x===0n))fail();}
 function recordProcess(v){exact(v,['pid','start_ticks']);if(!u(v.pid,32)||v.pid<=1n||!u(v.start_ticks)||v.start_ticks===0n)fail();}
-function fileIdentity(v){exact(v,['device','inode','uid','mode']);if(!u(v.device)||v.device===0n||!u(v.inode)||v.inode===0n||!u(v.uid,32)||!u(v.mode,32))fail();}
+function fileIdentity(v,kind=null){exact(v,['device','inode','uid','mode']);if(!u(v.device)||v.device===0n||!u(v.inode)||v.inode===0n||!u(v.uid,32)||!u(v.mode,32))fail();if(kind!==null&&((v.mode&0o170000n)!==kind||(v.mode&~(0o170000n|0o7777n))!==0n))fail();}
 function recoveryProfile(v){
  if(v===null)return;
  const hashes=['native_profile_sha256','adapter_sha256','app_sha256','buddy_unit_sha256','helper_unit_sha256','stock_executable_sha256','stock_unit_sha256','stock_dropin_sha256'];
@@ -31,10 +32,11 @@ function recoveryProfile(v){
 }
 function leaseRecord(v){
  if(v===null)return;
- exact(v,['version','activation','group','buddy_invocation','buddy_start_micros','stock','profile_sha256','adapter_sha256','recovery_profile_sha256']);if(v.version!==2n||!basicUuid(v.activation)||!/^([a-f0-9]{32})$/.test(v.buddy_invocation)||!u(v.buddy_start_micros)||v.buddy_start_micros===0n)fail();
- const g=v.group;exact(g,['mount_path','unit','context','group','parent']);if(g.mount_path!=='/sys/fs/cgroup/unified'||g.unit!=='reader-buddy.service')fail();fileIdentity(g.group);recordProcess(g.parent);
- exact(g.context,['boot','mount_namespace','cgroup_namespace','mount_record','mount','slice']);if(!basicUuid(g.context.boot)||!ascii(g.context.mount_record,16384))fail();for(const k of ['mount_namespace','cgroup_namespace','mount','slice'])fileIdentity(g.context[k]);
- exact(v.stock,['process','invocation','executable_sha256','unit_sha256','dropin_sha256']);recordProcess(v.stock.process);if(!/^[a-f0-9]{32}$/.test(v.stock.invocation))fail();for(const k of ['executable_sha256','unit_sha256','dropin_sha256'])hashArray(v.stock[k]);for(const k of ['profile_sha256','adapter_sha256','recovery_profile_sha256'])hashArray(v[k]);
+ exact(v,['version','activation','group','buddy_invocation','buddy_start_micros','stock','profile_sha256','adapter_sha256','recovery_profile_sha256']);if(v.version!==2n||!basicUuid(v.activation)||(!/^([a-f0-9]{32})$/.test(v.buddy_invocation)||/^0+$/.test(v.buddy_invocation))||!u(v.buddy_start_micros)||v.buddy_start_micros===0n)fail();
+ const g=v.group;exact(g,['mount_path','unit','context','group','parent']);if(g.mount_path!=='/sys/fs/cgroup/unified'||g.unit!=='reader-buddy.service')fail();fileIdentity(g.group,0o040000n);recordProcess(g.parent);
+ exact(g.context,['boot','mount_namespace','cgroup_namespace','mount_record','mount','slice']);if(!basicUuid(g.context.boot)||!ascii(g.context.mount_record,4096))fail();for(const k of ['mount_namespace','cgroup_namespace'])fileIdentity(g.context[k],0o100000n);for(const k of ['mount','slice'])fileIdentity(g.context[k],0o040000n);
+ const c=g.context;if(g.group.device!==c.mount.device||c.slice.device!==c.mount.device||new Set([g.group.inode,c.slice.inode,c.mount.inode]).size!==3)fail();const parts=c.mount_record.split(' - ');if(parts.length!==2)fail();const fields=parts[0].trim().split(/\s+/),tail=parts[1].trim().split(/\s+/);if(fields.length<6||!decimal(fields[0])||!decimal(fields[1])||fields[3]!=='/'||fields[4]!==g.mount_path||tail.length!==3||tail[0]!=='cgroup2')fail();
+ exact(v.stock,['process','invocation','executable_sha256','unit_sha256','dropin_sha256']);recordProcess(v.stock.process);if(!/^[a-f0-9]{32}$/.test(v.stock.invocation)||/^0+$/.test(v.stock.invocation))fail();for(const k of ['executable_sha256','unit_sha256','dropin_sha256'])hashArray(v.stock[k]);for(const k of ['profile_sha256','adapter_sha256','recovery_profile_sha256'])hashArray(v[k]);
 }
 function snapshot(v){
  if(v===null)return;exact(v,['state','policy','stop_extra']);
@@ -42,7 +44,8 @@ function snapshot(v){
  if(Buffer.byteLength(Object.values(v).flatMap(Object.entries).map(([k,x])=>`${k}=${x}\n`).join(''))>32768)fail();
  for(const name of ['MainPID','ControlPID','ExecMainPID'])if(!decimal(v.state[name],32))fail();
  if(!decimal(v.state.ExecMainStartTimestampMonotonic)||!['reader-buddy.service','reader-buddy-stock-recovery.service','xochitl.service'].includes(v.state.Id))fail();
- if(v.state.InvocationID!==''&&!/^[a-f0-9]{32}$/.test(v.state.InvocationID))fail();
+ if(v.state.InvocationID!==''&&(!/^[a-f0-9]{32}$/.test(v.state.InvocationID)||/^0+$/.test(v.state.InvocationID)))fail();
+ if(v.state.InvocationID===''&&!Object.entries({ActiveState:'inactive',SubState:'dead',MainPID:'0',ControlPID:'0',ExecMainPID:'0',ExecMainStartTimestampMonotonic:'0',ControlGroup:'',Job:''}).every(([k,x])=>v.state[k]===x))fail();
 }
 export function parseServiceStopRaw(v,selector){
  if(Buffer.byteLength(JSON.stringify(v))>262144)fail();exact(v,['selector','command','reason',...evidence]);
@@ -65,7 +68,8 @@ export function serviceStopSampleDigest(observation,profile,raw){
 // Deliberately no qualified production tuple. Metadata, hashes or a matching
 // source shape cannot enroll a deployment. Enabling requires reviewed native
 // shutdown/recovery qualification and a source change, never a caller flag.
-export function admitServiceStopProfile(){return null;}
+const qualifiedStopTuples=Object.freeze([]);
+export function admitServiceStopProfile(observation,raw){return qualifiedStopTuples.find(tuple=>matchesCandidateStopProfile(observation,raw,tuple))?.profile??null;}
 export function currentServiceState(observation){
  const s=observation?.service;if(!s||s.LoadState!=='loaded')return null;
  const state=({inactive:'inactive',active:'active',activating:'transitioning',deactivating:'transitioning',reloading:'transitioning',failed:'failed'})[s.ActiveState];return state?{state}:null;
