@@ -24,6 +24,10 @@ class TransitionTest(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.config = Path(directory.name) / "wired.json"
         self.recovery = Mock()
+        self.version = "1.2.3-r2"
+        self.ownership = {"boot_id": self.activation.boot_id, "package": f"remarkable-buddies-{self.version}",
+                          "database_sha256": "e" * 64}
+        self.recovery.package_ownership.return_value = self.ownership
         self.recovery.capture_activation.return_value = self.activation
         self.recovery.observe_recovery.return_value = {"lease_sha256": self.activation.lease_sha256}
         self.events = Mock()
@@ -42,12 +46,17 @@ class TransitionTest(unittest.TestCase):
 
     def prepare(self):
         return transition.prepare(self.config, self.connection, self.activation, self.activation.profile_sha256,
-                                  float("inf"))
+                                  float("inf"), approved_version=self.version)
 
     def test_journal_precedes_the_single_stop(self):
-        self.assertEqual(self.prepare()["recovery"]["lease_sha256"], self.activation.lease_sha256)
+        receipt = self.prepare()
+        self.assertEqual(receipt["recovery"]["lease_sha256"], self.activation.lease_sha256)
+        self.assertEqual(receipt["ownership"], self.ownership)
         self.assertEqual([entry[0] for entry in self.events.mock_calls], ["record", "stop"])
+        path = transition.intent_path(self.config, self.activation.boot_id, self.activation.activation_id)
+        self.events.record.assert_called_once_with(path, self.connection, self.activation, self.ownership)
         self.events.stop.assert_called_once_with("wire", transition.STOP_COMMAND, float("inf"), 1024)
+        self.assertEqual(self.recovery.package_ownership.call_count, 2)
 
     def test_duplicate_intent_refuses_before_opening_usb(self):
         path = transition.intent_path(self.config, self.activation.boot_id, self.activation.activation_id)
@@ -63,16 +72,47 @@ class TransitionTest(unittest.TestCase):
             self.prepare()
         self.assertEqual(self.events.mock_calls, [])
 
+    def test_missing_ownership_never_records_or_stops(self):
+        self.recovery.package_ownership.side_effect = ValueError("ownership refused")
+        with self.assertRaises(ValueError):
+            self.prepare()
+        self.recovery.capture_activation.assert_not_called()
+        self.assertEqual(self.events.mock_calls, [])
+
+    def test_ownership_drift_stays_pending_after_recovery(self):
+        self.recovery.package_ownership.side_effect = [
+            self.ownership, {**self.ownership, "database_sha256": "f" * 64},
+        ]
+        with self.assertRaises(transition.RecoveryPending):
+            self.prepare()
+        self.recovery.observe_recovery.assert_called_once_with(self.activation)
+        self.events.stop.assert_called_once()
+
     def test_connection_failure_stays_pending_and_observation_does_not_stop(self):
         self.events.stop.side_effect = OSError("link lost")
         with self.assertRaises(transition.RecoveryPending):
             self.prepare()
         self.recovery.observe_recovery.assert_not_called()
-        raw = json.dumps({"version": 1, "connection_id": self.connection,
-                          "activation": asdict(self.activation)}).encode()
+        raw = json.dumps({"version": 2, "connection_id": self.connection,
+                          "activation": asdict(self.activation), "ownership": self.ownership}).encode()
         with (patch.object(transition, "checked_root", return_value=(1, 2)),
               patch.object(transition.shared, "private_bytes", return_value=raw)):
-            transition.observe(self.config, self.connection, self.activation.boot_id,
-                               self.activation.activation_id, self.activation.profile_sha256, float("inf"))
+            receipt = transition.observe(self.config, self.connection, self.activation.boot_id,
+                                         self.activation.activation_id, self.activation.profile_sha256, float("inf"),
+                                         approved_version=self.version)
+            self.assertEqual(receipt["ownership"], self.ownership)
         self.recovery.observe_recovery.assert_called_once_with(self.activation)
         self.assertEqual([entry[0] for entry in self.events.mock_calls], ["record", "stop"])
+
+    def test_v1_intent_remains_observable_without_ownership(self):
+        raw = json.dumps({"version": 1, "connection_id": self.connection,
+                          "activation": asdict(self.activation)}).encode()
+        args = (self.config, self.connection, self.activation.boot_id, self.activation.activation_id,
+                self.activation.profile_sha256, float("inf"))
+        with (patch.object(transition, "checked_root", return_value=(1, 2)),
+              patch.object(transition.shared, "private_bytes", return_value=raw)):
+            self.assertNotIn("ownership", transition.observe(*args))
+            with self.assertRaises(ValueError):
+                transition.observe(*args, approved_version=self.version)
+        self.recovery.package_ownership.assert_not_called()
+        self.events.stop.assert_not_called()

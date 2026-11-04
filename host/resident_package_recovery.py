@@ -55,6 +55,10 @@ def require(value):
         raise ValueError("resident package recovery observation refused")
 
 
+def require_package_version(version):
+    require(isinstance(version, str) and len(version) <= 64 and PACKAGE_VERSION.fullmatch(version))
+
+
 def json_record(raw):
     def unique(items):
         result = {}
@@ -164,7 +168,7 @@ class PackageRecovery:
 
     def package_ownership(self, version):
         """Observe exact APK ownership on the pinned root-layer Vellum layout."""
-        require(isinstance(version, str) and len(version) <= 64 and PACKAGE_VERSION.fullmatch(version))
+        require_package_version(version)
         boot = self.boot()
         # apk also reads a uvol layer when present. Its ownership is outside this layout.
         layout = f"test ! -e {VELLUM_LAYER} && test ! -L {VELLUM_LAYER}"

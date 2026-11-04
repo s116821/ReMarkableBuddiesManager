@@ -8,7 +8,9 @@ import sys
 import time
 
 from drive_store import checked_root, exclusive
-from resident_package_recovery import Activation, DIGEST, UUID, PackageRecovery, json_record, require
+from resident_package_recovery import (
+    Activation, DIGEST, UUID, PackageRecovery, json_record, require, require_package_version,
+)
 from service_stop_sampler import run_fixed
 from service_stop_transport import STOP_COMMAND
 import wired_observer as shared
@@ -24,10 +26,11 @@ def intent_path(config_path, boot, activation):
     return Path(config_path).parent / f"resident-stop-{boot}-{activation}.json"
 
 
-def record_intent(path, connection, activation):
+def record_intent(path, connection, activation, ownership):
     root_identity = checked_root(path.parent)
     require(root_identity is not None)
-    payload = {"version": 1, "connection_id": connection, "activation": asdict(activation)}
+    payload = {"version": 2, "connection_id": connection, "activation": asdict(activation),
+               "ownership": ownership}
     try:
         with exclusive(path, write_through=True) as stream:
             stream.write(json.dumps(payload, separators=(",", ":")).encode("ascii"))
@@ -72,6 +75,19 @@ def require_approved(expected, approved_profile_sha256):
             and expected.profile_sha256 == approved_profile_sha256)
 
 
+def require_ownership(ownership, boot, version):
+    require_package_version(version)
+    require(isinstance(ownership, dict) and set(ownership) == {"boot_id", "package", "database_sha256"}
+            and ownership["boot_id"] == boot and ownership["package"] == f"remarkable-buddies-{version}"
+            and isinstance(ownership["database_sha256"], str) and DIGEST.fullmatch(ownership["database_sha256"]))
+
+
+def recovered_with_ownership(recovery, receipt, version, expected_ownership):
+    if recovery.package_ownership(version) != expected_ownership:
+        raise RecoveryPending("Vellum ownership changed after possible stop submission")
+    return {"recovery": receipt, "ownership": expected_ownership}
+
+
 def observe_package_ownership(config_path, approved_version, deadline, expected_connection=None):
     """Inspect the installed Vellum package through Manager's verified wired route."""
     def inspect(transport):
@@ -91,9 +107,10 @@ def review(config_path, approved_profile_sha256, deadline):
     return on_wire(config_path, inspect)
 
 
-def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline):
-    """Record one stop intent in the verified host configuration's private directory."""
+def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline, *, approved_version):
+    """Require owned bytes before recording intent and reconfirm ownership after recovery."""
     require_approved(expected, approved_profile_sha256)
+    require_package_version(approved_version)
     require(isinstance(expected_connection, str) and DIGEST.fullmatch(expected_connection))
     path = intent_path(config_path, expected.boot_id, expected.activation_id)
     if os.path.lexists(path):
@@ -103,8 +120,10 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
     def inspect(transport):
         nonlocal possible
         recovery = PackageRecovery(transport, deadline)
+        ownership = recovery.package_ownership(approved_version)
+        require_ownership(ownership, expected.boot_id, approved_version)
         require(recovery.capture_activation() == expected and time.monotonic() < deadline)
-        record_intent(path, expected_connection, expected)
+        record_intent(path, expected_connection, expected, ownership)
         if time.monotonic() >= deadline:
             raise shared.Refusal("timeout")
         possible = True
@@ -113,11 +132,13 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
             raise RecoveryPending("Buddy stop submission could not be confirmed")
         while time.monotonic() < deadline:
             try:
-                return {"recovery": recovery.observe_recovery(expected)}
+                receipt = recovery.observe_recovery(expected)
             except ValueError:
                 if recovery.boot() != expected.boot_id:
                     raise RecoveryPending("Tablet boot changed after stop submission") from None
                 time.sleep(max(0, min(0.25, deadline - time.monotonic())))
+            else:
+                return recovered_with_ownership(recovery, receipt, approved_version, ownership)
         raise RecoveryPending("Stock recovery could not be confirmed")
 
     try:
@@ -130,19 +151,31 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
         raise
 
 
-def observe(config_path, expected_connection, boot, activation, approved_profile_sha256, deadline):
+def observe(config_path, expected_connection, boot, activation, approved_profile_sha256, deadline,
+            *, approved_version=None):
     """Read the original intent across processes and reconcile without a service command."""
     path = intent_path(config_path, boot, activation)
     require(checked_root(path.parent) is not None)
     record = json_record(shared.private_bytes(path, parent_private=True, maximum=2048))
-    require(set(record) == {"version", "connection_id", "activation"} and type(record["version"]) is int
-            and record["version"] == 1 and record["connection_id"] == expected_connection)
+    require(type(record.get("version")) is int and record["version"] in (1, 2)
+            and record.get("connection_id") == expected_connection)
+    fields = {"version", "connection_id", "activation"}
+    if record["version"] == 2:
+        require(set(record) == fields | {"ownership"})
+        require_ownership(record["ownership"], boot, approved_version)
+    else:
+        # Existing receipts remain readable but cannot establish package ownership.
+        require(set(record) == fields and approved_version is None)
     expected = Activation(**record["activation"])
     require(expected.boot_id == boot and expected.activation_id == activation)
     require_approved(expected, approved_profile_sha256)
     require(isinstance(expected_connection, str) and DIGEST.fullmatch(expected_connection))
 
     def inspect(transport):
-        return {"recovery": PackageRecovery(transport, deadline).observe_recovery(expected)}
+        recovery = PackageRecovery(transport, deadline)
+        receipt = recovery.observe_recovery(expected)
+        if record["version"] == 1:
+            return {"recovery": receipt}
+        return recovered_with_ownership(recovery, receipt, approved_version, record["ownership"])
 
     return on_wire(config_path, inspect, expected_connection)
