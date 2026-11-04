@@ -106,7 +106,7 @@ def private_read(root, kind):
     return raw
 
 
-def exclusive(path):
+def exclusive(path, *, write_through=False):
     if sys.platform != 'win32':
         return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb')
     import msvcrt
@@ -129,8 +129,11 @@ def exclusive(path):
     sd.SetSecurityDescriptorControl(security.SE_DACL_PROTECTED, security.SE_DACL_PROTECTED)
     attributes = pywintypes.SECURITY_ATTRIBUTES()
     attributes.SECURITY_DESCRIPTOR = sd
+    flags = win32file.FILE_FLAG_OPEN_REPARSE_POINT
+    if write_through:
+        flags |= win32file.FILE_FLAG_WRITE_THROUGH
     handle = win32file.CreateFile(str(path), win32con.GENERIC_WRITE, 0, attributes, win32con.CREATE_NEW,
-                                 win32file.FILE_FLAG_OPEN_REPARSE_POINT, None)
+                                 flags, None)
     return os.fdopen(msvcrt.open_osfhandle(handle.Detach(), os.O_WRONLY | os.O_BINARY), 'wb')
 
 

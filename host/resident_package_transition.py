@@ -1,10 +1,14 @@
 """Host-private stop and recovery preparation for a resident package change."""
 
 from dataclasses import asdict
+import json
+import os
+from pathlib import Path
 import sys
 import time
 
-from resident_package_recovery import Activation, DIGEST, PackageRecovery, require
+from drive_store import checked_root, exclusive
+from resident_package_recovery import Activation, DIGEST, UUID, PackageRecovery, json_record, require
 from service_stop_sampler import run_fixed
 from service_stop_transport import STOP_COMMAND
 import wired_observer as shared
@@ -12,6 +16,37 @@ import wired_observer as shared
 
 class RecoveryPending(RuntimeError):
     """A stop may have been submitted. Only observe the original activation."""
+
+
+def intent_path(config_path, boot, activation):
+    require(isinstance(boot, str) and UUID.fullmatch(boot)
+            and isinstance(activation, str) and UUID.fullmatch(activation))
+    return Path(config_path).parent / f"resident-stop-{boot}-{activation}.json"
+
+
+def record_intent(path, connection, activation):
+    root_identity = checked_root(path.parent)
+    require(root_identity is not None)
+    payload = {"version": 1, "connection_id": connection, "activation": asdict(activation)}
+    try:
+        with exclusive(path, write_through=True) as stream:
+            stream.write(json.dumps(payload, separators=(",", ":")).encode("ascii"))
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception as error:
+        if os.path.lexists(path):
+            raise RecoveryPending("Stop intent already exists or its publication is uncertain") from error
+        raise
+    if sys.platform == "linux":
+        fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            require((info.st_dev, info.st_ino) == root_identity)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    require(checked_root(path.parent) == root_identity)
+    require(json_record(shared.private_bytes(path, parent_private=True, maximum=2048)) == payload)
 
 
 def on_wire(config_path, inspect, expected_connection=None):
@@ -47,22 +82,20 @@ def review(config_path, approved_profile_sha256, deadline):
     return on_wire(config_path, inspect)
 
 
-def prepare(config_path, expected_connection, expected, approved_profile_sha256,
-            deadline, record_possible_submission):
-    """Send one stop after admission.
-
-    The caller holds the package transaction lock. Its callback must durably
-    record the activation and refuse any duplicate before returning.
-    """
+def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline):
+    """Record one stop intent in the verified host configuration's private directory."""
     require_approved(expected, approved_profile_sha256)
     require(isinstance(expected_connection, str) and DIGEST.fullmatch(expected_connection))
+    path = intent_path(config_path, expected.boot_id, expected.activation_id)
+    if os.path.lexists(path):
+        raise RecoveryPending("Stop intent is already retained")
     possible = False
 
     def inspect(transport):
         nonlocal possible
         recovery = PackageRecovery(transport, deadline)
         require(recovery.capture_activation() == expected and time.monotonic() < deadline)
-        record_possible_submission(expected)
+        record_intent(path, expected_connection, expected)
         if time.monotonic() >= deadline:
             raise shared.Refusal("timeout")
         possible = True
@@ -88,8 +121,15 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
         raise
 
 
-def observe(config_path, expected_connection, expected, approved_profile_sha256, deadline):
-    """Reconcile a retained activation without a service command."""
+def observe(config_path, expected_connection, boot, activation, approved_profile_sha256, deadline):
+    """Read the original intent across processes and reconcile without a service command."""
+    path = intent_path(config_path, boot, activation)
+    require(checked_root(path.parent) is not None)
+    record = json_record(shared.private_bytes(path, parent_private=True, maximum=2048))
+    require(set(record) == {"version", "connection_id", "activation"} and type(record["version"]) is int
+            and record["version"] == 1 and record["connection_id"] == expected_connection)
+    expected = Activation(**record["activation"])
+    require(expected.boot_id == boot and expected.activation_id == activation)
     require_approved(expected, approved_profile_sha256)
     require(isinstance(expected_connection, str) and DIGEST.fullmatch(expected_connection))
 
