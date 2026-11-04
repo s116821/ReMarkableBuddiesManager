@@ -21,7 +21,7 @@ export function parseStorageInitializationResult(v,request,validate){
  for(const r of s.retained){if(keys(r)!=='boot_id,connection_id,outcome,reason,reference'||!basicDigest(r.reference)||!basicDigest(r.connection_id)||!basicUuid(r.boot_id)||!['prepared','unknown'].includes(r.outcome)||!reasons.includes(r.reason)||r.outcome==='prepared'&&r.reason!==null||r.outcome==='unknown'&&r.reason===null||seen.has(r.reference))fail();seen.add(r.reference);}
  const original=s.retained.find(r=>r.reference===s.reference);
  if(['prepared','unknown'].includes(s.state)&&(original?.outcome!==s.state||q.action==='begin'&&(s.state==='prepared'||original.connection_id!==q.connection_id)))fail();
- if(s.current!==null&&(!['confirm','refresh'].includes(q.action)||keys(s.current)!=='kind'||!kinds.includes(s.current.kind)||!['prepared','unknown'].includes(s.state)||v.status!=='observed'))fail();
+ if(s.current!==null&&(!['confirm','refresh'].includes(q.action)||keys(s.current)!=='kind'||!kinds.includes(s.current.kind)||!['prepared','unknown'].includes(s.state)))fail();
  if(s.current!==null&&(original?.connection_id!==v.observation?.connection_id||original?.boot_id!==v.observation?.boot_id))fail();
  if(s.state==='ready'&&(q.action!=='begin'||!s.reference||s.invocation!==null||s.current!==null||s.reason!==null||v.status!=='observed'||s.retained.some(r=>r.outcome==='unknown'&&r.connection_id===q.connection_id)))fail();
  if(v.status==='observed'){
