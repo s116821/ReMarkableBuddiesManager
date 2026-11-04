@@ -77,6 +77,26 @@ class Transport(unittest.TestCase):
             self.assertNotEqual(observed['status'],'reported')
             c.close.assert_called_once()
 
+    def test_observed_producer_bytes_through_fixed_zero_exit_transport(self):
+        fixture=root/'tests/fixtures/notebook-archive-interop'
+        for stem in ('01-busy','02-missing','03-export','04-inspect','05-existing'):
+            receipt=json.loads((fixture/(stem+'.receipt.json')).read_text())
+            raw=(fixture/(stem+'.stdout')).read_bytes()
+            self.assertEqual(receipt['exit_code'],0)
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),receipt['stdout_sha256'])
+            t,c=self.channel(raw)
+            with patch.object(q.shared,'inspect',return_value={'boot_id':BOOT}):
+                result=q.execute(t,request(receipt['operation']))
+            self.assertEqual(base64.b64decode(result['_archive_raw']['stdout_base64']),raw)
+            c.exec_command.assert_called_once_with(q.PREFIX+receipt['operation']+' --archive-input -')
+            # Derived negative: reuse observed bytes but change the simulated exit.
+            t,c=self.channel(raw,1)
+            with patch.object(q.shared,'inspect',return_value={'boot_id':BOOT}):
+                self.assertIsNone(q.execute(t,request(receipt['operation']))['_archive_raw']['stdout_base64'])
+        raw=(fixture/'06-legacy-inspect.stdout').read_bytes();t,c=self.channel(raw)
+        with patch.object(q.shared,'inspect',return_value={'boot_id':BOOT}),self.assertRaises(ValueError):
+            q.execute(t,request('inspect-notebook'))
+
 class ModePeer(Peer):
     def __init__(self,selector):super().__init__();self.selector=selector;self.received=None
     def check_channel_exec_request(self,channel,command):
