@@ -14,6 +14,7 @@ UNIT_DIR = "/usr/lib/systemd/system"
 RUNTIME = "/run/reader-buddy-resident"
 ACTIVE_LEASE = f"{RUNTIME}/activation.json"
 PROFILE = f"{LIB}/resident-recovery.json"
+APP = f"{LIB}/reader-buddy"
 BUDDY = "reader-buddy.service"
 HELPER = "reader-buddy-stock-recovery.service"
 STOCK = "xochitl.service"
@@ -32,6 +33,13 @@ PROPERTIES = (
     "InvocationID", "FragmentPath", "DropInPaths", "NeedDaemonReload", "Result",
     "ExecMainStartTimestampMonotonic", "ExecMainExitTimestampMonotonic",
     "ExecMainCode", "ExecMainStatus",
+)
+PACKAGE_FILES = (
+    (APP, "app_sha256", "755", 128 * 1024 * 1024),
+    (f"{LIB}/libremarkable-resident.so", "adapter_sha256", "644", 32 * 1024 * 1024),
+    (f"{LIB}/resident-profile.json", "native_profile_sha256", "644", 32768),
+    (f"{UNIT_DIR}/{BUDDY}", "buddy_unit_sha256", "644", 32768),
+    (f"{UNIT_DIR}/{HELPER}", "helper_unit_sha256", "644", 32768),
 )
 
 
@@ -127,6 +135,26 @@ class PackageRecovery:
         require(len(data) == int(length) and self.read(command, 192) == before)
         return data
 
+    def package_files(self, profile):
+        require(profile["version"] == 6 and profile["firmware"] == "3.28.0.172"
+                and profile["companion"] == "rm2-3.28.0.172-v1"
+                and profile["source_mode"] == "resident-installed-output-v1")
+        for path, field, mode, limit in PACKAGE_FILES:
+            checksum = digest_field(profile[field])
+            quoted = shlex.quote(path)
+            stat = f"stat -c '%d:%i:%u:%g:%a:%h:%s:%Y:%Z' {quoted}"
+            raw = self.read(
+                f'test ! -L {quoted} && test -f {quoted} && '
+                f'test "$(readlink -f {quoted})" = {quoted} && '
+                f'test "$(stat -c %s {quoted})" -le {limit} && '
+                f'{stat} && sha256sum {quoted} && {stat}', 512)
+            before, observed, after = raw.splitlines()
+            require(before == after and re.fullmatch(rb"[0-9]+(?::[0-9]+){8}", before))
+            _, _, uid, gid, permissions, links, length, _, _ = before.decode().split(":")
+            require(uid == gid == "0" and permissions == mode and links == "1"
+                    and 0 < int(length) <= limit
+                    and observed == f"{checksum}  {path}".encode())
+
     def runtime(self):
         require(self.read(f"test ! -L {RUNTIME} && test -d {RUNTIME} && "
                           f'test "$(readlink -f {RUNTIME})" = {RUNTIME} && '
@@ -151,12 +179,14 @@ class PackageRecovery:
         profile_raw = self.protected(PROFILE)
         profile = json_record(profile_raw)
         profile_sha = digest_field(record["recovery_profile_sha256"])
-        require(sha256(profile_raw) == profile_sha and profile["version"] == 6
-                and profile["firmware"] == "3.28.0.172" and profile["companion"] == "rm2-3.28.0.172-v1")
+        require(sha256(profile_raw) == profile_sha)
         stock_sha = digest_field(record["stock"]["executable_sha256"])
         require(stock_sha == digest_field(profile["stock_executable_sha256"]))
+        self.package_files(profile)
+        require(pid < 2**32 and self.read(f"readlink /proc/{pid}/exe", 256) == (APP + "\n").encode())
         require(self.service(BUDDY) == buddy and self.boot() == boot
-                and self.protected(ACTIVE_LEASE, private=True) == lease)
+                and self.protected(ACTIVE_LEASE, private=True) == lease
+                and self.protected(PROFILE) == profile_raw)
         return Activation(boot, activation, sha256(lease), profile_sha, inv, started, stock_sha)
 
     def vendor_process(self, state, executable, checksum, after):
@@ -178,7 +208,8 @@ class PackageRecovery:
         self.runtime()
         archived = f"{RUNTIME}/recovered-{expected.activation_id}.json"
         require(sha256(self.protected(archived, private=True)) == expected.lease_sha256)
-        require(sha256(self.protected(PROFILE)) == expected.profile_sha256)
+        profile_raw = self.protected(PROFILE)
+        require(sha256(profile_raw) == expected.profile_sha256)
         states = {unit: self.service(unit) for unit in UNITS}
         for unit in (BUDDY, HELPER):
             state = states[unit]
@@ -193,6 +224,7 @@ class PackageRecovery:
         helper_inv = invocation(helper["InvocationID"])
         stock_inv = self.vendor_process(states[STOCK], STOCK_EXE, expected.stock_sha256, helper_start)
         sync_inv = self.vendor_process(states[SYNC], SYNC_EXE, SYNC_SHA256, helper_start)
+        self.package_files(json_record(profile_raw))
         require(states == {unit: self.service(unit) for unit in UNITS})
         self.read(f"test ! -e {ACTIVE_LEASE} && test ! -L {ACTIVE_LEASE}", 32)
         require(sha256(self.protected(archived, private=True)) == expected.lease_sha256
