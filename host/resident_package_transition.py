@@ -155,6 +155,8 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
             ownership = recovery.package_ownership(approved_version)
             require_ownership(ownership, expected.boot_id, approved_version)
         require(recovery.capture_activation() == expected and time.monotonic() < deadline)
+        recovery.require_takeover()
+        require(time.monotonic() < deadline)
         record_intent(path, expected_connection, expected, ownership, plan)
         if time.monotonic() >= deadline:
             raise shared.Refusal("timeout")

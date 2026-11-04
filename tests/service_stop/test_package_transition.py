@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "host"))
 import resident_package_transition as transition
 import resident_package_uninstall as uninstall
+import resident_package_disable as disable
 
 
 class TransitionTest(unittest.TestCase):
@@ -71,6 +72,12 @@ class TransitionTest(unittest.TestCase):
 
     def test_stale_activation_never_records_or_stops(self):
         self.recovery.capture_activation.return_value = replace(self.activation, buddy_invocation="2" * 32)
+        with self.assertRaises(ValueError):
+            self.prepare()
+        self.assertEqual(self.events.mock_calls, [])
+
+    def test_unsettled_takeover_never_records_or_stops(self):
+        self.recovery.require_takeover.side_effect = ValueError("stock still active")
         with self.assertRaises(ValueError):
             self.prepare()
         self.assertEqual(self.events.mock_calls, [])
@@ -157,3 +164,48 @@ class RemovalPromptTest(unittest.TestCase):
         collateral = lines.replace(b"After this operation", b"  rm2 (1.0.0-r0)\nAfter this operation")
         with self.assertRaises(ValueError):
             uninstall.exact_prompt(collateral + uninstall.PROMPT, "1.2.3-r2")
+
+
+class DisableTransitionTest(unittest.TestCase):
+    def test_disable_preserves_recovery_and_reobserves_without_dispatch(self):
+        boot, activation = "12345678-1234-1234-1234-123456789abc", "22345678-1234-1234-1234-123456789abc"
+        version = "1.2.3-r2"
+        stop = {"version": 2, "ownership": {"package": f"remarkable-buddies-{version}"}}
+        stock = {"reader_invocation": "a" * 32, "sync_invocation": "b" * 32}
+        record = {"version": 1, "stop": stop, "stock": stock}
+        expected = Mock()
+        recovery = Mock()
+        recovery.observe_recovery.return_value = stock
+        recovery.package_ownership.return_value = stop["ownership"]
+        operations = []
+        disabled = False
+
+        def state(unit):
+            if unit == disable.HELPER:
+                return b"static\n"
+            return b"disabled\n" if disabled else b"enabled\n"
+
+        def read(command, _):
+            nonlocal disabled
+            if command == disable.DISABLE_COMMAND:
+                self.assertNotIn("--no-reload", command)
+                self.assertEqual(operations, ["record"])
+                operations.append("disable")
+                disabled = True
+            if command == f"readlink {disable.STARTUP_LINK}":
+                return (disable.PACKAGE_UNIT + "\n").encode("ascii")
+            return b""
+
+        recovery.unit_file_state.side_effect = state
+        recovery.read.side_effect = read
+        with (TemporaryDirectory() as directory,
+              patch.object(disable, "load_intent", return_value=(expected, stop, None)),
+              patch.object(disable, "on_wire", side_effect=lambda _, inspect, _connection: inspect("wire")),
+              patch.object(disable, "PackageRecovery", return_value=recovery),
+              patch.object(disable, "write_private_record", side_effect=lambda *_: operations.append("record")),
+              patch.object(disable.shared, "private_bytes", return_value=json.dumps(record).encode())):
+            args = (Path(directory) / "wired.json", "c" * 64, boot, activation, "d" * 64, float("inf"))
+            self.assertTrue(disable.execute(*args, approved_version=version)["disabled"])
+            self.assertTrue(disable.observe(*args, approved_version=version)["disabled"])
+        self.assertEqual(operations, ["record", "disable"])
+        self.assertEqual(recovery.observe_disabled_recovery.call_count, 2)

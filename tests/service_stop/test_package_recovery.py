@@ -52,6 +52,15 @@ class PackageRecoveryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.sample.observe_recovery(self.expected)
 
+    def test_disabled_recovery_uses_retained_invocations_after_reload(self):
+        receipt = self.sample.observe_recovery(self.expected)
+        self.states[recovery.BUDDY]["InvocationID"] = ""
+        self.states[recovery.HELPER]["InvocationID"] = ""
+        self.sample.observe_disabled_recovery(self.expected, receipt)
+        self.states[recovery.STOCK]["InvocationID"] = "f" * 32
+        with self.assertRaises(ValueError):
+            self.sample.observe_disabled_recovery(self.expected, receipt)
+
     def test_package_file_rejects_digest_drift(self):
         sampler = recovery.PackageRecovery(None, float("inf"))
         stat = b"1:2:0:0:755:1:64:10:10\n"

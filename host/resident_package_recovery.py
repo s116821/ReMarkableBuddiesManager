@@ -138,6 +138,20 @@ class PackageRecovery:
         require(state["DropInPaths"] == dropins)
         return state
 
+    def unit_file_state(self, unit):
+        require(unit in (BUDDY, HELPER))
+        # UnitFileState on a loaded unit can remain cached after --no-reload.
+        code, out, err = self.sampler.command(f"/bin/systemctl --system --no-pager is-enabled -- {unit}", 32)
+        require(not err and (code, out) in ((0, b"enabled\n"), (0, b"static\n"), (1, b"disabled\n")))
+        return out
+
+    def require_takeover(self):
+        # An activation record can precede actual takeover. The later recovery
+        # proof requires new stock invocations, so do not stop that early phase.
+        for unit in (STOCK, SYNC):
+            state = self.service(unit)
+            require(state["ActiveState"] == "inactive" and state["MainPID"] == "0")
+
     def protected(self, path, *, private=False):
         path = shlex.quote(path)
         prefix = f"test ! -L {path} && test -f {path} && test \"$(readlink -f {path})\" = {path} && "
@@ -280,6 +294,33 @@ class PackageRecovery:
         require(self.read(f"readlink {path}", 256) == (executable + "\n").encode())
         require(self.read(f"sha256sum {path}", 256) == f"{checksum}  {path}\n".encode())
         return inv
+
+    def observe_disabled_recovery(self, expected, stock):
+        """Recheck a previously verified recovery after disable reloads PID 1."""
+        require(self.boot() == expected.boot_id and stock["boot_id"] == expected.boot_id
+                and stock["activation_id"] == expected.activation_id
+                and stock["lease_sha256"] == expected.lease_sha256)
+        helper_invocation = invocation(stock["recovery_invocation"])
+        self.runtime()
+        archived = f"{RUNTIME}/recovered-{expected.activation_id}.json"
+        require(sha256(self.protected(archived, private=True)) == expected.lease_sha256)
+        profile_raw = self.protected(PROFILE)
+        require(sha256(profile_raw) == expected.profile_sha256)
+        states = {unit: self.service(unit) for unit in UNITS}
+        for unit in (BUDDY, HELPER):
+            require(states[unit]["ActiveState"] == "inactive" and states[unit]["SubState"] == "dead"
+                    and states[unit]["MainPID"] == "0" and states[unit]["Result"] == "success")
+        require(states[BUDDY]["InvocationID"] in ("", expected.buddy_invocation)
+                and states[HELPER]["InvocationID"] in ("", helper_invocation))
+        require(self.vendor_process(states[STOCK], STOCK_EXE, expected.stock_sha256,
+                                    expected.buddy_start_micros) == stock["reader_invocation"]
+                and self.vendor_process(states[SYNC], SYNC_EXE, SYNC_SHA256,
+                                        expected.buddy_start_micros) == stock["sync_invocation"])
+        self.package_files(json_record(profile_raw))
+        self.read(f"test ! -e {ACTIVE_LEASE} && test ! -L {ACTIVE_LEASE}", 32)
+        require(states == {unit: self.service(unit) for unit in UNITS}
+                and sha256(self.protected(archived, private=True)) == expected.lease_sha256
+                and self.protected(PROFILE) == profile_raw and self.boot() == expected.boot_id)
 
     def observe_recovery(self, expected):
         require(isinstance(expected, Activation) and UUID.fullmatch(expected.activation_id)

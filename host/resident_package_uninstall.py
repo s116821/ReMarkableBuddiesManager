@@ -6,6 +6,7 @@ import secrets
 import shlex
 import time
 
+from resident_package_disable import STARTUP_LINK, disable_path, observe_disabled, retained_stock
 from resident_package_recovery import (
     ACTIVE_LEASE, BUDDY, HELPER, OWNER_PATHS, RUNTIME, STOCK, STOCK_EXE, SYNC,
     SYNC_EXE, SYNC_SHA256, VELLUM_APK, VELLUM_APK_SHA256, VELLUM_DB, VELLUM_OFFLINE,
@@ -134,7 +135,7 @@ def removed(recovery, expected, plan, stock):
     require(recovery.boot() == expected.boot_id)
     archived = f"{RUNTIME}/recovered-{expected.activation_id}.json"
     require(sha256(recovery.protected(archived, private=True)) == expected.lease_sha256)
-    paths = (*RELEASED_FILES, ACTIVE_LEASE, "/etc/systemd/system/reader-buddy.service")
+    paths = (*RELEASED_FILES, ACTIVE_LEASE, STARTUP_LINK, "/etc/systemd/system/reader-buddy.service")
     recovery.read(" && ".join(f"test ! -e {path} && test ! -L {path}" for path in paths), 32)
     database = f'test ! -L {VELLUM_DB} && test -f {VELLUM_DB} && sha256sum {VELLUM_DB}'
     checksum = recovery.read(database, 256)
@@ -164,12 +165,18 @@ def execute(config, connection, boot, activation, profile_sha256, deadline, *, a
     def inspect(transport):
         nonlocal started
         recovery = PackageRecovery(transport, deadline)
-        stock = recovery.observe_recovery(expected)
+        disabled_intent = os.path.lexists(disable_path(config, boot, activation))
+        stock = (retained_stock(config, boot, activation, stop) if disabled_intent
+                 else recovery.observe_recovery(expected))
 
         def verify_locked():
+            if disabled_intent:
+                observe_disabled(recovery, expected, approved_version, stop, plan, stock)
+                return
             require(recovery.observe_recovery(expected) == stock and recovery.removal_plan(approved_version) == plan)
             for unit, state in ((BUDDY, b"disabled\n"), (HELPER, b"static\n")):
-                require(recovery.read(f"/bin/systemctl show -p UnitFileState --value -- {unit}", 32) == state)
+                require(recovery.unit_file_state(unit) == state)
+            recovery.read(f"test ! -e {STARTUP_LINK} && test ! -L {STARTUP_LINK}", 32)
 
         verify_locked()
         write_private_record(path, {"version": 1, "stop": stop, "stock": stock})
