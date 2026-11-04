@@ -2,3 +2,5 @@
 
 # Immutable observed producer fixture bytes, including captured CRLF receipts.
 tests/fixtures/notebook-archive-interop/** -text
+# The captured PowerShell source receipt includes literal CRLF bytes.
+tests/fixtures/notebook-archive-interop/source.receipt.json -diff
