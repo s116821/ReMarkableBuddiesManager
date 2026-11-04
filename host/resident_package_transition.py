@@ -72,6 +72,15 @@ def require_approved(expected, approved_profile_sha256):
             and expected.profile_sha256 == approved_profile_sha256)
 
 
+def observe_package_ownership(config_path, approved_version, deadline, expected_connection=None):
+    """Inspect the installed Vellum package through Manager's verified wired route."""
+    def inspect(transport):
+        recovery = PackageRecovery(transport, deadline)
+        return {"ownership": recovery.package_ownership(approved_version)}
+
+    return on_wire(config_path, inspect, expected_connection)
+
+
 def review(config_path, approved_profile_sha256, deadline):
     """Read the activation for the package identity approved by the host caller."""
     def inspect(transport):

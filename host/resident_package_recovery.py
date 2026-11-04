@@ -1,4 +1,4 @@
-"""Read-only RM2 resident recovery evidence for a future package transaction."""
+"""Read-only RM2 ownership and recovery evidence for a package transaction."""
 
 from dataclasses import dataclass
 import hashlib
@@ -34,6 +34,12 @@ PROPERTIES = (
     "ExecMainStartTimestampMonotonic", "ExecMainExitTimestampMonotonic",
     "ExecMainCode", "ExecMainStatus",
 )
+VELLUM_ROOT = "/home/root/.vellum"
+VELLUM_APK = f"{VELLUM_ROOT}/bin/apk.vellum"
+VELLUM_APK_SHA256 = "2fa969001cd8fbc8fa373b7c3dfcc99f858ceb516306d35d1b037c09861ac94a"
+VELLUM_DB = f"{VELLUM_ROOT}/lib/apk/db/installed"
+VELLUM_LAYER = f"{VELLUM_ROOT}/lib/apk/db-uvol"
+PACKAGE_VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-r(?:0|[1-9][0-9]*)")
 PACKAGE_FILES = (
     (APP, "app_sha256", "755", 128 * 1024 * 1024),
     (f"{LIB}/libremarkable-resident.so", "adapter_sha256", "644", 32 * 1024 * 1024),
@@ -41,6 +47,7 @@ PACKAGE_FILES = (
     (f"{UNIT_DIR}/{BUDDY}", "buddy_unit_sha256", "644", 32768),
     (f"{UNIT_DIR}/{HELPER}", "helper_unit_sha256", "644", 32768),
 )
+OWNER_PATHS = (PROFILE, *(path for path, *_ in PACKAGE_FILES))
 
 
 def require(value):
@@ -154,6 +161,59 @@ class PackageRecovery:
             require(uid == gid == "0" and permissions == mode and links == "1"
                     and 0 < int(length) <= limit
                     and observed == f"{checksum}  {path}".encode())
+
+    def package_ownership(self, version):
+        """Observe exact APK ownership on the pinned root-layer Vellum layout."""
+        require(isinstance(version, str) and len(version) <= 64 and PACKAGE_VERSION.fullmatch(version))
+        boot = self.boot()
+        # apk also reads a uvol layer when present. Its ownership is outside this layout.
+        layout = f"test ! -e {VELLUM_LAYER} && test ! -L {VELLUM_LAYER}"
+
+        def stamp(path, maximum):
+            check = (
+                f'test ! -L {path} && test -f {path} && '
+                f'test "$(readlink -f {path})" = {path} && '
+                f'test "$(stat -c %s {path})" -le {maximum}'
+            )
+            stat = f"stat -c '%d:%i:%u:%g:%a:%h:%s:%y:%z' {path}"
+            before, checksum, after = self.read(f"{check} && {stat} && sha256sum {path} && {stat}", 768).splitlines()
+            require(before == after)
+            _, _, uid, gid, mode, links, size, _ = before.decode("ascii").split(":", 7)
+            require(uid == gid == "0" and links == "1" and 0 < int(size) <= maximum
+                    and int(mode, 8) & 0o022 == 0)
+            digest, separator, name = checksum.decode("ascii").partition("  ")
+            require(separator and name == path and DIGEST.fullmatch(digest))
+            return before, digest
+
+        directories = ("/home", "/home/root", VELLUM_ROOT, f"{VELLUM_ROOT}/bin",
+                       f"{VELLUM_ROOT}/lib", f"{VELLUM_ROOT}/lib/apk", f"{VELLUM_ROOT}/lib/apk/db")
+
+        def check_layout():
+            self.read(layout, 32)
+            directory_checks = [
+                f'test ! -L {path} && test -d {path} && stat -c "%u:%g:%a" {path}'
+                for path in directories
+            ]
+            observed = self.read(" && ".join(directory_checks), 256).splitlines()
+            require(len(observed) == len(directories))
+            for entry in observed:
+                uid, gid, mode = entry.decode("ascii").split(":")
+                require(uid == gid == "0" and int(mode, 8) & 0o022 == 0)
+
+        check_layout()
+        executable = stamp(VELLUM_APK, 16 * 1024 * 1024)
+        require(executable[1] == VELLUM_APK_SHA256)
+        database = stamp(VELLUM_DB, 16 * 1024 * 1024)
+        owner = f"remarkable-buddies-{version}"
+        result = self.read(
+            f"APK_CONFIG=/dev/null {VELLUM_APK} --root {VELLUM_ROOT} --install-root / "
+            f"--no-network --no-cache --no-logfile info --who-owns {' '.join(OWNER_PATHS)}", 4096)
+        expected = "".join(f"{path} is owned by {owner}\n" for path in OWNER_PATHS).encode("ascii")
+        require(result == expected)
+        require(stamp(VELLUM_DB, 16 * 1024 * 1024) == database
+                and stamp(VELLUM_APK, 16 * 1024 * 1024) == executable and self.boot() == boot)
+        check_layout()
+        return {"boot_id": boot, "package": owner, "database_sha256": database[1]}
 
     def runtime(self):
         require(self.read(f"test ! -L {RUNTIME} && test -d {RUNTIME} && "
