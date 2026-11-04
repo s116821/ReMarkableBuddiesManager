@@ -1,3 +1,4 @@
+import type {ServiceStopAdapter} from './service-stop';
 import type {StorageInitializationAdapter} from './storage-initialization';
 import type {OwnedV3Adapter} from './owned-data-v3';
 import type {LocalModeAdapter} from './local-mode-choice';
@@ -58,6 +59,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly conversationManagement?:ManagementAdapter['conversationManagement'];
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
+  readonly serviceStop?:ServiceStopAdapter['serviceStop'];
   readonly storageInitialization?:StorageInitializationAdapter['storageInitialization'];
   readonly inspectOwnedV3?:OwnedV3Adapter['inspectOwnedV3'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
@@ -182,6 +184,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Storage preparation unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Storage preparation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/storage-initialization-protocol.mjs').StorageInitializationResult;
+    },
+    serviceStop: async (request: import('../host/service-stop-protocol.mjs').ServiceStopRequest|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Service stop helper unavailable');
+      const pending=fetch('/manager-service-stop',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Service stop unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Service stop response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/service-stop-protocol.mjs').ServiceStopResult;
     },
     inspectOwnedV3: async (request: import('../host/owned-data-v3-protocol.mjs').OwnedV3Request|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Stored data inspection helper unavailable');

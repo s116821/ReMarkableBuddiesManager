@@ -1,0 +1,51 @@
+{
+  "state": [
+    "Id",
+    "LoadState",
+    "ActiveState",
+    "SubState",
+    "MainPID",
+    "ControlPID",
+    "ExecMainPID",
+    "ExecMainStartTimestampMonotonic",
+    "InvocationID",
+    "Job",
+    "ControlGroup"
+  ],
+  "policy": [
+    "Type",
+    "NeedDaemonReload",
+    "KillMode",
+    "Delegate",
+    "Restart",
+    "RestartMode",
+    "RestartForceExitStatus",
+    "FragmentPath",
+    "DropInPaths",
+    "OnSuccess",
+    "OnFailure",
+    "OnSuccessJobMode",
+    "OnFailureJobMode",
+    "Conflicts",
+    "After",
+    "DefaultDependencies",
+    "SendSIGKILL",
+    "WatchdogUSec",
+    "TimeoutStopUSec",
+    "TimeoutStartUSec"
+  ],
+  "stop_extra": [
+    "Names",
+    "ExecStop",
+    "ExecStopPost",
+    "EnvironmentFiles",
+    "WorkingDirectory",
+    "User",
+    "Group",
+    "KillSignal",
+    "FinalKillSignal",
+    "RestartUSec",
+    "RefuseManualStop",
+    "CanStop"
+  ]
+}
