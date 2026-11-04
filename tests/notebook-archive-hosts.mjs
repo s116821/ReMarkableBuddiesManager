@@ -28,6 +28,18 @@ async function matrix(request,c){
  }
  assert.equal(busy,38);assert.equal(invalidations,35);console.log(JSON.stringify({notebook_factory_peers:19,busy_directions:busy,preview_invalidations:invalidations}));
 }
+async function preserveUnknowns(request,c){
+ const notebook=await request('notebookArchive',{action:'retained'});assert.ok(notebook.notebook_archive.retained.some(r=>r.original_outcome==='unknown'));
+ const review=(await request('storageInitialization',{action:'begin',...identity})).storage_initialization;assert.equal(review.state,'ready');
+ await c.storageLost(true);let lost;
+ try{lost=(await request('storageInitialization',requestFor('confirm',{reference:review.reference}))).storage_initialization;}finally{await c.storageLost(false);}
+ assert.equal(lost.state,'unknown');const storage=await request('storageInitialization',{action:'retained'});
+ await request('notebookArchive',prepare());await request('notebookArchive',requestFor('inspect',{path:'/home/root/backups/existing'}));
+ assert.deepEqual(await request('storageInitialization',{action:'retained'}),storage);
+ await request('storageInitialization',requestFor('refresh',{reference:lost.reference}));
+ assert.deepEqual(await request('notebookArchive',{action:'retained'}),notebook);
+ console.log('Actual factory notebook and storage unknown histories survive reciprocal prepare/inspect/current refresh');
+}
 async function ui(page,c,capture){
  await readFreshTabletState(page);
  const status=page.getByTestId('notebook-archive-status'),field=page.locator('#notebook-archive-path'),preview=page.getByRole('button',{name:'Preview notebook export',exact:true}),confirm=page.getByRole('button',{name:'Confirm notebook export',exact:true}),inspect=page.getByRole('button',{name:'Check notebook archive',exact:true});
@@ -50,10 +62,10 @@ const helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser
 try{
  const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.goto(helper.origin+'/preview/');const cookie=(await context.cookies(helper.origin)).find(x=>x.name==='manager_session').value;
  const request=async(name,q)=>{const r=await context.request.post(helper.origin+'/manager-'+routes[name],{headers:{Origin:helper.origin,Cookie:'manager_session='+cookie},data:q});assert.equal(r.status(),200,name);return r.json();};
- const control={hold:async()=>{let resolve;const promise=new Promise(r=>{resolve=r;});f.boundary.gate={resolve,promise,entered:false};},entered:()=>expect.poll(()=>f.boundary.gate?.entered).toBe(true),release:async()=>{const g=f.boundary.gate;f.boundary.gate=null;g.resolve();},snapshot:async()=>({calls:f.boundary.calls,cancels:f.observer.cancels}),mode:async mode=>setMode(f,mode)};
+ const control={hold:async()=>{let resolve;const promise=new Promise(r=>{resolve=r;});f.boundary.gate={resolve,promise,entered:false};},entered:()=>expect.poll(()=>f.boundary.gate?.entered).toBe(true),release:async()=>{const g=f.boundary.gate;f.boundary.gate=null;g.resolve();},snapshot:async()=>({calls:f.boundary.calls,cancels:f.observer.cancels}),storageLost:async lost=>{f.initialization.raw=lost?'{}\n':null;},mode:async mode=>setMode(f,mode)};
  await readFreshTabletState(page);await page.getByRole('button',{name:'Disconnect',exact:true}).click();await matrix(request,control);
  for(const [suffix,body,status]of [['?x=1','{}',403],['','x'.repeat(16385),413],['','{"action":"retained","action":"retained"}',400],['','{"action":"retained","path":"/private"}',400]]){const r=await context.request.post(helper.origin+'/manager-notebook-archive'+suffix,{headers:{Origin:helper.origin,Cookie:'manager_session='+cookie,'Content-Type':'application/json'},data:body});assert.equal(r.status(),status);}
- await page.reload();await ui(page,control,width=>page.locator('section[aria-labelledby="notebook-archive-title"]').screenshot({path:`test-results/notebook-archive-browser-${packaged?'production':'development'}-${width}.png`}));
+ await page.reload();await ui(page,control,width=>page.locator('section[aria-labelledby="notebook-archive-title"]').screenshot({path:`test-results/notebook-archive-browser-${packaged?'production':'development'}-${width}.png`}));await preserveUnknowns(request,control);
 }finally{f.boundary.gate?.resolve();await browser.close();await helper.close();}
 const folder=await mkdtemp(path.join(os.tmpdir(),'manager-notebook-archive-')),env={...process.env};for(const n of Object.keys(env))if(n.startsWith('MANAGER_'))delete env[n];Object.assign(env,{MANAGER_TEST:'1',MANAGER_TEST_DEFER_LOAD:'1',MANAGER_TEST_PROFILE:folder});const restoreAssets=packaged?async()=>{}:await stageDevelopmentBrowserAssets();
 const app=await electron.launch({executablePath:packaged?path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform==='win32'?'ReMarkableBuddiesManager.exe':'ReMarkableBuddiesManager'}`):undefined,args:[...(packaged?[]:['.']),...(process.platform==='linux'?['--disable-gpu']:[])],env}).catch(async e=>{await restoreAssets();throw e;});
@@ -64,7 +76,7 @@ try{
  for(const code of ['window.managerHost.notebookArchive()','window.managerHost.notebookArchive({}, {})','window.managerHost.notebookArchive({path:"PRIVATE"})'])assert.equal(await page.evaluate(code+'.then(()=>false,()=>true)'),true);
  assert.equal(await app.evaluate(async({ipcMain,BrowserWindow})=>{const h=ipcMain._invokeHandlers.get('manager:notebookArchive'),c=BrowserWindow.getAllWindows()[0].webContents;let refused=0;for(const e of [{},{sender:c,senderFrame:{url:c.getURL()}}])try{await h(e,{action:'retained'});}catch{refused++;}return refused;}),2);
  await readFreshTabletState(page);await page.getByRole('button',{name:'Disconnect',exact:true}).click();const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
- const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.notebookHarness.boundary.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.notebookHarness.boundary.gate?.entered)).toBe(true),release:()=>app.evaluate(()=>{const b=globalThis.notebookHarness.boundary,g=b.gate;b.gate=null;g.resolve();}),snapshot:()=>app.evaluate(()=>({calls:globalThis.notebookHarness.boundary.calls,cancels:globalThis.notebookObserver.generation})),mode:mode=>app.evaluate((_electron,mode)=>{const s=globalThis.notebookHarness.notebookState;s.failExport=mode==='unknown';s.onRaw=mode==='refused'?(r,q)=>q.selector==='export-notebook'?{report_version:1,operation:q.selector,status:'invalid-input',incomplete:false,activation_performed:false,data:null}:r:null;},mode)};
+ const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.notebookHarness.boundary.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.notebookHarness.boundary.gate?.entered)).toBe(true),release:()=>app.evaluate(()=>{const b=globalThis.notebookHarness.boundary,g=b.gate;b.gate=null;g.resolve();}),snapshot:()=>app.evaluate(()=>({calls:globalThis.notebookHarness.boundary.calls,cancels:globalThis.notebookObserver.generation})),storageLost:lost=>app.evaluate((_electron,lost)=>{globalThis.notebookHarness.initialization.raw=lost?'{}\n':null;},lost),mode:mode=>app.evaluate((_electron,mode)=>{const s=globalThis.notebookHarness.notebookState;s.failExport=mode==='unknown';s.onRaw=mode==='refused'?(r,q)=>q.selector==='export-notebook'?{report_version:1,operation:q.selector,status:'invalid-input',incomplete:false,activation_performed:false,data:null}:r:null;},mode)};
  await matrix(request,control);await page.reload();await ui(page,control,async width=>{
   const section=page.locator('section[aria-labelledby="notebook-archive-title"]'),desiredHeight=Math.ceil(await section.evaluate(el=>el.getBoundingClientRect().height))+80;
   const content=await app.evaluate(({BrowserWindow},{width,height})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(width,height);return w.getContentSize();},{width,height:desiredHeight});
@@ -75,6 +87,7 @@ try{
   console.log('Notebook native geometry',JSON.stringify({width,desiredHeight,content,nativePixels:[probe.readUInt32BE(16),probe.readUInt32BE(20)],viewportHeight}));await capture('');
   if(box.height>viewportHeight){await section.evaluate(el=>el.scrollIntoView({block:'end'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await capture('-bottom');}
  });
+ await preserveUnknowns(request,control);
  if(packaged){const resources=await app.evaluate(()=>process.resourcesPath);for(const name of ['notebook-archive.mjs','notebook-archive-private.mjs','notebook-archive-protocol.mjs','notebook_archive_transport.py'])assert.deepEqual(await readFile(path.join(resources,'host',name)),await readFile(path.join('host',name)));}
  console.log('Actual Electron notebook guarded IPC, factory matrix and shared UI pass; synthetic transport');
 }finally{await app.evaluate(()=>globalThis.notebookHarness.boundary.gate?.resolve()).catch(()=>{});await app.close();await restoreAssets();await rm(folder,{recursive:true,force:true});}
