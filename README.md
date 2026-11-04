@@ -138,3 +138,7 @@ For whole-archive checks and deliberate selected-history export in both companio
 Both companions can inspect saved handwriting corrections and separately confirm
 removal from active use. See the [correction management guide](docs/handwriting-corrections.md)
 for explicit profile selection, retained history and unknown-operation checks.
+
+For deliberate creation/recovery of configured Buddy storage, see
+[Prepare Buddy storage](docs/storage-initialization.md). Review is command-free;
+confirmation is separate, and later inspections preserve earlier uncertainty.

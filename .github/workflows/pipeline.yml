@@ -184,6 +184,8 @@ jobs:
           xvfb-run -a npm run test:product-lifetime-hosts -- --packaged
           xvfb-run -a npm run test:owned-notebook-hosts
           xvfb-run -a npm run test:owned-notebook-hosts -- --packaged
+          xvfb-run -a npm run test:storage-initialization-hosts
+          xvfb-run -a npm run test:storage-initialization-hosts -- --packaged
           xvfb-run -a npm run test:local-mode-choice-hosts
           xvfb-run -a npm run test:local-mode-choice-hosts -- --packaged
           xvfb-run -a npm run test:model-settings-hosts
@@ -249,6 +251,8 @@ jobs:
           npm run test:product-lifetime-hosts -- --packaged
           npm run test:owned-notebook-hosts
           npm run test:owned-notebook-hosts -- --packaged
+          npm run test:storage-initialization-hosts
+          npm run test:storage-initialization-hosts -- --packaged
           npm run test:local-mode-choice-hosts
           npm run test:local-mode-choice-hosts -- --packaged
           npm run test:model-settings-hosts
