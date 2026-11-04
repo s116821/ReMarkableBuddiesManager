@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "host"))
 import resident_package_transition as transition
+import resident_package_uninstall as uninstall
 
 
 class TransitionTest(unittest.TestCase):
@@ -141,3 +142,18 @@ class TransitionTest(unittest.TestCase):
                 transition.observe(*args, approved_version=self.version)
         self.recovery.package_ownership.assert_not_called()
         self.events.stop.assert_not_called()
+
+
+class RemovalPromptTest(unittest.TestCase):
+    def test_only_the_exact_buddy_removal_is_approved(self):
+        lines = (b"The following packages will be REMOVED:\n"
+                 b"  remarkable-buddies (1.2.3-r2)\n"
+                 b"After this operation, 32 B of disk space will be freed.\n")
+        uninstall.exact_prompt(lines + uninstall.PROMPT, "1.2.3-r2")
+        advisory = b"\n".join(uninstall.ADVISORY + [b"  rm2 remarkable-os", b""])
+        uninstall.exact_prompt(advisory + lines + uninstall.PROMPT, "1.2.3-r2")
+        with self.assertRaises(ValueError):
+            uninstall.exact_prompt(lines + uninstall.PROMPT, "1.2.3-r1")
+        collateral = lines.replace(b"After this operation", b"  rm2 (1.0.0-r0)\nAfter this operation")
+        with self.assertRaises(ValueError):
+            uninstall.exact_prompt(collateral + uninstall.PROMPT, "1.2.3-r2")

@@ -27,12 +27,16 @@ def intent_path(config_path, boot, activation):
 
 
 def record_intent(path, connection, activation, ownership, removal_plan=None):
-    root_identity = checked_root(path.parent)
-    require(root_identity is not None)
     payload = {"version": 2, "connection_id": connection, "activation": asdict(activation),
                "ownership": ownership}
     if removal_plan is not None:
         payload.update(version=3, removal_plan=removal_plan)
+    write_private_record(path, payload)
+
+
+def write_private_record(path, payload):
+    root_identity = checked_root(path.parent)
+    require(root_identity is not None)
     try:
         with exclusive(path, write_through=True) as stream:
             stream.write(json.dumps(payload, separators=(",", ":")).encode("ascii"))
@@ -40,7 +44,7 @@ def record_intent(path, connection, activation, ownership, removal_plan=None):
             os.fsync(stream.fileno())
     except Exception as error:
         if os.path.lexists(path):
-            raise RecoveryPending("Stop intent already exists or its publication is uncertain") from error
+            raise RecoveryPending("Intent already exists or its publication is uncertain") from error
         raise
     if sys.platform == "linux":
         fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -179,9 +183,7 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
         raise
 
 
-def observe(config_path, expected_connection, boot, activation, approved_profile_sha256, deadline,
-            *, approved_version=None):
-    """Read the original intent across processes and reconcile without a service command."""
+def load_intent(config_path, expected_connection, boot, activation, approved_profile_sha256, approved_version):
     path = intent_path(config_path, boot, activation)
     require(checked_root(path.parent) is not None)
     record = json_record(shared.private_bytes(path, parent_private=True, maximum=2048))
@@ -204,6 +206,14 @@ def observe(config_path, expected_connection, boot, activation, approved_profile
     require(expected.boot_id == boot and expected.activation_id == activation)
     require_approved(expected, approved_profile_sha256)
     require(isinstance(expected_connection, str) and DIGEST.fullmatch(expected_connection))
+    return expected, record, plan
+
+
+def observe(config_path, expected_connection, boot, activation, approved_profile_sha256, deadline,
+            *, approved_version=None):
+    """Read the original intent across processes and reconcile without a service command."""
+    expected, record, plan = load_intent(config_path, expected_connection, boot, activation,
+                                         approved_profile_sha256, approved_version)
 
     def inspect(transport):
         recovery = PackageRecovery(transport, deadline)
