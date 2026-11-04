@@ -21,3 +21,23 @@ test('public requests/results cannot supply or expose selectors, paths, mode or 
 
 test('existing saved mode kinds are preserved and private bindings are reduced before public delivery',async()=>{for(const kind of ['unconfigured','local-only','isolated-backup','shared-group']){const f=open();f.initialization.kind=kind;const r=await begin(f),v=await f.host.request(command('confirm',r.storage_initialization.reference));assert.deepEqual(v.storage_initialization.current,{kind});for(const secret of ['PRIVATE_ROOT_CANARY','binding_sha256','backup','group','token'])assert.equal(JSON.stringify(v).includes('"'+secret+'"'),false);}});
 test('public kind observation must match the retained original target identity',async()=>{const f=open(),r=await begin(f),q=command('confirm',r.storage_initialization.reference),v=await f.host.request(q);v.storage_initialization.retained[0].connection_id='f'.repeat(64);assert.throws(()=>parseStorageInitializationResult(v,q,validateResult));});
+
+test('public replies are bound to action, preserving genuine no-current replay and preview cancellation',async()=>{
+ const f=open(),policy=await begin(f),ref=policy.storage_initialization.reference,q=command('confirm',ref),success=await f.host.request(q),review={action:'begin',...identity};
+ parseStorageInitializationResult(policy,review,validateResult);parseStorageInitializationResult(success,q,validateResult);
+ const asBegin=structuredClone(success);asBegin.storage_initialization.invocation=null;
+ assert.throws(()=>parseStorageInitializationResult(asBegin,review,validateResult));
+ const noCurrent=structuredClone(asBegin);noCurrent.status='unconfigured';noCurrent.observation=null;noCurrent.storage_initialization.current=null;
+ assert.throws(()=>parseStorageInitializationResult(noCurrent,review,validateResult));
+ const previewCancel={action:'cancel',reference:ref,invocation:null};assert.throws(()=>parseStorageInitializationResult(policy,previewCancel,validateResult));
+ assert.throws(()=>parseStorageInitializationResult(success,{action:'cancel',reference:ref,invocation:q.invocation},validateResult));
+ const replay=await f.host.request({...q,invocation:invocation(2)});assert.equal(replay.storage_initialization.state,'prepared');assert.equal(replay.storage_initialization.current,null);parseStorageInitializationResult(replay,{...q,invocation:invocation(2)},validateResult);
+ const cancelled=await f.host.request(previewCancel);assert.equal(cancelled.storage_initialization.current,null);parseStorageInitializationResult(cancelled,previewCancel,validateResult);
+ const g=open(),ready=await begin(g),cancel={action:'cancel',reference:ready.storage_initialization.reference,invocation:null},invalidated=await g.host.request(cancel);assert.equal(invalidated.storage_initialization.state,'invalidated');parseStorageInitializationResult(invalidated,cancel,validateResult);
+});
+test('begin unknown must match connection, while genuine older-boot unknown and current inspection remain valid',async()=>{
+ const f=open(),policy=await begin(f),ref=policy.storage_initialization.reference;f.initialization.raw='partial';await f.host.request(command('confirm',ref));
+ f.observer.lastObservation.boot_id=invocation(80);const review={action:'begin',...identity,boot_id:invocation(80)},blocked=await f.host.request(review);assert.equal(blocked.storage_initialization.state,'unknown');assert.equal(blocked.storage_initialization.retained[0].boot_id,identity.boot_id);parseStorageInitializationResult(blocked,review,validateResult);
+ const wrong=structuredClone(blocked);wrong.storage_initialization.retained[0].connection_id='f'.repeat(64);assert.throws(()=>parseStorageInitializationResult(wrong,review,validateResult));
+ f.observer.lastObservation.boot_id=identity.boot_id;f.initialization.raw=null;const q=command('refresh',ref,3),checked=await f.host.request(q);assert.equal(checked.storage_initialization.state,'unknown');assert.deepEqual(checked.storage_initialization.current,{kind:'unconfigured'});parseStorageInitializationResult(checked,q,validateResult);
+});

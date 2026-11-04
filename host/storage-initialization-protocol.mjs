@@ -19,9 +19,12 @@ export function parseStorageInitializationResult(v,request,validate){
  if(q.reference&&s.reference!==q.reference||q.invocation!==undefined&&s.invocation!==q.invocation)fail();
  if(!Array.isArray(s.retained)||s.retained.length>8)fail();const seen=new Set();
  for(const r of s.retained){if(keys(r)!=='boot_id,connection_id,outcome,reason,reference'||!basicDigest(r.reference)||!basicDigest(r.connection_id)||!basicUuid(r.boot_id)||!['prepared','unknown'].includes(r.outcome)||!reasons.includes(r.reason)||r.outcome==='prepared'&&r.reason!==null||r.outcome==='unknown'&&r.reason===null||seen.has(r.reference))fail();seen.add(r.reference);}
- if(['prepared','unknown'].includes(s.state)&&(!s.reference||!s.retained.some(r=>r.reference===s.reference&&r.outcome===s.state)))fail();
+ const original=s.retained.find(r=>r.reference===s.reference);
+ if(['prepared','unknown'].includes(s.state)&&original?.outcome!==s.state)fail();
+ if(s.state==='ready'&&q.action!=='begin'||q.action==='begin'&&s.state==='prepared'||s.current!==null&&!['confirm','refresh'].includes(q.action))fail();
+ if(q.action==='begin'&&s.state==='unknown'&&original?.connection_id!==q.connection_id)fail();
  if(s.current!==null&&(keys(s.current)!=='kind'||!kinds.includes(s.current.kind)||!['prepared','unknown'].includes(s.state)||v.status!=='observed'))fail();
- if(s.current!==null&&!s.retained.some(r=>r.reference===s.reference&&r.connection_id===v.observation?.connection_id&&r.boot_id===v.observation?.boot_id))fail();
+ if(s.current!==null&&(original?.connection_id!==v.observation?.connection_id||original?.boot_id!==v.observation?.boot_id))fail();
  if(s.state==='ready'&&(!s.reference||s.invocation!==null||s.current!==null||s.reason!==null||v.status!=='observed'||s.retained.some(r=>r.outcome==='unknown'&&r.connection_id===q.connection_id)))fail();
  if(v.status==='observed'){
   if(!v.observation||q.connection_id&&v.observation.connection_id!==q.connection_id||q.boot_id&&v.observation.boot_id!==q.boot_id||s.state!=='ready'&&s.current===null)fail();
