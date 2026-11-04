@@ -70,3 +70,59 @@ bundled host modules. Synthetic values are not device/provider/native evidence.
 Screenshots under ignored `test-results/owned-*-partial.png` complement DOM/adapter
 checks. Durable review evidence belongs in linked PR comments, pinned to exact
 source. No live tablet, private account or model access is required.
+
+## Stored data including notebooks
+
+The separate **Inspect stored data including notebooks** action consumes only
+`--inspect-owned-data-v3`. The older **Inspect owned data** action and report1/2
+parser remain available manually. There is no automatic fallback, minimum tag
+heuristic, service startup or filesystem scraping. Both Linux and Windows hosts
+invoke the Linux tablet CLI using the existing verified wired callbacks.
+
+The new host validates the original UTF8 bytes, single JSON frame/LF, closed keys,
+duplicates, original unsigned integer token spellings, decimal-string u64 counts
+and accounting relationships before reducing the report. Node24.21.0 and the
+pinned Electron44.4.5 runtime supply standard JSON.parse reviver source context;
+a missing context fails closed. Raw counts are never converted to Number.
+The public view excludes owner and generation UUIDs, lease custody details, raw
+stdout and diagnostics. The fixed apparent-file-length basis and excluded
+credentials/native-documents/legacy-cache/external-diagnostics scopes still apply.
+Metadata may contain protected inline text; inspection is not described as
+text-free. Archived media payloads are not needed for these accounting observations.
+
+Physical files, overlapping domain references and included notebook metadata are
+separate groups. Archived source metadata is included in Source; notebook plans
+and stages are included in Conversations. Do not add these subtotals to physical
+space or interpret records as requests, generated turns or visible notebooks.
+Missing categories say **Not checked**, unknown byte aggregates say **Unknown**,
+and observed zero stays zero. Complete requires all categories and known totals,
+no issues and full reference coverage. Other statuses do not establish an empty,
+healthy or recoverable Store. Current/retained formats do not prove running
+software, upgrade or restore compatibility. Counts preserve every decimal digit.
+
+The host acquires shared maintenance ownership before dispatch or peer
+invalidation. Busy does not cancel another operation. A retained unconfirmed
+Local-only choice stays unconfirmed; this read cannot reconcile or replay it.
+**Stop waiting**, hiding the page and disposing the UI clear local delivery;
+the already-started bounded host read may still finish. These paths do not send a
+delayed global cancellation. Explicit observation/disconnect invalidates the read.
+
+Raw stdout is bounded to32768 bytes including LF; discarded stderr to8192 bytes.
+The private raw/base64 envelope is bounded to49152 bytes and public results to16384
+bytes. Remaining deadlines are at most2s channel,8s collection,12s child,13s host
+and14s UI including observation quiescence. Oversize, malformed, stale, nonzero or
+late responses are refused without retry. CLI exits2/126/127 are unsupported;
+a valid producer refusal is kept separately from an unsupported command.
+
+Run `node --test tests/owned-data-v3*.test.mjs`,
+`python -m unittest discover -s tests/owned_data_v3 -v`, and
+`npm run test:owned-v3-hosts` with its `-- --packaged` counterpart after normal
+build/package checks. CI runs the actual browser/Electron host checks on both
+supported OSes. Frozen raw vectors are synthetic lexical/arithmetic cases,
+including huge opaque-file sums; they are not enormous valid media descriptors
+or reachable-filesystem evidence. Host tests use synthetic transport and a local
+SSH peer, and do not qualify a physical tablet or installed release.
+
+The added validation and UI measured about632kB of initial production assets.
+The explicit initial error budget is650kB (previously625kB); the400kB warning
+remains. This modest feature budget adjustment does not disable bundle checking.
