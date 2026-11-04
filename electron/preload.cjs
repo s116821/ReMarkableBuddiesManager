@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   sourceCacheCleanup: (...args) => args.length===1?ipcRenderer.invoke('manager:sourceCacheCleanup',args[0]):Promise.reject(new Error('Cache cleanup arity refused')),
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
   inspectOwnedV3: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectOwnedV3',args[0]):Promise.reject(new Error('Stored data inspection arity refused')),
+  storageInitialization: (...args) => args.length===1?ipcRenderer.invoke('manager:storageInitialization',args[0]):Promise.reject(new Error('Storage preparation arity refused')),
   inspectConversations: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectConversations',args[0]):Promise.reject(new Error('Conversation inventory arity refused')),
   modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
   localModeChoice: (...args) => args.length===1?ipcRenderer.invoke('manager:localModeChoice',args[0]):Promise.reject(new Error('Local-only choice arity refused')),

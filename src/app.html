@@ -741,6 +741,24 @@
     }
   </section>
 
+  <section class="ui-panel my-6" aria-labelledby="storage-initialization-title">
+    <h2 id="storage-initialization-title">Prepare Buddy storage</h2>
+    <p class="text-sm text-muted">Create or recover Buddy-owned storage at configured locations. Recovery may clean owned staging. This does not install Buddy, set paths, choose a mode, stop services or restore archives.</p>
+    <button class="ui-button ui-button-primary mt-3" type="button" (click)="beginStorageInitialization()" [disabled]="!canBeginStorageInitialization()">Review storage setup</button>
+    @if (storageInitialization().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopStorageInitialization()">Stop setup wait</button> }
+    <p role="status" class="mt-3" data-testid="storage-initialization-status">{{ storageInitialization().status }}</p>
+    @if (storageInitialization().view?.state === 'ready') {
+      <div class="mt-3" data-testid="storage-initialization-review"><p>Setup can change owned storage. Valid paths and disabled legacy sync are required. Review does not check for empty storage, freeze configuration, reserve changes or predict repairs.</p><p>Saved mode is kept. Runtime, cloud, native pages and replacement restore are not checked or enabled.</p>
+      <button class="ui-button ui-button-secondary mt-3" type="button" (click)="confirmStorageInitialization()" [disabled]="!canConfirmStorageInitialization()">Prepare storage</button></div>
+    }
+    @if (storageInitialization().view?.current; as current) { <p class="mt-3" data-testid="storage-initialization-current">Current saved mode: {{ storageModeKindLabels[current.kind] }}. This does not confirm earlier setup.</p> }
+    @for (row of storageInitialization().retained; track row.reference) {
+      <div class="mt-3" data-testid="storage-initialization-original"><p>{{ row.outcome === 'prepared' ? 'Earlier setup completed' : 'Storage setup not confirmed' }}. Later checks do not change this result.</p>
+      <button class="ui-button ui-button-secondary" type="button" (click)="checkStorageInitialization(row)" [disabled]="!canCheckStorageInitialization(row)">Check current storage</button></div>
+    }
+    <p class="text-sm text-muted mt-3">Restart does not confirm setup. No automatic retries. Read saved mode and Save Local-only are separate actions requiring valid storage.</p>
+  </section>
+
   <section class="ui-panel my-6" aria-labelledby="owned-v3-title">
     <h2 id="owned-v3-title">Stored data including notebooks</h2>
     <p class="text-sm text-muted">Inspect Buddy-owned file accounting. Original documents and credentials are excluded. Apparent file lengths do not establish allocated or reclaimable space, runtime health or restore compatibility.</p>
