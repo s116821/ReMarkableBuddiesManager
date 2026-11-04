@@ -16,6 +16,9 @@ from service_stop_transport import STOP_COMMAND
 import wired_observer as shared
 
 
+INTENT_MAX_BYTES = 4096
+
+
 class RecoveryPending(RuntimeError):
     """A stop may have been submitted. Only observe the original activation."""
 
@@ -35,11 +38,13 @@ def record_intent(path, connection, activation, ownership, removal_plan=None):
 
 
 def write_private_record(path, payload):
+    data = json.dumps(payload, separators=(",", ":")).encode("ascii")
+    require(len(data) <= INTENT_MAX_BYTES)
     root_identity = checked_root(path.parent)
     require(root_identity is not None)
     try:
         with exclusive(path, write_through=True) as stream:
-            stream.write(json.dumps(payload, separators=(",", ":")).encode("ascii"))
+            stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
     except Exception as error:
@@ -55,7 +60,7 @@ def write_private_record(path, payload):
         finally:
             os.close(fd)
     require(checked_root(path.parent) == root_identity)
-    require(json_record(shared.private_bytes(path, parent_private=True, maximum=2048)) == payload)
+    require(json_record(shared.private_bytes(path, parent_private=True, maximum=INTENT_MAX_BYTES)) == payload)
 
 
 def on_wire(config_path, inspect, expected_connection=None):
@@ -193,7 +198,7 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
 def load_intent(config_path, expected_connection, boot, activation, approved_profile_sha256, approved_version):
     path = intent_path(config_path, boot, activation)
     require(checked_root(path.parent) is not None)
-    record = json_record(shared.private_bytes(path, parent_private=True, maximum=2048))
+    record = json_record(shared.private_bytes(path, parent_private=True, maximum=INTENT_MAX_BYTES))
     require(type(record.get("version")) is int and record["version"] in (1, 2, 3)
             and record.get("connection_id") == expected_connection)
     fields = {"version", "connection_id", "activation"}

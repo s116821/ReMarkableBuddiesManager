@@ -72,6 +72,30 @@ class TransitionTest(unittest.TestCase):
         self.recovery.capture_activation.assert_not_called()
         self.assertEqual(self.events.mock_calls, [])
 
+    def test_intent_round_trip_accepts_real_replacement_size(self):
+        path = self.config.with_name("replacement.json")
+        payload = {"record": "x" * (2097 - len(b'{"record":""}'))}
+        info = path.parent.stat()
+
+        def read_private_record(record, *, parent_private, maximum):
+            self.assertTrue(parent_private)
+            raw = record.read_bytes()
+            self.assertLessEqual(len(raw), maximum)
+            return raw
+
+        with (patch.object(transition, "checked_root", return_value=(info.st_dev, info.st_ino)),
+              patch.object(transition, "exclusive", side_effect=lambda file, **_: file.open("xb")),
+              patch.object(transition.shared, "private_bytes", side_effect=read_private_record)):
+            transition.write_private_record(path, payload)
+        self.assertEqual(path.stat().st_size, 2097)
+
+    def test_oversize_intent_refuses_before_file_creation(self):
+        path = self.config.with_name("replacement.json")
+        with patch.object(transition, "exclusive") as exclusive:
+            with self.assertRaises(ValueError):
+                transition.write_private_record(path, {"record": "x" * transition.INTENT_MAX_BYTES})
+        exclusive.assert_not_called()
+
     def test_stale_activation_never_records_or_stops(self):
         self.recovery.capture_activation.return_value = replace(self.activation, buddy_invocation="2" * 32)
         with self.assertRaises(ValueError):

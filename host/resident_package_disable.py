@@ -5,7 +5,7 @@ import time
 
 from resident_package_recovery import BUDDY, HELPER, UNIT_DIR, PackageRecovery, json_record, require
 from resident_package_transition import (
-    RecoveryPending, intent_path, load_intent, on_wire, recovered_with_ownership, write_private_record,
+    INTENT_MAX_BYTES, RecoveryPending, intent_path, load_intent, on_wire, recovered_with_ownership, write_private_record,
 )
 import wired_observer as shared
 
@@ -69,7 +69,7 @@ def execute(config, connection, boot, activation, profile_sha256, deadline, *, a
 
 
 def retained_stock(config, boot, activation, stop):
-    raw = shared.private_bytes(disable_path(config, boot, activation), parent_private=True, maximum=2048)
+    raw = shared.private_bytes(disable_path(config, boot, activation), parent_private=True, maximum=INTENT_MAX_BYTES)
     record = json_record(raw)
     require(set(record) == {"version", "stop", "stock"} and type(record["version"]) is int
             and record["version"] == 1 and record["stop"] == stop)

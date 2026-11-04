@@ -12,7 +12,7 @@ from resident_package_recovery import (
     PackageRecovery, json_record, require, require_package_version, sha256,
 )
 from resident_package_transition import (
-    RecoveryPending, intent_path, load_intent, on_wire, write_private_record,
+    INTENT_MAX_BYTES, RecoveryPending, intent_path, load_intent, on_wire, write_private_record,
 )
 from resident_package_uninstall import (
     ADVISORY, PROMPT, exact_commit_result, locked_command, run_locked_transaction,
@@ -216,7 +216,7 @@ def observe(config, connection, boot, activation, profile_sha256, deadline, *,
     """Reconcile the retained revision change without dispatching a package command."""
     expected, stop, removal = load_intent(config, connection, boot, activation, profile_sha256, approved_version)
     require(stop["version"] == 2 and removal is None)
-    raw = shared.private_bytes(replacement_path(config, boot, activation), parent_private=True, maximum=2048)
+    raw = shared.private_bytes(replacement_path(config, boot, activation), parent_private=True, maximum=INTENT_MAX_BYTES)
     record = json_record(raw)
     require(set(record) == {"version", "stop", "stock", "candidate", "profile_sha256", "plan"}
             and type(record["version"]) is int and record["version"] == 1 and record["stop"] == stop

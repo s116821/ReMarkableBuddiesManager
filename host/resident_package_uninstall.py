@@ -13,7 +13,7 @@ from resident_package_recovery import (
     PackageRecovery, json_record, require, sha256,
 )
 from resident_package_transition import (
-    RecoveryPending, intent_path, load_intent, on_wire, write_private_record,
+    INTENT_MAX_BYTES, RecoveryPending, intent_path, load_intent, on_wire, write_private_record,
 )
 from service_stop_sampler import PREFIX
 import wired_observer as shared
@@ -213,7 +213,7 @@ def observe(config, connection, boot, activation, profile_sha256, deadline, *, a
     """Reconcile the original removal from installed state without opening an apply channel."""
     expected, stop, plan = load_intent(config, connection, boot, activation, profile_sha256, approved_version)
     require(plan is not None)
-    raw = shared.private_bytes(removal_path(config, boot, activation), parent_private=True, maximum=2048)
+    raw = shared.private_bytes(removal_path(config, boot, activation), parent_private=True, maximum=INTENT_MAX_BYTES)
     record = json_record(raw)
     require(set(record) == {"version", "stop", "stock"} and type(record["version"]) is int
             and record["version"] == 1 and record["stop"] == stop)
