@@ -1,7 +1,7 @@
 import {verifyNotebookArchiveAppBoundaries} from './fixtures/notebook-archive-app-boundaries.mjs';
 import {readFreshTabletState} from './fixtures/storage-initialization-observation.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
-import {mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {stageDevelopmentBrowserAssets} from './fixtures/development-browser-assets.mjs';
 import {startHelper} from '../host/browser-helper.mjs';
@@ -65,7 +65,16 @@ try{
  assert.equal(await app.evaluate(async({ipcMain,BrowserWindow})=>{const h=ipcMain._invokeHandlers.get('manager:notebookArchive'),c=BrowserWindow.getAllWindows()[0].webContents;let refused=0;for(const e of [{},{sender:c,senderFrame:{url:c.getURL()}}])try{await h(e,{action:'retained'});}catch{refused++;}return refused;}),2);
  await readFreshTabletState(page);await page.getByRole('button',{name:'Disconnect',exact:true}).click();const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
  const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.notebookHarness.boundary.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.notebookHarness.boundary.gate?.entered)).toBe(true),release:()=>app.evaluate(()=>{const b=globalThis.notebookHarness.boundary,g=b.gate;b.gate=null;g.resolve();}),snapshot:()=>app.evaluate(()=>({calls:globalThis.notebookHarness.boundary.calls,cancels:globalThis.notebookObserver.generation})),mode:mode=>app.evaluate((_electron,mode)=>{const s=globalThis.notebookHarness.notebookState;s.failExport=mode==='unknown';s.onRaw=mode==='refused'?(r,q)=>q.selector==='export-notebook'?{report_version:1,operation:q.selector,status:'invalid-input',incomplete:false,activation_performed:false,data:null}:r:null;},mode)};
- await matrix(request,control);await page.reload();await ui(page,control,async width=>{await app.evaluate(({BrowserWindow},width)=>BrowserWindow.getAllWindows()[0].setContentSize(width,1200),width);const section=page.locator('section[aria-labelledby="notebook-archive-title"]');await section.scrollIntoViewIfNeeded();await section.screenshot({path:`test-results/notebook-archive-electron-${packaged?'packaged':'development'}-${width}.png`});});
+ await matrix(request,control);await page.reload();await ui(page,control,async width=>{
+  const section=page.locator('section[aria-labelledby="notebook-archive-title"]'),desiredHeight=Math.ceil(await section.evaluate(el=>el.getBoundingClientRect().height))+80;
+  const content=await app.evaluate(({BrowserWindow},{width,height})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(width,height);return w.getContentSize();},{width,height:desiredHeight});
+  const probe=Buffer.from(await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64')),'base64'),scale=probe.readUInt32BE(16)/width,viewportHeight=Math.min(desiredHeight,content[1],Math.floor(probe.readUInt32BE(20)/scale));
+  await page.setViewportSize({width,height:viewportHeight});await section.evaluate(el=>el.scrollIntoView({block:'start'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  const box=await section.boundingBox();assert.ok(box&&box.y>=-1&&box.y<100,'Native capture starts at notebook panel');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  const capture=async suffix=>{const png=await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG().toString('base64'));await writeFile(`test-results/notebook-archive-electron-${packaged?'packaged':'development'}-${width}${suffix}.png`,Buffer.from(png,'base64'));};
+  console.log('Notebook native geometry',JSON.stringify({width,desiredHeight,content,nativePixels:[probe.readUInt32BE(16),probe.readUInt32BE(20)],viewportHeight}));await capture('');
+  if(box.height>viewportHeight){await section.evaluate(el=>el.scrollIntoView({block:'end'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await capture('-bottom');}
+ });
  if(packaged){const resources=await app.evaluate(()=>process.resourcesPath);for(const name of ['notebook-archive.mjs','notebook-archive-private.mjs','notebook-archive-protocol.mjs','notebook_archive_transport.py'])assert.deepEqual(await readFile(path.join(resources,'host',name)),await readFile(path.join('host',name)));}
  console.log('Actual Electron notebook guarded IPC, factory matrix and shared UI pass; synthetic transport');
 }finally{await app.evaluate(()=>globalThis.notebookHarness.boundary.gate?.resolve()).catch(()=>{});await app.close();await restoreAssets();await rm(folder,{recursive:true,force:true});}
