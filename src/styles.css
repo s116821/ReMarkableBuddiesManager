@@ -23,6 +23,9 @@
   code { @apply break-all text-xs; }
 }
 @layer components {
+  .owned-data-accounting :is(th, td) { padding-inline-end: 1rem; text-align: left; vertical-align: top; }
+  .owned-data-accounting :is(th, td):last-child { padding-inline-end: 0; }
+  .owned-data-accounting td:nth-child(n + 2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .ui-panel { @apply rounded-xl border border-divider bg-surface p-6; }
   .ui-button { @apply rounded-md px-4 py-2 font-semibold disabled:cursor-not-allowed; }
   .ui-button-primary { @apply bg-forest text-white enabled:hover:bg-ink disabled:cursor-wait disabled:opacity-60; }
