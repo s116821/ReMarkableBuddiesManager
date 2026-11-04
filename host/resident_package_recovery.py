@@ -122,8 +122,9 @@ class PackageRecovery:
         require(raw.endswith("\n") and UUID.fullmatch(raw[:-1]))
         return raw[:-1]
 
-    def service(self, unit):
+    def service(self, unit, *, allow_pending_reload=False):
         require(unit in UNITS)
+        require(not allow_pending_reload or unit in (BUDDY, HELPER))
         props = " ".join(f"--property={name}" for name in PROPERTIES)
         raw = self.read(f"/bin/systemctl --system --no-pager --no-ask-password --all show {props} -- {unit}")
         state = {}
@@ -132,7 +133,8 @@ class PackageRecovery:
             require(sep and key in PROPERTIES and key not in state)
             state[key] = value
         require(set(state) == set(PROPERTIES) and state["Id"] == unit and state["LoadState"] == "loaded"
-                and state["ControlPID"] == "0" and not state["Job"] and state["NeedDaemonReload"] == "no")
+                and state["ControlPID"] == "0" and not state["Job"])
+        require(state["NeedDaemonReload"] == "no" or (allow_pending_reload and state["NeedDaemonReload"] == "yes"))
         require(state["FragmentPath"] == f"{UNIT_DIR}/{unit}")
         dropins = "" if unit in (BUDDY, HELPER) else f"{UNIT_DIR}/{unit}.d/{unit[:-8]}-service-override.conf"
         require(state["DropInPaths"] == dropins)

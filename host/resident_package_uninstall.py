@@ -74,13 +74,17 @@ def fixed_command(activation, token):
         "--repositories-file", "/dev/null", "--interactive=yes", "--verbose",
         "--no-scripts", "del", "remarkable-buddies",
     ]
+    return locked_command(activation, token, "remove", apk)
+
+
+def locked_command(activation, token, operation, apk):
     service = [
         "/usr/bin/systemd-run", "--quiet", "--pipe", "--wait",
-        f"--unit=remarkable-buddies-remove-{activation}", "--property=Type=exec",
+        f"--unit=remarkable-buddies-{operation}-{activation}", "--property=Type=exec",
         "--property=RuntimeMaxSec=55s", "--property=TimeoutStopSec=3s",
         "--property=KillMode=control-group", "--property=Restart=no",
         "/usr/bin/env", "-i", "HOME=/home/root", "PATH=/usr/bin:/bin", "LC_ALL=C",
-        "/bin/bash", "-c", FEEDER, "remarkable-buddies-remove", token,
+        "/bin/bash", "-c", FEEDER, f"remarkable-buddies-{operation}", token,
         "/usr/bin/env", *apk,
     ]
     guard = f'test "$(sha256sum {VELLUM_APK})" = "{VELLUM_APK_SHA256}  {VELLUM_APK}" && '
@@ -88,6 +92,23 @@ def fixed_command(activation, token):
 
 
 def run_locked(transport, deadline, activation, version, verify_locked):
+    def verify_result(output):
+        exact_commit_result(output, f"(1/1) Purging remarkable-buddies ({version})")
+
+    run_locked_transaction(
+        transport, deadline, lambda token: fixed_command(activation, token),
+        lambda output: exact_prompt(output, version), verify_locked, verify_result,
+    )
+
+
+def exact_commit_result(output, transition):
+    lines = output.splitlines()
+    require(len(lines) == 2 and lines[0] == transition.encode("ascii")
+            and re.fullmatch(rb"OK: [0-9]+ packages, [0-9]+ dirs, [0-9]+ files, "
+                             rb"[0-9]+(?:\.[0-9]+)? [A-Za-z]+", lines[1]))
+
+
+def run_locked_transaction(transport, deadline, command, check_prompt, verify_locked, verify_result):
     end = min(deadline, time.monotonic() + 60)
     require(end > time.monotonic())
     channel = transport.open_session(timeout=min(2, end - time.monotonic()))
@@ -96,7 +117,7 @@ def run_locked(transport, deadline, activation, version, verify_locked):
     approved = False
     try:
         channel.settimeout(min(2, end - time.monotonic()))
-        channel.exec_command(fixed_command(activation, token))
+        channel.exec_command(command(token))
         while time.monotonic() < end:
             if channel.recv_stderr_ready():
                 require(not channel.recv_stderr(4096))
@@ -104,7 +125,7 @@ def run_locked(transport, deadline, activation, version, verify_locked):
                 output.extend(channel.recv(4096))
                 require(len(output) <= 8192)
             if not approved and output.endswith(PROMPT):
-                exact_prompt(output, version)
+                check_prompt(output)
                 verify_locked()
                 require(time.monotonic() < end and not channel.exit_status_ready()
                         and not channel.recv_stderr_ready() and not channel.recv_ready())
@@ -114,11 +135,7 @@ def run_locked(transport, deadline, activation, version, verify_locked):
                 output.clear()
             if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
                 require(approved and channel.recv_exit_status() == 0)
-                lines = output.splitlines()
-                require(len(lines) == 2
-                        and lines[0] == f"(1/1) Purging remarkable-buddies ({version})".encode("ascii")
-                        and re.fullmatch(rb"OK: [0-9]+ packages, [0-9]+ dirs, [0-9]+ files, "
-                                         rb"[0-9]+(?:\.[0-9]+)? [A-Za-z]+", lines[1]))
+                verify_result(output)
                 return
             time.sleep(0.01)
         raise shared.Refusal("timeout")

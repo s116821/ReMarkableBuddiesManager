@@ -13,6 +13,7 @@ import resident_package_transition as transition
 import resident_package_uninstall as uninstall
 import resident_package_disable as disable
 import resident_package_removal as removal
+import resident_package_replacement as replacement
 
 
 class TransitionTest(unittest.TestCase):
@@ -184,6 +185,31 @@ class RemovalPromptTest(unittest.TestCase):
         collateral = lines.replace(b"After this operation", b"  rm2 (1.0.0-r0)\nAfter this operation")
         with self.assertRaises(ValueError):
             uninstall.exact_prompt(collateral + uninstall.PROMPT, "1.2.3-r2")
+
+
+class ReplacementPromptTest(unittest.TestCase):
+    def test_upgrade_and_downgrade_require_the_sole_exact_transition(self):
+        for heading, old, new in (("upgraded", "1.2.3-r1", "1.2.3-r2"),
+                                  ("DOWNGRADED", "1.2.3-r2", "1.2.3-r1")):
+            with self.subTest(heading=heading):
+                prompt = (
+                    f"The following packages will be {heading}:\n"
+                    f"  remarkable-buddies ({old} -> {new})\n"
+                    "After this operation, 0 B of additional disk space will be used.\n"
+                ).encode("ascii")
+                replacement.exact_replacement_prompt(prompt + uninstall.PROMPT, old, new)
+                extra = prompt.replace(b"After this operation", b"  rm2 (1.0.0-r0)\nAfter this operation")
+                with self.assertRaises(ValueError):
+                    replacement.exact_replacement_prompt(extra + uninstall.PROMPT, old, new)
+
+    def test_replacement_world_binds_the_exact_pin_and_other_entries(self):
+        before = b"remarkable-buddies\nremarkable-os=3.28.0.172-r0\nrm2\n"
+        after = before.replace(b"remarkable-buddies\n", b"remarkable-buddies=1.2.3-r2\n")
+        expected = replacement.other_world_sha256(before, "1.2.3-r1")
+        self.assertEqual(replacement.other_world_sha256(after, "1.2.3-r2", require_pin=True), expected)
+        self.assertNotEqual(replacement.other_world_sha256(after + b"unrelated\n", "1.2.3-r2"), expected)
+        with self.assertRaises(ValueError):
+            replacement.other_world_sha256(before, "1.2.3-r2", require_pin=True)
 
 
 class DisableTransitionTest(unittest.TestCase):
