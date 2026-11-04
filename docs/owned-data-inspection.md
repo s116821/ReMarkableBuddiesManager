@@ -116,7 +116,7 @@ a valid producer refusal is kept separately from an unsupported command.
 
 Run `node --test tests/owned-data-v3*.test.mjs`,
 `python -m unittest discover -s tests/owned_data_v3 -v`, and
-`npm run test:owned-v3-hosts` with its `-- --packaged` counterpart after normal
+`npm run test:owned-notebook-hosts` with its `-- --packaged` counterpart after normal
 build/package checks. CI runs the actual browser/Electron host checks on both
 supported OSes. Frozen raw vectors are synthetic lexical/arithmetic cases,
 including huge opaque-file sums; they are not enormous valid media descriptors
