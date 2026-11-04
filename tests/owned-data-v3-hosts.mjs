@@ -1,7 +1,7 @@
 import {verifyOwnedV3Quiescence} from './fixtures/owned-v3-quiescence.mjs';
 import {verifyOwnedV3AppBoundaries} from './fixtures/owned-v3-app-boundaries.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
-import {mkdtemp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
+import {mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {startHelper} from '../host/browser-helper.mjs';
 import {generation4Fixture,tablet,identity,vectors} from './fixtures/owned-data-v3.mjs';
 import {lanes as sixteen} from './fixtures/maintenance-sixteen-lanes.mjs';
