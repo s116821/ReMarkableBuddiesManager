@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("./");
 
 /* One CSS-first theme for the shared browser and Electron renderer. */
 @theme {
