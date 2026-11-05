@@ -11,6 +11,11 @@ Angular's application builder reads `.postcssrc.json` with `@tailwindcss/postcss
 `src/styles.css` imports `tailwindcss`. This is the supported
 [Tailwind Angular integration](https://tailwindcss.com/docs/installation/framework-guides/angular)
 and [Angular manual setup](https://angular.dev/guide/tailwind).
+The import limits [class detection](https://tailwindcss.com/docs/detecting-classes-in-source-files)
+to the renderer's `src` directory, including inline component templates. Host
+helpers, fixtures and documentation must not add incidental utilities to the
+application stylesheet. Keep renderer class literals under `src`; register any
+future external UI library explicitly when it is introduced.
 Existing exact Tailwind/PostCSS pins and the committed npm lockfile are retained;
 `npm ci` with Node 24.21.0 installs them. Do not use a CDN, custom compiler/plugin,
 force an unrelated dependency upgrade or generate CSS with a separate host script.
