@@ -127,3 +127,38 @@ test('known-reference prearrival cancellation remains fenced in original ledger 
  const future=f.q('check-export',{reference:r.reference});await f.host.request({...future,action:'cancel'});f.time(15000);
  const calls=f.calls.length;const result=(await f.host.request(future)).selected_archive;assert.equal(result.state,'unavailable');assert.equal(f.calls.length,calls);assert.equal(result.retained[0].original_outcome,'exported');
 });
+
+for (const outcome of ['exported', 'partial-media', 'not-dispatched', 'unknown']) {
+  test(`cancel a current archive check preserves ${outcome} history and a successor`, async () => {
+    const f = fixture(), ready = await preview(f);
+    if (outcome === 'partial-media') f.next(report('export-selected', { ...v.context.summary, complete_media: false }));
+    if (outcome === 'not-dispatched') f.next({ report_version: 1, operation: 'export-selected', status: 'unsupported', incomplete: false, activation_performed: false, data: null });
+    if (outcome === 'unknown') f.next(() => { throw Error('lost export result'); });
+    const exported = (await f.host.request(f.q('confirm-export', { reference: ready.reference }))).selected_archive;
+    assert.equal(exported.original_outcome, outcome);
+    const original = structuredClone(exported.retained), request = f.q('check-export', { reference: ready.reference });
+    let finish, successor;
+    f.next(() => new Promise(resolve => { finish = resolve; }));
+    const pending = f.host.request(request);
+    try {
+      await Promise.resolve();
+      assert.equal(typeof finish, 'function');
+      const canceled = (await f.host.request({ ...request, action: 'cancel' })).selected_archive;
+      assert.equal(canceled.state, 'not-dispatched');
+      assert.equal(canceled.original_outcome, null);
+      assert.deepEqual(canceled.retained, original);
+      assert.equal(f.stats().cancellations, 1);
+      successor = f.io.acquire('successor', 'next', 'read');
+      assert.ok(successor);
+      await f.host.request({ ...request, action: 'cancel' });
+      assert.equal(f.io.owns(successor), true);
+      finish(report('inspect')); await pending;
+      assert.equal(f.io.owns(successor), true);
+      assert.deepEqual((await f.host.request({ action: 'retained' })).selected_archive.retained, original);
+      assert.equal(f.calls.filter(c => c.selector === 'export-selected').length, 1);
+    } finally {
+      finish?.(report('inspect')); await pending;
+      f.io.release(successor); f.host.invalidate();
+    }
+  });
+}

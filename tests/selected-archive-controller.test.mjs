@@ -10,3 +10,29 @@ test('queued stop and expiry cannot dispatch late producer work',async t=>{t.moc
 test('Busy speculative original retires; genuine row/history and nonrenewing expiry stay',async t=>{t.mock.timers.enable({apis:['setTimeout']});const f=open();await ready(f);await f.c.confirm(f.adapter,tablet,pause);const old=structuredClone(f.c.state.retained[0]);await ready(f);const owner=f.io.acquire('peer','held','read');await f.c.confirm(f.adapter,tablet,pause);assert.equal(f.c.state.view.state,'busy');assert.deepEqual(f.c.state.retained,[old]);f.io.release(owner);t.mock.timers.tick(1800001);assert.equal(f.c.state.retained[0].expired,true);f.c.dispose();});
 test('ready Stop targets original creator and never exports; unknown input is not reconstructed',async()=>{const f=open();await ready(f);await f.c.stop(f.adapter);assert.equal(f.c.state.view.state,'invalidated');assert.equal(f.calls.length,0);assert.equal(f.c.state.draft,'');f.c.dispose();});
 test('protected text edit refuses malformed/oversized values without truncating; CRLF display is normalized',()=>{const f=open();f.c.paste(0,0,'/a\r\nb');assert.equal(f.c.state.draft,'/a\r\nb');assert.equal(f.c.text(),'/a\nb');assert.equal(f.c.paste(0,0,'\ud800'),false);assert.equal(f.c.valid(),false);f.c.setDraft(archivePath);assert.equal(f.c.paste(0,0,'x'.repeat(4097)),false);assert.equal(f.c.state.draft,archivePath);f.c.dispose();});
+
+for (const outcome of ['exported', 'partial-media', 'not-dispatched', 'unknown']) {
+ test(`stopping an original-folder check preserves ${outcome} without export wording`, async () => {
+  const f=open(), gate=defer(); let pending, successor;
+  try {
+   f.selectedState.failExport=outcome==='unknown';
+   f.selectedState.completeMedia=outcome!=='partial-media';
+   if(outcome==='not-dispatched') f.selectedState.onRaw=(report,q)=>q.selector==='export-selected'?{report_version:1,operation:q.selector,status:'unsupported',incomplete:false,activation_performed:false,data:null}:report;
+   await ready(f); await f.c.confirm(f.adapter,tablet,pause);
+   const original=structuredClone(f.c.state.retained);
+   assert.equal(original[0].original_outcome,outcome);
+   f.selectedState.onRaw=async report=>{await gate.promise;return report;};
+   pending=f.c.check(f.adapter,tablet,original[0],pause);
+   await new Promise(resolve=>setImmediate(resolve));
+   await f.c.stop(f.adapter);
+   assert.equal(f.c.state.busy,false);
+   assert.match(f.c.state.status,/earlier export results are unchanged/i);
+   assert.deepEqual(f.c.state.retained,original);
+   successor=f.io.acquire('successor','next','read'); assert.ok(successor);
+   gate.resolve(); await pending;
+   assert.equal(f.io.owns(successor),true);
+   assert.deepEqual(f.c.state.retained,original);
+   assert.equal(f.calls.filter(c=>c.selector==='export-selected').length,1);
+  } finally {gate.resolve();await pending;f.io.release(successor);f.c.dispose();f.selected.invalidate();}
+ });
+}
