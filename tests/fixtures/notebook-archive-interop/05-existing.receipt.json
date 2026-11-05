@@ -1,0 +1,8 @@
+{
+  "exit_code": 0,
+  "operation": "export-notebook",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 136,
+  "stdout_sha256": "e3e71e00cf01ad549e1de065c9c8c138b56e3cb5c5154b728dad72c69abdb555"
+}

@@ -1,0 +1,8 @@
+{
+  "exit_code": 0,
+  "operation": "inspect-notebook",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 272,
+  "stdout_sha256": "b13eb01dfa8ec4754df056e5a43cfe737403ce54a95dd2e34f3623431c63b047"
+}

@@ -597,7 +597,7 @@
     <h2 id="selected-archive-title" class="ui-heading">Check an archive or export Buddy history</h2>
     <p class="mt-2">Check an existing archive, or copy supported Buddy history and media to a new folder on this tablet. Current data is kept. This does not download a backup, restore selected history, or set up cloud sync.</p>
     <label class="block mt-3" for="selected-archive-path">Archive folder path on this tablet</label>
-    <textarea id="selected-archive-path" class="ui-field block w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="selectedPathText()" (beforeinput)="beforeSelectedPath($event)" (input)="updateSelectedPath($event)" (paste)="pasteSelectedPath($event)" [disabled]="selectedArchive().busy || selectedPeerBusy()" aria-describedby="selected-archive-help"></textarea>
+    <textarea id="selected-archive-path" class="ui-field block w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="selectedPathText()" (beforeinput)="beforeSelectedPath($event)" (input)="updateSelectedPath($event)" (paste)="pasteSelectedPath($event)" [disabled]="archiveBusy() || selectedPeerBusy()" aria-describedby="selected-archive-help"></textarea>
     <p id="selected-archive-help" class="mt-2">Enter a full tablet path, not a folder on this computer. It clears on submission and is not saved or shown in results. Export requires a new folder outside Buddy data.</p>
     <div class="flex flex-wrap gap-2 mt-3">
       <button class="ui-button ui-button-secondary" type="button" (click)="inspectArchive()" [disabled]="!canInspectArchive()">Inspect archive</button>
@@ -617,6 +617,34 @@
     @for (record of selectedArchive().retained; track record.reference) {
       <div class="mt-3" data-testid="selected-archive-original"><p>{{ archiveAttemptMessage(record.original_outcome) }}</p>
         <button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkArchive(record)" [disabled]="!canCheckArchive(record)">Check export folder</button>
+        @if (record.expired) { <p>Private check details expired; this earlier result is kept without retry permission.</p> }
+      </div>
+    }
+  </section>
+  <section class="ui-panel mt-6" aria-labelledby="notebook-archive-title">
+    <h2 id="notebook-archive-title" class="ui-heading">Check or export Buddy notebook data</h2>
+    <p class="mt-2">Check a notebook archive, or copy complete Buddy notebook data to a new folder on this tablet. Current records are kept. The archive stays on this tablet; copy it off-device separately for protection against tablet loss.</p>
+    <label class="block mt-3" for="notebook-archive-path">Archive folder path on this tablet</label>
+    <textarea id="notebook-archive-path" class="ui-field block w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="notebookPathText()" (beforeinput)="beforeNotebookPath($event)" (input)="updateNotebookPath($event)" (paste)="pasteNotebookPath($event)" [disabled]="notebookArchive().busy || notebookPeerBusy()" aria-describedby="notebook-archive-help"></textarea>
+    <p id="notebook-archive-help" class="mt-2">Enter a full tablet path, not a folder on this computer. It clears on submission and is not saved or shown in results. Export requires a new folder outside Buddy data.</p>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button class="ui-button ui-button-secondary" type="button" (click)="inspectNotebookArchive()" [disabled]="!canInspectNotebookArchive()">Check notebook archive</button>
+      <button class="ui-button ui-button-primary" type="button" (click)="previewNotebookArchive()" [disabled]="!canPreviewNotebookArchive()">Preview notebook export</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="confirmNotebookArchive()" [disabled]="!canConfirmNotebookArchive()">Confirm notebook export</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="stopNotebookArchive()" [disabled]="notebookPeerBusy()">Stop notebook wait</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="showNotebookArchiveOriginals()">Show earlier notebook exports</button>
+    </div>
+    <p role="status" class="mt-3" data-testid="notebook-archive-status">{{ notebookArchive().status }}</p>
+    @if (notebookArchive().view?.state === 'ready') {
+      <p class="mt-3" data-testid="notebook-archive-preview">Confirming copies complete Buddy notebook data and media while keeping current records. Existing saved settings may be included and can contain private endpoint or credential-reference text. Credential contents, native reMarkable documents and native pages are excluded. This review does not reserve the folder, freeze the source or guarantee success. Restore, sync and runtime activation are separate; no archive is transferred to this computer.</p>
+    }
+    @if (notebookArchive().view?.summary; as summary) {
+      <p class="mt-3" data-testid="notebook-archive-summary">Media: complete. Saved settings included: {{ summary.configuration_included ? 'yes; kept private and not applied or approved as portable' : 'no' }}. This checks archive data; running Buddy and native pages have not been checked.</p>
+      <details class="mt-3" data-testid="notebook-archive-technical"><summary>Technical details</summary><p>Archive format {{ summary.format }}; {{ summary.manifests }} manifests, {{ summary.objects }} objects.</p></details>
+    }
+    @for (record of notebookArchive().retained; track record.reference) {
+      <div class="mt-3" data-testid="notebook-archive-original"><p>{{ notebookAttemptMessage(record.original_outcome) }}</p>
+        <button class="ui-button ui-button-secondary mt-2" type="button" (click)="checkNotebookArchive(record)" [disabled]="!canCheckNotebookArchive(record)">Check original notebook folder</button>
         @if (record.expired) { <p>Private check details expired; this earlier result is kept without retry permission.</p> }
       </div>
     }
