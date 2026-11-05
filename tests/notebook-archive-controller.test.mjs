@@ -17,3 +17,18 @@ test('stopped check preserves completed export and describes only the current re
  const pending=f.c.check(f.adapter,tablet,row,pause);await Promise.resolve();await Promise.resolve();await f.c.stop(f.adapter);
  assert.match(f.c.state.status,/Earlier export results are unchanged/);assert.equal(f.c.state.retained[0].original_outcome,'exported');gate.resolve();await pending;assert.equal(f.c.state.retained[0].original_outcome,'exported');f.c.dispose();
 });
+
+for(const action of ['inspect','check'])test(`lost ${action} cancellation acknowledgement preserves export history and rejects late UI`,async()=>{
+ const f=open();f.notebookState.failExport=false;await ready(f);await f.c.confirm(f.adapter,tablet,pause);
+ const row=structuredClone(f.c.state.retained[0]),entered=defer(),gate=defer();
+ f.notebookState.onRaw=async(r,q)=>{if(q.selector==='inspect-notebook'){entered.resolve();await gate.promise;}return r;};
+ const adapter={notebookArchive:async q=>{if(q.action==='cancel')throw Error('Lost cancellation acknowledgement');return f.adapter.notebookArchive(q);}};
+ f.input();const pending=action==='inspect'?f.c.inspect(adapter,tablet,pause):f.c.check(adapter,tablet,row,pause);
+ try{
+  await entered.promise;await f.c.stop(adapter);
+  assert.match(f.c.state.status,/check may finish/);assert.match(f.c.state.status,/Earlier export results are unchanged/);
+  assert.doesNotMatch(f.c.state.status,/export may/i);assert.equal(f.c.state.busy,false);assert.deepEqual(f.c.state.retained,[row]);
+  const stopped=structuredClone(f.c.state);gate.resolve();await pending;
+  assert.deepEqual(f.c.state,stopped);assert.equal(f.calls.filter(c=>c.selector==='export-notebook').length,1);
+ }finally{gate.resolve();await pending;f.c.dispose();}
+});
