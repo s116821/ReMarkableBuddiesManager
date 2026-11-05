@@ -1,0 +1,8 @@
+{
+  "commit": "5e18c63edbde1b69970a6540668a0d9f08f96a90",
+  "tree": "871a4935722350d9abe115bac4c1f5128b10c674",
+  "verified_git_blobs": 853,
+  "source_tar_sha256": "fcb61fe056370039a06060ec33902abe202a3da4ccd04703ea25b32c3e829a4e",
+  "test_only_addition": "tests/capture_archive_interop.rs",
+  "toolchain": "rustc 1.98.1 (48a229cea 2026-09-01); cargo 1.98.1 (797e8a9bc 2026-08-05)"
+}

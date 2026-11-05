@@ -1,0 +1,8 @@
+{
+  "exit_code": 0,
+  "operation": "inspect",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 126,
+  "stdout_sha256": "e3008c13497b009b3824003ebd7360034c5a1fa793fc2836fb46e30014a76740"
+}
