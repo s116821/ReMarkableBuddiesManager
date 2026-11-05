@@ -18,18 +18,22 @@ import wired_observer as shared
 BUDDY = 'reader-buddy.service'
 HELPER = 'reader-buddy-stock-recovery.service'
 STOCK = 'xochitl.service'
+COMPANION = 'rm-sync.service'
 LEASE_DIRECTORY = '/run/reader-buddy-resident'
 LEASE = LEASE_DIRECTORY + '/activation.json'
-SLOTS = dict(buddy_unit='/etc/systemd/system/reader-buddy.service',
-             recovery_profile='/home/root/.local/lib/reader-buddy/resident-recovery.json',
-             native_profile='/home/root/.local/lib/reader-buddy/resident-profile.json',
-             adapter='/home/root/.local/lib/reader-buddy/libremarkable-resident.so',
-             helper_unit='/etc/systemd/system/reader-buddy-stock-recovery.service',
+SLOTS = dict(buddy_unit='/usr/lib/systemd/system/reader-buddy.service',
+             recovery_profile='/home/root/.local/lib/remarkable-buddies/resident-recovery.json',
+             native_profile='/home/root/.local/lib/remarkable-buddies/resident-profile.json',
+             adapter='/home/root/.local/lib/remarkable-buddies/libremarkable-resident.so',
+             helper_unit='/usr/lib/systemd/system/reader-buddy-stock-recovery.service',
              stock_executable='/usr/bin/xochitl', stock_unit='/usr/lib/systemd/system/xochitl.service',
-             stock_dropin='/usr/lib/systemd/system/xochitl.service.d/xochitl-service-override.conf')
+             stock_dropin='/usr/lib/systemd/system/xochitl.service.d/xochitl-service-override.conf',
+             companion_executable='/usr/bin/rm-sync', companion_unit='/usr/lib/systemd/system/rm-sync.service',
+             companion_dropin='/usr/lib/systemd/system/rm-sync.service.d/rm-sync-service-override.conf')
 APPS = {'ordinary-manual':'/opt/bin/reader-buddy',
-        'resident-installed':'/home/root/.local/lib/reader-buddy/reader-buddy'}
+        'resident-installed':'/home/root/.local/lib/remarkable-buddies/reader-buddy'}
 CATALOG = json.loads(Path(__file__).with_name('service-stop-properties.json').read_text())
+VENDOR = json.loads(Path(__file__).with_name('service-stop-vendor-policy.json').read_text())
 PROPERTIES = [k for values in CATALOG.values() for k in values]
 PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c '
 STAT_FORMAT = '%d %i %u %g %f %s %h\\n%y\\n%z\\n'
@@ -41,7 +45,8 @@ def refuse():
 
 def canonical_digest(observation, profile, raw):
     names = ('buddy','helper','stock','process','platform','artifacts',
-             'recovery_profile_base64','lease_base64','lease_observation','configuration')
+             'recovery_profile_base64','lease_base64','lease_observation','configuration',
+             'companion','companion_group','vendor_policy')
     v = dict(connection_id=observation['connection_id'],boot_id=observation['boot_id'],profile=profile,
              **{k:raw[k] for k in names})
     return hashlib.sha256(json.dumps(v,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
@@ -156,7 +161,7 @@ class Sampler:
         return out
 
     def service(self,unit):
-        if unit not in (BUDDY,HELPER,STOCK):refuse()
+        if unit not in (BUDDY,HELPER,STOCK,COMPANION):refuse()
         command='/bin/systemctl --system --no-pager --no-ask-password --all show '+' '.join('--property='+k for k in PROPERTIES)+' -- '+unit
         code,out,err=self.run(self.transport,command,self.deadline,32768)
         if code or err:refuse()
@@ -168,7 +173,44 @@ class Sampler:
         if set(result)!=set(PROPERTIES) or result['Id']!=unit:refuse()
         # Do not serialize unexpected secret-bearing arbitrary stop hook argv.
         if result['ExecStop'] or result['ExecStopPost']:refuse()
-        return {section:{k:result[k] for k in names} for section,names in CATALOG.items()}
+        value={section:{k:result[k] for k in names} for section,names in CATALOG.items()}
+        if len(json.dumps(value,separators=(',',':')).encode())>16384:refuse()
+        return value
+
+    def absent(self,path):
+        parents=self.parents(path)
+        if self.stat(path,missing=True) is not None or self.parents(path)!=parents or self.stat(path,missing=True) is not None:refuse()
+
+    def package_conflicts(self):
+        # Only these two fixed missing-component cases are supported.
+        legacy='/home/root/.local/lib/reader-buddy'
+        parents=self.parents(legacy);directory=self.stat(legacy,missing=True)
+        if directory is None:
+            if self.parents(legacy)!=parents or self.stat(legacy,missing=True) is not None:refuse()
+        else:
+            self.absent(legacy+'/resident-recovery.json')
+            if self.stat(legacy)!=directory or self.parents(legacy)!=parents:refuse()
+        for unit in (BUDDY,HELPER):self.absent('/etc/systemd/system/'+unit)
+
+    def vendor_policy(self,unit):
+        name={STOCK:'stock',COMPANION:'companion'}.get(unit)
+        if name is None:refuse()
+        command='/bin/systemctl --system --no-pager --no-ask-password --all show '+' '.join('--property='+k for k in VENDOR['keys'])+' -- '+unit
+        code,out,err=self.run(self.transport,command,self.deadline,32768)
+        if code or err:refuse()
+        result={}
+        for line in out.decode('ascii').splitlines():
+            key,sep,value=line.partition('=')
+            if not sep or key not in VENDOR['keys'] or key in result or len(value)>4096 or any(ord(c)<32 or ord(c)>126 for c in value):refuse()
+            result[key]=value
+        if set(result)!=set(VENDOR['keys']) or len(json.dumps(result,separators=(',',':')).encode())>16384:refuse()
+        for key,wanted in VENDOR[name].items():
+            got=result[key]
+            if key in VENDOR['token_sets']:
+                a,b=got.split(),wanted.split()
+                if len(a)!=len(set(a)) or len(b)!=len(set(b)) or set(a)!=set(b):refuse()
+            elif got!=wanted:refuse()
+        return result
 
     def process(self,service,app,artifact):
         pid=service['state']['MainPID']
@@ -220,7 +262,7 @@ class Sampler:
             return value
         record=json.loads(base64.b64decode(record_base64).decode('utf8'),object_pairs_hook=pairs)
         g=record['group'];c=g['context'];mount='/sys/fs/cgroup/unified'
-        if type(record['version']) is not int or record['version']!=2 or g['unit']!=BUDDY or g['mount_path']!=mount or str(g['parent']['pid'])!=process['pid'] or str(g['parent']['start_ticks'])!=process['start_ticks']:refuse()
+        if type(record['version']) is not int or record['version']!=3 or g['unit']!=BUDDY or g['mount_path']!=mount or str(g['parent']['pid'])!=process['pid'] or str(g['parent']['start_ticks'])!=process['start_ticks']:refuse()
         if self.text('/proc/sys/kernel/random/boot_id',64).decode('ascii').strip()!=c['boot']:refuse()
         def identity(path,expected,follow=False):
             actual=self.stat(path,follow=follow)[0]
@@ -246,14 +288,70 @@ class Sampler:
         if self.parents(group)!=parents:refuse()
         # These sampled comparisons do not transfer the native owner's open FDs.
 
+    def companion(self,record_base64):
+        def pairs(items):
+            value={}
+            for key,item in items:
+                if key in value:refuse()
+                value[key]=item
+            return value
+        lease=json.loads(base64.b64decode(record_base64).decode('utf8'),object_pairs_hook=pairs)
+        text=lease['companion']
+        if not isinstance(text,str) or len(text.encode())>65536:refuse()
+        original=json.loads(text,object_pairs_hook=pairs);g=original['group']
+        if type(original['version']) is not int or original['version']!=1 or g['unit']!=COMPANION or g['mount_path']!='/sys/fs/cgroup/unified' or g['context']!=lease['group']['context'] or g['group']==lease['group']['group']:refuse()
+        snapshot=original['snapshot']
+        if not isinstance(snapshot,str) or len(snapshot.encode())>16384:refuse()
+        fields={}
+        for line in snapshot.splitlines():
+            key,sep,value=line.partition('=')
+            if not sep or key in fields or any(ord(c)<32 or ord(c)>126 for c in value):refuse()
+            fields[key]=value
+        if set(fields)!=set(CATALOG['state']+CATALOG['policy']) or fields['Id']!=COMPANION or fields['WatchdogUSec']!='0':refuse()
+        first=self.service(COMPANION)
+        mount='/sys/fs/cgroup/unified';path=mount+'/system.slice/'+COMPANION
+        parents=self.parents(path);before=self.stat(path,missing=True)
+        if before is None:
+            if self.stat(path,missing=True) is not None:refuse()
+            observed='original-absent'
+        else:
+            if any(before[0][k]!=str(g['group'][k]) for k in ('device','inode','uid','mode')):refuse()
+            events={}
+            for line in self.text(path+'/cgroup.events',4096).decode('ascii').splitlines():
+                key,sep,value=line.partition(' ')
+                if not sep or key not in ('populated','frozen') or key in events or value not in ('0','1'):refuse()
+                events[key]=value
+            if 'populated' not in events:refuse()
+            observed='populated' if events['populated']=='1' else 'empty-original'
+            if self.stat(path)!=before:refuse()
+        if self.parents(path)!=parents:refuse()
+        last=self.service(COMPANION)
+        if first!=last:refuse()
+        state=last['state'];policy=last['policy']
+        if policy['WatchdogUSec']!='0':refuse()
+        for key,value in policy.items():
+            if key in ('After','Conflicts'):
+                a,b=value.split(),fields[key].split()
+                if len(a)!=len(set(a)) or len(b)!=len(set(b)) or set(a)!=set(b):refuse()
+            elif value!=fields[key]:refuse()
+        retained=all(state[k]==fields[k] for k in ('InvocationID','ExecMainPID','ExecMainStartTimestampMonotonic'))
+        cleared=state['InvocationID']=='' and state['ExecMainPID']=='0' and state['ExecMainStartTimestampMonotonic']=='0'
+        if not (retained or cleared) or state['LoadState']!='loaded' or state['MainPID']!='0' or state['ControlPID']!='0' or state['Job']!='':refuse()
+        if not (state['ActiveState']=='inactive' and state['SubState']=='dead' or retained and state['ActiveState']=='failed' and state['SubState']=='failed'):refuse()
+        if observed=='populated' or cleared and observed!='original-absent':refuse()
+        if state['ControlGroup']=='' and observed!='original-absent' or state['ControlGroup']!=fields['ControlGroup'] and not (state['ControlGroup']=='' and observed=='original-absent'):refuse()
+        return last,observed
+
     def capture(self,profile,empty):
         if profile not in APPS:refuse()
         r=empty('review',None);r['buddy']=self.service(BUDDY)
         slots=dict(SLOTS,buddy_executable=APPS[profile])
+        if profile=='ordinary-manual':slots['buddy_unit']='/etc/systemd/system/'+BUDDY
+        else:self.package_conflicts()
         r['artifacts']={k:None for k in slots}
         for key in slots:
             if profile=='ordinary-manual' and key not in ('buddy_unit','buddy_executable'):continue
-            cap=134217728 if key in ('buddy_executable','stock_executable','adapter') else 32768
+            cap=134217728 if key in ('buddy_executable','stock_executable','adapter','companion_executable') else 32768
             evidence,content=self.file(slots[key],cap,contents=key=='recovery_profile')
             r['artifacts'][key]=evidence
             if key=='recovery_profile':r['recovery_profile_base64']=base64.b64encode(content).decode('ascii')
@@ -272,6 +370,8 @@ class Sampler:
             self.group(r['lease_base64'],r['process'])
             if self.process(r['buddy'],APPS[profile],r['artifacts']['buddy_executable'])!=r['process']:refuse()
             r['helper']=self.service(HELPER);r['stock']=self.service(STOCK)
+            r['companion'],r['companion_group']=self.companion(r['lease_base64'])
+            r['vendor_policy']={name:self.vendor_policy(unit) for name,unit in [('stock',STOCK),('companion',COMPANION)]}
         if self.service(BUDDY)!=r['buddy'] or self.process(r['buddy'],APPS[profile],r['artifacts']['buddy_executable'])!=r['process']:refuse()
         if time.monotonic()>=self.deadline:raise shared.Refusal('timeout')
         return r

@@ -23,6 +23,8 @@ VECTORS=json.loads((Path(__file__).resolve().parents[1]/'fixtures/service-stop-p
 class Files:
  def __init__(self,profile='ordinary-manual'):
   self.vector=copy.deepcopy(next(v for v in VECTORS if v['tuple']['profile']==profile));self.raw=self.vector['raw'];self.profile=profile;self.commands=[];self.change=None;self.permission=False;self.extra_argv=False;self.bad_parent=False;self.namespace_drift=False;self.slotpaths=dict(s.SLOTS,buddy_executable=s.APPS[profile]);self.by_path={v:k for k,v in self.slotpaths.items()};self.contents={}
+  if profile=='ordinary-manual':self.slotpaths['buddy_unit']='/etc/systemd/system/'+s.BUDDY
+  self.by_path={v:k for k,v in self.slotpaths.items()};self.legacy_directory=False;self.legacy_profile=False;self.shadow=False;self.companion_state='original-absent';self.companion_replaced=False;self.companion_permission=False
   for field,path in [('recovery_profile_base64',s.SLOTS['recovery_profile']),('lease_base64',s.LEASE)]:
    if self.raw[field]:self.contents[path]=base64.b64decode(self.raw[field])
  def meta(self,path,follow=False):
@@ -37,19 +39,27 @@ class Files:
   device,uid=1,0
   if self.profile=='resident-installed':
    g=json.loads(self.contents[s.LEASE])['group'];c=g['context'];mount='/sys/fs/cgroup/unified'
-   identities={mount:c['mount'],mount+'/system.slice':c['slice'],mount+'/system.slice/'+s.BUDDY:g['group'],'/proc/20/ns/mnt':c['mount_namespace'],'/proc/self/ns/mnt':c['mount_namespace'],'/proc/20/ns/cgroup':c['cgroup_namespace'],'/proc/self/ns/cgroup':c['cgroup_namespace']}
+   cg=json.loads(json.loads(self.contents[s.LEASE])['companion'])['group']
+   identities={mount:c['mount'],mount+'/system.slice':c['slice'],mount+'/system.slice/'+s.BUDDY:g['group'],mount+'/system.slice/'+s.COMPANION:cg['group'],'/proc/20/ns/mnt':c['mount_namespace'],'/proc/self/ns/mnt':c['mount_namespace'],'/proc/20/ns/cgroup':c['cgroup_namespace'],'/proc/self/ns/cgroup':c['cgroup_namespace']}
    if path in identities:
     x=identities[path];device,inode,uid,mode=x['device'],x['inode'],x['uid'],x['mode']
     if self.namespace_drift and path=='/proc/20/ns/mnt':inode+=1
+    if self.companion_replaced and path==mount+'/system.slice/'+s.COMPANION:inode+=1
   return f'{device} {inode} {uid} 0 {mode:x} {length} {1 if slot or record else 2}\n2026-01-01 00:00:00.000000001 +0000\n2026-01-01 00:00:00.000000001 +0000\n'.encode()
  def run(self,transport,command,deadline,cap):
   self.commands.append(command)
   if command.startswith('/bin/systemctl '):
-   unit=command.rsplit(' ',1)[1];name={s.BUDDY:'buddy',s.HELPER:'helper',s.STOCK:'stock'}[unit]
+   unit=command.rsplit(' ',1)[1];name={s.BUDDY:'buddy',s.HELPER:'helper',s.STOCK:'stock',s.COMPANION:'companion'}[unit]
+   if '--property=UMask' in command:return 0,''.join(k+'='+v+'\n' for k,v in self.raw['vendor_policy'][name].items()).encode(),b''
    value=self.raw[name];out=''.join(k+'='+v+'\n' for group in value.values() for k,v in group.items()).encode();return 0,out,b''
   script=shlex.split(command)[-1];parts=shlex.split(script);path=parts[-1]
   if parts[0]=='stat' and '-f' in parts:return 0,b'63677270\n',b''
   if 'stat' in parts:
+   legacy='/home/root/.local/lib/reader-buddy'
+   absent=self.profile=='resident-installed' and ((path==legacy and not self.legacy_directory) or (path==legacy+'/resident-recovery.json' and not self.legacy_profile) or (path in ['/etc/systemd/system/'+s.BUDDY,'/etc/systemd/system/'+s.HELPER] and not self.shadow) or (path=='/sys/fs/cgroup/unified/system.slice/'+s.COMPANION and self.companion_state=='original-absent'))
+   if absent or self.companion_permission and path=='/sys/fs/cgroup/unified/system.slice/'+s.COMPANION:
+    message='Permission denied' if self.companion_permission and path=='/sys/fs/cgroup/unified/system.slice/'+s.COMPANION else 'No such file or directory'
+    return 1,b'',f"stat: cannot statx '{path}': {message}\n".encode()
    if path==s.LEASE_DIRECTORY and self.profile=='ordinary-manual':
     message='Permission denied' if self.permission else 'No such file or directory'
     return 1,b'',f"stat: cannot statx '{path}': {message}\n".encode()
@@ -65,7 +75,7 @@ class Files:
    elif path=='/proc/20/cgroup':out=b'0::/system.slice/reader-buddy.service\n'
    elif path=='/proc/sys/kernel/random/boot_id':out=(self.vector['observation']['boot_id']+'\n').encode()
    elif path=='/proc/self/mountinfo':out=(json.loads(self.contents[s.LEASE])['group']['context']['mount_record']+'\n').encode()
-   elif path.endswith('/cgroup.events'):out=b'populated 1\nfrozen 0\n'
+   elif path.endswith('/cgroup.events'):out=b'populated 0\nfrozen 0\n' if s.COMPANION in path and self.companion_state=='empty-original' else b'populated 1\nfrozen 0\n'
    elif path=='/etc/os-release':out=b'IMG_VERSION="3.28.0.172"\n'
    elif path=='/proc/sys/kernel/osrelease':out=b'5.4.70-v1.6.3-rm11x\n'
    else:out=self.contents[path]
@@ -135,6 +145,48 @@ class SamplerTests(unittest.TestCase):
  def test_live_namespace_drift_refuses_existing_resident_record(self):
   f=Files('resident-installed');f.namespace_drift=True
   with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+ def test_package_conflicts_allow_only_the_two_protected_missing_components(self):
+  for directory in (False,True):
+   f=Files('resident-installed');f.legacy_directory=directory;f.sampler().capture(f.profile,t.empty_raw)
+  for field in ('legacy_profile','shadow'):
+   f=Files('resident-installed');f.legacy_directory=True;setattr(f,field,True)
+   with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+ def test_original_and_current_companion_watchdog_are_explicitly_zero(self):
+  f=Files('resident-installed');f.raw['companion']['policy']['WatchdogUSec']='1s'
+  with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+  f=Files('resident-installed');l=json.loads(f.contents[s.LEASE]);v=json.loads(l['companion']);v['snapshot']=v['snapshot'].replace('WatchdogUSec=0\n','WatchdogUSec=1s\n');l['companion']=json.dumps(v);f.contents[s.LEASE]=json.dumps(l).encode()
+  with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+ def test_companion_terminal_group_identity_and_enoent_do_not_transfer_ownership(self):
+  for field,value in [('companion_state','populated'),('companion_replaced',True),('companion_permission',True)]:
+   f=Files('resident-installed');setattr(f,field,value)
+   if field=='companion_replaced':f.companion_state='empty-original'
+   with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+  f=Files('resident-installed');l=json.loads(f.contents[s.LEASE]);v=json.loads(l['companion']);fields=dict(line.split('=',1) for line in v['snapshot'].splitlines());state=f.raw['companion']['state']
+  for key in ('InvocationID','ExecMainPID','ExecMainStartTimestampMonotonic','ControlGroup'):state[key]=fields[key]
+  f.companion_state='empty-original';r=f.sampler().capture(f.profile,t.empty_raw);self.assertEqual(r['companion_group'],'empty-original')
+  state['ControlGroup']=''
+  with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+ def test_fixed_vendor_projection_and_shared_deadline_refuse_before_any_stop(self):
+  for name in ('stock','companion'):
+   f=Files('resident-installed');f.raw['vendor_policy'][name]['Nice']='999'
+   with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+   self.assertFalse(any(t.STOP_COMMAND==c for c in f.commands))
+  f=Files('resident-installed');sampler=f.sampler();sampler.deadline=time.monotonic()-1
+  with self.assertRaises(Exception):sampler.capture(f.profile,t.empty_raw)
+ def test_vendor_raw_duplicate_unknown_missing_and_oversized_fields_refuse(self):
+  f=Files('resident-installed');good=''.join(k+'='+v+'\n' for k,v in f.raw['vendor_policy']['companion'].items()).encode()
+  for data in [good+b'Id=rm-sync.service\n',good+b'SECRET=CANARY\n',good.replace(b'Nice=19\n',b''),good.replace(b'Nice=19\n',b'Nice='+b'x'*4097+b'\n')]:
+   with self.assertRaises(ValueError):s.Sampler(Mock(),time.monotonic()+12,run=lambda *_:(0,data,b'')).vendor_policy(s.COMPANION)
+ def test_companion_baseline_and_second_sample_drift_refuse(self):
+  f=Files('resident-installed');l=json.loads(f.contents[s.LEASE]);v=json.loads(l['companion']);v['group']['context']['boot']='00000000-0000-4000-8000-000000000099';l['companion']=json.dumps(v);f.contents[s.LEASE]=json.dumps(l).encode()
+  with self.assertRaises(ValueError):f.sampler().capture(f.profile,t.empty_raw)
+  f=Files('resident-installed');capture=f.sampler().capture;sampler=f.sampler();calls=[]
+  def change(profile,empty):
+   r=capture(profile,empty)
+   if calls:r['vendor_policy']['companion']['After']='changed'
+   calls.append(True);return r
+  sampler.capture=change
+  with self.assertRaises(ValueError):sampler.bracket(f.profile,f.vector['observation'],t.empty_raw)
  def test_property_duplicates_missing_hooks_and_unknown_units_refuse(self):
   f=Files();f.raw['buddy']['stop_extra']['ExecStop']='secret hook'
   with self.assertRaises(ValueError):f.sampler().service(s.BUDDY)

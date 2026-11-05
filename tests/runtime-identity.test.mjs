@@ -21,6 +21,23 @@ test('shared display suppresses late/cross-boot results and does not convert sel
   await c.inspect({inspectRuntime:async()=>({...reply(identity()),observation:{...tablet,boot_id:'22222222-2222-2222-2222-222222222222'}})},tablet);assert.equal(c.state.report,null);
   await c.inspect({inspectRuntime:async()=>reply({...identity(),secret:'PRIVATE_SENTINEL'})},tablet);assert.equal(c.state.report,null);
 });
+test('late parser loading after clear cannot publish or dispatch another runtime read',async()=>{
+ const parser=await import('../host/runtime-identity.mjs');let finish,entered;const loaded=new Promise(r=>finish=r),started=new Promise(r=>entered=r);let calls=0;
+ const c=new RuntimeIdentityController(()=>{},()=>{entered();return loaded;});
+ const pending=c.inspect({inspectRuntime:async()=>{calls++;return reply(identity());}},tablet);await started;c.clear();const before=structuredClone(c.state);finish(parser);await pending;assert.deepEqual(c.state,before);assert.equal(calls,1);
+});
+
+test('older module completion cannot replace a newer report and module failure stays private',async()=>{
+ const parser=await import('../host/runtime-identity.mjs');let finish,entered;const loaded=new Promise(r=>finish=r),started=new Promise(r=>entered=r);let loads=0;
+ const c=new RuntimeIdentityController(()=>{},()=>++loads===1?(entered(),loaded):Promise.resolve(parser));
+ const old=c.inspect({inspectRuntime:async()=>reply(identity())},tablet);await started;await c.inspect({inspectRuntime:async()=>reply({...identity(),binary_version:'0.2.0'})},tablet);const current=structuredClone(c.state);finish(parser);await old;assert.deepEqual(c.state,current);assert.equal(c.state.report.binary_version,'0.2.0');
+ const failed=new RuntimeIdentityController(()=>{},()=>Promise.reject(Error('PRIVATE_CANARY')));await failed.inspect({inspectRuntime:async()=>reply(identity())},tablet);assert.equal(failed.state.report,null);assert.equal(JSON.stringify(failed.state).includes('PRIVATE_CANARY'),false);
+});
+
+test('obsolete host result never starts report-module loading',async()=>{
+ let finish,loads=0;const c=new RuntimeIdentityController(()=>{},async()=>{loads++;return import('../host/runtime-identity.mjs');});const pending=c.inspect({inspectRuntime:()=>new Promise(r=>finish=r)},tablet);c.clear();finish(reply(identity()));await pending;assert.equal(loads,0);assert.equal(c.state.report,null);
+});
+
 test('actual fixed child identity IO sanitizes malformed output, bounds responses and rejects changed session',async t=>{
   const dir=await mkdtemp(path.join(os.tmpdir(),'manager-runtime-child-'));t.after(()=>rm(dir,{recursive:true,force:true}));const config=path.join(dir,'config');await writeFile(config,'normal');
   await writeFile(path.join(dir,'runtime_identity_transport.py'),`const fs=require('node:fs');let raw='';process.stdin.on('data',b=>raw+=b);process.stdin.on('end',()=>{const q=JSON.parse(raw);if(Object.keys(q).sort().join()!=='boot_id,connection_id'||process.argv.length!==2)throw Error('wrong child input');const mode=fs.readFileSync(process.env.MANAGER_WIRED_CONFIG,'utf8');if(mode==='oversize'){console.log('x'.repeat(8193));return}const v=${JSON.stringify(reply(identity()))};if(mode==='changed')v.observation.boot_id='22222222-2222-2222-2222-222222222222';if(mode==='secret')v.runtime_identity.secret='PRIVATE_SENTINEL';console.log(JSON.stringify(v))});`);

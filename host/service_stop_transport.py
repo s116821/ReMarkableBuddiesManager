@@ -68,7 +68,8 @@ def empty_raw(selector,reason='lifecycle-unqualified'):
     return dict(selector=selector, command='not-submitted', reason=reason,
                 buddy=None, helper=None, stock=None, process=None, platform=None, artifacts=None,
                 recovery_profile_base64=None, lease_base64=None, lease_observation='not-read',
-                configuration=dict(read='not-read', effective_mode='unverified'))
+                configuration=dict(read='not-read', effective_mode='unverified'),
+                companion=None,companion_group=None,vendor_policy=None)
 
 
 def execute(transport, v, deadline=None, on_submission=lambda:None):

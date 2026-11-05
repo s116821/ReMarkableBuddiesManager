@@ -26,6 +26,16 @@ sampler/submission adapter and semantic candidate matcher are implemented behind
 the empty source/release gate; they do not enroll observed metadata or transfer
 native ownership.
 
+The resident candidate follows the delivered package layout under
+`/home/root/.local/lib/remarkable-buddies` with units under `/usr/lib/systemd/system`.
+It requires closed Profile6/Lease3 records, the original nested rm-sync baseline,
+twelve fixed protected artifacts and both source vendor-policy projections.
+Original and current rm-sync watchdog values must both be zero. Its terminal
+incarnation/group samples are observations, not native ownership or recovery
+authority. Legacy resident records and mixed layouts refuse without fallback.
+The ordinary `/opt/bin` manual-unit candidate retains its separate restrictions.
+Both production registries remain empty; these source shapes do not qualify Stop.
+
 Remaining release gates include qualifying the fixed-path sampler, GNU stat and
 PID1 property spellings on the exact supported target, binding immutable released
 build/unit/policy/platform tuples, actual all-mode/native shutdown and recovery
