@@ -51,7 +51,23 @@ class Files:
   if command.startswith('/bin/systemctl '):
    unit=command.rsplit(' ',1)[1];name={s.BUDDY:'buddy',s.HELPER:'helper',s.STOCK:'stock',s.COMPANION:'companion'}[unit]
    if '--property=UMask' in command:return 0,''.join(k+'='+v+'\n' for k,v in self.raw['vendor_policy'][name].items()).encode(),b''
-   value=self.raw[name];out=''.join(k+'='+v+'\n' for group in value.values() for k,v in group.items()).encode();return 0,out,b''
+   value=self.raw[name];out=''.join(k+'='+v+'\n' for section in s.TEXT_SECTIONS for k,v in value[section].items()).encode();return 0,out,b''
+  if 'CAPCLIENT1' in command:
+   lines=['CAPCLIENT1','present']+['1 1 0 0 41ed 0 1 1 1']*3+['1 2 0 0 81ed 71172 1 1 1',s.hooks.EXPECTED_SHA256+'  /usr/bin/busctl']
+   return 0,('\n'.join(lines)+'\n').encode(),b''
+  if 'DBUS_SYSTEM_BUS_ADDRESS=' in command:
+   parts=shlex.split(shlex.split(command)[-1]);args=parts[parts.index('call')+1:];method=args[3]
+   if method=='GetId':value,kind='a'*32,'s'
+   elif method=='GetNameOwner':value,kind=':1.0','s'
+   elif method=='GetConnectionUnixProcessID':value,kind=1,'u'
+   elif method=='GetUnit':value,kind=s.UNIT_OBJECTS[args[5]],'o'
+   elif method=='Get':
+    unit=next(k for k,v in s.UNIT_OBJECTS.items() if v==args[1]);name={s.BUDDY:'buddy',s.HELPER:'helper',s.STOCK:'stock',s.COMPANION:'companion'}[unit]
+    h=self.raw[name]['hooks'][args[6]]
+    commands=[] if h['observation']=='observed-empty' else [['PRIVATE_CANARY',[],False,0,0,0,0,0,0,0]]
+    return 0,json.dumps(dict(type='v',data=[dict(type=s.hooks.SIGNATURE,data=commands)])).encode(),b''
+   else:raise AssertionError('unexpected typed method')
+   return 0,json.dumps(dict(type=kind,data=[value])).encode(),b''
   script=shlex.split(command)[-1];parts=shlex.split(script);path=parts[-1]
   if parts[0]=='stat' and '-f' in parts:return 0,b'63677270\n',b''
   if 'stat' in parts:

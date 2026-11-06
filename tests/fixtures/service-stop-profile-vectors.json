@@ -20,6 +20,20 @@
       "command": "not-submitted",
       "reason": null,
       "buddy": {
+        "hooks": {
+          "ExecStop": {
+            "property": "ExecStop",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          },
+          "ExecStopPost": {
+            "property": "ExecStopPost",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          }
+        },
         "state": {
           "Id": "reader-buddy.service",
           "LoadState": "loaded",
@@ -57,8 +71,6 @@
         },
         "stop_extra": {
           "Names": "reader-buddy.service",
-          "ExecStop": "",
-          "ExecStopPost": "",
           "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
           "WorkingDirectory": "/home/root",
           "User": "root",
@@ -167,8 +179,6 @@
       },
       "buddy_extra": {
         "Names": "reader-buddy.service",
-        "ExecStop": "",
-        "ExecStopPost": "",
         "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
         "WorkingDirectory": "/home/root",
         "User": "root",
@@ -184,7 +194,7 @@
       "companion_policy": null,
       "vendor_policy": null
     },
-    "sample_sha256": "5fb8bc7cf510f65fb66e78b03cd4f73bf22efb501104ffb3dfa9642d5f8e936a"
+    "sample_sha256": "1b31c54d4aeafd9985696a88e1db7943c01802c0e069a41c9ea1b09229d8f211"
   },
   {
     "observation": {
@@ -207,6 +217,20 @@
       "command": "not-submitted",
       "reason": null,
       "buddy": {
+        "hooks": {
+          "ExecStop": {
+            "property": "ExecStop",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          },
+          "ExecStopPost": {
+            "property": "ExecStopPost",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          }
+        },
         "state": {
           "Id": "reader-buddy.service",
           "LoadState": "loaded",
@@ -244,8 +268,6 @@
         },
         "stop_extra": {
           "Names": "reader-buddy.service",
-          "ExecStop": "",
-          "ExecStopPost": "",
           "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
           "WorkingDirectory": "/home/root",
           "User": "root",
@@ -258,6 +280,20 @@
         }
       },
       "helper": {
+        "hooks": {
+          "ExecStop": {
+            "property": "ExecStop",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          },
+          "ExecStopPost": {
+            "property": "ExecStopPost",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          }
+        },
         "state": {
           "Id": "reader-buddy-stock-recovery.service",
           "LoadState": "loaded",
@@ -295,8 +331,6 @@
         },
         "stop_extra": {
           "Names": "reader-buddy-stock-recovery.service",
-          "ExecStop": "",
-          "ExecStopPost": "",
           "EnvironmentFiles": "",
           "WorkingDirectory": "",
           "User": "root",
@@ -309,6 +343,20 @@
         }
       },
       "stock": {
+        "hooks": {
+          "ExecStop": {
+            "property": "ExecStop",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          },
+          "ExecStopPost": {
+            "property": "ExecStopPost",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          }
+        },
         "state": {
           "Id": "xochitl.service",
           "LoadState": "loaded",
@@ -346,8 +394,6 @@
         },
         "stop_extra": {
           "Names": "xochitl.service",
-          "ExecStop": "",
-          "ExecStopPost": "",
           "EnvironmentFiles": "",
           "WorkingDirectory": "",
           "User": "root",
@@ -516,6 +562,20 @@
         "effective_mode": "unverified"
       },
       "companion": {
+        "hooks": {
+          "ExecStop": {
+            "property": "ExecStop",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          },
+          "ExecStopPost": {
+            "property": "ExecStopPost",
+            "observation": "observed-empty",
+            "type_verified": true,
+            "reason": "typed-empty"
+          }
+        },
         "state": {
           "Id": "rm-sync.service",
           "LoadState": "loaded",
@@ -553,8 +613,6 @@
         },
         "stop_extra": {
           "Names": "rm-sync.service",
-          "ExecStop": "",
-          "ExecStopPost": "",
           "EnvironmentFiles": "",
           "WorkingDirectory": "",
           "User": "root",
@@ -673,8 +731,6 @@
       },
       "buddy_extra": {
         "Names": "reader-buddy.service",
-        "ExecStop": "",
-        "ExecStopPost": "",
         "EnvironmentFiles": "/home/root/.config/reader-buddy/environment (ignore_errors=no)",
         "WorkingDirectory": "/home/root",
         "User": "root",
@@ -812,6 +868,6 @@
         }
       }
     },
-    "sample_sha256": "f373c7993c353f647bb5e68c8f8f4ffb62f144a2ccf942869e7bfb46e6d87e6f"
+    "sample_sha256": "9658312985f762fdfe07e52a033e9159ab5b1140c835270217307a659a51df19"
   }
 ]

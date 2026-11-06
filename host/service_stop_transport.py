@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 import wired_observer as shared
-from service_stop_sampler import Sampler, run_fixed
+from service_stop_sampler import Sampler, run_fixed, TypedHookRefusal
 
 MAX_REQUEST = 4096
 # Source/release gate only, never device metadata or a caller-controlled flag.
@@ -97,6 +97,8 @@ def execute(transport, v, deadline=None, on_submission=lambda:None):
                 facts,digest=sampler.bracket(profile,observed,empty_raw)
                 found=True
                 break
+            except TypedHookRefusal:
+                raise
             except Exception:
                 if v['selector']=='stop':raise
         if not found:raise shared.Refusal('observation-unavailable')

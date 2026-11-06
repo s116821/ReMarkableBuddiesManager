@@ -19,7 +19,7 @@ function policiesEqual(got,wanted,helper=false){
  if(!got||!wanted||Object.keys(got).sort().join()!==[...catalog.policy].sort().join()||Object.keys(wanted).sort().join()!==[...catalog.policy].sort().join())return false;
  return catalog.policy.every(k=>{if(k==='WatchdogUSec'&&helper&&got[k]==='infinity')return wanted[k]==='0';if(['After','Conflicts'].includes(k)){const a=got[k].split(/\s+/).filter(Boolean).sort(),b=wanted[k].split(/\s+/).filter(Boolean).sort();return new Set(a).size===a.length&&new Set(b).size===b.length&&a.join()===b.join();}return got[k]===wanted[k];});
 }
-function extras(s){return matches(s.stop_extra,{ExecStop:'',ExecStopPost:'',KillSignal:'15',FinalKillSignal:'9',RefuseManualStop:'no',CanStop:'yes'})&&['','root'].includes(s.stop_extra.User)&&['','root'].includes(s.stop_extra.Group);}
+function extras(s){return matches(s.stop_extra,{KillSignal:'15',FinalKillSignal:'9',RefuseManualStop:'no',CanStop:'yes'})&&['','root'].includes(s.stop_extra.User)&&['','root'].includes(s.stop_extra.Group);}
 function safePolicy(p,fragment,dropins=''){return matches(p,{FragmentPath:fragment,DropInPaths:dropins,NeedDaemonReload:'no',KillMode:'control-group',Delegate:'no',SendSIGKILL:'yes',RestartForceExitStatus:''});}
 function cleared(s){return matches(s.state,{ActiveState:'inactive',SubState:'dead',MainPID:'0',ControlPID:'0',ExecMainPID:'0',ExecMainStartTimestampMonotonic:'0',InvocationID:'',ControlGroup:'',Job:''});}
 function parseRecord(value){const text=Buffer.from(value,'base64').toString('utf8');return JSON.parse(text,(_k,v,c)=>typeof v==='number'?BigInt(c.source):v);}
@@ -33,11 +33,13 @@ export function companionTerminal(current,original,group){
  if(s.ControlGroup===''&&group!=='original-absent'||s.ControlGroup!==o.ControlGroup&&!(s.ControlGroup===''&&group==='original-absent')||clear&&group!=='original-absent')return false;
  return true;
 }
+function emptyHooks(s){return s?.hooks&&catalog.hooks.every(k=>{const h=s.hooks[k];return h?.property===k&&h.observation==='observed-empty'&&h.type_verified===true&&h.reason==='typed-empty';});}
 export function matchesCandidateStopProfile(observation,raw,tuple){
  try{
   // tuple must come from independently reviewed immutable build/platform policy,
   // never copied from this observation or accepted from a renderer/device file.
   if(!['review','stop'].includes(raw?.selector))return false;parseServiceStopRaw(raw,raw.selector);
+  if(!emptyHooks(raw.buddy)||tuple?.profile==='resident-installed'&&!['helper','stock','companion'].every(k=>emptyHooks(raw[k])))return false;
   if(!tuple||Object.keys(tuple).sort().join()!=='artifacts,buddy_extra,buddy_policy,companion_policy,helper_policy,model,platform,profile,stock_policy,vendor_policy'||!['ordinary-manual','resident-installed'].includes(tuple.profile)||!observation?.model||observation.firmware_conflict||!raw.platform||!matches(raw.platform,tuple.platform)||tuple.model!==observation.model||observation.firmware!==raw.platform.firmware)return false;
   if(Object.keys(tuple.buddy_extra??{}).sort().join()!==[...catalog.stop_extra].sort().join()||Object.keys(tuple.platform??{}).sort().join()!=='firmware,kernel')return false;
   const expectedSlots=tuple.profile==='ordinary-manual'?['buddy_unit','buddy_executable']:['buddy_unit','buddy_executable','recovery_profile','native_profile','adapter','helper_unit','stock_executable','stock_unit','stock_dropin',...Object.keys(companionPins)];if(Object.keys(tuple.artifacts??{}).sort().join()!==expectedSlots.sort().join())return false;
