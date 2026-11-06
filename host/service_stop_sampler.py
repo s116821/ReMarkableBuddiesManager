@@ -12,6 +12,7 @@ import json
 from pathlib import PurePosixPath, Path
 import re
 import shlex
+import socket
 import time
 import wired_observer as shared
 import service_stop_hooks as hooks
@@ -66,17 +67,37 @@ def run_fixed(transport, command, deadline, cap=32768):
         channel.exec_command(command)
         channel.shutdown_write()
         command_deadline = min(deadline,time.monotonic()+8)
+        # Available status and temporarily empty buffers do not establish EOF.
+        # Drain each stream fairly until an actual empty read, then require status.
+        channel.settimeout(0.0)
+        stdout_done = stderr_done = False
         while True:
             if time.monotonic() >= command_deadline:
                 raise shared.Refusal('timeout')
-            if channel.recv_ready():
-                output.extend(channel.recv(4096))
-                if len(output)>cap:refuse()
-            if channel.recv_stderr_ready():
-                error.extend(channel.recv_stderr(4096))
-                if len(error)>8192:refuse()
-            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():break
-            time.sleep(.005)
+            progressed = False
+            if not stdout_done:
+                try:
+                    data = channel.recv(4096)
+                except socket.timeout:
+                    pass
+                else:
+                    stdout_done = not data
+                    output.extend(data)
+                    progressed = True
+                    if len(output)>cap:refuse()
+            if not stderr_done:
+                try:
+                    data = channel.recv_stderr(4096)
+                except socket.timeout:
+                    pass
+                else:
+                    stderr_done = not data
+                    error.extend(data)
+                    progressed = True
+                    if len(error)>8192:refuse()
+            if stdout_done and stderr_done and channel.exit_status_ready():break
+            if not progressed:
+                time.sleep(min(.005,max(0,command_deadline-time.monotonic())))
         code=channel.recv_exit_status()
         if time.monotonic()>=deadline:raise shared.Refusal('timeout')
         return code,bytes(output),bytes(error)
