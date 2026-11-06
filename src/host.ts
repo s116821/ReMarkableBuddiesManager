@@ -1,3 +1,6 @@
+import {portableJson} from '../host/portable-configuration-protocol.mjs';
+import type {PortableAdapter} from './portable-configuration';
+import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
 import type {ArchiveRequest as NotebookRequest,ArchiveResult as NotebookResult} from '../host/notebook-archive-protocol.mjs';
 import {parseArchiveJson as parseNotebookJson} from '../host/notebook-archive-protocol.mjs';
 import type {StorageInitializationAdapter} from './storage-initialization';
@@ -59,6 +62,7 @@ const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restor
 
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
+  readonly portableConfiguration?:PortableAdapter['portableConfiguration'];
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
   readonly memorySettings?:MemorySettingsAdapter['memorySettings'];
@@ -125,6 +129,13 @@ export function currentHost(): ManagerHost {
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
     } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    portableConfiguration: async (request:import('../host/portable-configuration-protocol.mjs').PortableRequest|null)=>{
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Portable preferences helper unavailable');
+      const pending=fetch('/manager-portable-configuration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Portable preferences unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0,complete=false;
+      try{for(;;){const item=await reader.read();if(item.done){complete=true;break;}bytes+=item.value.byteLength;if(bytes>196608){item.value.fill(0);throw Error('Portable response refused');}chunks.push(item.value);}const raw=new Uint8Array(bytes);let at=0;for(const chunk of chunks){raw.set(chunk,at);at+=chunk.length;}try{return portableJson(raw,196608) as PortableResult;}finally{raw.fill(0);}}
+      finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
+    },
     ordinaryExport: async (request: import('../host/ordinary-export-protocol.mjs').ExportRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Ordinary export helper unavailable');
       const pending=fetch('/manager-ordinary-export',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
