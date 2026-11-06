@@ -42,7 +42,8 @@ build/unit/policy/platform tuples, actual all-mode/native shutdown and recovery
 qualification, independent review and final Linux/Windows package checks. Neither
 profile is enabled by source/fixture tests. The central `stop-buddy-service` change
 remains active until those gates and coordinated delivery are complete.
-# Typed hook observations
+
+## Typed hook observations
 
 The private sampler reads `ExecStop` and `ExecStopPost` through bounded typed
 `Properties.Get` calls. Other textual properties remain strictly required. Both
