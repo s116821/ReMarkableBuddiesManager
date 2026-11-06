@@ -171,3 +171,92 @@ constraints, wired device identity, one actual package owner, data-preserving li
 and rollback. Equal SemVer or successful synthetic signature checks cannot establish
 package equivalence or authorize downgrade/handoff. Existing REM-46 production tooling
 and its unresolved gates are unchanged.
+
+## Original public test-package observer
+
+`tests/vellum/real_fixture.py` is a separate opt-in Linux nonroot observer for
+original two-target public test packages. Its default still accepts the historical
+six-file `legacy-no-sdk` handoff with an adjacent `hash-manifest.json`, a 32 MiB
+limit per APK and the ordinary three-file payload. It requires a separately
+communicated manifest digest and the actual public key's DER-SPKI digest.
+
+The explicit `--manifest EXTERNAL_MANIFEST` option selects only schema 2,
+`current-resident-fixture`. Keep this regular, canonical, ancestor-safe file outside
+the unchanged original directory. That directory must contain exactly the two
+versioned APKs, `buddy-index.adb`, `fixture.pub` and
+`test-key-build-receipt.json`. The manifest is limited to 16 KiB, the receipt to
+64 KiB and each APK to 64 MiB (128 MiB total). There is no arbitrary size override.
+
+The external manifest has exactly `schema`, `purpose`, `profile`, `eligibility`,
+`installation_eligible`, `private_key_included`, `source`, `helper_commit`,
+`docs_commit`, `license`, `builds` and `artifacts`. Purpose remains
+`host-only-offline-consumer-test-fixture`, eligibility is `not-qualified`, and both
+authority flags are false. Source records repository, Git SHA, tag and epoch;
+`builds` holds exactly the ARMv7 and AArch64 declared build objects. Each artifact
+record pins bytes and SHA256, including the completed receipt. Supply its SHA256
+and the public DER-SPKI pin independently; adjacent files cannot establish trust.
+Commit IDs and build/toolchain fields are developer attribution, not compiler
+attestation. Versions come from Git tags rather than a maintained source version.
+
+The current fixture permits exactly the ten reviewed ARMv7 resident paths:
+
+```text
+home/root/.local/lib/remarkable-buddies/Dobby-LICENSE
+home/root/.local/lib/remarkable-buddies/OpenSDK-LICENSE
+home/root/.local/lib/remarkable-buddies/libremarkable-resident.so
+home/root/.local/lib/remarkable-buddies/reader-buddy
+home/root/.local/lib/remarkable-buddies/resident-profile.json
+home/root/.local/lib/remarkable-buddies/resident-recovery.json
+usr/lib/systemd/system/reader-buddy-stock-recovery.service
+usr/lib/systemd/system/reader-buddy.service
+usr/share/remarkable-buddies/LICENSE
+usr/share/remarkable-buddies/build.json
+```
+
+The executable is 0755 and all other files, including the shared library, are
+0644, with root/root ownership and the exact source epoch. Signed metadata must
+match the finite `rm2-resident-test-key` profile, device `rm2`, firmware
+`3.28.0.172`, dependencies `remarkable-os=3.28.0.172-r0` and `rm2`, SDK source
+`a0c6480be6785480c2e0da76a3c06697a18efae4` and bundle SHA256
+`f9c4b44b9baf281bc47c74470ddd8d098853e79383e9323e5ff02ef2846fb477`.
+AArch64 remains SDK-bound `unqualified-development` with only
+`usr/bin/reader-buddy` and the shared LICENSE/build.json paths. Unknown paths,
+scripts, triggers, links, metadata or numeric type aliases refuse. These fixture
+restrictions do not enable the resident profile or qualify any tablet model.
+
+Canonical declared build bytes use sorted-key, compact, ASCII JSON plus one
+newline. Their size/SHA256 must match the signed build.json entry. The observer
+does not extract that file. Source, target/ABI, SDK, feature, binary and payload
+records must agree across manifest, receipt, signed metadata and authenticated
+index. Saved producer index comparison remains distinct from independent index
+regeneration, and metadata identity remains distinct from complete APK SHA256.
+
+For a deliberately selected actual observation, provide existing qualified
+source-build tool inputs and a new output path under an existing directory:
+
+```text
+python3 tests/vellum/real_fixture.py --inputs ORIGINALS --manifest EXTERNAL_MANIFEST --manifest-sha256 INDEPENDENT_MANIFEST_SHA256 --expected-spki INDEPENDENT_DER_SPKI_SHA256 --apk APK_TOOL --build-receipt TOOL_BUILD_RECEIPT --source-archive TOOL_SOURCE_ARCHIVE --output NEW_RESULT_JSON
+```
+
+The runner validates the existing 417-entry tool-source contract and immutable
+runtime image. It binds the external manifest at the fixed read-only
+`/handoff/manifest.json` and checks its digest before/after each APK command and
+at completion. Existing nonroot, no-network, read-only mounts, snapshots, bounded
+output/timeouts and owned cleanup remain in force. No signing, package generation,
+payload extraction/execution, package database mutation or device access occurs.
+
+Plan temporary storage for three bounded ARMv7 altered copies (control,
+executable and shared library), a small altered index and public-only metadata.
+Both ELF mutations require a unique complete-file size/hash match within a bounded
+candidate scan; a raw unique-ELF assumption is insufficient for this layout.
+Wrong/missing keys and altered control/index/both payloads must produce recognized
+signature/integrity refusals. A completed current run records 14 observations;
+legacy retains its 12. Crash, timeout or usage errors are failures.
+
+Run the default pure checks with
+`python3 -B -m unittest discover -s tests/vellum -p 'test_*.py' -v`.
+They use tiny synthetic metadata/files/ELFs and owned subprocess guards; they do
+not execute Docker or the APK tool. Source-test success does not establish actual
+cryptographic verification. Actual current-fixture observation remains a separate
+unqualified operation until its own result is recorded; installation and update
+eligibility remain false in every report.
