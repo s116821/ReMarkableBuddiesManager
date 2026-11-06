@@ -1,5 +1,6 @@
 // Safe public DTOs only. Original paths and producer conditions stay host-private.
 import {strictJson} from './strict-json.mjs';
+import {restoreFamily} from './restore-family.mjs';
 import {basicDigest,basicUuid} from './basic-settings-protocol.mjs';
 const keys=v=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().join():'';
 const exact=(v,k)=>keys(v)===k.split(' ').sort().join();
@@ -21,12 +22,12 @@ export function parseRestoreRequest(v){
 export function restoreResponseContext(v){const {action,connection_id,boot_id,invocation,reference}=v;return {action,...connection_id?{connection_id,boot_id,invocation}:{},...reference?{reference}:{}};}
 const outcomes={prepare:['prepared'],apply:['restored'],status:['desired-generation-observed','unresolved']};
 const refusal=['invalid-input','unavailable','unsupported','busy','conflict','failed'];
-export function restorePublicReport(r,selector){
- if(!exact(r,'operation status outcome disk_readback_verified runtime_activation')||r.operation!==selector||r.runtime_activation!=='unverified'||typeof r.disk_readback_verified!=='boolean')refuse();
+function familyPublicReport(r,selector,family){
+ if(!Object.hasOwn(family.selectors,selector)||!exact(r,'operation status outcome disk_readback_verified runtime_activation')||r.operation!==family.selectors[selector]||r.runtime_activation!=='unverified'||typeof r.disk_readback_verified!=='boolean')refuse();
  if(r.status==='ok'){if(!outcomes[selector]?.includes(r.outcome)||r.disk_readback_verified!==(selector==='apply'))refuse();}
  else if(!refusal.includes(r.status)||r.disk_readback_verified||!(r.outcome==='not-dispatched'||selector==='apply'&&r.status==='failed'&&['not-activated','unknown'].includes(r.outcome)))refuse();return {...r};
 }
-export function parseRestoreResult(v,request,validate){
+function familyResult(v,request,validate,family){
  let q;if(request?.action==='prepare'&&!('source' in request)){if(!exact(request,'action connection_id boot_id invocation')||!basicDigest(request.connection_id)||!basicUuid(request.boot_id)||!basicUuid(request.invocation))refuse();q={...request};}else q=parseRestoreRequest(request);if(size(v)>8192||!exact(v,'contract_version status observation ordinary_restore'))refuse();validate({contract_version:v.contract_version,status:v.status,observation:v.observation});
  const c=v.ordinary_restore;if(!exact(c,'state reference preview inspection report apply_outcome retained')||!Array.isArray(c.retained)||c.retained.length>8)refuse();
  const refs=new Set();for(const row of c.retained){if(!exact(row,'reference connection_id boot_id state apply_outcome status_available')||!basicDigest(row.reference)||refs.has(row.reference)||!basicDigest(row.connection_id)||!basicUuid(row.boot_id)||!['unknown','not-activated','unresolved'].includes(row.state)||!['unknown','not-activated'].includes(row.apply_outcome)||row.state==='not-activated'&&row.apply_outcome!=='not-activated'||typeof row.status_available!=='boolean')refuse();refs.add(row.reference);}
@@ -39,9 +40,9 @@ export function parseRestoreResult(v,request,validate){
  if(['ready','restored','desired-generation-observed'].includes(c.state)&&row)refuse();
  const r=c.report;
  if(r===null){if(v.status!=='unconfigured'||v.observation!==null)refuse();}
- else{restorePublicReport(r,{prepare:'prepare',confirm:'apply',status:'status'}[q.action]);if(v.status!=='observed'||!same(q,v.observation))refuse();}
- if(c.preview!==null){if(c.state!=='ready')refuse();restorePreview(c.preview);}
- if(c.inspection!==null){if(!['restored','desired-generation-observed'].includes(c.state))refuse();restoreSummary(c.inspection);}
+ else{familyPublicReport(r,{prepare:'prepare',confirm:'apply',status:'status'}[q.action],family);if(v.status!=='observed'||!same(q,v.observation))refuse();}
+ if(c.preview!==null){if(c.state!=='ready')refuse();restorePreview(c.preview);if(family.version===2&&(!c.preview.source.complete_media||!c.preview.target.complete_media))refuse();}
+ if(c.inspection!==null){if(!['restored','desired-generation-observed'].includes(c.state))refuse();restoreSummary(c.inspection);if(family.version===2&&!c.inspection.complete_media)refuse();}
  const is=(status,outcome)=>r?.status===status&&r?.outcome===outcome;
  switch(c.state){
  case 'ready':if(!is('ok','prepared')||c.preview===null||c.inspection!==null)refuse();break;
@@ -56,4 +57,8 @@ export function parseRestoreResult(v,request,validate){
  }
  if(q.action==='cancel'&&r!==null)refuse();return v;
 }
+export const restorePublicReport=(r,selector)=>familyPublicReport(r,selector,restoreFamily());
+export const notebookRestorePublicReport=(r,selector)=>familyPublicReport(r,selector,restoreFamily('notebook'));
+export const parseRestoreResult=(v,q,validate)=>familyResult(v,q,validate,restoreFamily());
+export const parseNotebookRestoreResult=(v,q,validate)=>familyResult(v,q,validate,restoreFamily('notebook'));
 export function parseRestoreJson(raw){try{if(raw.byteLength>8192||new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw).charCodeAt(0)===0xfeff)refuse();return strictJson(raw);}catch{return refuse();}}

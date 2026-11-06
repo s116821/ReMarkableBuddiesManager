@@ -22,7 +22,7 @@ export async function verifyStorageInitializationAppBoundaries(page){
    if(method==='confirmHandwriting')a.handwritingRecords.set({...a.handwritingRecords(),result:{state:'prepared'}});
    if(method==='chooseLocalMode')a.localModeChoice.set({...a.localModeChoice(),view:{state:'ready'},retained:[]});
    const c=a.storageInitializationController,old=c.clear;let calls=0,pending;c.clear=function(...args){calls++;return old.apply(this,args);};if(busy)a.storageInitialization.set({...c.state,busy:true});
-   try{pending=a[method](method==='forgetAction'||method==='manageConversation'?action:method==='inspectHandwriting'?{profile:ids.profile,correction:ids.correction}:r);}finally{c.clear=old;}
+   try{pending=a[method](['prepareRestore','confirmRestore'].includes(method)?'legacy':method==='forgetAction'||method==='manageConversation'?action:method==='inspectHandwriting'?{profile:ids.profile,correction:ids.correction}:r);}finally{c.clear=old;}
    const result={calls,cleared:a.storageInitialization().view===null};if(busy)a.storageInitialization.set(c.state);await pending;return result;
   },{method,action,conversation,ids,busy});assert.deepEqual(result,{calls:busy?0:1,cleared:!busy},method+' '+action+' busy='+busy);}
  console.log('Actual development App:'+boundaries.length+' storage setup peer Busy guards/incoming invalidations and'+outgoing.length+' outgoing clears pass');

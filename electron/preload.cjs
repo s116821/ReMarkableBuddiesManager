@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   selectedArchive: (...args) => args.length===1?ipcRenderer.invoke('manager:selectedArchive',args[0]):Promise.reject(new Error('Archive arity refused')),
   notebookArchive: (...args) => args.length===1?ipcRenderer.invoke('manager:notebookArchive',args[0]):Promise.reject(new Error('Archive arity refused')),
   handwritingRecords: (...args) => args.length===1?ipcRenderer.invoke('manager:handwritingRecords',args[0]):Promise.reject(new Error('Handwriting arity refused')),
+  notebookRestore: (...args) => args.length===1?ipcRenderer.invoke('manager:notebookRestore',args[0]):Promise.reject(new Error('Notebook restore arity refused')),
   ordinaryRestore: (...args) => args.length===1?ipcRenderer.invoke('manager:ordinaryRestore',args[0]):Promise.reject(new Error('Ordinary restore arity refused')),
   sourceCacheCleanup: (...args) => args.length===1?ipcRenderer.invoke('manager:sourceCacheCleanup',args[0]):Promise.reject(new Error('Cache cleanup arity refused')),
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
