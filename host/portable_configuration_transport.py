@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -122,20 +123,40 @@ def execute(transport, v, deadline=None):
             pass
         output, discarded = bytearray(), 0
         command_deadline = min(deadline, time.monotonic() + 8)
+        # Status availability and temporarily empty buffers are not receive EOF.
+        # Nonblocking reads distinguish no current bytes from actual completion.
+        channel.settimeout(0.0)
+        stdout_done = stderr_done = False
         while True:
             if time.monotonic() >= command_deadline:
                 raise shared.Refusal('timeout')
-            while channel.recv_ready():
-                output.extend(channel.recv(4096))
-                if len(output) > (131072 if v['selector'] == 'export' else 16384):
-                    raise ValueError('oversized response')
-            while channel.recv_stderr_ready():
-                discarded += len(channel.recv_stderr(4096))
-                if discarded > 8192:
-                    raise ValueError('oversized diagnostics')
-            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            progressed = False
+            if not stdout_done:
+                try:
+                    data = channel.recv(4096)
+                except socket.timeout:
+                    pass
+                else:
+                    stdout_done = not data
+                    output.extend(data)
+                    progressed = True
+                    if len(output) > (131072 if v['selector'] == 'export' else 16384):
+                        raise ValueError('oversized response')
+            if not stderr_done:
+                try:
+                    data = channel.recv_stderr(4096)
+                except socket.timeout:
+                    pass
+                else:
+                    stderr_done = not data
+                    discarded += len(data)
+                    progressed = True
+                    if discarded > 8192:
+                        raise ValueError('oversized diagnostics')
+            if stdout_done and stderr_done and channel.exit_status_ready():
                 break
-            time.sleep(.01)
+            if not progressed:
+                time.sleep(min(.01, max(0, command_deadline - time.monotonic())))
         code = channel.recv_exit_status()
         one_line = output.endswith(b'\n') and output.count(b'\n') == 1
         report = parse(output, 131072 if v['selector'] == 'export' else 16384) if code == 0 and one_line else None

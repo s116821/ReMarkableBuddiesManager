@@ -1,6 +1,7 @@
 """Synthetic fixed-channel tests; these are not native producer captures."""
 import base64
 import json
+import socket
 from pathlib import Path
 import subprocess
 import sys
@@ -21,6 +22,80 @@ def report(selector):
     if selector=='export':
         return dict(report_version=1,operation=selector,status='ok',runtime_activation='unverified',artifact=ARTIFACT,summary=dict(artifact_sha256='d'*64,declared_settings=1,personalization_included=True))
     return dict(report_version=1,operation=selector,status='unsupported',outcome='read-only' if selector in ('inspect','status') else 'not-dispatched',disk_readback_verified=False,runtime_activation='unverified',data=None)
+class ScheduledChannel:
+    """Exit status arrives first; receive completion and late bytes are independent."""
+    def __init__(self, clock, stdout, stderr=(), eof=.03):
+        self.clock, self.stdout, self.stderr, self.eof = clock, list(stdout), list(stderr), eof
+        self.closed = False
+        self.received_stderr = bytearray()
+        self.stdout_complete = self.stderr_complete = False
+    def settimeout(self, value): pass
+    def exec_command(self, value): pass
+    def shutdown_write(self): pass
+    def close(self): self.closed = True
+    def exit_status_ready(self): return True
+    def recv_exit_status(self): return 0
+    def recv_ready(self): return bool(self.stdout and self.stdout[0][0] <= self.clock[0])
+    def recv_stderr_ready(self): return bool(self.stderr and self.stderr[0][0] <= self.clock[0])
+    def receive(self, queue, size):
+        if queue and queue[0][0] <= self.clock[0]:
+            at, data = queue.pop(0)
+            if len(data) > size: queue.insert(0, (at, data[size:]))
+            return data[:size]
+        if self.eof is not None and self.clock[0] >= self.eof: return b''
+        raise socket.timeout()
+    def recv(self, size):
+        data = self.receive(self.stdout, size)
+        if not data: self.stdout_complete = True
+        return data
+    def recv_stderr(self, size):
+        data = self.receive(self.stderr, size)
+        if not data: self.stderr_complete = True
+        self.received_stderr.extend(data)
+        return data
+
+class Completion(unittest.TestCase):
+    def run_channel(self, trailing=(), stderr=(), eof=.03):
+        clock = [0.0]
+        raw = (json.dumps(report('inspect'))+'\n').encode()
+        channel = ScheduledChannel(clock, [(0, raw), *trailing], stderr, eof)
+        transport = Mock(); transport.open_session.return_value = channel
+        def sleep(value): clock[0] += value
+        with patch.object(q.time, 'monotonic', side_effect=lambda:clock[0]), patch.object(q.time, 'sleep', side_effect=sleep), patch.object(q.shared, 'inspect', return_value={'boot_id':BOOT}):
+            try: result = q.execute(transport, REQUEST, deadline=.08)
+            except Exception as error: result = error
+        self.assertTrue(channel.closed)
+        return result, channel, clock[0], raw
+    def test_exit_status_before_delayed_second_stdout_frame_is_refused(self):
+        result, channel, elapsed, _ = self.run_channel(trailing=[(.01, b'{}\n')])
+        self.assertIsNone(result['_portable_raw']['stdout_base64'])
+        self.assertEqual(result['_portable_raw']['status'], 'unavailable')
+        self.assertTrue(channel.stdout_complete and channel.stderr_complete)
+        self.assertGreaterEqual(elapsed, .03)
+    def test_exit_status_before_delayed_stderr_drains_to_completion(self):
+        result, channel, elapsed, raw = self.run_channel(stderr=[(.01, b'PRIVATE_DIAGNOSTIC')])
+        self.assertEqual(channel.received_stderr, b'PRIVATE_DIAGNOSTIC')
+        self.assertNotIn('PRIVATE_DIAGNOSTIC', json.dumps(result))
+        self.assertEqual(base64.b64decode(result['_portable_raw']['stdout_base64']), raw)
+        self.assertTrue(channel.stdout_complete and channel.stderr_complete)
+        self.assertGreaterEqual(elapsed, .03)
+    def test_delayed_stderr_over_cap_is_refused(self):
+        result, _, _, _ = self.run_channel(stderr=[(.01, b'x'*8193)])
+        self.assertIsInstance(result, ValueError)
+    def test_exit_status_without_eof_uses_original_deadline(self):
+        result, channel, elapsed, _ = self.run_channel(eof=None)
+        self.assertIsInstance(result, q.shared.Refusal)
+        self.assertEqual(result.status, 'timeout')
+        self.assertFalse(channel.stdout_complete or channel.stderr_complete)
+        self.assertGreaterEqual(elapsed, .08)
+        self.assertLess(elapsed, .10)
+    def test_valid_frame_requires_both_receive_completions(self):
+        result, channel, elapsed, raw = self.run_channel()
+        self.assertEqual(result['_portable_raw']['status'], 'reported')
+        self.assertEqual(base64.b64decode(result['_portable_raw']['stdout_base64']), raw)
+        self.assertTrue(channel.stdout_complete and channel.stderr_complete)
+        self.assertGreaterEqual(elapsed, .03)
+
 class Transport(unittest.TestCase):
     def test_exact_private_packets_limits_numeric_alias_and_no_unsafe_selector(self):
         prepare=dict(portable_import_version=1,operation=BOOT,base_sha256='b'*64,config_path_sha256=q.PATH_HASH,artifact=ARTIFACT)
@@ -33,7 +108,7 @@ class Transport(unittest.TestCase):
         for raw in [b'\xff',b'{} {}',b'{"a":1,"a":2}',b' '*360449]:
             with self.assertRaises((ValueError,UnicodeError)):q.request(raw)
     def channel(self, raw, code=0):
-        channel=Mock();channel.recv_ready.side_effect=[True,False,False];channel.recv.return_value=raw;channel.recv_stderr_ready.return_value=False;channel.exit_status_ready.return_value=True;channel.recv_exit_status.return_value=code
+        channel=Mock();channel.recv_ready.side_effect=[True,False,False];channel.recv.side_effect=[raw,b''];channel.recv_stderr_ready.return_value=False;channel.recv_stderr.return_value=b'';channel.exit_status_ready.return_value=True;channel.recv_exit_status.return_value=code
         transport=Mock();transport.open_session.return_value=channel;return transport,channel
     def test_fixed_export_inspect_and_apply_commands_exact_stdin_and_one_eof(self):
         for selector,body in [('export',None),('inspect',None),('apply',dict(intent=INTENT,artifact=ARTIFACT)),('status',dict(intent=INTENT))]:

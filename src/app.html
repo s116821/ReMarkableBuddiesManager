@@ -18,7 +18,7 @@
   <p role="status" data-testid="portable-status">{{ portable().status }}</p>
   @if (portable().view?.state === 'ready') {
     <ul data-testid="portable-preview">@for (row of portableRows(); track row.key) {<li>{{ row.label }}: {{ row.before }} → {{ row.after }}</li>}</ul>
-    <p>Only the selected declarations change. This review does not reserve the destination or verify running settings.</p>
+    <p>Only preferences listed here will change. If saved settings change before confirmation, review the file again.</p>
     <button class="ui-button ui-button-primary" type="button" (click)="confirmPortable()" [disabled]="!portableAvailable()">Confirm preferences import</button>
   }
   @for (record of portable().retained; track record.reference; let i = $index) {
