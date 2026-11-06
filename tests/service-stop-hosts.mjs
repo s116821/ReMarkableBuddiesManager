@@ -6,11 +6,12 @@ import {chromium,_electron as electron,expect} from '@playwright/test';
 import {mkdtemp,mkdir,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {startHelper} from '../host/browser-helper.mjs';
 import {serviceStopFixture,tablet,identity} from './fixtures/service-stop.mjs';
+import {source as notebookRestoreSource} from './fixtures/notebook-restore.mjs';
 import {lanes as sixteen} from './fixtures/maintenance-sixteen-lanes.mjs';
-const lanes={...sixteen,notebookArchive:{key:'notebook_archive',begin:()=>({action:'prepare-export',...identity,path:'/home/root/backups/notebook-new',invocation:randomUUID()})},localModeChoice:{key:'local_mode_choice',begin:()=>({action:'begin',...identity})},inspectOwnedV3:{key:'owned_data_v3',begin:()=>({...identity})},storageInitialization:{key:'storage_initialization',begin:()=>({action:'begin',...identity})}};
-const routes={notebookArchive:'notebook-archive',serviceStop:'service-stop',storageInitialization:'storage-initialization',localModeChoice:'local-mode-choice',inspectOwnedV3:'owned-data-v3',productSettings:'product-settings',handwritingRecords:'handwriting-records',selectedArchive:'selected-archive',ordinaryRestore:'ordinary-restore',conversationManagement:'conversation-management',sourceCacheCleanup:'source-cache-cleanup',inspectSourceCache:'source-cache-inventory',inspectConversations:'conversation-inventory',modelSettings:'model-settings',basicSettings:'basic-settings',memoryForget:'memory-forget',ordinaryExport:'ordinary-export',researchSettings:'research-settings',memorySettings:'memory-settings',credentialReference:'credential-reference',modelCredential:'model-credential'};
+const lanes={...sixteen,notebookRestore:{key:'ordinary_restore',begin:()=>({action:'prepare',...identity,source:notebookRestoreSource,invocation:randomUUID()})},notebookArchive:{key:'notebook_archive',begin:()=>({action:'prepare-export',...identity,path:'/home/root/backups/notebook-new',invocation:randomUUID()})},localModeChoice:{key:'local_mode_choice',begin:()=>({action:'begin',...identity})},inspectOwnedV3:{key:'owned_data_v3',begin:()=>({...identity})},storageInitialization:{key:'storage_initialization',begin:()=>({action:'begin',...identity})}};
+const routes={notebookRestore:'notebook-restore',notebookArchive:'notebook-archive',serviceStop:'service-stop',storageInitialization:'storage-initialization',localModeChoice:'local-mode-choice',inspectOwnedV3:'owned-data-v3',productSettings:'product-settings',handwritingRecords:'handwriting-records',selectedArchive:'selected-archive',ordinaryRestore:'ordinary-restore',conversationManagement:'conversation-management',sourceCacheCleanup:'source-cache-cleanup',inspectSourceCache:'source-cache-inventory',inspectConversations:'conversation-inventory',modelSettings:'model-settings',basicSettings:'basic-settings',memoryForget:'memory-forget',ordinaryExport:'ordinary-export',researchSettings:'research-settings',memorySettings:'memory-settings',credentialReference:'credential-reference',modelCredential:'model-credential'};
 const packaged=process.argv.includes('--packaged'),begin={action:'begin',...identity},read=n=>n.startsWith('inspect');
-function confirm(name,a,reference){const q=a.change?{action:'save',...identity,reference,change:a.change}:a.changes?{action:'save',...identity,reference,changes:a.changes}:name==='memoryForget'?{action:'confirm',reference}:name==='localModeChoice'?{action:'choose',...identity,reference}:{action:name==='conversationManagement'?'prepare':name==='handwritingRecords'?'confirm-remove':['selectedArchive','notebookArchive'].includes(name)?'confirm-export':'confirm',...identity,reference,invocation:randomUUID()};if(!['storageInitialization','conversationManagement','handwritingRecords','selectedArchive','notebookArchive','ordinaryRestore','sourceCacheCleanup'].includes(name))delete q.invocation;return q;}
+function confirm(name,a,reference){const q=a.change?{action:'save',...identity,reference,change:a.change}:a.changes?{action:'save',...identity,reference,changes:a.changes}:name==='memoryForget'?{action:'confirm',reference}:name==='localModeChoice'?{action:'choose',...identity,reference}:{action:name==='conversationManagement'?'prepare':name==='handwritingRecords'?'confirm-remove':['selectedArchive','notebookArchive'].includes(name)?'confirm-export':'confirm',...identity,reference,invocation:randomUUID()};if(!['storageInitialization','conversationManagement','handwritingRecords','selectedArchive','notebookArchive','ordinaryRestore','notebookRestore','sourceCacheCleanup'].includes(name))delete q.invocation;return q;}
 async function matrix(request,control){let busy=0,invalidated=0;
  for(const [name,a]of Object.entries(lanes)){
   await control.hold();const p=request('serviceStop',begin);await control.entered();try{const before=await control.snapshot(),v=(await request(name,a.begin()))[a.key];assert.equal(read(name)?v.status:v.state,'busy',name);assert.deepEqual(await control.snapshot(),before);busy++;}finally{await control.release();}assert.equal((await p).service_stop.state,'unsupported');
@@ -18,7 +19,7 @@ async function matrix(request,control){let busy=0,invalidated=0;
   await control.hold();const peer=request(name,q);await control.entered();try{const before=await control.snapshot();assert.equal((await request('serviceStop',begin)).service_stop.state,'busy',name);assert.deepEqual(await control.snapshot(),before);busy++;}finally{await control.release();}let old=(await peer)[a.key];if(['selectedArchive','notebookArchive','handwritingRecords','storageInitialization'].includes(name))old=(await request(name,a.begin()))[a.key];
   await request('serviceStop',begin);if(!read(name)){assert.ok(old.reference,name);const v=(await request(name,confirm(name,a,old.reference)))[a.key];assert.ok(['invalidated','unavailable','not-dispatched'].includes(v.state),name+':'+v.state);invalidated++;}
  }
- assert.equal(Object.keys(lanes).length,20);assert.equal(busy,40);console.log(JSON.stringify({actual_factory_peers:20,busy_directions:busy,predecessor_previews_invalidated:invalidated,production_profiles_enabled:0}));
+ assert.equal(Object.keys(lanes).length,21);assert.equal(busy,42);console.log(JSON.stringify({actual_factory_peers:21,busy_directions:busy,predecessor_previews_invalidated:invalidated,production_profiles_enabled:0}));
 }
 async function reciprocalStorage(request,control){
  const ready=await control.syntheticReview(request);assert.equal(ready.service_stop.state,'ready');
@@ -30,12 +31,15 @@ async function reciprocalStorage(request,control){
  console.log('Actual storage-to-Stop idle review invalidation passes with isolated synthetic review; production profiles remain0');
 }
 async function reciprocalNotebook(request,control){
- const ready=await control.syntheticReview(request);assert.equal(ready.service_stop.state,'ready');const ref=ready.service_stop.reference,before=await control.snapshot();
- await request('notebookArchive',{action:'retained'});assert.deepEqual(await control.snapshot(),before);
- const preview=(await request('notebookArchive',{action:'prepare-export',...identity,path:'/home/root/backups/notebook-new',invocation:randomUUID()})).notebook_archive;assert.equal(preview.state,'ready');
- const stale=(await request('serviceStop',{action:'confirm',...identity,reference:ref,invocation:randomUUID()})).service_stop;assert.equal(stale.state,'unavailable');assert.equal((await control.snapshot()).stops,before.stops);
- await request('serviceStop',begin);assert.equal((await request('notebookArchive',{action:'confirm-export',...identity,reference:preview.reference,invocation:randomUUID()})).notebook_archive.state,'unavailable');
- assert.equal(await control.productionClosed(),true);console.log('Actual notebook/Stop idle previews invalidate reciprocally; retained lookup has no I/O or invalidation; native profiles remain0');
+ for(const name of ['notebookArchive','notebookRestore']){
+  const lane=lanes[name],ready=await control.syntheticReview(request);assert.equal(ready.service_stop.state,'ready');const ref=ready.service_stop.reference,before=await control.snapshot();
+  await request(name,{action:'retained'});assert.deepEqual(await control.snapshot(),before);
+  const preview=(await request(name,lane.begin()))[lane.key];assert.equal(preview.state,'ready');
+  const stale=(await request('serviceStop',{action:'confirm',...identity,reference:ref,invocation:randomUUID()})).service_stop;assert.equal(stale.state,'unavailable');assert.equal((await control.snapshot()).stops,before.stops);
+  await request('serviceStop',begin);assert.equal((await request(name,confirm(name,lane,preview.reference)))[lane.key].state,name==='notebookRestore'?'not-dispatched':'unavailable');
+  assert.equal(await control.productionClosed(),true);
+ }
+ console.log('Actual notebook export/restore and Stop idle previews invalidate reciprocally; retained lookup has no I/O or invalidation; native profiles remain0');
 }
 async function isolate(context,origin){await context.route('**/*',r=>{const u=r.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return r.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||origin&&new URL(u).origin===origin)return r.continue();return r.abort();});}
 async function loadingDeadline(page,control){
@@ -51,26 +55,32 @@ async function loadingDeadline(page,control){
 }
 async function stopOutgoing(page){
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
- const names=['notebookController','storageInitializationController','ownedV3Controller','cacheController','handwritingController','selectedController','restoreController','managementController','conversationController','cleanupController','fileCredentialController','credentialController','memorySettingsController','researchController','modelController','localModeController','productController','basicController','forgetController','savedModeController','memoryInspectionController','ownedController','runtimeController','exportController','savedConfigurationController','memoryController','personalizationController'];
+ const names=['notebookController','storageInitializationController','ownedV3Controller','cacheController','handwritingController','selectedController','restoreController','notebookRestoreController','managementController','conversationController','cleanupController','fileCredentialController','credentialController','memorySettingsController','researchController','modelController','localModeController','productController','basicController','forgetController','savedModeController','memoryInspectionController','ownedController','runtimeController','exportController','savedConfigurationController','memoryController','personalizationController'];
  const epoch=await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.stopOutgoingCounts={};a.stopOutgoingOriginals={};for(const name of names){const c=a[name],old=c.clear;a.stopOutgoingOriginals[name]=old;c.clear=function(...args){a.stopOutgoingCounts[name]=(a.stopOutgoingCounts[name]??0)+1;return old.apply(this,args);};}return a.serviceStopEpoch();},names);
- try{await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await expect.poll(()=>page.evaluate(()=>Object.keys(window.ng.getComponent(document.querySelector('app-root')).stopOutgoingCounts).length)).toBe(27);await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');const v=await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));return {counts:a.stopOutgoingCounts,epoch:a.serviceStopEpoch()};});assert.ok(Object.values(v.counts).every(x=>x===1),JSON.stringify(v.counts));assert.equal(v.epoch,epoch);}
+ try{await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await expect.poll(()=>page.evaluate(()=>Object.keys(window.ng.getComponent(document.querySelector('app-root')).stopOutgoingCounts).length)).toBe(28);await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');const v=await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));return {counts:a.stopOutgoingCounts,epoch:a.serviceStopEpoch()};});assert.ok(Object.values(v.counts).every(x=>x===1),JSON.stringify(v.counts));assert.equal(v.epoch,epoch);}
  finally{await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));for(const name of names)a[name].clear=a.stopOutgoingOriginals[name];delete a.stopOutgoingCounts;delete a.stopOutgoingOriginals;},names);}
- console.log('Actual Stop preparation:27 peer/view clears including ordinary export; own epoch preserved');
+ console.log('Actual Stop preparation:28 peer/view clears including ordinary export; own epoch preserved');
 }
 async function notebookUiPeers(page,control){
- const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true}),field=page.locator('#notebook-archive-path'),preview=page.getByRole('button',{name:'Preview notebook export',exact:true}),confirm=page.getByRole('button',{name:'Confirm notebook export',exact:true});
+ const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true});
+ const cases=[
+  {field:'#notebook-archive-path',action:'export',earlier:'exports',source:'/home/root/backups/notebook-new',state:'notebookArchive',controller:'notebookController'},
+  {field:'#notebook-restore-source',action:'restore',earlier:'restores',source:notebookRestoreSource,state:'notebookRestore',controller:'notebookRestoreController'},
+ ];
+ const reviewReady=async()=>{const before=await control.snapshot();await review.click();await expect.poll(async()=>(await control.snapshot()).all).toBe(before.all+1);await expect(stop).toBeEnabled();};
  await control.admission(true);
- try{
-  await review.click();await expect(stop).toBeEnabled();const before=await control.snapshot();
-  await page.getByRole('button',{name:'Show earlier notebook exports',exact:true}).click();assert.deepEqual(await control.snapshot(),before);await expect(stop).toBeEnabled();
-  await field.fill('/home/root/backups/notebook-new');await preview.click();await expect(confirm).toBeEnabled();await expect(stop).toHaveCount(0);await expect(field).toHaveValue('');
-  await review.click();await expect(stop).toBeEnabled();await expect(confirm).toBeDisabled();await expect(field).toHaveValue('');
+ try{for(const lane of cases){
+  const field=page.locator(lane.field),preview=page.getByRole('button',{name:`Preview notebook ${lane.action}`,exact:true}),confirm=page.getByRole('button',{name:`Confirm notebook ${lane.action}`,exact:true});
+  await reviewReady();const before=await control.snapshot();
+  await page.getByRole('button',{name:`Show earlier notebook ${lane.earlier}`,exact:true}).click();assert.deepEqual(await control.snapshot(),before);await expect(stop).toBeEnabled();
+  await field.fill(lane.source);await preview.click();await expect(confirm).toBeEnabled();await expect(stop).toHaveCount(0);await expect(field).toHaveValue('');
+  await reviewReady();if(lane.action==='restore')await expect(confirm).toHaveCount(0);else await expect(confirm).toBeDisabled();await expect(field).toHaveValue('');
   if(await page.evaluate(()=>!!window.ng?.getComponent)){
    await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).serviceStopBusy.set(true));await expect(field).toBeDisabled();await expect(preview).toBeDisabled();await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).serviceStopBusy.set(false));
-   await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.notebookArchive.set({...a.notebookArchive(),busy:true});});await expect(review).toBeDisabled();await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.notebookArchive.set(a.notebookController.state);});
+   await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set({...a[lane.state](),busy:true});},lane);await expect(review).toBeDisabled();await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set(a[lane.controller].state);},lane);
   }
- }finally{await control.admission(false);}
- assert.equal(await control.productionClosed(),true);console.log('Actual notebook/Stop UI reciprocal ready invalidation, Busy/edit guards and retained no-I/O pass; default profile admission restored');
+ }}finally{await control.admission(false);}
+ assert.equal(await control.productionClosed(),true);console.log('Actual notebook export/restore and Stop UI reciprocal ready invalidation, Busy/edit guards and retained no-I/O pass; default profile admission restored');
 }
 async function unknownCoexistence(request,control){
  const stopBefore=await request('serviceStop',{action:'retained'}),unknown=stopBefore.service_stop.retained.find(r=>r.outcome==='unknown');assert.ok(unknown);

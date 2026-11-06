@@ -23,7 +23,7 @@ export async function verifyNotebookArchiveAppBoundaries(page){
    if(method==='chooseLocalMode')a.localModeChoice.set({...a.localModeChoice(),view:{state:'ready'},retained:[]});
    if(method==='confirmStorageInitialization')a.storageInitialization.set({...a.storageInitialization(),view:{state:'ready',reference:r.reference}});
    const c=a.notebookController,old=c.clear;let calls=0,pending;c.clear=function(...args){calls++;return old.apply(this,args);};if(busy)a.notebookArchive.set({...c.state,busy:true});
-   try{pending=a[method](method==='forgetAction'||method==='manageConversation'?action:method==='inspectHandwriting'?{profile:ids.profile,correction:ids.correction}:r);}finally{c.clear=old;}
+   try{pending=a[method](['prepareRestore','confirmRestore'].includes(method)?'legacy':method==='forgetAction'||method==='manageConversation'?action:method==='inspectHandwriting'?{profile:ids.profile,correction:ids.correction}:r);}finally{c.clear=old;}
    const result={calls,cleared:a.notebookArchive().view===null};if(busy)a.notebookArchive.set(c.state);await pending;return result;
   },{method,action,conversation,ids,busy});assert.deepEqual(result,{calls:busy?0:1,cleared:!busy},method+' '+action+' busy='+busy);}
  console.log('Actual development App:'+boundaries.length+' notebook peer Busy guards/incoming invalidations and'+outgoing.length+' outgoing clears pass');

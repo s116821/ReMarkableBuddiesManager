@@ -12,6 +12,8 @@ export const restoreSummary:(v:unknown)=>RestoreSummary;
 export const restorePreview:(v:unknown)=>RestorePreview;
 export const parseRestoreRequest:(v:unknown)=>RestoreRequest;
 export const restoreResponseContext:(v:RestoreRequest)=>RestoreContext;
+export const parseNotebookRestoreResult:(v:unknown,q:RestoreRequest|RestoreContext,validate:(v:unknown)=>unknown)=>RestoreResult;
+export const notebookRestorePublicReport:(v:unknown,selector:string)=>RestoreReport;
 export const parseRestoreResult:(v:unknown,q:RestoreRequest|RestoreContext,validate:(v:unknown)=>unknown)=>RestoreResult;
 export const parseRestoreJson:(raw:Uint8Array)=>unknown;
 export const restorePublicReport:(v:unknown,selector:string)=>RestoreReport;
