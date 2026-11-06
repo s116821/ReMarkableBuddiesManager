@@ -14,6 +14,7 @@ import re
 import shlex
 import time
 import wired_observer as shared
+import service_stop_hooks as hooks
 
 BUDDY = 'reader-buddy.service'
 HELPER = 'reader-buddy-stock-recovery.service'
@@ -34,7 +35,8 @@ APPS = {'ordinary-manual':'/opt/bin/reader-buddy',
         'resident-installed':'/home/root/.local/lib/remarkable-buddies/reader-buddy'}
 CATALOG = json.loads(Path(__file__).with_name('service-stop-properties.json').read_text())
 VENDOR = json.loads(Path(__file__).with_name('service-stop-vendor-policy.json').read_text())
-PROPERTIES = [k for values in CATALOG.values() for k in values]
+TEXT_SECTIONS = ('state','policy','stop_extra')
+PROPERTIES = [k for section in TEXT_SECTIONS for k in CATALOG[section]]
 PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c '
 STAT_FORMAT = '%d %i %u %g %f %s %h\\n%y\\n%z\\n'
 
@@ -106,9 +108,113 @@ def metadata(raw):
     except (UnicodeError,ValueError,OverflowError):refuse()
 
 
+class TypedHookRefusal(ValueError):
+    """Value-free fatal refusal: never try another candidate after this group fails."""
+
+
+UNIT_OBJECTS = {unit: '/org/freedesktop/systemd1/unit/' + encoded for unit,encoded in (
+    (BUDDY,'reader_2dbuddy_2eservice'),
+    (HELPER,'reader_2dbuddy_2dstock_2drecovery_2eservice'),
+    (STOCK,'xochitl_2eservice'),(COMPANION,'rm_2dsync_2eservice'))}
+
+
+class _TypedHooks:
+    def __init__(self, sampler, maximum):
+        self.sampler,self.maximum,self.commands = sampler,maximum,0
+        self.owner,self.bus,self.client = None,None,None
+        self.units = []
+
+    def run(self, command, cap=4096):
+        try:
+            if self.commands >= self.maximum or time.monotonic() >= self.sampler.deadline:
+                raise ValueError()
+            self.commands += 1
+            reply = self.sampler.run(self.sampler.transport,command,self.sampler.deadline,cap)
+            code,out,err = reply
+            if (time.monotonic() >= self.sampler.deadline or type(code) is not int
+                    or type(out) is not bytes or type(err) is not bytes
+                    or len(out)>cap or len(err)>8192):
+                raise ValueError()
+            return reply
+        except Exception:
+            raise TypedHookRefusal('typed hook observation refused') from None
+
+    def call(self, destination, path, interface, method, signature='', *arguments, cap=4096):
+        command = hooks.BUS_PREFIX + shlex.quote('exec ' + shlex.join(
+            (*hooks.CALL_PREFIX,destination,path,interface,method,signature,*arguments)))
+        return self.run(command,cap)
+
+    def dbus(self, method, signature='', *arguments):
+        return self.call('org.freedesktop.DBus','/org/freedesktop/DBus',
+                         'org.freedesktop.DBus',method,signature,*arguments)
+
+    def identity(self):
+        value = hooks.identity(*self.run(hooks.PREFIX+shlex.quote(hooks.IDENTITY_SCRIPT)))
+        if value['state']!='present' or value['metadata'][-1]['bytes']!=hooks.EXPECTED_BYTES or value['sha256']!=hooks.EXPECTED_SHA256:
+            raise ValueError()
+        return value
+
+    def start(self):
+        self.client = self.identity()
+        self.bus = hooks.bus_id(*self.dbus('GetId'))
+        self.owner = hooks.bus_owner(*self.dbus('GetNameOwner','s','org.freedesktop.systemd1'))
+        hooks.pid_one(*self.dbus('GetConnectionUnixProcessID','s',self.owner))
+
+    def unit(self, unit):
+        if unit not in UNIT_OBJECTS or not hooks.owner_valid(self.owner):
+            raise ValueError()
+        reply = self.call(self.owner,'/org/freedesktop/systemd1',
+                          'org.freedesktop.systemd1.Manager','GetUnit','s',unit)
+        if hooks.scalar(*reply,'o') != UNIT_OBJECTS[unit]:
+            raise ValueError()
+
+    def read(self, unit):
+        if unit not in self.units:
+            self.unit(unit)
+            self.units.append(unit)
+        result = {}
+        for prop in hooks.PROPERTIES:
+            reply = self.call(self.owner,UNIT_OBJECTS[unit],'org.freedesktop.DBus.Properties',
+                              'Get','ss','org.freedesktop.systemd1.Service',prop,cap=32768)
+            observation = hooks.decode_hook(prop,reply[1],reply[2],reply[0],complete=True)
+            if observation != dict(property=prop,observation='observed-empty',type_verified=True,reason='typed-empty'):
+                raise ValueError()
+            result[prop] = observation
+        return result
+
+    def finish(self):
+        for unit in self.units:
+            self.unit(unit)
+        hooks.pid_one(*self.dbus('GetConnectionUnixProcessID','s',self.owner))
+        if hooks.bus_owner(*self.dbus('GetNameOwner','s','org.freedesktop.systemd1')) != self.owner:
+            raise ValueError()
+        if hooks.bus_id(*self.dbus('GetId')) != self.bus or self.identity() != self.client:
+            raise ValueError()
+
+    def clear(self):
+        self.owner,self.bus,self.client = None,None,None
+        self.units.clear()
+
+
 class Sampler:
     def __init__(self,transport,deadline,run=run_fixed):
         self.transport,self.deadline,self.run=transport,deadline,run
+        self._hooks = None
+
+    def _typed_group(self, operation, maximum):
+        if self._hooks is not None:refuse()
+        group = _TypedHooks(self,maximum)
+        self._hooks = group
+        try:
+            try:group.start()
+            except Exception:raise TypedHookRefusal('typed hook observation refused') from None
+            result = operation()
+            try:group.finish()
+            except Exception:raise TypedHookRefusal('typed hook observation refused') from None
+            return result
+        finally:
+            group.clear()
+            self._hooks = None
 
     def command(self,script,cap=32768):
         return self.run(self.transport,PREFIX+shlex.quote(script),self.deadline,cap)
@@ -161,7 +267,9 @@ class Sampler:
         return out
 
     def service(self,unit):
-        if unit not in (BUDDY,HELPER,STOCK,COMPANION):refuse()
+        if unit not in UNIT_OBJECTS:refuse()
+        if self._hooks is None:
+            return self._typed_group(lambda:self.service(unit),12)
         command='/bin/systemctl --system --no-pager --no-ask-password --all show '+' '.join('--property='+k for k in PROPERTIES)+' -- '+unit
         code,out,err=self.run(self.transport,command,self.deadline,32768)
         if code or err:refuse()
@@ -171,9 +279,9 @@ class Sampler:
             if not separator or key not in PROPERTIES or key in result or len(value)>4096 or any(ord(c)<32 or ord(c)>126 for c in value):refuse()
             result[key]=value
         if set(result)!=set(PROPERTIES) or result['Id']!=unit:refuse()
-        # Do not serialize unexpected secret-bearing arbitrary stop hook argv.
-        if result['ExecStop'] or result['ExecStopPost']:refuse()
-        value={section:{k:result[k] for k in names} for section,names in CATALOG.items()}
+        value={section:{k:result[k] for k in CATALOG[section]} for section in TEXT_SECTIONS}
+        try:value['hooks']=self._hooks.read(unit)
+        except Exception:raise TypedHookRefusal('typed hook observation refused') from None
         if len(json.dumps(value,separators=(',',':')).encode())>16384:refuse()
         return value
 
@@ -377,7 +485,10 @@ class Sampler:
         return r
 
     def bracket(self,profile,observation,empty):
-        first=self.capture(profile,empty);digest=canonical_digest(observation,profile,first)
-        second=self.capture(profile,empty)
-        if digest!=canonical_digest(observation,profile,second):refuse()
-        return second,digest
+        if profile not in APPS:refuse()
+        def sample():
+            first=self.capture(profile,empty);digest=canonical_digest(observation,profile,first)
+            second=self.capture(profile,empty)
+            if digest!=canonical_digest(observation,profile,second):refuse()
+            return second,digest
+        return self._typed_group(sample,18 if profile=='ordinary-manual' else 40)

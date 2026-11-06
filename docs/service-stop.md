@@ -42,3 +42,12 @@ build/unit/policy/platform tuples, actual all-mode/native shutdown and recovery
 qualification, independent review and final Linux/Windows package checks. Neither
 profile is enabled by source/fixture tests. The central `stop-buddy-service` change
 remains active until those gates and coordinated delivery are complete.
+# Typed hook observations
+
+The private sampler reads `ExecStop` and `ExecStopPost` through bounded typed
+`Properties.Get` calls. Other textual properties remain strictly required. Both
+hooks must be positively typed empty for every service required by a candidate;
+missing text never becomes an empty hook. Query uncertainty stops the candidate
+loop and discards its original-operation context. Normal OS socket activation is
+possible. These time-point observations do not qualify shutdown or enable either
+empty production registry. See the active central `stop-buddy-service` contract.

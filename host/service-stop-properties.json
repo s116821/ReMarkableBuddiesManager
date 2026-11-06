@@ -36,8 +36,6 @@
   ],
   "stop_extra": [
     "Names",
-    "ExecStop",
-    "ExecStopPost",
     "EnvironmentFiles",
     "WorkingDirectory",
     "User",
@@ -47,5 +45,9 @@
     "RestartUSec",
     "RefuseManualStop",
     "CanStop"
+  ],
+  "hooks": [
+    "ExecStop",
+    "ExecStopPost"
   ]
 }

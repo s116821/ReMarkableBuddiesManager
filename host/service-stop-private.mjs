@@ -66,8 +66,11 @@ function leaseRecord(v){
  exact(v.stock,['process','invocation','executable_sha256','unit_sha256','dropin_sha256']);recordProcess(v.stock.process);if(!/^[a-f0-9]{32}$/.test(v.stock.invocation)||/^0+$/.test(v.stock.invocation))fail();for(const k of ['executable_sha256','unit_sha256','dropin_sha256'])hashArray(v.stock[k]);for(const k of ['profile_sha256','adapter_sha256','recovery_profile_sha256'])hashArray(v[k]);
 }
 function snapshot(v){
- if(v===null)return;exact(v,['state','policy','stop_extra']);
- for(const [section,names] of Object.entries(catalog)){exact(v[section],names);for(const x of Object.values(v[section]))if(!ascii(x))fail();}
+ if(v===null)return;exact(v,['state','policy','stop_extra','hooks']);
+ for(const section of ['state','policy','stop_extra']){exact(v[section],catalog[section]);for(const x of Object.values(v[section]))if(!ascii(x))fail();}
+ exact(v.hooks,catalog.hooks);
+ const unknown=['transport-incomplete','invalid-input','response-limit','invalid-exit-status','client-error','unexpected-stderr','malformed-json','wrong-envelope','wrong-signature','invalid-command-array'];
+ for(const name of catalog.hooks){const h=v.hooks[name];exact(h,['property','observation','type_verified','reason']);if(h.property!==name||!(h.observation==='observed-empty'&&h.type_verified===true&&h.reason==='typed-empty'||h.observation==='observed-nonempty'&&h.type_verified===true&&h.reason==='typed-nonempty'||h.observation==='unknown'&&h.type_verified===false&&unknown.includes(h.reason)))fail();}
  if(Buffer.byteLength(JSON.stringify(v))>16384)fail();stateFields(v.state);
 }
 export function parseServiceStopRaw(v,selector){
