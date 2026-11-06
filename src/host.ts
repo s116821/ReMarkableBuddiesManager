@@ -49,12 +49,21 @@ import type { DriveAdapter } from './drive-auth';
 import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/drive-protocol.mjs';
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
+const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restore')=>async (request: import('../host/ordinary-restore-protocol.mjs').RestoreRequest|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Ordinary restore helper unavailable');
+      const pending=fetch(route,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Ordinary restore unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Ordinary restore response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseRestoreJson(raw) as RestoreResult;
+    };
+
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
   readonly memorySettings?:MemorySettingsAdapter['memorySettings'];
   readonly ordinaryRestore?:RestoreAdapter['ordinaryRestore'];
+  readonly notebookRestore?:RestoreAdapter['notebookRestore'];
   readonly handwritingRecords?:(request:HandwritingRequest)=>Promise<HandwritingResult>;
   readonly selectedArchive?:(request:ArchiveRequest)=>Promise<ArchiveResult>;
   readonly notebookArchive?:(request:NotebookRequest)=>Promise<NotebookResult>;
@@ -158,13 +167,8 @@ export function currentHost(): ManagerHost {
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Archive operation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseNotebookJson(raw) as NotebookResult;
     },
-    ordinaryRestore: async (request: import('../host/ordinary-restore-protocol.mjs').RestoreRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Ordinary restore helper unavailable');
-      const pending=fetch('/manager-ordinary-restore',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Ordinary restore unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Ordinary restore response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseRestoreJson(raw) as RestoreResult;
-    },
+    ordinaryRestore: restoreBridge('/manager-ordinary-restore'),
+    notebookRestore: restoreBridge('/manager-notebook-restore'),
     conversationManagement: async (request: import('../host/conversation-management-protocol.mjs').ManagementRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Conversation management helper unavailable');
       const pending=fetch('/manager-conversation-management',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;

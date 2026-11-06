@@ -21,7 +21,7 @@ export async function verifyLocalModeAppBoundaries(page){
    if(method==='prepareHandwriting'){const state={...a.handwritingController.state,result:{state:'inspected',view:{profile:ids.profile,correction:ids.correction,heads:[{state:'value',sample_availability:'available'}]}}};a.handwritingController.state=state;a.handwritingRecords.set(state);}
    if(method==='confirmHandwriting')a.handwritingRecords.set({...a.handwritingRecords(),result:{state:'prepared'}});
    const c=a.localModeController,old=c.clear;let calls=0,pending;c.clear=function(...args){calls++;return old.apply(this,args);};if(busy)a.localModeChoice.set({...c.state,busy:true});
-   try{pending=a[method](method==='forgetAction'||method==='manageConversation'?action:method==='inspectHandwriting'?{profile:ids.profile,correction:ids.correction}:r);}finally{c.clear=old;}
+   try{pending=a[method](['prepareRestore','confirmRestore'].includes(method)?'legacy':method==='forgetAction'||method==='manageConversation'?action:method==='inspectHandwriting'?{profile:ids.profile,correction:ids.correction}:r);}finally{c.clear=old;}
    const result={calls,cleared:a.localModeChoice().view===null};if(busy)a.localModeChoice.set(c.state);await pending;return result;
   },{method,action,conversation,ids,busy});assert.deepEqual(result,{calls:busy?0:1,cleared:!busy},method+' '+action+' busy='+busy);}
  console.log('Actual development App:49 Local-only peer Busy guards,49 incoming invalidations and16 outgoing clears pass');
