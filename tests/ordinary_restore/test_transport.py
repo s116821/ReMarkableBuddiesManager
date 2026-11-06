@@ -26,21 +26,43 @@ BASELINE={'generation':1}
 IDENTITY=hashlib.sha256(json.dumps(BASELINE,sort_keys=True).encode()).hexdigest()
 def request(selector):
     context=V['context']
-    body=({'restore_version':1,'operation':context['operation'],'source':context['source']} if selector=='prepare' else {'source':context['source'],'intent':context['intent']})
+    action=selector.removesuffix('-notebook')
+    version=2 if selector.endswith('-notebook') else 1
+    body=({'restore_version':version,'operation':context['operation'],'source':context['source']} if action=='prepare' else {'source':context['source'],'intent':dict(context['intent'],restore_version=version,complete_media=True) if version==2 else context['intent']})
     return dict(selector=selector,connection_id=IDENTITY,boot_id=BOOT,budget_ms=12000,input_base64=base64.b64encode(json.dumps(body,separators=(',',':')).encode()).decode())
 def report(selector):
-    name={'prepare':'prepared-valid-target-media-differs-from-source','apply':'restored-exact-target','status':'desired-exact-target-not-receipt'}[selector]
-    return next(c['stdout_utf8'].encode('utf-8') for c in V['raw_cases'] if c['id']==name)
+    action=selector.removesuffix('-notebook')
+    name={'prepare':'prepared-valid-target-media-differs-from-source','apply':'restored-exact-target','status':'desired-exact-target-not-receipt'}[action]
+    raw=next(c['stdout_utf8'].encode('utf-8') for c in V['raw_cases'] if c['id']==name)
+    if not selector.endswith('-notebook'):return raw
+    v=json.loads(raw);v.update(report_version=2,operation=selector)
+    if action=='prepare':
+        v['data']['intent'].update(restore_version=2,complete_media=True)
+        for kind in ('source','target'):v['data']['preview'][kind]['complete_media']=True
+    else:v['data']['inspection']['complete_media']=True
+    return (json.dumps(v,separators=(',',':'))+'\n').encode()
 class Transport(unittest.TestCase):
     def channel(self,raw,code=0):
         c=Mock();c.recv_ready.side_effect=[True,False,False];c.recv.return_value=raw;c.recv_stderr_ready.return_value=False;c.exit_status_ready.return_value=True;c.recv_exit_status.return_value=code;t=Mock();t.open_session.return_value=c;return t,c
     def test_closed_original_input_and_caps(self):
-        for selector in ('prepare','apply','status'):
+        for selector in ('prepare','apply','status','prepare-notebook','apply-notebook','status-notebook'):
             value=request(selector);raw=json.dumps(value).encode();self.assertEqual(q.request(raw),value);self.assertEqual(q.request(raw+b' '*(24576-len(raw))),value)
             for bad in [dict(value,selector='list'),dict(value,selector=';echo'),dict(value,invocation=BOOT),dict(value,budget_ms=True),dict(value,input_base64=None),dict(value,input_base64='e30='),dict(value,path='/synthetic')]:
                 with self.assertRaises((ValueError,TypeError)):q.request(json.dumps(bad).encode())
         for raw in [b'x'*24577,b'{"selector":0,"selector":1}',b'\xef\xbb\xbf{}',b'"\\ud800"']:
             with self.assertRaises((ValueError,UnicodeError)):q.request(raw)
+    def test_fixed_family_versions_and_notebook_complete_media(self):
+        for selector in ('prepare','apply','status','prepare-notebook','apply-notebook','status-notebook'):
+            value=request(selector);body=json.loads(base64.b64decode(value['input_base64']))
+            versioned=body if selector.startswith('prepare') else body['intent']
+            versioned['restore_version']=1 if selector.endswith('-notebook') else 2
+            value['input_base64']=base64.b64encode(json.dumps(body).encode()).decode()
+            with self.assertRaises(ValueError):q.request(json.dumps(value).encode())
+        for selector in ('apply-notebook','status-notebook'):
+            value=request(selector);body=json.loads(base64.b64decode(value['input_base64']));body['intent']['complete_media']=False
+            value['input_base64']=base64.b64encode(json.dumps(body).encode()).decode()
+            with self.assertRaises(ValueError):q.request(json.dumps(value).encode())
+        self.assertEqual(q.request(json.dumps(request('apply')).encode()),request('apply'))
     def test_wrong_path_domains_and_apply_wrapper_refuse(self):
         for field in ('config_path_sha256','source_path_sha256'):
             intent=dict(V['context']['intent']);intent[field]='0'*64
@@ -49,7 +71,7 @@ class Transport(unittest.TestCase):
         value['input_base64']=base64.b64encode(json.dumps(body).encode()).decode()
         with self.assertRaises(ValueError):q.request(json.dumps(value).encode())
     def test_fixed_argv_exact_stdin_eof_bounds_and_identity(self):
-        for selector in ('prepare','apply','status'):
+        for selector in ('prepare','apply','status','prepare-notebook','apply-notebook','status-notebook'):
             value=request(selector);raw=report(selector);padded=raw[:-1]+b' '*(16384-len(raw))+b'\n';t,c=self.channel(padded)
             with patch.object(q.shared,'inspect',return_value={'boot_id':BOOT}):result=q.execute(t,value)
             self.assertEqual(base64.b64decode(result['_ordinary_restore_raw']['stdout_base64']),padded)
@@ -91,7 +113,7 @@ def key(seed):
 class SSH(unittest.TestCase):
     @unittest.skipUnless(sys.platform=='linux','POSIX local SSH fixture, no Windows native USB claim')
     def test_real_local_ssh_peer_all_three_selectors_exact_original_stdin(self):
-        for selector in ('prepare','apply','status'):
+        for selector in ('prepare','apply','status','prepare-notebook','apply-notebook','status-notebook'):
             with self.subTest(selector=selector),tempfile.TemporaryDirectory() as folder:
                 client_bytes,_=key(bytes(range(32)));_,hostkey=key(bytes([7])*32);p=Path(folder)/'public-fixture';p.write_bytes(client_bytes);p.chmod(0o600)
                 client,server=socket.socketpair();peer=ModePeer(selector);transport=paramiko.Transport(server);transport.add_server_key(hostkey);transport.set_subsystem_handler('sftp',paramiko.SFTPServer,Files);transport.start_server(event=threading.Event(),server=peer)

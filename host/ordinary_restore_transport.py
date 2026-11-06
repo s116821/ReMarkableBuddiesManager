@@ -11,7 +11,8 @@ import wired_observer as shared
 MAX_REQUEST = 24576
 MAX_RESPONSE = 16384
 PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json /opt/bin/reader-buddy --restore-operation '
-SELECTORS = {'prepare', 'apply', 'status'}
+SELECTORS = {'prepare': 1, 'apply': 1, 'status': 1,
+             'prepare-notebook': 2, 'apply-notebook': 2, 'status-notebook': 2}
 
 
 def parse(raw, limit):
@@ -61,18 +62,19 @@ def source_path(value):
             and len(value.encode('utf-8')) <= 4096)
 
 
-def intent(value, source):
+def intent(value, source, version=1):
     fields = 'restore_version operation config_path_sha256 config_sha256 source_path_sha256 archive_sha256 actor mode_sha256 base_generation base_history_sha256 target_generation target_history_sha256 staged_configuration_sha256 complete_media'.split()
     exact(value, ' '.join(fields))
     import hashlib
     def path_hash(kind, path):
         return hashlib.sha256(('urn:remarkable-buddies:ordinary-restore-' + kind + '-path:v1:' + path).encode('utf-8')).hexdigest()
-    if (type(value['restore_version']) is not int or value['restore_version'] != 1
+    if (type(value['restore_version']) is not int or value['restore_version'] != version
             or not all(uuid(value[k]) for k in ('operation', 'actor', 'base_generation', 'target_generation'))
             or value['base_generation'] == value['target_generation']
             or not all(digest(value[k]) for k in fields if k.endswith('sha256') and k != 'staged_configuration_sha256')
             or value['staged_configuration_sha256'] is not None and not digest(value['staged_configuration_sha256'])
             or type(value['complete_media']) is not bool
+            or version == 2 and value['complete_media'] is not True
             or value['config_path_sha256'] != path_hash('config', '/home/root/.config/remarkable-buddies/config.json')
             or value['source_path_sha256'] != path_hash('source', source)):
         raise ValueError('intent refused')
@@ -90,16 +92,17 @@ def request(raw):
     if base64.b64encode(decoded).decode('ascii') != v['input_base64']:
         raise ValueError('input refused')
     body = parse(decoded, 16384)
-    if v['selector'] == 'prepare':
+    version = SELECTORS[v['selector']]
+    if v['selector'] in ('prepare', 'prepare-notebook'):
         exact(body, 'restore_version operation source')
-        if (type(body['restore_version']) is not int or body['restore_version'] != 1
+        if (type(body['restore_version']) is not int or body['restore_version'] != version
                 or not uuid(body['operation']) or not source_path(body['source'])):
             raise ValueError('input refused')
     else:
         exact(body, 'source intent')
         if not source_path(body['source']):
             raise ValueError('input refused')
-        intent(body['intent'], body['source'])
+        intent(body['intent'], body['source'], version)
     return v
 
 
@@ -108,7 +111,7 @@ def report_shape(report, selector):
     # Preserve future versions privately for its action-sensitive reduction.
     if not isinstance(report, dict) or type(report.get('report_version')) is not int or report['report_version'] < 1:
         raise ValueError('report refused')
-    if report['report_version'] != 1:
+    if report['report_version'] != SELECTORS[selector]:
         return
     exact(report, 'report_version operation status outcome disk_readback_verified runtime_activation data')
     if (report['operation'] != selector or report['runtime_activation'] != 'unverified'
