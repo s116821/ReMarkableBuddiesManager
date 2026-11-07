@@ -35,7 +35,8 @@ class NativePackageLockTest(unittest.TestCase):
     def test_actual_retained_and_initial_writer_exclusion_readability_death(self):
         for mode in ('initial','retained'):
             with self.subTest(mode=mode), TemporaryDirectory() as directory:
-                root=Path(directory);protect(root);path=root/'resident-stop.json'
+                # Windows TEMP may use an 8.3 alias; admit the actual created root.
+                root=Path(directory).resolve();protect(root);path=root/'resident-stop.json'
                 if mode=='retained':transition.write_private_record(path,{'version':1})
                 source='''from pathlib import Path
 import sys,time
