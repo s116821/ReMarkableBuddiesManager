@@ -4,17 +4,25 @@ import {
 } from '../host/shared-preferences-protocol.mjs';
 
 export type SharedPreferenceAdapter = (request: SharedPreferenceRequest) => Promise<SharedPreferenceResult>;
-export type SharedPreferenceState = SharedPreferenceResult & {busy: boolean};
+export type SharedPreferenceState = Omit<SharedPreferenceResult, 'state'> & {
+  state: SharedPreferenceResult['state'] | 'invalid-input';
+  busy: boolean;
+};
 
 export class SharedPreferenceController {
   state: SharedPreferenceState = {state: 'idle', reference: null, view: null, retained: [], busy: false};
   private generation = 0;
   private expiry?: ReturnType<typeof setTimeout>;
-  constructor(private readonly changed: (state: SharedPreferenceState) => void) {}
+  private readonly changed: (state: SharedPreferenceState) => void;
+  constructor(changed: (state: SharedPreferenceState) => void) {
+    this.changed = changed;
+  }
 
   private publish(state: SharedPreferenceState) {
-    clearTimeout(this.expiry);
-    this.expiry = state.view ? setTimeout(() => this.clear(), 120000) : undefined;
+    if (state.view !== this.state.view) {
+      clearTimeout(this.expiry);
+      this.expiry = state.view ? setTimeout(() => this.clear(), 120000) : undefined;
+    }
     this.state = state;
     this.changed(state);
   }
@@ -27,12 +35,17 @@ export class SharedPreferenceController {
   async run(adapter: SharedPreferenceAdapter, request: SharedPreferenceRequest | null,
             stillCurrent: () => boolean = () => true) {
     if (!request || (this.state.busy && request.action !== 'cancel')) return;
+    try {
+      parseSharedPreferenceRequest(request);
+    } catch {
+      this.publish({...this.state, state: 'invalid-input'});
+      return;
+    }
     const generation = ++this.generation;
     const context = sharedPreferenceContext(request);
     const retained = this.state.retained;
     this.publish({...this.state, view: null, busy: true});
     try {
-      parseSharedPreferenceRequest(request);
       const pending = adapter(request);
       request = null;
       const value = parseSharedPreferenceResult(await pending, context);

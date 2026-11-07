@@ -1,5 +1,5 @@
-import {SharedPreferenceController, sharedPatch, target as sharedTarget} from './shared-preferences';
-import type {RetainedPreference, SharedPreferenceResult} from '../host/shared-preferences-protocol.mjs';
+import {SharedPreferenceController, sharedPatch, target as sharedTarget, type SharedPreferenceState} from './shared-preferences';
+import type {RetainedPreference} from '../host/shared-preferences-protocol.mjs';
 import {PortableController} from './portable-configuration';
 import type {PortableRetained,PortableOrigins} from '../host/portable-configuration-protocol.mjs';
 import {NotebookArchiveController,archiveAttemptMessage as notebookAttemptMessage} from './notebook-archive';
@@ -94,7 +94,7 @@ export class App implements OnDestroy {
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
   private readonly sharedPreferenceController = new SharedPreferenceController(state => this.sharedPreferences.set(state));
   readonly sharedPreferences = signal(this.sharedPreferenceController.state);
-  readonly sharedLabels: Record<SharedPreferenceResult['state'], string> = {
+  readonly sharedLabels: Record<SharedPreferenceState['state'], string> = {
     idle: 'Shared preferences have not been inspected.', ready: 'Shared preference snapshot read.',
     joining: 'The shared group is still joining.', unresolved: 'The shared preference selection is unresolved.',
     invalidated: 'The shared preference snapshot expired or changed. Inspect again.',
@@ -106,6 +106,7 @@ export class App implements OnDestroy {
     unavailable: 'Shared preferences are unavailable.', busy: 'Buddy data is busy. Inspect again when ownership is available.',
     conflict: 'The shared preferences changed. Inspect again before editing.',
     'not-dispatched': 'The shared edit was refused before publication.',
+    'invalid-input': 'Nothing was sent. Use supported preferences and keep the prompt at or below 16 KiB (16,384 UTF-8 bytes).',
     unknown: 'The edit outcome is unknown. Check the original edit.',
   };
   private readonly portableController=new PortableController(state=>this.portable.set(state),()=>{document.querySelectorAll<HTMLInputElement>('#portable-file').forEach(f=>{f.value='';});});

@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
+import {SharedPreferenceController} from '../src/shared-preferences.ts';
 import {MaintenanceIO} from '../host/maintenance-io.mjs';
 import {startHelper} from '../host/browser-helper.mjs';
 import {SharedPreferencesHost, registerSharedPreferenceHandler} from '../host/shared-preferences.mjs';
@@ -123,4 +124,38 @@ test('cancellation after possible dispatch and late completion retain the origin
   f.release();
   assert.equal((await writing).state, 'unknown');
   assert.equal((await host.request({action: 'retained'})).retained.length, 1);
+});
+
+test('locally invalid Edit sends nothing and keeps the Inspect editor available', async () => {
+  const f = fixture();
+  f.set('normal');
+  const host = new SharedPreferencesHost({observer: f.observer, io: new MaintenanceIO(), beforeIO() {}});
+  const controller = new SharedPreferenceController(() => {});
+  const dispatch = async q => host.deliver(await host.request(q));
+  try {
+    await controller.run(dispatch, inspect);
+    const {reference, view} = controller.state;
+    const before = f.calls.length;
+    let invocations = 0;
+    const counted = q => { invocations++; return dispatch(q); };
+    const edit = {action: 'edit', ...target, reference, patch: {
+      portable_configuration_version: 1, settings: {personalization: {text: 'x'.repeat(16385)}}
+    }};
+    await controller.run(counted, edit);
+    assert.equal(invocations, 0);
+    assert.equal(f.calls.length, before);
+    assert.equal(controller.state.state, 'invalid-input');
+    assert.equal(controller.state.busy, false);
+    assert.equal(controller.state.view, view);
+    assert.equal(controller.state.reference, reference);
+    assert.deepEqual(controller.state.retained, []);
+    f.set('lost');
+    await controller.run(counted, {...edit, patch});
+    assert.equal(invocations, 1);
+    assert.equal(controller.state.state, 'unknown');
+    assert.deepEqual(controller.state.retained, [{reference, ...target}]);
+  } finally {
+    controller.clear();
+    host.dispose();
+  }
 });
