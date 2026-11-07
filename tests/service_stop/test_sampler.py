@@ -110,6 +110,42 @@ class Files:
  def sampler(self):return s.Sampler(Mock(),time.monotonic()+12,run=self.run)
 
 
+class AliasFiles(Files):
+ def __init__(self):
+  super().__init__()
+  self.app=s.APPS['ordinary-manual'];self.target=s.ORDINARY_ALIAS_TARGET
+  self.by_path[self.target]='buddy_executable'
+  self.literal=self.target;self.proc_path=self.target
+  self.alias_reads=0;self.drift=False;self.target_parent_drift=False
+  self.target_inode_drift=False;self.target_reads=0
+  self.foreign_target_parent=False;self.nested_target=False;self.proc_inode_drift=False
+
+ def meta(self,path,follow=False):
+  if path==self.app:
+   self.alias_reads+=1
+   inode=4 if not self.drift or self.alias_reads==1 else 5
+   return f'1 {inode} 0 0 a1ff {len(self.literal)} 1\n2026-01-01 00:00:00.000000001 +0000\n2026-01-01 00:00:00.000000001 +0000\n'.encode()
+  raw=super().meta(path,follow)
+  if path==self.target:
+   self.target_reads+=1
+   if self.target_inode_drift and self.target_reads>1:raw=raw.replace(b'1 2 0 0 ',b'1 3 0 0 ',1)
+  if path==self.target.rsplit('/',1)[0]:
+   if self.foreign_target_parent:return raw.replace(b'0 0 41ed',b'1 0 41ed',1)
+   if self.target_parent_drift and self.target_reads:return raw.replace(b'1 1 0 0 ',b'1 3 0 0 ',1)
+  if path=='/proc/20/exe' and self.proc_inode_drift:raw=raw.replace(b'1 2 0 0 ',b'1 3 0 0 ',1)
+  return raw
+
+ def run(self,transport,command,deadline,cap):
+  parts=shlex.split(shlex.split(command)[-1]) if command.startswith(s.PREFIX) else []
+  if parts and parts[0]=='readlink':
+   self.commands.append(command)
+   return 0,((self.literal if parts[-1]==self.app else self.proc_path)+'\n').encode(),b''
+  if self.nested_target and parts and parts[-1]==self.target and 'stat' in parts:
+   self.commands.append(command)
+   return 1,b'',b''
+  return super().run(transport,command,deadline,cap)
+
+
 class Channel:
  def __init__(self,out=b'',err=b'',code=0):self.out=out;self.err=err;self.code=code;self.closed=False;self.write_closed=False;self.commands=[]
  def settimeout(self,value):pass
@@ -267,11 +303,26 @@ class SamplerTests(unittest.TestCase):
   root=Path(__file__).resolve().parents[2]
   imports=json.dumps((root/'host/service-stop-profiles.mjs').as_uri());private=json.dumps((root/'host/service-stop-private.mjs').as_uri())
   script="import {matchesCandidateStopProfile} from "+imports+";import {parseServiceStopRaw,serviceStopSampleDigest,admitServiceStopProfile} from "+private+";let s='';for await(const c of process.stdin)s+=c;const v=JSON.parse(s);parseServiceStopRaw(v.raw,'review');if(!matchesCandidateStopProfile(v.observation,v.raw,v.tuple)||serviceStopSampleDigest(v.observation,v.tuple.profile,v.raw)!==v.digest||admitServiceStopProfile(v.observation,v.raw)!==null)process.exit(1);"
-  for profile in s.APPS:
-   f=Files(profile);raw,digest=f.sampler().bracket(profile,f.vector['observation'],t.empty_raw)
+  for f in (Files(),Files('resident-installed'),AliasFiles()):
+   profile=f.profile
+   if isinstance(f,AliasFiles):f.vector['tuple']['ordinary_alias_target']=f.target
+   raw,digest=f.sampler().bracket(profile,f.vector['observation'],t.empty_raw)
    body=dict(raw=raw,digest=digest,observation=f.vector['observation'],tuple=f.vector['tuple'])
    r=subprocess.run(['node','--input-type=module','-e',script],input=json.dumps(body),capture_output=True,text=True,timeout=10)
    self.assertEqual(r.returncode,0,r.stderr)
+ def test_alias_sampler_binds_literal_target_process_and_both_parent_brackets(self):
+  f=AliasFiles();raw,digest=f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+  self.assertEqual(raw['ordinary_alias']['literal'],f.target)
+  self.assertEqual(raw['process']['executable'],f.target)
+  self.assertEqual(raw['process']['argv'],[f.app])
+  self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
+  self.assertEqual(len(digest),64)
+  for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
+                       ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
+                       ('target_parent_drift',True),('nested_target',True),('proc_inode_drift',True)]:
+   f=AliasFiles();setattr(f,change,value)
+   with self.subTest(change=change), self.assertRaises(ValueError):
+    f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
  def test_actual_cli_disabled_stop_never_uses_host_config_or_ssh(self):
   v=VECTORS[0];q=dict(connection_id=v['observation']['connection_id'],boot_id=v['observation']['boot_id'],selector='stop',budget_ms=12000,expected=dict(profile='ordinary-manual',sample_sha256=v['sample_sha256']))
   r=subprocess.run([sys.executable,t.__file__],input=json.dumps(q),capture_output=True,text=True,timeout=3,env=dict(os.environ,MANAGER_WIRED_CONFIG='THIS_MUST_NOT_BE_READ'))

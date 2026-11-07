@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {matchesCandidateStopProfile} from './service-stop-profiles.mjs';
+import {matchesCandidateStopProfile,ORDINARY_STOP_EXEC_START,ORDINARY_STOP_ALIAS_TARGET} from './service-stop-profiles.mjs';
 import {strictJson} from './strict-json.mjs';
 import {basicDigest,basicUuid} from './basic-settings-protocol.mjs';
 import {readFileSync} from 'node:fs';
@@ -73,8 +73,18 @@ function snapshot(v){
  for(const name of catalog.hooks){const h=v.hooks[name];exact(h,['property','observation','type_verified','reason']);if(h.property!==name||!(h.observation==='observed-empty'&&h.type_verified===true&&h.reason==='typed-empty'||h.observation==='observed-nonempty'&&h.type_verified===true&&h.reason==='typed-nonempty'||h.observation==='unknown'&&h.type_verified===false&&unknown.includes(h.reason)))fail();}
  if(Buffer.byteLength(JSON.stringify(v))>16384)fail();stateFields(v.state);
 }
+function ordinaryAlias(v){
+ exact(v,['device','inode','uid','gid','mode','length','mtime_ns','ctime_ns','links','literal','link_parents_sha256','target_parents_sha256']);
+ for(const k of ['device','inode','uid','gid','mode','length','mtime_ns','ctime_ns'])if(!decimal(v[k],['uid','gid','mode'].includes(k)?32:64))fail();
+ if(v.device==='0'||v.inode==='0'||v.uid!=='0'||v.gid!=='0'||v.mode!==String(0o120777)||
+    v.links!=='1'||v.literal!==ORDINARY_STOP_ALIAS_TARGET||v.length!==String(v.literal.length)||
+    !basicDigest(v.link_parents_sha256)||!basicDigest(v.target_parents_sha256))fail();
+}
 export function parseServiceStopRaw(v,selector){
- if(Buffer.byteLength(JSON.stringify(v))>262144)fail();exact(v,['selector','command','reason',...evidence]);
+ if(Buffer.byteLength(JSON.stringify(v))>262144)fail();
+ const alias=Object.hasOwn(v??{},'ordinary_alias');
+ exact(v,['selector','command','reason',...evidence,...(alias?['ordinary_alias']:[])]);
+ if(alias)ordinaryAlias(v.ordinary_alias);
  if(v.selector!==selector||!['review','stop','inspect'].includes(selector)||!['not-submitted','request-accepted','unknown'].includes(v.command)||selector!=='stop'&&v.command!=='not-submitted'||!reasons.includes(v.reason))fail();
  if(v.command==='request-accepted'&&v.reason!==null||v.command==='unknown'&&v.reason===null)fail();
  for(const k of ['buddy','helper','stock','companion']){snapshot(v[k]);if(v[k]&&v[k].state.Id!==({buddy:'reader-buddy.service',helper:'reader-buddy-stock-recovery.service',stock:'xochitl.service',companion:'rm-sync.service'})[k])fail();}
@@ -82,18 +92,31 @@ export function parseServiceStopRaw(v,selector){
  if(v.vendor_policy!==null){exact(v.vendor_policy,['stock','companion']);for(const p of Object.values(v.vendor_policy)){exact(p,vendor.keys);if(Buffer.byteLength(JSON.stringify(p))>16384||!Object.values(p).every(x=>ascii(x)))fail();}}
  exact(v.configuration,['read','effective_mode']);if(v.configuration.read!=='not-read'||v.configuration.effective_mode!=='unverified'||!['not-read','absent-final-component','occupied','refused'].includes(v.lease_observation))fail();
  if(v.platform!==null){exact(v.platform,['firmware','kernel']);if(!ascii(v.platform.firmware,128)||!ascii(v.platform.kernel,256)||!v.platform.firmware||!v.platform.kernel)fail();}
- if(v.process!==null){const p=v.process;exact(p,['pid','start_ticks','uid','gid','executable','argv','sha256']);for(const k of ['pid','start_ticks','uid','gid'])if(!decimal(p[k],k==='pid'?32:64))fail();if(!['/opt/bin/reader-buddy','/home/root/.local/lib/remarkable-buddies/reader-buddy'].includes(p.executable)||!Array.isArray(p.argv)||p.argv.length!==1||p.argv[0]!==p.executable||!basicDigest(p.sha256))fail();}
+ if(v.process!==null){
+   const p=v.process;
+   exact(p,['pid','start_ticks','uid','gid','executable','argv','sha256']);
+   for(const k of ['pid','start_ticks','uid','gid'])if(!decimal(p[k],k==='pid'?32:64))fail();
+   const paths=alias?[ORDINARY_STOP_ALIAS_TARGET]:[ORDINARY_STOP_EXEC_START,'/home/root/.local/lib/remarkable-buddies/reader-buddy'];
+   if(!paths.includes(p.executable)||!Array.isArray(p.argv)||p.argv.length!==1||
+      p.argv[0]!==(alias?ORDINARY_STOP_EXEC_START:p.executable)||!basicDigest(p.sha256))fail();
+ }
  if(v.artifacts!==null){exact(v.artifacts,['buddy_unit','buddy_executable','recovery_profile','native_profile','adapter','helper_unit','stock_executable','stock_unit','stock_dropin','companion_executable','companion_unit','companion_dropin']);for(const [slot,f] of Object.entries(v.artifacts)){if(f===null)continue;exact(f,['device','inode','uid','gid','mode','length','mtime_ns','ctime_ns','sha256']);for(const k of ['device','inode','uid','gid','mode','length','mtime_ns','ctime_ns'])if(!decimal(f[k],['uid','gid','mode'].includes(k)?32:64))fail();if(f.device==='0'||f.inode==='0'||!basicDigest(f.sha256)||BigInt(f.length)>BigInt(['buddy_executable','adapter','stock_executable','companion_executable'].includes(slot)?134217728:32768))fail();}}
  recoveryProfile(record(v.recovery_profile_base64));leaseRecord(record(v.lease_base64));
  if(v.lease_base64!==null&&v.lease_observation!=='occupied')fail();
- if(selector==='inspect'||v.process===null||v.process.executable==='/opt/bin/reader-buddy'){if(v.companion!==null||v.companion_group!==null||v.vendor_policy!==null)fail();if(v.process?.executable==='/opt/bin/reader-buddy'&&Object.entries(v.artifacts??{}).some(([k,f])=>!['buddy_unit','buddy_executable'].includes(k)&&f!==null))fail();}
+ const ordinary=alias||v.process?.executable===ORDINARY_STOP_EXEC_START;
+ if(alias&&(selector==='inspect'||!v.process||!v.artifacts?.buddy_executable||!v.artifacts?.buddy_unit||
+     v.recovery_profile_base64!==null||v.lease_base64!==null||v.helper!==null||v.stock!==null))fail();
+ if(selector==='inspect'||v.process===null||ordinary){
+   if(v.companion!==null||v.companion_group!==null||v.vendor_policy!==null)fail();
+   if(ordinary&&Object.entries(v.artifacts??{}).some(([k,f])=>!['buddy_unit','buddy_executable'].includes(k)&&f!==null))fail();
+ }
  else if(v.companion===null||v.companion_group===null||v.vendor_policy===null||v.recovery_profile_base64===null||v.lease_base64===null||Object.values(v.artifacts??{}).length!==12||Object.values(v.artifacts).some(x=>x===null))fail();
  return v;
 }
 function canonical(v){if(Array.isArray(v))return v.map(canonical);if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])]));return v;}
 export function serviceStopSampleDigest(observation,profile,raw){
  if(!['ordinary-manual','resident-installed'].includes(profile))fail();
- return createHash('sha256').update(JSON.stringify(canonical({connection_id:observation.connection_id,boot_id:observation.boot_id,profile,...Object.fromEntries(evidence.map(k=>[k,raw[k]]))}))).digest('hex');
+ return createHash('sha256').update(JSON.stringify(canonical({connection_id:observation.connection_id,boot_id:observation.boot_id,profile,...Object.fromEntries(evidence.map(k=>[k,raw[k]])),...(Object.hasOwn(raw,'ordinary_alias')?{ordinary_alias:raw.ordinary_alias}:{})}))).digest('hex');
 }
 // Deliberately no qualified production tuple. Metadata, hashes or a matching
 // source shape cannot enroll a deployment. Enabling requires reviewed native

@@ -34,6 +34,7 @@ SLOTS = dict(buddy_unit='/usr/lib/systemd/system/reader-buddy.service',
              companion_dropin='/usr/lib/systemd/system/rm-sync.service.d/rm-sync-service-override.conf')
 APPS = {'ordinary-manual':'/opt/bin/reader-buddy',
         'resident-installed':'/home/root/.local/lib/remarkable-buddies/reader-buddy'}
+ORDINARY_ALIAS_TARGET = '/home/root/.local/lib/reader-buddy/ordinary/reader-buddy'
 CATALOG = json.loads(Path(__file__).with_name('service-stop-properties.json').read_text())
 VENDOR = json.loads(Path(__file__).with_name('service-stop-vendor-policy.json').read_text())
 TEXT_SECTIONS = ('state','policy','stop_extra')
@@ -54,6 +55,7 @@ def canonical_digest(observation, profile, raw):
              'companion','companion_group','vendor_policy')
     v = dict(connection_id=observation['connection_id'],boot_id=observation['boot_id'],profile=profile,
              **{k:raw[k] for k in names})
+    if 'ordinary_alias' in raw:v['ordinary_alias']=raw['ordinary_alias']
     return hashlib.sha256(json.dumps(v,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
 
 
@@ -242,9 +244,9 @@ class Sampler:
     def command(self,script,cap=32768):
         return self.run(self.transport,PREFIX+shlex.quote(script),self.deadline,cap)
 
-    def stat(self,path,follow=False,missing=False):
+    def stat(self,path,follow=False,missing=False,allow_link=False):
         # Every caller uses a compiled fixed path or a range-checked MainPID path.
-        command=('stat -L ' if follow else 'test ! -L '+shlex.quote(path)+' && stat ')
+        command=('stat -L ' if follow else 'stat ' if allow_link else 'test ! -L '+shlex.quote(path)+' && stat ')
         command+='-c '+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(path)
         code,out,err=self.command(command,4096)
         if code:
@@ -293,6 +295,25 @@ class Sampler:
             out=None
         if self.stat(path)!=before or self.parents(path)!=parents:refuse()
         return dict(f,sha256=checksum),out
+
+    def ordinary_alias(self, app):
+        if app != APPS['ordinary-manual']:refuse()
+        parents=self.parents(app)
+        before=self.stat(app,allow_link=True)
+        f,nlink=before
+        mode=int(f['mode'])
+        if mode&0o170000==0o100000:return None
+        expected=ORDINARY_ALIAS_TARGET.encode('ascii')
+        if f['uid']!='0' or f['gid']!='0' or mode!=0o120777 or nlink!=1 or int(f['length'])!=len(expected):refuse()
+        code,literal,err=self.command('readlink -- '+shlex.quote(app),256)
+        if code or err or literal!=expected+b'\n':refuse()
+        target_parents=self.parents(ORDINARY_ALIAS_TARGET)
+        if self.stat(app,allow_link=True)!=before or self.parents(app)!=parents:refuse()
+        def parent_digest(rows):
+            return hashlib.sha256(json.dumps(rows,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+        return dict(f,links='1',literal=ORDINARY_ALIAS_TARGET,
+                    link_parents_sha256=parent_digest(parents),
+                    target_parents_sha256=parent_digest(target_parents))
 
     def text(self,path,cap):
         # Kernel/platform identity files are read-only sources, not trust anchors.
@@ -358,7 +379,8 @@ class Sampler:
             elif got!=wanted:refuse()
         return result
 
-    def process(self,service,app,artifact):
+    def process(self,service,app,artifact,argv0=None):
+        argv0=app if argv0 is None else argv0
         pid=service['state']['MainPID']
         if not re.fullmatch('[1-9][0-9]*',pid) or not 1<int(pid)<2**32:refuse()
         root='/proc/'+pid
@@ -368,8 +390,8 @@ class Sampler:
             fields=stat.rsplit(')',1)[1].split()
             if len(fields)<20 or fields[0] in ('Z','X','x') or not re.fullmatch('[1-9][0-9]*',fields[19]):refuse()
             return fields[19]
-        before=start();cmd=self.text(root+'/cmdline',len(app)+1)
-        if cmd!=app.encode()+b'\0':refuse()
+        before=start();cmd=self.text(root+'/cmdline',len(argv0)+1)
+        if cmd!=argv0.encode()+b'\0':refuse()
         code,exe,err=self.command('readlink -- '+shlex.quote(root+'/exe'),4096)
         if code or err or exe!=app.encode()+b'\n':refuse()
         status=self.text(root+'/status',16384).decode('ascii').splitlines()
@@ -382,7 +404,7 @@ class Sampler:
         if running!= {k:v for k,v in artifact.items() if k!='sha256'}:refuse()
         code,out,err=self.command('sha256sum -- '+shlex.quote(root+'/exe'),4096)
         if code or err or out!=(artifact['sha256']+'  '+root+'/exe\n').encode() or self.stat(root+'/exe',follow=True)[0]!=running or start()!=before:refuse()
-        return dict(pid=pid,start_ticks=before,uid='0',gid='0',executable=app,argv=[app],sha256=artifact['sha256'])
+        return dict(pid=pid,start_ticks=before,uid='0',gid='0',executable=app,argv=[argv0],sha256=artifact['sha256'])
 
     def lease(self):
         parents=self.parents(LEASE_DIRECTORY);directory=self.stat(LEASE_DIRECTORY,missing=True)
@@ -491,7 +513,11 @@ class Sampler:
     def capture(self,profile,empty):
         if profile not in APPS:refuse()
         r=empty('review',None);r['buddy']=self.service(BUDDY)
-        slots=dict(SLOTS,buddy_executable=APPS[profile])
+        app=APPS[profile]
+        alias=self.ordinary_alias(app) if profile=='ordinary-manual' else None
+        executable=alias['literal'] if alias else app
+        slots=dict(SLOTS,buddy_executable=executable)
+        if alias:r['ordinary_alias']=alias
         if profile=='ordinary-manual':slots['buddy_unit']='/etc/systemd/system/'+BUDDY
         else:self.package_conflicts()
         r['artifacts']={k:None for k in slots}
@@ -501,7 +527,11 @@ class Sampler:
             evidence,content=self.file(slots[key],cap,contents=key=='recovery_profile')
             r['artifacts'][key]=evidence
             if key=='recovery_profile':r['recovery_profile_base64']=base64.b64encode(content).decode('ascii')
-        r['process']=self.process(r['buddy'],APPS[profile],r['artifacts']['buddy_executable'])
+        def process():
+            artifact=r['artifacts']['buddy_executable']
+            return (self.process(r['buddy'],executable,artifact,argv0=app) if alias else
+                    self.process(r['buddy'],executable,artifact))
+        r['process']=process()
         os_release=self.text('/etc/os-release',16384).decode('ascii').splitlines()
         versions=[x[len('IMG_VERSION='):] for x in os_release if x.startswith('IMG_VERSION=')]
         if len(versions)!=1:refuse()
@@ -514,11 +544,16 @@ class Sampler:
         if profile=='resident-installed':
             if r['lease_observation']!='occupied' or r['lease_base64'] is None:refuse()
             self.group(r['lease_base64'],r['process'])
-            if self.process(r['buddy'],APPS[profile],r['artifacts']['buddy_executable'])!=r['process']:refuse()
+            if process()!=r['process']:refuse()
             r['helper']=self.service(HELPER);r['stock']=self.service(STOCK)
             r['companion'],r['companion_group']=self.companion(r['lease_base64'])
             r['vendor_policy']={name:self.vendor_policy(unit) for name,unit in [('stock',STOCK),('companion',COMPANION)]}
-        if self.service(BUDDY)!=r['buddy'] or self.process(r['buddy'],APPS[profile],r['artifacts']['buddy_executable'])!=r['process']:refuse()
+        if self.service(BUDDY)!=r['buddy'] or process()!=r['process']:refuse()
+        if alias:
+            target=self.stat(executable)[0]
+            if (not int(target['mode'])&0o111 or
+                target!={k:v for k,v in r['artifacts']['buddy_executable'].items() if k!='sha256'} or
+                self.ordinary_alias(app)!=alias):refuse()
         if time.monotonic()>=self.deadline:raise shared.Refusal('timeout')
         return r
 
