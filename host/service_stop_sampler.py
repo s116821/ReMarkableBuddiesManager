@@ -257,9 +257,19 @@ class Sampler:
         return metadata(out)
 
     def parents(self,path):
-        parents=list(PurePosixPath(path).parents);result=[]
-        for parent in reversed(parents):
-            p=str(parent);info=self.stat(p)
+        parents=[str(parent) for parent in reversed(PurePosixPath(path).parents)]
+        if not parents:return []
+        # One command per original chain, no cache. Only metadata is collected
+        # before host validation; callers cannot read leaf bytes/hashes yet.
+        scripts=['test ! -L '+shlex.quote(p)+' && stat -c '+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(p)
+                 for p in parents]
+        code,out,err=self.command(' && '.join(scripts),4096)
+        if code or err:refuse()
+        lines=out.split(b'\n')
+        if len(lines)!=3*len(parents)+1 or lines[-1]!=b'':refuse()
+        result=[]
+        for i,p in enumerate(parents):
+            info=metadata(b'\n'.join(lines[3*i:3*i+3])+b'\n')
             f=info[0];mode=int(f['mode'])
             if f['uid']!='0' or f['gid']!='0' or mode&0o170000!=0o040000 or mode&0o022:refuse()
             result.append((p,info))
