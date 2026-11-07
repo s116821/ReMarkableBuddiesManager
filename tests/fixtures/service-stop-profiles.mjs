@@ -27,3 +27,14 @@ export function stopProfileFixture(profile='ordinary-manual'){
  const tuple={profile,model:o.model,platform:{...r.platform},artifacts:Object.fromEntries(Object.entries(r.artifacts).filter(([,f])=>f).map(([k,f])=>[k,f.sha256])),buddy_policy:structuredClone(r.buddy.policy),buddy_extra:structuredClone(r.buddy.stop_extra),helper_policy:structuredClone(r.helper?.policy??null),stock_policy:structuredClone(r.stock?.policy??null),companion_policy:structuredClone(r.companion?.policy??null),vendor_policy:structuredClone(r.vendor_policy)};
  return {observation:o,raw:r,tuple};
 }
+
+export function ordinaryAliasFixture(){
+ const fixture=stopProfileFixture();
+ const target='/home/root/.local/lib/reader-buddy/ordinary/reader-buddy';
+ fixture.tuple.ordinary_alias_target=target;
+ fixture.raw.process.executable=target;
+ fixture.raw.ordinary_alias={device:'1',inode:'4',uid:'0',gid:'0',mode:String(0o120777),
+   length:String(target.length),mtime_ns:'1',ctime_ns:'1',links:'1',literal:target,
+   link_parents_sha256:'a'.repeat(64),target_parents_sha256:'b'.repeat(64)};
+ return fixture;
+}

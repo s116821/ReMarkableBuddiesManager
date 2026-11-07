@@ -34,20 +34,34 @@ export function companionTerminal(current,original,group){
  return true;
 }
 function emptyHooks(s){return s?.hooks&&catalog.hooks.every(k=>{const h=s.hooks[k];return h?.property===k&&h.observation==='observed-empty'&&h.type_verified===true&&h.reason==='typed-empty';});}
+export const ORDINARY_STOP_EXEC_START='/opt/bin/reader-buddy';
+export const ORDINARY_STOP_ALIAS_TARGET='/home/root/.local/lib/reader-buddy/ordinary/reader-buddy';
+
 export function matchesCandidateStopProfile(observation,raw,tuple){
  try{
   // tuple must come from independently reviewed immutable build/platform policy,
   // never copied from this observation or accepted from a renderer/device file.
   if(!['review','stop'].includes(raw?.selector))return false;parseServiceStopRaw(raw,raw.selector);
   if(!emptyHooks(raw.buddy)||tuple?.profile==='resident-installed'&&!['helper','stock','companion'].every(k=>emptyHooks(raw[k])))return false;
-  if(!tuple||Object.keys(tuple).sort().join()!=='artifacts,buddy_extra,buddy_policy,companion_policy,helper_policy,model,platform,profile,stock_policy,vendor_policy'||!['ordinary-manual','resident-installed'].includes(tuple.profile)||!observation?.model||observation.firmware_conflict||!raw.platform||!matches(raw.platform,tuple.platform)||tuple.model!==observation.model||observation.firmware!==raw.platform.firmware)return false;
+  const alias=raw.ordinary_alias;
+  const aliasTuple=Object.hasOwn(tuple??{},'ordinary_alias_target');
+  const tupleKeys='artifacts,buddy_extra,buddy_policy,companion_policy,helper_policy,model,'+
+    (aliasTuple?'ordinary_alias_target,':'')+'platform,profile,stock_policy,vendor_policy';
+  if(aliasTuple!==Object.hasOwn(raw,'ordinary_alias')||aliasTuple&&
+     (tuple.profile!=='ordinary-manual'||tuple.ordinary_alias_target!==ORDINARY_STOP_ALIAS_TARGET||
+      alias?.literal!==ORDINARY_STOP_ALIAS_TARGET||alias.uid!=='0'||alias.gid!=='0'||alias.links!=='1'||
+      alias.mode!==String(0o120777)||alias.length!==String(ORDINARY_STOP_ALIAS_TARGET.length)||
+      !digest(alias.link_parents_sha256)||!digest(alias.target_parents_sha256)))return false;
+  if(!tuple||Object.keys(tuple).sort().join()!==tupleKeys||!['ordinary-manual','resident-installed'].includes(tuple.profile)||!observation?.model||observation.firmware_conflict||!raw.platform||!matches(raw.platform,tuple.platform)||tuple.model!==observation.model||observation.firmware!==raw.platform.firmware)return false;
   if(Object.keys(tuple.buddy_extra??{}).sort().join()!==[...catalog.stop_extra].sort().join()||Object.keys(tuple.platform??{}).sort().join()!=='firmware,kernel')return false;
   const expectedSlots=tuple.profile==='ordinary-manual'?['buddy_unit','buddy_executable']:['buddy_unit','buddy_executable','recovery_profile','native_profile','adapter','helper_unit','stock_executable','stock_unit','stock_dropin',...Object.keys(companionPins)];if(Object.keys(tuple.artifacts??{}).sort().join()!==expectedSlots.sort().join())return false;
   const b=raw.buddy,p=raw.process,a=raw.artifacts,packageUnit='/usr/lib/systemd/system/reader-buddy.service';if(!b||!p||!a||!matches(b.state,{Id:BUDDY,LoadState:'loaded',ActiveState:'active',SubState:'running',ControlPID:'0',Job:'',ControlGroup:'/system.slice/'+BUDDY})||b.stop_extra.Names!==BUDDY||!nonzero(b.state.MainPID)||BigInt(b.state.MainPID)<=1n||b.state.MainPID!==b.state.ExecMainPID||p.pid!==b.state.MainPID||!nonzero(p.start_ticks)||!nonzero(b.state.ExecMainStartTimestampMonotonic)||!/^[a-f0-9]{32}$/.test(b.state.InvocationID)||/^0+$/.test(b.state.InvocationID)||p.uid!=='0'||p.gid!=='0'||!extras(b)||!safePolicy(b.policy,tuple.profile==='ordinary-manual'?fixedFiles.buddy_unit:packageUnit))return false;
   if(!a.buddy_unit||!a.buddy_executable||p.sha256!==a.buddy_executable.sha256||!Object.entries(a).every(([k,f])=>f===null||protectedFile(f)&&tuple.artifacts?.[k]===f.sha256)||!policiesEqual(b.policy,tuple.buddy_policy)||!matches(b.stop_extra,tuple.buddy_extra))return false;
   if(tuple.profile==='ordinary-manual'){
    if(tuple.companion_policy!==null||tuple.vendor_policy!==null)return false;
-   return matches(b.policy,{Type:'simple',Restart:'on-failure',DefaultDependencies:'yes',WatchdogUSec:'0',OnSuccess:'',OnFailure:''})&&matches(b.stop_extra,{WorkingDirectory:'/home/root',RestartUSec:'5s',EnvironmentFiles:'/home/root/.config/reader-buddy/environment (ignore_errors=no)'})&&finite(b.policy.TimeoutStopUSec)&&finite(b.policy.TimeoutStartUSec)&&a.buddy_unit.sha256===manualUnit&&p.executable==='/opt/bin/reader-buddy'&&p.argv.length===1&&p.argv[0]===p.executable&&raw.recovery_profile_base64===null&&raw.lease_base64===null&&raw.lease_observation==='absent-final-component'&&Object.entries(a).every(([k,f])=>['buddy_unit','buddy_executable'].includes(k)||f===null);
+   return matches(b.policy,{Type:'simple',Restart:'on-failure',DefaultDependencies:'yes',WatchdogUSec:'0',OnSuccess:'',OnFailure:''})&&matches(b.stop_extra,{WorkingDirectory:'/home/root',RestartUSec:'5s',EnvironmentFiles:'/home/root/.config/reader-buddy/environment (ignore_errors=no)'})&&finite(b.policy.TimeoutStopUSec)&&finite(b.policy.TimeoutStartUSec)&&a.buddy_unit.sha256===manualUnit&&p.executable===(aliasTuple?ORDINARY_STOP_ALIAS_TARGET:ORDINARY_STOP_EXEC_START)&&
+     p.argv.length===1&&p.argv[0]===ORDINARY_STOP_EXEC_START&&
+     (!aliasTuple||(BigInt(a.buddy_executable.mode)&0o111n)!==0n)&&raw.recovery_profile_base64===null&&raw.lease_base64===null&&raw.lease_observation==='absent-final-component'&&Object.entries(a).every(([k,f])=>['buddy_unit','buddy_executable'].includes(k)||f===null);
   }
   if(!raw.recovery_profile_base64||!raw.lease_base64||raw.lease_observation!=='occupied'||!Object.values(a).every(protectedFile)||p.executable!=='/home/root/.local/lib/remarkable-buddies/reader-buddy'||p.argv.length!==1||p.argv[0]!==p.executable||!raw.helper||!raw.stock||!raw.companion)return false;
   const profileBytes=Buffer.from(raw.recovery_profile_base64,'base64');if(createHash('sha256').update(profileBytes).digest('hex')!==a.recovery_profile.sha256||String(profileBytes.length)!==a.recovery_profile.length)return false;
