@@ -268,8 +268,8 @@ class Sampler:
         if f['uid']!='0' or f['gid']!='0' or mode&0o170000!=0o100000 or mode&0o022 or int(f['length'])>limit:refuse()
         if private and (mode&0o7777!=0o600 or nlink!=1 or int(f['length'])==0):refuse()
         if contents:
-            code,out,err=self.command('head -c '+str(limit+1)+' -- '+shlex.quote(path),limit+1)
-            if code or err or len(out)!=int(f['length']) or len(out)>limit:refuse()
+            out=self.text(path,limit)
+            if len(out)!=int(f['length']):refuse()
             checksum=hashlib.sha256(out).hexdigest()
         else:
             code,value,err=self.command('sha256sum -- '+shlex.quote(path),4096)
@@ -283,7 +283,11 @@ class Sampler:
 
     def text(self,path,cap):
         # Kernel/platform identity files are read-only sources, not trust anchors.
-        code,out,err=self.command('head -c '+str(cap+1)+' -- '+shlex.quote(path),cap+1)
+        # bs=1 makes count a byte limit even for short procfs reads. Probe one
+        # excess byte; exact-cap EOF is valid, excess and nonzero exits refuse.
+        # POSIX dd writes normal counters to stderr: suppress those, preserving
+        # its exit status (including read errors and a missing utility). No retry.
+        code,out,err=self.command('dd bs=1 count='+str(cap+1)+' '+shlex.quote('if='+path)+' 2>/dev/null',cap+1)
         if code or err or len(out)>cap:refuse()
         return out
 

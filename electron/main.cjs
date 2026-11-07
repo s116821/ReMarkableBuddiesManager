@@ -55,9 +55,12 @@ app.whenReady().then(async () => {
   const {parseRestoreRequest,parseRestoreResult,parseNotebookRestoreResult,restoreResponseContext}=await import(pathToFileURL(path.join(hostRoot,'ordinary-restore-protocol.mjs')).href);
   const {ConversationManagementHost}=await import(pathToFileURL(path.join(hostRoot,'conversation-management.mjs')).href);
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
-  const io=new MaintenanceIO();let notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [notebookRestore,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
+  const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
+  const io=new MaintenanceIO();let portable,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
+  portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
   product=new ProductSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(product)});
   model=new ModelSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(model)});
@@ -107,6 +110,10 @@ app.whenReady().then(async () => {
     return observer.memoryQuery(args[0]);
   });
   window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Portable preferences caller refused');
+    let q=parsePortableRequest(args[0]);const context=portableContext(q),pending=portable.request(q);q=null;const value=parsePortableResult(await pending,context,validateResult);return portable.assertCurrent(value);
+  });
   ipcMain.handle('manager:ordinaryExport',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Ordinary export caller refused');
     let request=parseExportRequest(args[0]);args.length=0;
@@ -245,7 +252,7 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  window.on('closed', () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

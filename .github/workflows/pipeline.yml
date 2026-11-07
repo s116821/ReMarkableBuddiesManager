@@ -218,6 +218,8 @@ jobs:
           xvfb-run -a npm run test:source-cache-cleanup-hosts -- --packaged
           xvfb-run -a npm run test:ordinary-export-hosts
           xvfb-run -a npm run test:ordinary-export-hosts -- --packaged
+          xvfb-run -a npm run test:portable-configuration-hosts
+          xvfb-run -a npm run test:portable-configuration-hosts -- --packaged
       - if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -289,6 +291,8 @@ jobs:
           npm run test:source-cache-cleanup-hosts -- --packaged
           npm run test:ordinary-export-hosts
           npm run test:ordinary-export-hosts -- --packaged
+          npm run test:portable-configuration-hosts
+          npm run test:portable-configuration-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
         run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"

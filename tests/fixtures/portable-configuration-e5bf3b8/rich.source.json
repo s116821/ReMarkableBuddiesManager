@@ -1,0 +1,11 @@
+{
+  "product_settings": {
+    "schema_version": 1,
+    "reader_enabled": false
+  },
+  "personalization": {
+    "enabled": false,
+    "text": "Synthetic é 日本語 😀\r\n\t\b\f\u0001 \" \\   "
+  },
+  "research_policy": null
+}

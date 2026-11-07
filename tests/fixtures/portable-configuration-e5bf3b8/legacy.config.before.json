@@ -1,0 +1,19 @@
+{
+  "product_settings": {
+    "reader_enabled": true,
+    "writer_enabled": true
+  },
+  "personalization": {
+    "enabled": false,
+    "text": "Synthetic destination preserved"
+  },
+  "research_policy": "disabled",
+  "paths": {
+    "data": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\data",
+    "cache": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\cache",
+    "credentials": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\credentials"
+  },
+  "model": "synthetic-excluded-model",
+  "model_credential": "synthetic_key",
+  "base_url": "https://synthetic.invalid/v1"
+}
