@@ -9,3 +9,35 @@ test('existing lease namespace/type/mount relationships and stock invocation rem
 test('all required slots require both positively typed empty hooks',()=>{for(const profile of ['ordinary-manual','resident-installed'])for(const slot of profile==='ordinary-manual'?['buddy']:['buddy','helper','stock','companion'])for(const property of ['ExecStop','ExecStopPost'])for(const observation of ['observed-nonempty','unknown']){const f=stopProfileFixture(profile);f.raw[slot].hooks[property]={property,observation,type_verified:observation!=='unknown',reason:observation==='unknown'?'wrong-envelope':'typed-nonempty'};assert.equal(matchesCandidateStopProfile(f.observation,f.raw,f.tuple),false,`${profile}/${slot}/${property}/${observation}`);assert.equal(admitServiceStopProfile(f.observation,f.raw),null);}});
 
 test('typed hooks reject missing mixed contradictory and extra private forms',()=>{for(const mutate of [f=>delete f.raw.buddy.hooks,f=>delete f.raw.buddy.hooks.ExecStop,f=>f.raw.buddy.hooks.ExecStop.type_verified=false,f=>f.raw.buddy.hooks.ExecStop.property='ExecStopPost',f=>f.raw.buddy.hooks.ExecStop.reason='PRIVATE_ERROR',f=>f.raw.buddy.hooks.ExecStop.argv='PRIVATE_ARGUMENT',f=>f.raw.buddy.stop_extra.ExecStop='',f=>f.raw.buddy.hooks.Extra=f.raw.buddy.hooks.ExecStop]){const f=stopProfileFixture();mutate(f);assert.equal(matchesCandidateStopProfile(f.observation,f.raw,f.tuple),false);}});
+
+test('ordinary alias candidate keeps argv, link, regular artifact and production admission distinct',async()=>{
+ const {ordinaryAliasFixture}=await import('./fixtures/service-stop-profiles.mjs');
+ const {parseServiceStopRaw,serviceStopSampleDigest,collectServiceStopSample}=await import('../host/service-stop-private.mjs');
+ const {observation,raw,tuple}=ordinaryAliasFixture();
+ assert.equal(parseServiceStopRaw(raw,'review'),raw);
+ assert.equal(matchesCandidateStopProfile(observation,raw,tuple),true);
+ assert.equal(admitServiceStopProfile(observation,raw),null);
+ assert.equal(matchesCandidateStopProfile(observation,raw,stopProfileFixture().tuple),false);
+ const digest=serviceStopSampleDigest(observation,tuple.profile,raw);
+ for(const key of ['inode','link_parents_sha256','target_parents_sha256']){
+  const changed=structuredClone(raw);
+  changed.ordinary_alias[key]=key==='inode'?'5':'c'.repeat(64);
+  assert.notEqual(serviceStopSampleDigest(observation,tuple.profile,changed),digest);
+  let read=0;
+  await assert.rejects(collectServiceStopSample({capture:async()=>read++?changed:raw,now:()=>0},observation,tuple.profile,10));
+ }
+ for(const mutate of [
+  value=>value.ordinary_alias.literal='/home/root/rem42-ordinary-trial/release-app',
+  value=>value.ordinary_alias.links='2',
+  value=>value.ordinary_alias.extra=true,
+  value=>value.process.argv=[value.process.executable],
+  value=>value.process.executable='/opt/bin/reader-buddy',
+  value=>value.companion=stopProfileFixture('resident-installed').raw.companion,
+  value=>delete value.ordinary_alias,
+ ]){
+  const changed=structuredClone(raw);mutate(changed);
+  assert.throws(()=>parseServiceStopRaw(changed,'review'));
+ }
+ const changed=structuredClone(raw);changed.artifacts.buddy_executable.mode=String(0o100644);
+ assert.equal(matchesCandidateStopProfile(observation,changed,tuple),false);
+});
