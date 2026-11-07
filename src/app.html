@@ -816,6 +816,9 @@
     <p class="text-sm text-muted mt-3">Restart does not confirm setup. No automatic retries. Read saved mode and Save Local-only are separate actions requiring valid storage.</p>
   </section>
 
+  @if (serviceStopOpen()) {
+    <section class="ui-panel my-6"><service-stop-panel [adapter]="serviceStopAdapter" [tablet]="connection().observation" [allowed]="!!host.serviceStop && profile().inspection && !storageInitializationPeerBusy() && !storageInitialization().busy" [epoch]="serviceStopEpoch()" [pause]="pauseServiceStop" (busy)="serviceStopBusy.set($event)" (starting)="prepareServiceStop()" /></section>
+  } @else {<button class="ui-button ui-button-secondary" type="button" (click)="serviceStopOpen.set(true)">Open Buddy stop controls</button>}
   <section class="ui-panel my-6" aria-labelledby="owned-v3-title">
     <h2 id="owned-v3-title">Stored data including notebooks</h2>
     <p class="text-sm text-muted">Inspect Buddy-owned file accounting. Original documents and credentials are excluded. Apparent file lengths do not establish allocated or reclaimable space, runtime health or restore compatibility.</p>

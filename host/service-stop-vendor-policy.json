@@ -1,0 +1,39 @@
+{
+  "kind": "proposed fixed source policy; not a qualified production tuple",
+  "source": "91dcc601154507790254946f8f0f811204a0fd43:src/workflow/resident_supervisor/service/vendor.rs",
+  "keys": [
+    "NeedDaemonReload", "Type", "Restart", "TimeoutStartUSec", "TimeoutStopUSec",
+    "UMask", "WorkingDirectory", "User", "Group", "KillMode", "KillSignal",
+    "FinalKillSignal", "SendSIGKILL", "Id", "RestartMode", "NotifyAccess",
+    "RestartForceExitStatus", "BusName", "Nice", "Requires", "Wants", "BindsTo",
+    "PartOf", "Before", "After", "FragmentPath", "DropInPaths"
+  ],
+  "token_sets": ["Requires", "Wants", "BindsTo", "PartOf", "Before", "After", "RestartForceExitStatus"],
+  "stock": {
+    "NeedDaemonReload": "no", "Type": "simple", "Restart": "on-failure",
+    "TimeoutStartUSec": "1min 30s", "TimeoutStopUSec": "1min 30s", "UMask": "0022",
+    "WorkingDirectory": "", "User": "", "Group": "", "KillMode": "control-group",
+    "KillSignal": "15", "FinalKillSignal": "9", "SendSIGKILL": "yes",
+    "Id": "xochitl.service", "RestartMode": "direct", "NotifyAccess": "all",
+    "RestartForceExitStatus": "", "BusName": "", "Nice": "0",
+    "Requires": "dbus.socket system.slice", "Wants": "wacom_flash.service rm-sync.service",
+    "BindsTo": "", "PartOf": "",
+    "Before": "rm-sync.service reader-buddy.service remarkable-reboot.service home.mount shutdown.target remarkable-shutdown.service",
+    "After": "systemd-journald.socket var-lib-uboot.mount dbus.socket factory-reset.service system.slice",
+    "FragmentPath": "/usr/lib/systemd/system/xochitl.service",
+    "DropInPaths": "/usr/lib/systemd/system/xochitl.service.d/xochitl-service-override.conf"
+  },
+  "companion": {
+    "NeedDaemonReload": "no", "Type": "simple", "Restart": "on-failure",
+    "TimeoutStartUSec": "1min 30s", "TimeoutStopUSec": "1min 30s", "UMask": "0022",
+    "WorkingDirectory": "", "User": "", "Group": "", "KillMode": "control-group",
+    "KillSignal": "15", "FinalKillSignal": "9", "SendSIGKILL": "yes",
+    "Id": "rm-sync.service", "RestartMode": "normal", "NotifyAccess": "none",
+    "RestartForceExitStatus": "HUP INT PIPE TERM", "BusName": "no.remarkable.sync", "Nice": "19",
+    "Requires": "system.slice sysinit.target", "Wants": "", "BindsTo": "xochitl.service",
+    "PartOf": "xochitl.service", "Before": "shutdown.target multi-user.target",
+    "After": "home.mount xochitl.service sysinit.target systemd-journald.socket basic.target dbus.socket system.slice",
+    "FragmentPath": "/usr/lib/systemd/system/rm-sync.service",
+    "DropInPaths": "/usr/lib/systemd/system/rm-sync.service.d/rm-sync-service-override.conf"
+  }
+}
