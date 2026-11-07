@@ -71,6 +71,14 @@ class Files:
    return 0,json.dumps(dict(type=kind,data=[value])).encode(),b''
   script=shlex.split(command)[-1];parts=shlex.split(script);path=parts[-1]
   if parts[0]=='stat' and '-f' in parts:return 0,b'63677270\n',b''
+  if parts.count('stat')>1:
+   chunks=[]
+   for i in range(0,len(parts),11):
+    pair=parts[i:i+10];path=pair[3]
+    assert pair==['test','!','-L',path,'&&','stat','-c',s.STAT_FORMAT,'--',path]
+    if i+10<len(parts):assert parts[i+10]=='&&'
+    chunks.append(self.meta(path))
+   return 0,b''.join(chunks),b''
   if 'stat' in parts:
    legacy='/home/root/.local/lib/reader-buddy'
    absent=self.profile=='resident-installed' and ((path==legacy and not self.legacy_directory) or (path==legacy+'/resident-recovery.json' and not self.legacy_profile) or (path in ['/etc/systemd/system/'+s.BUDDY,'/etc/systemd/system/'+s.HELPER] and not self.shadow) or (path=='/sys/fs/cgroup/unified/system.slice/'+s.COMPANION and self.companion_state=='original-absent'))
@@ -117,6 +125,95 @@ class Channel:
 
 
 class SamplerTests(unittest.TestCase):
+ def test_parent_chain_is_one_ordered_command_with_original_metadata(self):
+  f=Files();original=f.meta
+  def meta(path,follow=False):
+   lines=original(path,follow).split(b'\n');fields=lines[0].split();fields[1]=str(['/','/opt','/opt/bin'].index(path)+1).encode();lines[0]=b' '.join(fields);return b'\n'.join(lines)
+  f.meta=meta;sampler=f.sampler();result=sampler.parents('/opt/bin/reader-buddy')
+  self.assertEqual(result,[(p,s.metadata(f.meta(p))) for p in ['/','/opt','/opt/bin']])
+  self.assertEqual(len(f.commands),1);parts=shlex.split(shlex.split(f.commands[0])[-1])
+  self.assertEqual(parts.count('stat'),3);self.assertEqual(parts.count('test'),3)
+  self.assertNotIn('sha256sum',parts);self.assertNotIn('dd',parts)
+  f.commands.clear();self.assertEqual(sampler.parents('/'),[]);self.assertEqual(f.commands,[])
+ def test_parent_chain_rejects_partial_extra_framing_status_and_stderr(self):
+  f=Files();good=b''.join(f.meta(p) for p in ['/','/opt','/opt/bin'])
+  bad=[(1,good,b''),(0,good,b'warning'),(0,good[:-1],b''),(0,good+b'\n',b''),
+       (0,good+f.meta('/'),b''),(0,good[:-len(f.meta('/opt/bin'))],b''),
+       (0,good.replace(b'\n',b'\\n'),b''),(0,good.replace(b'.000000001',b'.000001',1),b'')]
+  for reply in bad:
+   with self.subTest(reply=reply):
+    run=Mock(return_value=reply);sampler=s.Sampler(Mock(),time.monotonic()+5,run=run)
+    with self.assertRaises(ValueError):sampler.parents('/opt/bin/reader-buddy')
+    self.assertEqual(run.call_count,1);self.assertEqual(run.call_args.args[3],4096);self.assertEqual(run.call_args.args[2],sampler.deadline)
+ def test_all_parent_metadata_precedes_host_validation_but_never_leaf_io(self):
+  for field,value in [(2,'1'),(3,'1'),(4,'81ed'),(4,'41ff')]:
+   f=Files();original=f.meta;seen=[]
+   def meta(path,follow=False):
+    seen.append(path);raw=original(path,follow)
+    if path=='/opt':
+     lines=raw.split(b'\n');fields=lines[0].split();fields[field]=value.encode();lines[0]=b' '.join(fields);raw=b'\n'.join(lines)
+    return raw
+   f.meta=meta
+   with self.assertRaises(ValueError):f.sampler().file('/opt/bin/reader-buddy',contents=True)
+   self.assertIn('/opt/bin',seen) # deliberate additional metadata, not early host refusal
+   self.assertEqual(len(f.commands),1)
+   script=shlex.split(f.commands[0])[-1]
+   self.assertNotIn('sha256sum',script);self.assertNotIn('dd ',script)
+   self.assertNotIn('/opt/bin/reader-buddy',script)
+ def test_changed_parent_in_second_chain_refuses_without_a_cache(self):
+  f=Files();original=f.meta;reads=0
+  def meta(path,follow=False):
+   nonlocal reads
+   raw=original(path,follow)
+   if path=='/opt':
+    reads+=1
+    if reads==2:
+     lines=raw.split(b'\n');fields=lines[0].split();fields[1]=b'99';lines[0]=b' '.join(fields);raw=b'\n'.join(lines)
+   return raw
+  f.meta=meta
+  with self.assertRaises(ValueError):f.sampler().file('/opt/bin/reader-buddy')
+  self.assertEqual(reads,2)
+  chains=[c for c in f.commands if shlex.split(shlex.split(c)[-1]).count('stat')==3]
+  self.assertEqual(len(chains),2);self.assertEqual(chains[0],chains[1])
+ @unittest.skipUnless(sys.platform=='linux','local GNU parent chain')
+ def test_actual_gnu_parent_batch_producer_and_unsafe_missing_symlink(self):
+  self.exercise_parent_batch()
+ @unittest.skipUnless(sys.platform=='linux' and shutil.which('busybox'),'local BusyBox parent chain')
+ def test_actual_busybox_parent_batch_producer_and_unsafe_missing_symlink(self):
+  self.exercise_parent_batch(shutil.which('busybox'))
+ def exercise_parent_batch(self,busybox=None):
+  replies=[]
+  def local(_,command,deadline,cap):
+   r=subprocess.run(command,shell=True,capture_output=True,timeout=max(.01,deadline-time.monotonic()))
+   if len(r.stdout)>cap or len(r.stderr)>8192:raise ValueError('fixture bound')
+   replies.append((command,r.returncode,r.stdout,r.stderr));return r.returncode,r.stdout,r.stderr
+  with tempfile.TemporaryDirectory() as folder:
+   fixture=Path(folder);prefix=s.PREFIX
+   if busybox:
+    binary=fixture/'bin';binary.mkdir();shim=binary/'stat'
+    shim.write_text('#!/bin/sh\nexec '+shlex.quote(busybox)+' stat "$@"\n');shim.chmod(0o700)
+    prefix='/usr/bin/env -i HOME=/home/root PATH='+shlex.quote(str(binary)+':/usr/bin:/bin')+' LC_ALL=C /bin/sh -c '
+   with patch.object(s,'PREFIX',prefix):
+    sampler=s.Sampler(Mock(),time.monotonic()+12,run=local)
+    result=sampler.parents('/usr/bin/stat');self.assertEqual([p for p,_ in result],['/','/usr','/usr/bin'])
+    self.assertEqual(len(replies),1)
+    for name,(metadata,nlink) in result:
+     current=Path(name).lstat();self.assertEqual(metadata['inode'],str(current.st_ino));self.assertEqual(metadata['mtime_ns'],str(current.st_mtime_ns));self.assertEqual(metadata['ctime_ns'],str(current.st_ctime_ns));self.assertEqual(nlink,current.st_nlink)
+    missing='/usr/'+fixture.name+'-missing/leaf'
+    with self.assertRaises(ValueError):sampler.parents(missing)
+    self.assertNotEqual(replies[-1][1],0);self.assertNotEqual(replies[-1][2],b'') # complete earlier records, refused partial chain
+    link=fixture/'parent-link';link.symlink_to('/usr/bin',target_is_directory=True)
+    with self.assertRaises(ValueError):sampler.parents(str(link/'leaf'))
+    self.assertNotEqual(replies[-1][1],0)
+    self.assertEqual(len(replies[-1][2].splitlines()),3*(len(PurePosixPath(str(link/'leaf')).parents)-1))
+    non_directory=fixture/'file-parent';non_directory.write_bytes(b'not read by producer')
+    with self.assertRaises(ValueError):sampler.parents(str(non_directory/'child'/'leaf'))
+    self.assertNotEqual(replies[-1][1],0);self.assertNotEqual(replies[-1][3],b'')
+    quoted=fixture/"quoted ' parent";quoted.mkdir()
+    with self.assertRaises(ValueError):sampler.parents(str(quoted/'leaf')) # /tmp and owned non-root directory are unsafe
+    self.assertEqual(replies[-1][1],0);self.assertEqual(replies[-1][3],b'')
+    self.assertNotIn("stat -L",shlex.split(replies[-1][0])[-1])
+    self.assertNotIn('leaf',shlex.split(replies[-1][0])[-1])
  @unittest.skipUnless(sys.platform=='linux','local POSIX GNU stat fixture')
  def test_actual_local_posix_stat_format_quoting_and_nofollow(self):
   self.exercise_local_stat()
