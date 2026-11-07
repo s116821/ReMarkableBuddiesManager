@@ -23,6 +23,13 @@ async function isolate(context, origin) {
 async function exercise(page, set, calls) {
   const panel = page.getByRole('region', {name: 'Shared group preferences'});
   const status = panel.getByTestId('shared-preference-status');
+  // Original recovery remains keyboard reachable even before a tablet is read.
+  const originals = panel.getByRole('button', {name: 'Refresh original edits'});
+  await originals.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(originals).toBeFocused();
+  assert.equal(await originals.evaluate(button => button.matches(':focus-visible')), true);
   await page.getByRole('button', {name: 'Read tablet state', exact: true}).click();
   const inspect = panel.getByRole('button', {name: 'Inspect shared preferences', exact: true});
   await expect(inspect).toBeEnabled();

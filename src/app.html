@@ -27,52 +27,6 @@
 </section>
 
 
-<section class="ui-panel my-5 min-w-0" aria-labelledby="shared-preferences-title">
-  <h2 id="shared-preferences-title">Shared group preferences</h2>
-  <p>Inspect the shared preferences available to Buddy’s next admitted request. A running request may be using an earlier snapshot.</p>
-  <div class="my-3 flex flex-wrap gap-3">
-    <button class="ui-button ui-button-secondary" type="button" (click)="inspectSharedPreferences(false)" [disabled]="!canInspectSharedPreferences()">Inspect shared preferences</button>
-    <button class="ui-button ui-button-secondary" type="button" (click)="inspectSharedPreferences(true)" [disabled]="!canInspectSharedPreferences()">Inspect and reveal private prompt</button>
-    <button class="ui-button ui-button-secondary" type="button" (click)="refreshSharedPreferenceOriginals()" [disabled]="sharedPreferences().busy || !host.sharedPreferences">Refresh original edits</button>
-    <button class="ui-button ui-button-secondary" type="button" (click)="stopSharedPreference()" [disabled]="!sharedPreferences().busy && !sharedPreferences().view">Clear shared view or stop waiting</button>
-  </div>
-  <p role="status" data-testid="shared-preference-status">{{ sharedPreferences().busy ? 'Waiting for Buddy…' : sharedLabels[sharedPreferences().state] }}</p>
-  @if (sharedPreferences().view; as view) {
-    <p>Group {{ view.group }} · {{ view.disposition }}</p>
-    <ul>
-      <li>Reader {{ view.effective.reader_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.reader_enabled }})</li>
-      <li>Writer {{ view.effective.writer_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.writer_enabled }})</li>
-      <li>Export {{ view.effective.export_destination }} ({{ view.effective.origins.export_destination }})</li>
-      <li>Research {{ view.effective.research_policy }} ({{ view.effective.origins.research_policy }})</li>
-      <li>Personalization {{ view.effective.personalization_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.personalization_enabled }})</li>
-      <li>Prompt {{ view.effective.personalization_text_present ? 'present' : 'absent' }} ({{ view.effective.origins.personalization_text }})</li>
-    </ul>
-    @if (view.effective.personalization_text !== null) {
-      <pre class="whitespace-pre-wrap wrap-anywhere">{{ view.effective.personalization_text }}</pre>
-    }
-    <form class="my-3 grid gap-3" (submit)="editSharedPreferences($event)">
-      <p>Choose only the declarations you want to change.</p>
-      <label>Reader <select class="ui-field" name="reader"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
-      <label>Writer <select class="ui-field" name="writer"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
-      <label>Export <select class="ui-field" name="export"><option value="">Leave unchanged</option><option value="mem">Mem</option><option value="disabled">Disable</option></select></label>
-      <label><input type="checkbox" name="product-null"> Explicitly set the shared Reader, Writer and export group to its defaults instead of the individual choices above</label>
-      <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Explicit default</option></select></label>
-      <label>Personalization <select class="ui-field" name="personalization"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
-      <label><input type="checkbox" name="replace-text"> Replace the shared prompt with the text below</label>
-      <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4"></textarea></label>
-      <label><input type="checkbox" name="confirm" required> Apply these declarations to this shared group</label>
-      <button class="ui-button ui-button-primary" type="submit" [disabled]="!canInspectSharedPreferences()">Save shared preferences</button>
-    </form>
-  }
-  @for (record of sharedPreferences().retained; track record.reference; let i = $index) {
-    <p><button class="ui-button ui-button-secondary" type="button" (click)="checkSharedPreference(record.reference)" [disabled]="!canCheckSharedPreference(record)">Check original shared edit {{ i + 1 }}</button></p>
-  } @empty {
-    @if (sharedPreferences().state === 'unknown' && sharedPreferences().reference; as reference) {
-      <p><button class="ui-button ui-button-secondary" type="button" (click)="checkSharedPreference(reference)" [disabled]="!canInspectSharedPreferences()">Check original shared edit</button></p>
-    }
-  }
-</section>
-
 <section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
     <div class="grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-boundary bg-paper font-serif text-muted" aria-hidden="true"><span>rM</span></div>
     <div class="min-w-0 flex-1" aria-live="polite"><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">{{ connectionLabels[connection().status] }}</h2>
@@ -441,6 +395,52 @@
     @if (!host.inspectSavedMode) { <p class="ui-warning">This Manager host does not support saved mode inspection.</p> }
     <p class="text-sm text-muted">Busy means the data cannot be inspected now. Try again later; this action does not stop or unlock the app.</p>
   </section>
+
+<section class="ui-panel my-5 min-w-0" aria-labelledby="shared-preferences-title">
+  <h2 id="shared-preferences-title">Shared group preferences</h2>
+  <p>Inspect the shared preferences available to Buddy’s next admitted request. A running request may be using an earlier snapshot.</p>
+  <div class="my-3 flex flex-wrap gap-3">
+    <button class="ui-button ui-button-secondary" type="button" (click)="inspectSharedPreferences(false)" [disabled]="!canInspectSharedPreferences()">Inspect shared preferences</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="inspectSharedPreferences(true)" [disabled]="!canInspectSharedPreferences()">Inspect and reveal private prompt</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="refreshSharedPreferenceOriginals()" [disabled]="sharedPreferences().busy || !host.sharedPreferences">Refresh original edits</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="stopSharedPreference()" [disabled]="!sharedPreferences().busy && !sharedPreferences().view">Clear shared view or stop waiting</button>
+  </div>
+  <p role="status" data-testid="shared-preference-status">{{ sharedPreferences().busy ? 'Waiting for Buddy…' : sharedLabels[sharedPreferences().state] }}</p>
+  @if (sharedPreferences().view; as view) {
+    <p>Group {{ view.group }} · {{ view.disposition }}</p>
+    <ul>
+      <li>Reader {{ view.effective.reader_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.reader_enabled }})</li>
+      <li>Writer {{ view.effective.writer_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.writer_enabled }})</li>
+      <li>Export {{ view.effective.export_destination }} ({{ view.effective.origins.export_destination }})</li>
+      <li>Research {{ view.effective.research_policy }} ({{ view.effective.origins.research_policy }})</li>
+      <li>Personalization {{ view.effective.personalization_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.personalization_enabled }})</li>
+      <li>Prompt {{ view.effective.personalization_text_present ? 'present' : 'absent' }} ({{ view.effective.origins.personalization_text }})</li>
+    </ul>
+    @if (view.effective.personalization_text !== null) {
+      <pre class="whitespace-pre-wrap wrap-anywhere">{{ view.effective.personalization_text }}</pre>
+    }
+    <form class="my-3 grid gap-3" (submit)="editSharedPreferences($event)">
+      <p>Choose only the declarations you want to change.</p>
+      <label>Reader <select class="ui-field" name="reader"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label>Writer <select class="ui-field" name="writer"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label>Export <select class="ui-field" name="export"><option value="">Leave unchanged</option><option value="mem">Mem</option><option value="disabled">Disable</option></select></label>
+      <label><input type="checkbox" name="product-null"> Explicitly set the shared Reader, Writer and export group to its defaults instead of the individual choices above</label>
+      <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Explicit default</option></select></label>
+      <label>Personalization <select class="ui-field" name="personalization"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label><input type="checkbox" name="replace-text"> Replace the shared prompt with the text below</label>
+      <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4"></textarea></label>
+      <label><input type="checkbox" name="confirm" required> Apply these declarations to this shared group</label>
+      <button class="ui-button ui-button-primary" type="submit" [disabled]="!canInspectSharedPreferences()">Save shared preferences</button>
+    </form>
+  }
+  @for (record of sharedPreferences().retained; track record.reference; let i = $index) {
+    <p><button class="ui-button ui-button-secondary" type="button" (click)="checkSharedPreference(record.reference)" [disabled]="!canCheckSharedPreference(record)">Check original shared edit {{ i + 1 }}</button></p>
+  } @empty {
+    @if (sharedPreferences().state === 'unknown' && sharedPreferences().reference; as reference) {
+      <p><button class="ui-button ui-button-secondary" type="button" (click)="checkSharedPreference(reference)" [disabled]="!canInspectSharedPreferences()">Check original shared edit</button></p>
+    }
+  }
+</section>
 
   <section aria-labelledby="local-mode-choice-title" class="ui-panel my-6">
     <h2 id="local-mode-choice-title">Save Local-only mode</h2>
