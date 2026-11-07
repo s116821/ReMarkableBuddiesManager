@@ -95,7 +95,7 @@ def request(raw):
             artifact(value['artifact'])
     return v
 
-def execute(transport, v, deadline=None):
+def execute(transport, v, deadline=None, *, command_for=None, report_limit=None, validate_report=report_shape):
     if deadline is None:
         deadline = time.monotonic() + v['budget_ms'] / 1000
     def remaining():
@@ -114,6 +114,9 @@ def execute(transport, v, deadline=None):
         remaining()
         selector = v['selector']
         command = EXPORT if selector == 'export' else PREFIX + selector + ('' if selector == 'inspect' else ' --portable-configuration-input -')
+        if command_for is not None:
+            command = command_for(selector)
+        limit = report_limit or (131072 if selector == 'export' else 16384)
         channel.exec_command(command)
         if v['input_base64'] is not None:
             channel.sendall(base64.b64decode(v['input_base64'], validate=True))
@@ -140,7 +143,7 @@ def execute(transport, v, deadline=None):
                     stdout_done = not data
                     output.extend(data)
                     progressed = True
-                    if len(output) > (131072 if v['selector'] == 'export' else 16384):
+                    if len(output) > limit:
                         raise ValueError('oversized response')
             if not stderr_done:
                 try:
@@ -159,9 +162,9 @@ def execute(transport, v, deadline=None):
                 time.sleep(min(.01, max(0, command_deadline - time.monotonic())))
         code = channel.recv_exit_status()
         one_line = output.endswith(b'\n') and output.count(b'\n') == 1
-        report = parse(output, 131072 if v['selector'] == 'export' else 16384) if code == 0 and one_line else None
+        report = parse(output, limit) if code == 0 and one_line else None
         if report is not None:
-            report_shape(report, v['selector'])
+            validate_report(report, selector)
         status = 'reported' if report is not None else 'unsupported' if code in (2, 126, 127) else 'unavailable'
         remaining()
         if shared.inspect(transport) != before:
@@ -173,7 +176,7 @@ def execute(transport, v, deadline=None):
         channel.close()
 
 
-def main():
+def main(parse_request=request, invoke=execute):
     timer = None
     lock, responded = threading.Lock(), False
     def failure(status):
@@ -186,7 +189,7 @@ def main():
                 responded = True
                 print(json.dumps(value), flush=True)
     try:
-        v = request(sys.stdin.buffer.read(MAX_REQUEST + 1))
+        v = parse_request(sys.stdin.buffer.read(MAX_REQUEST + 1))
         deadline = time.monotonic() + v['budget_ms'] / 1000
         def expire():
             respond(failure('timeout'))
@@ -204,10 +207,10 @@ def main():
         if sys.platform == 'win32':
             import windows_wired
             config = windows_wired.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = windows_wired.observe(config, shared, inspection=lambda t: execute(t, v, deadline), expected_connection=v['connection_id'])
+            observation = windows_wired.observe(config, shared, inspection=lambda t: invoke(t, v, deadline), expected_connection=v['connection_id'])
         else:
             config = shared.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = shared.observe(config, inspection=lambda t: execute(t, v, deadline), expected_connection=v['connection_id'])
+            observation = shared.observe(config, inspection=lambda t: invoke(t, v, deadline), expected_connection=v['connection_id'])
         mode = observation.pop('_portable_raw')
         respond({'contract_version': 1, 'status': 'observed', 'observation': observation, 'portable_configuration_raw': mode})
     except shared.Refusal as error:

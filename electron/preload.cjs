@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
     disconnect: () => ipcRenderer.invoke('manager:drive:disconnect'), revoke: id => ipcRenderer.invoke('manager:drive:revoke', id) }),
   downloads: Object.freeze({ request: (...args) => args.length !== 1 ? Promise.reject(new Error('Download input refused')) : ipcRenderer.invoke('manager:download', args[0]) }),
   memoryQuery: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory query input refused')) : ipcRenderer.invoke('manager:memoryQuery', args[0]),
+  sharedPreferences: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:sharedPreferences', args[0]) : Promise.reject(Error('Shared preferences arity refused')),
   portableConfiguration: (...args) => args.length===1?ipcRenderer.invoke('manager:portableConfiguration',args[0]):Promise.reject(new Error('Portable preferences arity refused')),
   ordinaryExport: (...args) => args.length===1?ipcRenderer.invoke('manager:ordinaryExport',args[0]):Promise.reject(new Error('Ordinary export arity refused')),
   researchSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:researchSettings',args[0]):Promise.reject(new Error('Research settings arity refused')),

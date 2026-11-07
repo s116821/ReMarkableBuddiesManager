@@ -55,8 +55,9 @@ app.whenReady().then(async () => {
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
-  const io=new MaintenanceIO();let portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const {SharedPreferencesHost, registerSharedPreferenceHandler} = await import(pathToFileURL(path.join(hostRoot, 'shared-preferences.mjs')).href);
+  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -75,6 +76,7 @@ app.whenReady().then(async () => {
   management=new ConversationManagementHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(management)});
   restore=new OrdinaryRestoreHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(restore)});
   notebookRestore=new OrdinaryRestoreHost({family:'notebook',observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebookRestore)});
+  sharedPreferences = new SharedPreferencesHost({observer: rawObserver, io, beforeIO: () => invalidatePeers(sharedPreferences)});
   const observer = forget.wrap();
   selected=new SelectedArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(selected)});
   notebook=new NotebookArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebook)});
@@ -107,6 +109,7 @@ app.whenReady().then(async () => {
     return observer.memoryQuery(args[0]);
   });
   window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  registerSharedPreferenceHandler(ipcMain, authorized, sharedPreferences);
   ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Portable preferences caller refused');
     let q=parsePortableRequest(args[0]);const context=portableContext(q),pending=portable.request(q);q=null;const value=parsePortableResult(await pending,context,validateResult);return portable.assertCurrent(value);
@@ -244,7 +247,7 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

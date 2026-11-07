@@ -1,3 +1,5 @@
+import {SharedPreferenceController, sharedPatch, target as sharedTarget, type SharedPreferenceState} from './shared-preferences';
+import type {RetainedPreference} from '../host/shared-preferences-protocol.mjs';
 import {PortableController} from './portable-configuration';
 import type {PortableRetained,PortableOrigins} from '../host/portable-configuration-protocol.mjs';
 import {NotebookArchiveController,archiveAttemptMessage as notebookAttemptMessage} from './notebook-archive';
@@ -90,9 +92,26 @@ export class App implements OnDestroy {
   readonly memory = signal(this.memoryController.state);
   readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
+  private readonly sharedPreferenceController = new SharedPreferenceController(state => this.sharedPreferences.set(state));
+  readonly sharedPreferences = signal(this.sharedPreferenceController.state);
+  readonly sharedLabels: Record<SharedPreferenceState['state'], string> = {
+    idle: 'Shared preferences have not been inspected.', ready: 'Shared preference snapshot read.',
+    joining: 'The shared group is still joining.', unresolved: 'The shared preference selection is unresolved.',
+    invalidated: 'The shared preference snapshot expired or changed. Inspect again.',
+    capacity: 'Check unresolved original edits before starting another.',
+    'no-change': 'The shared declarations already match.', 'local-selected': 'Saved locally. Shared publication is pending.',
+    applied: 'The original shared revision was verified as applied.',
+    superseded: 'The original edit was superseded by the shared winner.',
+    unsupported: 'This Buddy build or storage mode does not support shared preferences.',
+    unavailable: 'Shared preferences are unavailable.', busy: 'Buddy data is busy. Inspect again when ownership is available.',
+    conflict: 'The shared preferences changed. Inspect again before editing.',
+    'not-dispatched': 'The shared edit was refused before publication.',
+    'invalid-input': 'Nothing was sent. Use supported preferences and keep the prompt at or below 16 KiB (16,384 UTF-8 bytes).',
+    unknown: 'The edit outcome is unknown. Check the original edit.',
+  };
   private readonly portableController=new PortableController(state=>this.portable.set(state),()=>{document.querySelectorAll<HTMLInputElement>('#portable-file').forEach(f=>{f.value='';});});
   readonly portable=signal(this.portableController.state);
-  private readonly clearPortable=()=>this.portableController.clear();
+  private readonly clearPortable=()=>{this.portableController.clear();this.sharedPreferenceController.clear();};
   readonly portableLabels:Record<string,string>={product_settings:'Reader/Writer preferences',personalization:'Personalization',research_policy:'Research preference',absent:'No saved preference',declared:'Saved preference','declared-null':'Explicitly empty'};
   readonly portableRows=computed(()=>{const s=this.portable().view?.summary;return s?.kind==='import'?s.changed_settings.map(key=>({key,label:this.portableLabels[key],before:this.portableLabels[s.before?.[key as keyof PortableOrigins]??'absent'],after:this.portableLabels[s.after?.[key as keyof PortableOrigins]??'absent']})):[];});
   private readonly exportController=new OrdinaryExportController(state=>this.archiveExport.set(state),()=>{document.querySelectorAll<HTMLTextAreaElement>('#archive-export-destination').forEach(field=>{field.value='';});});
@@ -123,7 +142,7 @@ export class App implements OnDestroy {
   restoreState(family:RestoreFamily){return family==='notebook'?this.notebookRestore():this.ordinaryRestore();}
   private restoreControllerFor(family:RestoreFamily){return family==='notebook'?this.notebookRestoreController:this.restoreController;}
   private restoreCapability(family:RestoreFamily){return family==='notebook'?this.host.notebookRestore:this.host.ordinaryRestore;}
-  settingsBusy(){return this.portable().busy||this.localModeChoice().busy||this.product().busy;}
+  settingsBusy(){return this.sharedPreferences().busy||this.portable().busy||this.localModeChoice().busy||this.product().busy;}
   restoresBusy(){return this.notebookRestore().busy||this.ordinaryRestore().busy;}
   private clearRestores(){this.notebookRestoreController.clear();this.restoreController.clear();}
   private readonly managementController=new ConversationManagementController(state=>this.conversationManagement.set(state),()=>{document.querySelectorAll<HTMLSelectElement>('#conversation-management-choice').forEach(field=>{field.value='';});});
@@ -208,7 +227,7 @@ export class App implements OnDestroy {
   readonly managerRelease = signal(this.managerReleases.state);
   private readonly clearFileOnHidden=()=>{if(document.visibilityState==='hidden'){this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.clearSharedArchivePeers2();this.fileCredentialController.clear();}};
   private readonly clearModelOnPageHide=()=>{this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();};
-  constructor() { if(this.host.portableConfiguration)void this.portableController.retained({portableConfiguration:q=>this.host.portableConfiguration!(q)}); if(this.host.notebookRestore)void this.notebookRestoreController.retained(this.host); if(this.host.notebookArchive)void this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)}); if(this.host.storageInitialization)void this.storageInitializationController.retained(this.storageInitializationAdapter()); if(this.host.localModeChoice)void this.localModeController.retained({localModeChoice:q=>this.host.localModeChoice!(q)}); if(this.host.handwritingRecords)void this.handwritingController.retained({handwritingRecords:q=>this.host.handwritingRecords!(q)}); if(this.host.selectedArchive)void this.selectedController.retained({selectedArchive:q=>this.host.selectedArchive!(q)}); if(this.host.ordinaryRestore)void this.restoreController.retained({ordinaryRestore:q=>this.host.ordinaryRestore!(q)}); if(this.host.modelCredential)void this.fileCredentialController.retained({modelCredential:q=>this.host.modelCredential!(q)}); if(this.host.credentialReference)void this.credentialController.retained({credentialReference:q=>this.host.credentialReference!(q)}); if(this.host.memorySettings)void this.memorySettingsController.retained({memorySettings:q=>this.host.memorySettings!(q)}); if(this.host.researchSettings)void this.researchController.retained({researchSettings:q=>this.host.researchSettings!(q)}); window.addEventListener('pagehide',this.clearModelOnPageHide); document.addEventListener('visibilitychange',this.clearFileOnHidden); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.productSettings)void this.productController.retained({productSettings:q=>this.host.productSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
+  constructor() { if (this.host.sharedPreferences) void this.sharedPreferenceController.run(this.host.sharedPreferences, {action: 'retained'}); if(this.host.portableConfiguration)void this.portableController.retained({portableConfiguration:q=>this.host.portableConfiguration!(q)}); if(this.host.notebookRestore)void this.notebookRestoreController.retained(this.host); if(this.host.notebookArchive)void this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)}); if(this.host.storageInitialization)void this.storageInitializationController.retained(this.storageInitializationAdapter()); if(this.host.localModeChoice)void this.localModeController.retained({localModeChoice:q=>this.host.localModeChoice!(q)}); if(this.host.handwritingRecords)void this.handwritingController.retained({handwritingRecords:q=>this.host.handwritingRecords!(q)}); if(this.host.selectedArchive)void this.selectedController.retained({selectedArchive:q=>this.host.selectedArchive!(q)}); if(this.host.ordinaryRestore)void this.restoreController.retained({ordinaryRestore:q=>this.host.ordinaryRestore!(q)}); if(this.host.modelCredential)void this.fileCredentialController.retained({modelCredential:q=>this.host.modelCredential!(q)}); if(this.host.credentialReference)void this.credentialController.retained({credentialReference:q=>this.host.credentialReference!(q)}); if(this.host.memorySettings)void this.memorySettingsController.retained({memorySettings:q=>this.host.memorySettings!(q)}); if(this.host.researchSettings)void this.researchController.retained({researchSettings:q=>this.host.researchSettings!(q)}); window.addEventListener('pagehide',this.clearModelOnPageHide); document.addEventListener('visibilitychange',this.clearFileOnHidden); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.productSettings)void this.productController.retained({productSettings:q=>this.host.productSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
@@ -395,8 +414,70 @@ export class App implements OnDestroy {
   async stopMemorySettings(){if(this.memorySettingsPeerBusy())return;if(this.host.memorySettings)await this.memorySettingsController.stop({memorySettings:q=>this.host.memorySettings!(q)});}
   exportText(){return this.exportController.text();}
   private portablePeersBusy(){return this.localModeChoice().busy||this.product().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.cacheCleanup().busy||this.handwritingRecords().busy||this.notebookArchive().busy||this.selectedArchive().busy||this.restoresBusy()||this.conversationManagement().busy||this.conversationInventory().busy||this.storageInitialization().busy||this.ownedV3().busy||this.cacheInventory().busy||this.fileCredential().busy||this.credential().busy||this.memorySettings().busy||this.research().busy||this.forget().busy;}
-  private clearPortablePeers(){this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.notebookController.clear();this.selectedController.clear();this.restoreController.clear();this.notebookRestoreController.clear();this.managementController.clear();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.localModeController.clear();this.productController.clear();this.basicController.clear();this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();}
-  portableAvailable(){return !!this.host.portableConfiguration&&this.profile().savedConfigurationProbe&&!this.portablePeersBusy()&&!this.portable().busy;}
+  private clearPortablePeers(){this.sharedPreferenceController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.notebookController.clear();this.selectedController.clear();this.restoreController.clear();this.notebookRestoreController.clear();this.managementController.clear();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.localModeController.clear();this.productController.clear();this.basicController.clear();this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();}
+  portableAvailable(){return !this.sharedPreferences().busy&&!!this.host.portableConfiguration&&this.profile().savedConfigurationProbe&&!this.portablePeersBusy()&&!this.portable().busy;}
+  canInspectSharedPreferences() {
+    return !!this.host.sharedPreferences && this.profile().savedModeProbe &&
+      !this.sharedPreferences().busy && !this.portable().busy && !this.portablePeersBusy();
+  }
+
+  async inspectSharedPreferences(reveal: boolean) {
+    const observation = this.connection().observation, adapter = this.host.sharedPreferences;
+    if (!adapter || !observation || !this.canInspectSharedPreferences()) return;
+    this.portableController.clear();
+    this.clearPortablePeers();
+    await this.connectionController.pauseObservation();
+    const current = () => this.connection().observation === observation;
+    if (current()) await this.sharedPreferenceController.run(adapter,
+      {action: 'inspect', ...sharedTarget(observation), reveal_text: reveal}, current);
+  }
+
+  async editSharedPreferences(event: Event) {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    const observation = this.connection().observation, adapter = this.host.sharedPreferences;
+    const {reference, view} = this.sharedPreferences();
+    if (!adapter || !observation || !reference || !view || !this.canInspectSharedPreferences()) return;
+    const values = new FormData(form);
+    if (!values.has('confirm')) return;
+    const patch = sharedPatch(values);
+    const current = () => this.connection().observation === observation;
+    await this.sharedPreferenceController.run(adapter,
+      {action: 'edit', ...sharedTarget(observation), reference, patch}, current);
+  }
+
+  canCheckSharedPreference(record: RetainedPreference) {
+    const observation = this.connection().observation;
+    return this.canInspectSharedPreferences() && observation?.connection_id === record.connection_id &&
+      observation.boot_id === record.boot_id;
+  }
+
+  async checkSharedPreference(reference: string) {
+    const observation = this.connection().observation, adapter = this.host.sharedPreferences;
+    if (!adapter || !observation || !this.canInspectSharedPreferences()) return;
+    this.portableController.clear();
+    this.clearPortablePeers();
+    await this.connectionController.pauseObservation();
+    const current = () => this.connection().observation === observation;
+    if (current()) await this.sharedPreferenceController.run(adapter,
+      {action: 'status', ...sharedTarget(observation), reference}, current);
+  }
+
+  async refreshSharedPreferenceOriginals() {
+    if (this.host.sharedPreferences) {
+      await this.sharedPreferenceController.run(this.host.sharedPreferences, {action: 'retained'});
+    }
+  }
+
+  async stopSharedPreference() {
+    const reference = this.sharedPreferences().reference;
+    if (reference && this.host.sharedPreferences) {
+      await this.sharedPreferenceController.run(this.host.sharedPreferences, {action: 'cancel', reference});
+    } else {
+      this.sharedPreferenceController.clear();
+    }
+  }
+
   async exportPortable(){const tablet=this.connection().observation;if(!tablet||!this.portableAvailable())return;this.clearPortablePeers();await this.portableController.read({portableConfiguration:q=>this.host.portableConfiguration!(q)},tablet,async()=>{await this.connectionController.pauseObservation();return this.connection().observation===tablet;});}
   async choosePortable(event:Event){const field=event.target as HTMLInputElement;let file:File|null=field.files?.length===1?field.files[0]:null;field.value='';const tablet=this.connection().observation;if(!file||!tablet||!this.portableAvailable())return;this.clearPortablePeers();const pending=this.portableController.read({portableConfiguration:q=>this.host.portableConfiguration!(q)},tablet,async()=>{await this.connectionController.pauseObservation();return this.connection().observation===tablet;},file);file=null;await pending;}
   async confirmPortable(){const tablet=this.connection().observation;if(!tablet||!this.portableAvailable())return;this.clearPortablePeers();await this.portableController.confirm({portableConfiguration:q=>this.host.portableConfiguration!(q)},tablet);}
