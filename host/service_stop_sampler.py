@@ -1,6 +1,6 @@
 """Fixed-path read-only candidate sampling. No production profile is enabled here.
 
-The collector requires qualified GNU stat spellings. Unsupported utilities,
+The collector uses common GNU/BusyBox stat formats. Unsupported utilities,
 properties, permissions or framing refuse; sampled checks do not defeat hostile
 root replacement or transfer the native owner's FD-backed group authority.
 """
@@ -39,7 +39,9 @@ VENDOR = json.loads(Path(__file__).with_name('service-stop-vendor-policy.json').
 TEXT_SECTIONS = ('state','policy','stop_extra')
 PROPERTIES = [k for section in TEXT_SECTIONS for k in CATALOG[section]]
 PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c '
-STAT_FORMAT = '%d %i %u %g %f %s %h\\n%y\\n%z\\n'
+# Both implementations preserve literal internal newlines and append one final
+# newline for -c. Do not use --printf or encode literal backslash-n separators.
+STAT_FORMAT = '%d %i %u %g %f %s %h\n%y\n%z'
 
 
 def refuse():
@@ -243,12 +245,13 @@ class Sampler:
     def stat(self,path,follow=False,missing=False):
         # Every caller uses a compiled fixed path or a range-checked MainPID path.
         command=('stat -L ' if follow else 'test ! -L '+shlex.quote(path)+' && stat ')
-        command+='--printf='+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(path)
+        command+='-c '+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(path)
         code,out,err=self.command(command,4096)
         if code:
-            # Narrow qualified GNU spelling, under independently bracketed parents.
-            expected=("stat: cannot statx '"+path+"': No such file or directory\n").encode()
-            if missing and not out and err==expected:return None
+            # Exact C-locale envelopes, under independently bracketed parents.
+            expected=tuple(("stat: "+prefix+" '"+path+"': No such file or directory\n").encode()
+                           for prefix in ('cannot statx', "can't stat"))
+            if missing and code==1 and not out and err in expected:return None
             refuse()
         if err:refuse()
         return metadata(out)
@@ -405,7 +408,7 @@ class Sampler:
             identity('/proc/self/ns/'+name,c[key],True)
         identity(mount,c['mount']);identity(mount+'/system.slice',c['slice'])
         group=mount+'/system.slice/'+BUDDY;parents=self.parents(group);identity(group,g['group'])
-        code,out,err=self.command("stat -f --printf='%t\\n' -- "+mount,64)
+        code,out,err=self.command("stat -f -c %t -- "+mount,64)
         # Linux UAPI CGROUP2_SUPER_MAGIC, matching the existing native source check.
         if code or err or out!=b'63677270\n':refuse()
         records=self.text('/proc/self/mountinfo',256*1024).decode('ascii').splitlines()
