@@ -1,3 +1,5 @@
+import type {SharedPreferenceAdapter} from './shared-preferences';
+import {FRAME_LIMIT, type SharedPreferenceRequest, type SharedPreferenceResult} from '../host/shared-preferences-protocol.mjs';
 import {portableJson} from '../host/portable-configuration-protocol.mjs';
 import type {PortableAdapter} from './portable-configuration';
 import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
@@ -62,6 +64,7 @@ const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restor
 
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
+  readonly sharedPreferences?: SharedPreferenceAdapter;
   readonly portableConfiguration?:PortableAdapter['portableConfiguration'];
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
@@ -129,6 +132,34 @@ export function currentHost(): ManagerHost {
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
     } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    sharedPreferences: async (request: SharedPreferenceRequest | null) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('Shared preferences helper unavailable');
+      const pending = fetch('/manager-shared-preferences', {method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request), signal: AbortSignal.timeout(14000)});
+      request = null;
+      const response = await pending;
+      if (!response.ok || !response.body) throw Error('Shared preferences unavailable');
+      const reader = response.body.getReader(), chunks: Uint8Array[] = [];
+      let size = 0, complete = false;
+      try {
+        for (;;) {
+          const part = await reader.read();
+          if (part.done) { complete = true; break; }
+          chunks.push(part.value);
+          size += part.value.length;
+          if (size > FRAME_LIMIT) throw Error('Shared response refused');
+        }
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+        try { return portableJson(bytes, FRAME_LIMIT) as SharedPreferenceResult; }
+        finally { bytes.fill(0); }
+      } finally {
+        if (!complete) await reader.cancel().catch(() => {});
+        reader.releaseLock();
+        for (const chunk of chunks) chunk.fill(0);
+      }
+    },
     portableConfiguration: async (request:import('../host/portable-configuration-protocol.mjs').PortableRequest|null)=>{
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Portable preferences helper unavailable');
       const pending=fetch('/manager-portable-configuration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;

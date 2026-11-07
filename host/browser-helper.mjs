@@ -1,3 +1,5 @@
+import {SharedPreferencesHost} from './shared-preferences.mjs';
+import {parseSharedPreferenceRequest, sharedPreferenceContext, parseSharedPreferenceResult, FRAME_LIMIT} from './shared-preferences-protocol.mjs';
 import {PortableConfigurationHost} from './portable-configuration.mjs';
 import {parsePortableRequest,portableContext,parsePortableResult,portableJson} from './portable-configuration-protocol.mjs';
 import {NotebookArchiveHost} from './notebook-archive.mjs';
@@ -61,8 +63,8 @@ import {ConversationManagementHost} from './conversation-management.mjs';
 import {parseManagementRequest,parseManagementResult} from './conversation-management-protocol.mjs';
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
-  const io=new MaintenanceIO();let portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer,io,beforeIO:()=>invalidatePeers(basic)});
@@ -85,6 +87,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   notebook=new NotebookArchiveHost({observer:observer,io,beforeIO:()=>invalidatePeers(notebook)});
   handwriting=new HandwritingRecordsHost({observer:observer,io,beforeIO:()=>invalidatePeers(handwriting)});
   localMode=new LocalModeChoiceHost({observer:observer,io,beforeIO:()=>invalidatePeers(localMode)});
+  sharedPreferences = new SharedPreferencesHost({observer, io, beforeIO: () => invalidatePeers(sharedPreferences)});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -104,6 +107,34 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       return;
     }
     if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) observer.cancel();
+    if (url.pathname === '/manager-shared-preferences') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin ||
+          req.headers['content-type'] !== 'application/json' ||
+          req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const chunks = [];
+      let length = 0, request;
+      try {
+        for await (const chunk of req) {
+          length += chunk.length;
+          chunks.push(chunk);
+          if (length > FRAME_LIMIT) return refuse(413);
+        }
+        const bytes = Buffer.concat(chunks);
+        try { request = parseSharedPreferenceRequest(portableJson(bytes, FRAME_LIMIT)); }
+        finally { bytes.fill(0); }
+      } catch { return refuse(400); }
+      finally { for (const chunk of chunks) chunk.fill(0); }
+      try {
+        const context = sharedPreferenceContext(request);
+        const pending = sharedPreferences.request(request);
+        request = null;
+        const value = parseSharedPreferenceResult(await pending, context);
+        if (req.aborted || res.destroyed) return;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(sharedPreferences.deliver(value)));
+      } catch { refuse(503); }
+      return;
+    }
     if(url.pathname==='/manager-portable-configuration'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
       const chunks=[];let length=0,q;
@@ -348,5 +379,5 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   server.headersTimeout = 5000;
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
+  return { origin, server, close: async () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }

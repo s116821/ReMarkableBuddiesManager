@@ -1,0 +1,113 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {mkdir, mkdtemp} from 'node:fs/promises';
+import {chromium, _electron as electron, expect} from '@playwright/test';
+import {startHelper} from '../host/browser-helper.mjs';
+import {fixture, privateText} from './fixtures/shared-preferences.mjs';
+
+const root = path.resolve('dist/manager/browser');
+async function isolate(context, origin) {
+  await context.route('**/*', route => {
+    const url = route.request().url();
+    if (url.startsWith('file:') || (origin && new URL(url).origin === origin)) return route.continue();
+    return route.abort();
+  });
+}
+
+async function exercise(page, set, calls) {
+  const panel = page.getByRole('region', {name: 'Shared group preferences'});
+  const status = panel.getByTestId('shared-preference-status');
+  await page.getByRole('button', {name: 'Read tablet state', exact: true}).click();
+  const inspect = panel.getByRole('button', {name: 'Inspect shared preferences', exact: true});
+  await expect(inspect).toBeEnabled();
+  await inspect.click();
+  await expect(status).toContainText('does not support');
+  await set('normal');
+  await inspect.click();
+  await expect(status).toHaveText('Shared preference snapshot read.');
+  await expect(panel).toContainText('Writer enabled (local)');
+  await expect(panel).not.toContainText(privateText.trim());
+
+  await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
+  await expect(panel.locator('pre')).toContainText(privateText.trim());
+  await panel.getByRole('button', {name: 'Clear shared view or stop waiting'}).click();
+  await expect(panel.locator('pre')).toHaveCount(0);
+  await inspect.click();
+  await expect(status).toHaveText('Shared preference snapshot read.');
+
+  await panel.locator('select[name=writer]').selectOption('on');
+  await panel.locator('select[name=research]').selectOption('null');
+  await panel.getByLabel('Apply these declarations to this shared group').check();
+  await set('lost');
+  await panel.getByRole('button', {name: 'Save shared preferences'}).click();
+  await expect(status).toContainText('outcome is unknown');
+  const edit = (await calls()).filter(call => call.selector === 'edit');
+  assert.equal(edit.length, 1);
+  assert.deepEqual(edit[0].body.patch, {portable_configuration_version: 1,
+    settings: {product_settings: {writer_enabled: true}, research_policy: null}});
+  await set('normal');
+  await panel.getByRole('button', {name: 'Check original shared edit 1', exact: true}).click();
+  await expect(status).toContainText('verified as applied');
+  const last = (await calls()).at(-1);
+  assert.equal(last.selector, 'status');
+  assert.equal(last.body.operation, edit[0].body.operation);
+  assert.equal(Object.hasOwn(last.body, 'patch'), false);
+  await expect(panel).not.toContainText('local_config_sha256');
+}
+
+const f = fixture();
+const helper = await startHelper({root, observer: f.observer, driveAuth: {
+  dispose() {}, status: async () => ({contract_version: 1, status: 'unconfigured', account: null,
+    checkedAt: null, error: null, authorizationId: null, backupReady: false})
+}, downloads: {dispose() {}, request: async () => { throw Error('Unavailable in fixture'); }}});
+const browser = await chromium.launch();
+try {
+  const context = await browser.newContext();
+  await isolate(context, helper.origin);
+  const page = await context.newPage();
+  await page.goto(helper.origin + '/preview/');
+  await exercise(page, state => f.set(state), () => f.calls);
+} finally {
+  await browser.close();
+  await helper.close();
+}
+console.log('Built browser panel and guarded loopback helper passed with simulated Buddy replies.');
+
+const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MANAGER_')));
+await mkdir('test-results', {recursive: true});
+const profile = await mkdtemp(path.resolve('test-results/shared-preferences-profile-'));
+Object.assign(env, {MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: profile});
+const app = await electron.launch({
+  ...(process.env.SHARED_PREFERENCES_ELECTRON ? {executablePath: process.env.SHARED_PREFERENCES_ELECTRON} : {}),
+  args: ['.', ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env
+});
+try {
+  const page = await app.firstWindow();
+  await isolate(app.context());
+  await app.evaluate(async ({app, BrowserWindow}) => {
+    const require = process.mainModule.require.bind(process.mainModule);
+    const path = require('node:path'), root = app.getAppPath();
+    globalThis.sharedPreferenceHarness = require(path.join(root, 'tests/fixtures/shared-preferences.mjs')).fixture();
+    const {WiredObserver} = require(path.join(root, 'host/observer.mjs'));
+    const {DriveAuth} = require(path.join(root, 'host/drive-auth.mjs'));
+    DriveAuth.prototype.status = async () => ({contract_version: 1, status: 'unconfigured', account: null,
+      checkedAt: null, error: null, authorizationId: null, backupReady: false});
+    WiredObserver.prototype.observe = async function () {
+      const result = await globalThis.sharedPreferenceHarness.observer.observe();
+      this.lastObservation = result.observation;
+      return result;
+    };
+    WiredObserver.prototype.run = function (...args) {
+      return globalThis.sharedPreferenceHarness.observer.run(...args);
+    };
+    const window = BrowserWindow.getAllWindows()[0];
+    await window.loadFile(path.join(root, 'dist/manager/browser/index.html'));
+  });
+  assert.equal(await page.evaluate(() => typeof globalThis.window.require), 'undefined');
+  await exercise(page,
+    state => app.evaluate((_electron, value) => globalThis.sharedPreferenceHarness.set(value), state),
+    () => app.evaluate(() => globalThis.sharedPreferenceHarness.calls));
+} finally {
+  await app.close();
+}
+console.log('Built sandboxed Electron panel and guarded IPC passed with simulated Buddy replies.');
