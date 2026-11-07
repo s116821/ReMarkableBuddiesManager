@@ -8,7 +8,7 @@ import {MaintenanceIO} from '../host/maintenance-io.mjs';
 import {startHelper} from '../host/browser-helper.mjs';
 import {SharedPreferencesHost, registerSharedPreferenceHandler} from '../host/shared-preferences.mjs';
 
-import {fixture, target, guard, patch, privateText, digest} from './fixtures/shared-preferences.mjs';
+import {fixture, target, patch, privateText} from './fixtures/shared-preferences.mjs';
 
 async function browserPath(f) {
   const helper = await startHelper({
@@ -74,11 +74,20 @@ for (const [name, path] of [['browser HTTP', browserPath], ['Electron registered
     try {
       await assertGuard();
       assert.equal((await call(inspect)).state, 'unsupported');
+      f.set('command-unsupported');
+      assert.equal((await call(inspect)).state, 'unsupported');
       f.set('busy');
       assert.equal((await call(inspect)).state, 'busy');
+      f.set('joining');
+      const joining = await call(inspect);
+      assert.equal(joining.state, 'joining');
+      assert.equal(joining.reference, null);
+      f.set('leaked-prompt');
+      assert.equal((await call(inspect)).state, 'unavailable');
       f.set('normal');
       const ready = await call(inspect);
       assert.equal(ready.state, 'ready');
+      assert.equal(ready.view.disposition, 'established-absent');
       assert.equal(ready.view.effective.personalization_text, null);
       assert.equal(JSON.stringify(ready).includes('local_config_sha256'), false);
       const revealed = await call({...inspect, reveal_text: true});
@@ -88,8 +97,9 @@ for (const [name, path] of [['browser HTTP', browserPath], ['Electron registered
       assert.equal((await call({action: 'edit', ...target, reference: revealed.reference, patch})).state, 'conflict');
       assert.deepEqual((await call({action: 'retained'})).retained, []);
 
-      f.set('normal');
+      f.set('selected');
       const view = await call(inspect);
+      assert.equal(view.view.disposition, 'selected');
       f.set('lost');
       const edit = {action: 'edit', ...target, reference: view.reference, patch};
       assert.equal((await call(edit)).state, 'unknown');
@@ -100,13 +110,31 @@ for (const [name, path] of [['browser HTTP', browserPath], ['Electron registered
       const editBody = f.calls.filter(call => call.selector === 'edit').at(-1).body;
       assert.deepEqual(editBody.patch, patch);
       const status = {action: 'status', ...target, reference: original.reference};
-      f.set('substituted');
-      assert.equal((await call(status)).state, 'unknown');
+      for (const outcome of ['substituted', 'substituted-guard', 'substituted-patch', 'unknown', 'no-change', 'applied']) {
+        f.set(outcome);
+        assert.equal((await call(status)).state, 'unknown', outcome);
+        assert.deepEqual((await call({action: 'retained'})).retained, [original]);
+      }
+      f.set('busy');
+      assert.equal((await call(status)).state, 'busy');
+      assert.deepEqual((await call({action: 'retained'})).retained, [original]);
       f.set('normal');
-      assert.equal((await call(status)).state, 'applied');
+      assert.equal((await call(status)).state, 'local-committed');
+      // Canonical UTF-8 fixture bytes sort the V1 keys, retain the null, and
+      // encode beta directly, matching serde_json's Value serialization.
       assert.deepEqual(f.calls.at(-1).body, {shared_preferences_version: 1,
-        operation: editBody.operation, guard, patch_sha256: digest(patch)});
+        operation: editBody.operation, guard: editBody.guard,
+        patch_sha256: '981b6a9f5003f3a22f20c9180c13ea051864099e3b8c06997f5aba0b4bacd751'});
       assert.deepEqual((await call({action: 'retained'})).retained, []);
+
+      for (const [response, expected] of [['normal', 'local-committed'], ['no-change', 'no-change'],
+        ['invalid-input', 'not-dispatched']]) {
+        f.set('normal');
+        const {reference} = await call(inspect);
+        f.set(response);
+        assert.equal((await call({...edit, reference})).state, expected);
+        assert.deepEqual((await call({action: 'retained'})).retained, []);
+      }
     } finally { await close(); }
   });
 }

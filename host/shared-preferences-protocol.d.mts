@@ -15,7 +15,7 @@ export type SharedPreferenceRequest =
   | {action: 'retained'}
   | {action: 'cancel'; reference: string};
 type State = 'idle'|'ready'|'joining'|'unresolved'|'invalidated'|'capacity'|'no-change'|
-  'local-selected'|'applied'|'superseded'|'unsupported'|'unavailable'|'busy'|'conflict'|'not-dispatched'|'unknown';
+  'local-committed'|'unsupported'|'unavailable'|'busy'|'conflict'|'not-dispatched'|'unknown';
 export interface EffectivePreferences {
   reader_enabled: boolean;
   writer_enabled: boolean;
@@ -30,7 +30,7 @@ export interface EffectivePreferences {
 export interface SharedPreferenceResult {
   state: State;
   reference: string|null;
-  view: {group: string; disposition: 'established-absent'|'local-selected'|'applied'|'superseded'; effective: EffectivePreferences}|null;
+  view: {group: string; disposition: 'established-absent'|'selected'; effective: EffectivePreferences}|null;
   retained: RetainedPreference[];
 }
 type Context = {action: SharedPreferenceRequest['action']; reference?: string; reveal_text?: boolean};

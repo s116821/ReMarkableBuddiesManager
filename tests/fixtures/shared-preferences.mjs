@@ -18,8 +18,8 @@ const origins = Object.fromEntries([
   'personalization_text', 'research_policy'
 ].map(key => [key, 'local']));
 const digest = value => createHash('sha256').update(portableCanonical(value)).digest('hex');
-const frame = (selector, status, data = null) => ({
-  report_version: 1, operation: selector, status, runtime_activation: 'unverified', data
+const frame = (selector, status, disposition, fields = {}) => ({
+  report_version: 1, operation: selector, status, disposition, runtime_activation: 'unverified', ...fields
 });
 
 export function fixture() {
@@ -38,23 +38,36 @@ export function fixture() {
           stdout_base64: Buffer.from(JSON.stringify(report) + '\n').toString('base64')}});
       if (outcome === 'unsupported') return {contract_version: 1, status: 'observed', observation,
         portable_configuration_raw: {status: 'unsupported', stdout_base64: null}};
-      if (outcome === 'busy') return reported(frame(selector, 'busy'));
+      if (outcome === 'invalid-input') return reported(frame(selector, 'invalid-input', 'not-dispatched'));
+      if (outcome === 'joining') return reported(frame(selector, 'joining', 'not-admitted'));
       if (selector === 'inspect') {
+        if (outcome === 'busy' || outcome === 'command-unsupported') {
+          return reported(frame(selector, outcome === 'busy' ? 'busy' : 'unsupported', 'not-dispatched'));
+        }
         const effective = {reader_enabled: true, writer_enabled: true, export_destination: 'mem',
           personalization_enabled: true, personalization_text_present: true,
-          personalization_text: body.reveal_text ? privateText : null, research_policy: 'required', origins};
-        return reported(frame(selector, 'ok', {disposition: 'established-absent', guard, effective}));
+          research_policy: 'required', origins};
+        if (body.reveal_text || outcome === 'leaked-prompt') effective.personalization_text = privateText;
+        const condition = outcome === 'selected' ? {...guard, selection: {
+          kind: 'selected', aggregate_generation: uuid(5), accepted_base_sha256: 'd'.repeat(64),
+          selection_sha256: 'e'.repeat(64), revision: uuid(6)
+        }} : guard;
+        return reported(frame(selector, 'ok', 'read-only', {guard: condition, view: effective}));
       }
-      const original = {operation: body.operation, guard: body.guard,
+      const original = {original_operation: body.operation, guard: body.guard,
         patch_sha256: selector === 'edit' ? digest(body.patch) : body.patch_sha256};
-      if (outcome === 'conflict') return reported(frame(selector, 'conflict'));
+      if (outcome === 'busy' || outcome === 'conflict') return reported(frame(selector, outcome, 'not-dispatched', original));
+      if (outcome === 'unknown') return reported(frame(selector, 'unavailable', 'unknown', original));
       if (outcome === 'lost') throw Error('Fixture lost output');
       if (outcome === 'hold') await new Promise(resolve => { held = resolve; });
-      if (outcome === 'substituted') original.operation = uuid(98);
-      return reported(frame(selector, 'ok', {original, outcome: selector === 'edit' ? 'local-selected' : 'applied'}));
+      if (outcome === 'substituted') original.original_operation = uuid(98);
+      if (outcome === 'substituted-guard') original.guard = {...original.guard, store_generation: uuid(98)};
+      if (outcome === 'substituted-patch') original.patch_sha256 = 'f'.repeat(64);
+      const disposition = outcome === 'no-change' || outcome === 'applied' ? outcome : 'local-committed';
+      return reported(frame(selector, 'ok', disposition, original));
     }
   };
   return {calls, observer, set: state => { outcome = state; }, cancelCount: () => cancelled, release: () => held?.()};
 }
 
-export {target, guard, patch, privateText, digest};
+export {target, patch, privateText};

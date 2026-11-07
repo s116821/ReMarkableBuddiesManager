@@ -81,7 +81,7 @@ export class SharedPreferencesHost {
       throw Error('Shared observation refused');
     }
     if (operation === 'inspect' && raw?.status === 'unsupported' && raw.stdout_base64 === null) {
-      return {status: 'unsupported', data: null};
+      return {state: 'unsupported'};
     }
     if (raw?.status !== 'reported') throw Error('Shared report unavailable');
     const bytes = Buffer.from(portableBase64(raw.stdout_base64, REPORT_LIMIT));
@@ -119,11 +119,10 @@ export class SharedPreferencesHost {
       if (q.action === 'inspect') {
         const report = await this.#run(active, 'inspect', {shared_preferences_version: 1,
           reveal_text: q.reveal_text}, q);
-        if (report.status !== 'ok') return this.#result(report.status);
-        if (!report.data.guard) return this.#result(report.data.disposition);
-        const {guard, disposition, effective} = report.data;
+        if (report.state !== 'ready') return this.#result(report.state);
+        const {guard, view} = report;
         this.#view = {reference, guard, target: active.target, expires: this.now() + 120000};
-        return this.#result('ready', reference, {group: guard.group, disposition, effective});
+        return this.#result('ready', reference, view);
       }
 
       if (q.action === 'edit') {
@@ -142,17 +141,13 @@ export class SharedPreferencesHost {
         body.patch = null;
         q = null;
         const report = await pending;
-        if (report.status === 'ok' || ['not-dispatched', 'busy', 'conflict', 'unsupported'].includes(report.status)) {
-          return this.#terminal(report.status === 'ok' ? report.data.outcome : report.status, reference);
-        }
-        return this.#result('unknown', reference);
+        return report.state === 'unknown' ? this.#result('unknown', reference) : this.#terminal(report.state, reference);
       }
 
       const entry = this.#originals.get(reference);
       if (!entry || !sameTarget(entry.target, sample)) return this.#result('unavailable', reference);
       const report = await this.#run(active, 'status', {shared_preferences_version: 1, ...entry.original}, entry.original);
-      if (report.status !== 'ok') return this.#result(report.status, reference);
-      return this.#terminal(report.data.outcome, reference);
+      return report.state === 'local-committed' ? this.#terminal(report.state, reference) : this.#result(report.state, reference);
     } catch {
       return this.#result(action !== 'inspect' && this.#originals.has(reference) ? 'unknown' : 'unavailable', requestedReference);
     } finally {

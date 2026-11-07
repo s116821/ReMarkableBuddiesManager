@@ -60,9 +60,16 @@ def request(raw):
 
 
 def report_shape(value, selector):
-    exact(value, 'report_version operation status runtime_activation data')
+    fields = 'report_version operation status disposition runtime_activation'
+    status = value.get('status') if isinstance(value, dict) else None
+    if selector == 'inspect' and status == 'ok':
+        fields += ' guard view'
+    elif selector != 'inspect' and status != 'invalid-input':
+        fields += ' guard original_operation patch_sha256'
+    exact(value, fields)
     if (type(value['report_version']) is not int or value['report_version'] != 1 or
-            value['operation'] != selector or value['runtime_activation'] != 'unverified'):
+            value['operation'] != selector or value['runtime_activation'] != 'unverified' or
+            not isinstance(status, str) or not isinstance(value['disposition'], str)):
         raise ValueError('report refused')
 
 

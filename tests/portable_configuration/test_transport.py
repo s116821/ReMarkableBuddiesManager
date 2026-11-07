@@ -154,8 +154,12 @@ class SharedPreferences(unittest.TestCase):
         with self.assertRaises(ValueError):
             shared_preferences.request(json.dumps(dict(wire, selector='status; id')).encode())
 
-        raw = (json.dumps(dict(report_version=1, operation='status', status='unknown',
-                               runtime_activation='unverified', data=None)) + '\n').encode()
+        raw = (json.dumps(dict(report_version=1, operation='status', status='ok',
+                               disposition='local-committed', runtime_activation='unverified',
+                               original_operation=BOOT, guard=guard, patch_sha256=body['patch_sha256'])) + '\n').encode()
+        with self.assertRaises(ValueError):
+            shared_preferences.report_shape(dict(report_version=1, operation='status', status='unknown',
+                                                 runtime_activation='unverified', data=None), 'status')
         clock = [0.0]
         channel = ScheduledChannel(clock, [(0, raw)])
         channel.exec_command = Mock()

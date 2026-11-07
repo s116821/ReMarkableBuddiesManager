@@ -60,7 +60,7 @@ async function exercise(page, set, calls) {
     settings: {product_settings: {writer_enabled: true}, research_policy: null}});
   await set('normal');
   await panel.getByRole('button', {name: 'Check original shared edit 1', exact: true}).click();
-  await expect(status).toContainText('verified as applied');
+  await expect(status).toHaveText('The original edit was committed locally. Shared application is unverified.');
   const last = (await calls()).at(-1);
   assert.equal(last.selector, 'status');
   assert.equal(last.body.operation, edit[0].body.operation);

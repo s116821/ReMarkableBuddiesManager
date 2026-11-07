@@ -65,63 +65,70 @@ function guard(value) {
   }
 }
 
-const fields = 'reader_enabled writer_enabled export_destination personalization_enabled personalization_text research_policy';
-function effective(value, reveal) {
-  exact(value, fields + ' personalization_text_present origins');
-  exact(value.origins, fields);
+const fields = 'reader_enabled writer_enabled export_destination personalization_enabled research_policy';
+function effective(value, reveal, includeText = reveal) {
+  exact(value, fields + ' personalization_text_present origins' + (includeText ? ' personalization_text' : ''));
+  exact(value.origins, fields + ' personalization_text');
   if (!Object.values(value.origins).every(origin => ['shared', 'local', 'default'].includes(origin)) ||
       ![value.reader_enabled, value.writer_enabled, value.personalization_enabled,
         value.personalization_text_present].every(item => typeof item === 'boolean') ||
       !['mem', 'disabled'].includes(value.export_destination) ||
       !['required', 'disabled'].includes(value.research_policy)) fail();
+  if (!includeText) return;
   if (reveal && value.personalization_text_present) {
     if (!boundedText(value.personalization_text) || value.personalization_text.length === 0) fail();
   } else if (value.personalization_text !== null) fail();
 }
 
-const dispositions = ['established-absent', 'local-selected', 'applied', 'superseded', 'joining', 'unresolved'];
-const editOutcomes = ['no-change', 'local-selected', 'applied', 'superseded'];
-const backendFailures = ['unsupported', 'unavailable', 'busy', 'conflict', 'not-dispatched', 'unknown'];
+const viewDispositions = ['established-absent', 'selected'];
+const refusals = {
+  'busy/not-dispatched': 'busy',
+  'unsupported/not-dispatched': 'unsupported',
+  'unavailable/not-dispatched': 'unavailable',
+  'invalid-input/not-dispatched': 'unavailable'
+};
+const reportStates = {
+  inspect: {...refusals, 'unavailable/unknown': 'unresolved', 'unavailable/not-admitted': 'unavailable',
+    'joining/not-admitted': 'joining', 'ok/read-only': 'ready'},
+  edit: {...refusals, 'unavailable/not-dispatched': 'not-dispatched', 'invalid-input/not-dispatched': 'not-dispatched',
+    'conflict/not-dispatched': 'conflict', 'joining/not-admitted': 'joining', 'unavailable/unknown': 'unknown',
+    'ok/no-change': 'no-change', 'ok/local-committed': 'local-committed'},
+  status: {...refusals, 'unavailable/unknown': 'unknown', 'ok/local-committed': 'local-committed'}
+};
 
 export function parseSharedPreferenceReport(bytes, operation, context, canonical) {
   if (bytes.at(-1) !== 10 || bytes.filter(value => value === 10).length !== 1) fail();
   const report = portableJson(bytes, REPORT_LIMIT);
-  exact(report, 'report_version operation status runtime_activation data');
-  if (report.report_version !== 1 || report.operation !== operation ||
-      report.runtime_activation !== 'unverified' ||
-      !['ok', ...backendFailures].includes(report.status)) fail();
-  if (report.status !== 'ok') {
-    if (report.data !== null || (operation === 'inspect' &&
-        !['busy', 'unavailable', 'unsupported'].includes(report.status)) || (operation === 'status' &&
-        !['busy', 'unavailable', 'unsupported', 'unknown'].includes(report.status))) fail();
-    return report;
+  if (report?.report_version !== 1 || report.operation !== operation ||
+      report.runtime_activation !== 'unverified' || typeof report.status !== 'string' ||
+      typeof report.disposition !== 'string') fail();
+  const state = reportStates[operation]?.[report.status + '/' + report.disposition];
+  if (!state) fail();
+  const base = 'report_version operation status disposition runtime_activation';
+  if (state === 'ready') {
+    exact(report, base + ' guard view');
+    guard(report.guard);
+    effective(report.view, context.reveal_text);
+    return {state, guard: report.guard, view: {group: report.guard.group,
+      disposition: report.guard.selection.kind === 'absent' ? 'established-absent' : 'selected',
+      effective: {personalization_text: null, ...report.view}}};
   }
-  if (operation === 'inspect') {
-    const data = report.data;
-    exact(data, 'disposition guard effective');
-    if (!dispositions.includes(data.disposition)) fail();
-    if (data.disposition === 'joining' || data.disposition === 'unresolved') {
-      if (data.guard !== null || data.effective !== null) fail();
-    } else {
-      guard(data.guard);
-      effective(data.effective, context.reveal_text);
-      if ((data.disposition === 'established-absent') !== (data.guard.selection.kind === 'absent')) fail();
-    }
+  if (operation === 'inspect' || report.status === 'invalid-input') {
+    exact(report, base);
   } else {
-    const data = report.data;
-    exact(data, 'original outcome');
-    exact(data.original, 'operation guard patch_sha256');
-    guard(data.original.guard);
-    const outcomes = operation === 'edit' ? editOutcomes : editOutcomes.filter(value => value !== 'no-change');
-    if (!outcomes.includes(data.outcome) || canonical(data.original) !== canonical(context)) fail();
+    exact(report, base + ' guard original_operation patch_sha256');
+    guard(report.guard);
+    const original = {operation: report.original_operation, guard: report.guard, patch_sha256: report.patch_sha256};
+    if (canonical(original) !== canonical(context)) fail();
   }
-  return report;
+  return {state};
 }
 
 const resultStates = {
   inspect: ['ready', 'joining', 'unresolved', 'busy', 'unavailable', 'unsupported'],
-  edit: [...editOutcomes, ...backendFailures, 'invalidated', 'capacity'],
-  status: ['local-selected', 'applied', 'superseded', 'busy', 'unavailable', 'unsupported', 'unknown'],
+  edit: ['no-change', 'local-committed', 'joining', 'unsupported', 'unavailable', 'busy', 'conflict',
+    'not-dispatched', 'unknown', 'invalidated', 'capacity'],
+  status: ['local-committed', 'busy', 'unavailable', 'unsupported', 'unknown'],
   retained: ['idle'],
   cancel: ['unknown', 'invalidated']
 };
@@ -134,8 +141,8 @@ export function parseSharedPreferenceResult(value, context) {
   if (value.state === 'ready') {
     exact(value.view, 'group disposition effective');
     if (context.action !== 'inspect' || !uuid(value.reference) || !uuid(value.view.group) ||
-        !dispositions.slice(0, 4).includes(value.view.disposition)) fail();
-    effective(value.view.effective, context.reveal_text);
+        !viewDispositions.includes(value.view.disposition)) fail();
+    effective(value.view.effective, context.reveal_text, true);
   } else if (value.view !== null) fail();
   const seen = new Set();
   for (const entry of value.retained) {
