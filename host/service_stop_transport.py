@@ -1,5 +1,8 @@
 """Read-only Stop qualification boundary. No production shutdown tuple is enabled."""
+import hashlib
 import json
+import math
+import shlex
 import os
 import re
 import sys
@@ -12,6 +15,8 @@ MAX_REQUEST = 4096
 # Source/release gate only, never device metadata or a caller-controlled flag.
 # Enablement requires reviewed same-release host tuples and actual qualification.
 QUALIFIED_PROFILES = ()
+# Only a separately reviewed isolated build can pin this owner.
+TYPED_PUBLIC_STOP_OWNER = None
 STOP_COMMAND = '/bin/systemctl --system --no-pager --no-ask-password --no-block --job-mode=fail stop -- reader-buddy.service'
 
 
@@ -56,7 +61,10 @@ def request(raw):
             or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 12000):
         raise ValueError('input refused')
     if v['selector'] == 'stop':
-        exact(v['expected'], 'profile sample_sha256')
+        typed = TYPED_PUBLIC_STOP_OWNER is not None and v['expected'].get('profile') == 'ordinary-manual' if isinstance(v['expected'], dict) else False
+        exact(v['expected'], 'profile sample_sha256 invocation' if typed else 'profile sample_sha256')
+        if typed and not uuid(v['expected']['invocation']):
+            raise ValueError('input refused')
         if v['expected']['profile'] not in ('ordinary-manual', 'resident-installed') or not digest(v['expected']['sample_sha256']):
             raise ValueError('input refused')
     elif v['expected'] is not None:
@@ -70,6 +78,53 @@ def empty_raw(selector,reason='lifecycle-unqualified'):
                 recovery_profile_base64=None, lease_base64=None, lease_observation='not-read',
                 configuration=dict(read='not-read', effective_mode='unverified'),
                 companion=None,companion_group=None,vendor_policy=None)
+
+
+def typed_public_stop(sampler, v, facts, deadline, owner):
+    """Prepare the only permitted owner command and its exact ack predicate."""
+    exact(owner, 'nonce boot_id bus_id manager owner_sha256')
+    nonce, boot, bus, manager = (owner[k] for k in ('nonce','boot_id','bus_id','manager'))
+    if (not re.fullmatch('[0-9a-f]{32}', nonce) or not uuid(boot) or boot != v['boot_id']
+            or not re.fullmatch('[0-9a-f]{32}', bus)
+            or not re.fullmatch(r':[0-9]{1,10}\.[0-9]{1,10}', manager)
+            or not digest(owner['owner_sha256']) or not facts.get('ordinary_alias')):
+        raise shared.Refusal('observation-unavailable')
+    expected = v['expected']
+    if not uuid(expected['invocation']) or not digest(expected['sample_sha256']) or not digest(v['connection_id']):
+        raise shared.Refusal('observation-unavailable')
+    stage = '/home/root/rem42-ordinary-' + nonce
+    entry = stage + '/device-owner.sh'
+    sampler.parents(entry)
+    # The timestamp was sampled before this receipt, so using remaining time
+    # at receipt does not add the observation round trip to the deadline.
+    uptime = sampler.text('/proc/uptime', 64)
+    match = re.fullmatch(rb'(0|[1-9][0-9]{0,11})\.([0-9]{2}) (?:0|[1-9][0-9]{0,11})\.[0-9]{2}\n', uptime)
+    remaining = math.floor((deadline - time.monotonic()) * 1000) - 100
+    if not match or remaining <= 0:
+        raise shared.Refusal('timeout')
+    cutoff = int(match[1])*1000 + int(match[2])*10 + remaining
+    if not 0 < cutoff <= 9007199254740991:
+        raise shared.Refusal('observation-unavailable')
+    binding = f"PublicStop1 {nonce} {expected['invocation']} {expected['sample_sha256']} {v['connection_id']} {boot} {cutoff}\n"
+    if len(binding) > 384:
+        raise shared.Refusal('observation-unavailable')
+    pin = owner['owner_sha256']
+    body = (f"set -eu; test ! -L {stage}; test -d {stage}; "
+            f"test \"$(stat -c '%u:%g:%a' -- {stage})\" = 0:0:700; "
+            f"test ! -L {entry}; test -f {entry}; "
+            f"test \"$(sha256sum -- {entry})\" = '{pin}  {entry}'; "
+            f"printf '%s' {shlex.quote(binding)} | /bin/sh {entry} public-stop")
+    command = '/usr/bin/env -i HOME=/home/root PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c ' + shlex.quote(body)
+    state, proc = facts['buddy']['state'], facts['process']
+    invocation = ':'.join((proc['pid'],state['ExecMainStartTimestampMonotonic'],state['InvocationID'],proc['start_ticks']))
+    binding_sha = hashlib.sha256(binding.encode('ascii')).hexdigest()
+    prefix = re.escape(f'{nonce} public-stop {boot} {bus} {manager} {invocation}:').encode()
+    receipt = re.compile(prefix + rb'[1-9][0-9]{0,19}:[1-9][0-9]{0,19} ([1-9][0-9]{0,9}) [0-9a-f]{64} ' + binding_sha.encode() + rb'\n')
+
+    def acknowledged(code, out, err):
+        match = receipt.fullmatch(out) if len(out) <= 512 else None
+        return code == 0 and not err and match is not None and int(match[1]) < 2**32 and time.monotonic() < deadline
+    return command, acknowledged
 
 
 def execute(transport, v, deadline=None, on_submission=lambda:None):
@@ -107,10 +162,18 @@ def execute(transport, v, deadline=None, on_submission=lambda:None):
             if digest!=v['expected']['sample_sha256']:
                 raise shared.Refusal('observation-unavailable')
             if time.monotonic()>=deadline:raise shared.Refusal('timeout')
+            typed = TYPED_PUBLIC_STOP_OWNER is not None and profile == 'ordinary-manual'
+            if typed:
+                command, acknowledged = typed_public_stop(sampler, v, facts, deadline, TYPED_PUBLIC_STOP_OWNER)
+            else:
+                command = STOP_COMMAND
+                def acknowledged(code, out, err):
+                    return code == 0 and not out and not err
+            if time.monotonic()>=deadline:raise shared.Refusal('timeout')
             on_submission()  # Original uncertainty starts before the fixed send.
             raw['command']='unknown';raw['reason']='unavailable'
-            code,out,err=run_fixed(transport,STOP_COMMAND,deadline,1024)
-            if code==0 and not out and not err:
+            code,out,err=run_fixed(transport,command,deadline,512 if typed else 1024)
+            if acknowledged(code,out,err):
                 raw['command']='request-accepted';raw['reason']=None
         after=shared.inspect(transport)
         if after['boot_id']!=before['boot_id'] or time.monotonic()>=deadline:

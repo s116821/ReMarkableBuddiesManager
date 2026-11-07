@@ -1,0 +1,68 @@
+--- a/device-owner.sh
++++ b/device-owner.sh
+@@ -33,0 +34,3 @@
++test ! -L "$stage/service-stop-public-owner.sh" && test -f "$stage/service-stop-public-owner.sh"
++test "$(hash_file "$stage/service-stop-public-owner.sh")" = efff3ef5f35b2b60ad16e97c64c9f9f4bd39e7affc7a52c0768efb935f617b74
++. "$stage/service-stop-public-owner.sh"
+@@ -229 +232 @@
+-        original-stop:original|diagnostic-stop:trial|recovery-stop:trial) return 0 ;;
++        original-stop:original|diagnostic-stop:trial|public-stop:trial|recovery-stop:trial) return 0 ;;
+@@ -237 +240 @@
+-        diagnostic-stop|recovery-stop) buddy_retired "$trial_invocation" "$group_parents" ;;
++        diagnostic-stop|public-stop|recovery-stop) buddy_retired "$trial_invocation" "$group_parents" ;;
+@@ -246 +249 @@
+-        original-stop|diagnostic-stop|recovery-stop)
++        original-stop|diagnostic-stop|public-stop|recovery-stop)
+@@ -271 +274 @@
+-        original-stop|diagnostic-stop|recovery-stop) record_job "$1" ;;
++        original-stop|diagnostic-stop|public-stop|recovery-stop) record_job "$1" ;;
+@@ -467 +470 @@
+-        # The four phases all run under the existing owner lock. The
++        # The install and start phases use the existing owner lock. The
+@@ -470,5 +473,10 @@
+-            /bin/sh "$stage/device-owner.sh" start &&
+-            /bin/sh "$stage/device-owner.sh" stop &&
+-            mark diagnostic-observed || true
+-        /bin/sh "$stage/device-owner.sh" recover ;;
+-    install|start|stop|recover)
++            /bin/sh "$stage/device-owner.sh" start ;;
++    public-stop)
++        budget=35
++        test -f "$stage/prepared"
++        (
++            flock -n -x 9
++            load_records
++            public_stop
++        ) 9< "$stage/lock" ;;
++    install|start|recover)
+--- a/job-receipt.sh
++++ b/job-receipt.sh
+@@ -54 +54 @@
+-        diagnostic-stop|recovery-stop) bound_invocation=$trial_invocation ;;
++        diagnostic-stop|public-stop|recovery-stop) bound_invocation=$trial_invocation ;;
+@@ -57 +57,7 @@
+-    printf '%s\n' "$nonce $1 $expected_boot $expected_bus $expected_manager $bound_invocation $2 $3"
++    binding="$nonce $1 $expected_boot $expected_bus $expected_manager $bound_invocation $2 $3"
++    if test "$1" = public-stop; then
++        read_public_binding || return 1
++        public_binding_sha=$(hash_file "$stage/public-stop-binding") || return 1
++        binding="$binding $public_binding_sha"
++    fi
++    printf '%s\n' "$binding"
+@@ -68,0 +75 @@
++    if test "$1" = public-stop; then verify_public_send || return 1; fi
+@@ -91,0 +99,6 @@
++    if test "$1" = public-stop; then
++        test "$(stat -c '%u:%g:%a' -- "$job_dir")" = 0:0:700 &&
++            public_private_file "$stage/public-stop-job-accepted" 64 &&
++            public_private_file "$job_dir/reply" 8192 &&
++            public_private_file "$job_dir/identity" 512 || return 1
++    fi
+--- a/ordinary-trial.sh
++++ b/ordinary-trial.sh
+@@ -138 +138 @@
+-    for pending in original-stop trial-reload trial-start diagnostic-stop recovery-stop restore-reload original-start; do
++    for pending in original-stop trial-reload trial-start diagnostic-stop public-stop recovery-stop restore-reload original-start; do
+@@ -227 +227 @@
+-            if test -e "$stage/diagnostic-stop-claim"; then
++            if test -e "$stage/diagnostic-stop-claim" || test -e "$stage/public-stop-claim"; then

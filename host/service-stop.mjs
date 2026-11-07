@@ -3,6 +3,8 @@ import {MaintenanceIO} from './maintenance-io.mjs';
 import {validateResult} from './observation-protocol.mjs';
 import {parseServiceStopRequest,parseServiceStopResult} from './service-stop-protocol.mjs';
 import {parseServiceStopRaw,admitServiceStopProfile,serviceStopSampleDigest,currentServiceState} from './service-stop-private.mjs';
+// The shipped host never selects the isolated durable owner adapter.
+const TYPED_PUBLIC_STOP=false;
 const same=(a,b)=>a&&b&&a.connection_id===b.connection_id&&a.boot_id===b.boot_id;
 const keys=v=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().join():'';
 export class ServiceStopHost{
@@ -53,7 +55,9 @@ export class ServiceStopHost{
  async #raw(a){
   const budget_ms=Math.min(12000,Math.floor(a.deadline-this.now()));if(budget_ms<1||!this.#current(a))throw Error('Service stop expired');
   const selector=a.operation==='begin'?'review':a.operation==='confirm'?'stop':'inspect';
-  const q={connection_id:a.s.sample.connection_id,boot_id:a.s.sample.boot_id,selector,budget_ms,expected:selector==='stop'?a.s.expected:null};
+  const expected=selector==='stop'?(TYPED_PUBLIC_STOP&&a.s.expected.profile==='ordinary-manual'?
+    {...a.s.expected,invocation:a.invocation}:a.s.expected):null;
+  const q={connection_id:a.s.sample.connection_id,boot_id:a.s.sample.boot_id,selector,budget_ms,expected};
   const v=await this.observer.run('service-stop',q);if(!this.#current(a))throw Error('Service stop invalidated');
   if(keys(v)!=='contract_version,observation,service_stop_raw,status'||Buffer.byteLength(JSON.stringify(v))>262144)throw Error('Service stop envelope refused');
   validateResult({contract_version:v.contract_version,status:v.status,observation:v.observation});
