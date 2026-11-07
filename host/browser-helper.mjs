@@ -1,3 +1,5 @@
+import {ResidentPackageHost} from './resident-package.mjs';
+import {parseResidentPackageRequest,parseResidentPackageResult} from './resident-package-protocol.mjs';
 import {PortableConfigurationHost} from './portable-configuration.mjs';
 import {parsePortableRequest,portableContext,parsePortableResult,portableJson} from './portable-configuration-protocol.mjs';
 import {NotebookArchiveHost} from './notebook-archive.mjs';
@@ -63,8 +65,8 @@ import {ConversationManagementHost} from './conversation-management.mjs';
 import {parseManagementRequest,parseManagementResult} from './conversation-management-protocol.mjs';
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
-  const io=new MaintenanceIO();let portable,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let residentPackage,portable,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [residentPackage,portable,notebookRestore,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer,io,beforeIO:()=>invalidatePeers(basic)});
@@ -78,6 +80,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   sourceCache=new SourceCacheInventoryHost({observer:observer,io,beforeIO:()=>invalidatePeers(sourceCache)});
   ownedV3=new OwnedDataV3Host({observer:observer,io,beforeIO:()=>invalidatePeers(ownedV3)});
   storageInitialization=new StorageInitializationHost({observer:observer,io,beforeIO:()=>invalidatePeers(storageInitialization)});
+  residentPackage=new ResidentPackageHost({observer,io,beforeIO:()=>invalidatePeers(residentPackage)});
   serviceStop=new ServiceStopHost({observer:observer,io,beforeIO:()=>invalidatePeers(serviceStop)});
   cacheCleanup=new SourceCacheCleanupHost({observer:observer,io,beforeIO:()=>invalidatePeers(cacheCleanup)});
   conversations=new ConversationInventoryHost({observer:observer,io,beforeIO:()=>invalidatePeers(conversations)});
@@ -185,6 +188,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       const chunks=[];let bytes=0,request;
       try{for await(const chunk of req){bytes+=chunk.length;if(bytes>512){chunk.fill(0);return refuse(413);}chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseServiceStopRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
       try{const context=request,pending=serviceStop.request(request);request=null;const value=parseServiceStopResult(await pending,context,validateResult);serviceStop.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
+    }
+    if(url.pathname==='/manager-resident-package'){
+      if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
+      const chunks=[];let bytes=0,request;
+      try{for await(const chunk of req){bytes+=chunk.length;if(bytes>512){chunk.fill(0);return refuse(413);}chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseResidentPackageRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
+      try{const context=request,pending=residentPackage.request(request);request=null;const value=parseResidentPackageResult(await pending,context,validateResult);residentPackage.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
     }
     if(url.pathname==='/manager-owned-data-v3'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);

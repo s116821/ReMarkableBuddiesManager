@@ -76,6 +76,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
   readonly serviceStop?:ServiceStopAdapter['serviceStop'];
+  readonly residentPackage?:(request:import('../host/resident-package-protocol.mjs').ResidentPackageRequest)=>Promise<import('../host/resident-package-protocol.mjs').ResidentPackageResult>;
   readonly storageInitialization?:StorageInitializationAdapter['storageInitialization'];
   readonly inspectOwnedV3?:OwnedV3Adapter['inspectOwnedV3'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
@@ -216,6 +217,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Service stop unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Service stop response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/service-stop-protocol.mjs').ServiceStopResult;
+    },
+    residentPackage: async (request: import('../host/resident-package-protocol.mjs').ResidentPackageRequest|null) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Package transition helper unavailable');
+      const pending=fetch('/manager-resident-package',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!response.ok||!response.body)throw Error('Package transition unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Package transition response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/resident-package-protocol.mjs').ResidentPackageResult;
     },
     inspectOwnedV3: async (request: import('../host/owned-data-v3-protocol.mjs').OwnedV3Request|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Stored data inspection helper unavailable');

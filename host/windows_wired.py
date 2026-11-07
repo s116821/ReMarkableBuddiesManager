@@ -72,6 +72,8 @@ def private_bytes(path, parent_private=False, maximum=16384):
     finally:
         token.Close()
     allowed = {security.ConvertSidToStringSid(user), 'S-1-5-18', 'S-1-5-32-544'}
+    from resident_package_goal import lease_readable
+    shared_intent = lease_readable(path)
     handles = []
     try:
         for item in reversed((path, *path.parents)):
@@ -82,7 +84,7 @@ def private_bytes(path, parent_private=False, maximum=16384):
             if directory != (item != path):
                 raise Refusal('unconfigured')
             handle = win32file.CreateFile(str(item), win32con.READ_CONTROL | (0 if directory else win32con.GENERIC_READ),
-                win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE if directory else 0, None,
+                win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE if directory or shared_intent else 0, None,
                 win32con.OPEN_EXISTING, win32file.FILE_FLAG_OPEN_REPARSE_POINT | win32con.FILE_FLAG_BACKUP_SEMANTICS, None)
             handles.append(handle)
             info = win32file.GetFileInformationByHandle(handle)

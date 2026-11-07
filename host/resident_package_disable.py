@@ -37,7 +37,7 @@ def observe_disabled(recovery, expected, version, stop, plan, stock):
 def execute(config, connection, boot, activation, profile_sha256, deadline, *, approved_version):
     """Disable the exact package after recovery, with a separate durable intent."""
     expected, stop, plan = load_intent(config, connection, boot, activation, profile_sha256, approved_version)
-    require(stop["version"] in (2, 3))
+    require(stop["version"] in (2, 3, 4))
     path = disable_path(config, boot, activation)
     if os.path.lexists(path):
         raise RecoveryPending("Disable intent is already retained")
@@ -79,7 +79,7 @@ def retained_stock(config, boot, activation, stop):
 def observe(config, connection, boot, activation, profile_sha256, deadline, *, approved_version):
     """Read the retained disable operation without a systemd state change."""
     expected, stop, plan = load_intent(config, connection, boot, activation, profile_sha256, approved_version)
-    require(stop["version"] in (2, 3))
+    require(stop["version"] in (2, 3, 4))
     stock = retained_stock(config, boot, activation, stop)
 
     def inspect(transport):

@@ -816,6 +816,9 @@
     <p class="text-sm text-muted mt-3">Restart does not confirm setup. No automatic retries. Read saved mode and Save Local-only are separate actions requiring valid storage.</p>
   </section>
 
+  @if (residentPackageOpen()) {
+    <section class="ui-panel my-6"><resident-package-panel [adapter]="residentPackageAdapter" [tablet]="connection().observation" [allowed]="!!host.residentPackage && profile().inspection && !storageInitializationPeerBusy() && !storageInitialization().busy" [epoch]="residentPackageEpoch()" [pause]="pauseServiceStop" (busy)="residentPackageBusy.set($event)" (starting)="prepareResidentPackage()" /></section>
+  } @else {<button class="ui-button ui-button-secondary" type="button" (click)="residentPackageOpen.set(true)">Open Buddy package controls</button>}
   @if (serviceStopOpen()) {
     <section class="ui-panel my-6"><service-stop-panel [adapter]="serviceStopAdapter" [tablet]="connection().observation" [allowed]="!!host.serviceStop && profile().inspection && !storageInitializationPeerBusy() && !storageInitialization().busy" [epoch]="serviceStopEpoch()" [pause]="pauseServiceStop" (busy)="serviceStopBusy.set($event)" (starting)="prepareServiceStop()" /></section>
   } @else {<button class="ui-button ui-button-secondary" type="button" (click)="serviceStopOpen.set(true)">Open Buddy stop controls</button>}
