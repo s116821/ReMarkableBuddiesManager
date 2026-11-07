@@ -162,11 +162,18 @@ def observe_replaced(recovery, expected, stock, candidate, profile_sha256, plan)
     return {"ownership": ownership, "profile_sha256": profile_sha256}
 
 
+def require_original_goal(stop, candidate, replacement_profile_sha256, approved_plan):
+    if stop['version'] == 4:
+        require(stop['goal']['operation'] == 'replace' and stop['goal']['replacement'] == {
+            'candidate': asdict(candidate), 'profile_sha256': replacement_profile_sha256, 'plan': approved_plan})
+
+
 def execute(config, connection, boot, activation, profile_sha256, deadline, *,
             approved_version, candidate, replacement_profile_sha256, approved_plan):
     """Apply the retained reviewed candidate after the old service is recovered and disabled."""
     expected, stop, removal = load_intent(config, connection, boot, activation, profile_sha256, approved_version)
-    require(stop["version"] == 2 and removal is None)
+    require(stop["version"] in (2, 4) and removal is None)
+    require_original_goal(stop, candidate, replacement_profile_sha256, approved_plan)
     require(isinstance(replacement_profile_sha256, str) and DIGEST.fullmatch(replacement_profile_sha256))
     path = replacement_path(config, boot, activation)
     if os.path.lexists(path):
@@ -215,7 +222,8 @@ def observe(config, connection, boot, activation, profile_sha256, deadline, *,
             approved_version, candidate, replacement_profile_sha256, approved_plan):
     """Reconcile the retained revision change without dispatching a package command."""
     expected, stop, removal = load_intent(config, connection, boot, activation, profile_sha256, approved_version)
-    require(stop["version"] == 2 and removal is None)
+    require(stop["version"] in (2, 4) and removal is None)
+    require_original_goal(stop, candidate, replacement_profile_sha256, approved_plan)
     raw = shared.private_bytes(replacement_path(config, boot, activation), parent_private=True, maximum=INTENT_MAX_BYTES)
     record = json_record(raw)
     require(set(record) == {"version", "stop", "stock", "candidate", "profile_sha256", "plan"}

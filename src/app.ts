@@ -3,6 +3,7 @@ import type {PortableRetained,PortableOrigins} from '../host/portable-configurat
 import {NotebookArchiveController,archiveAttemptMessage as notebookAttemptMessage} from './notebook-archive';
 import type {ArchiveRetained as NotebookRetained} from '../host/notebook-archive-protocol.mjs';
 import {ServiceStopPanel} from './service-stop-panel';
+import {ResidentPackagePanel} from './resident-package-panel';
 import {StorageInitializationController} from './storage-initialization';
 import type {StorageInitializationRetained} from '../host/storage-initialization-protocol.mjs';
 import {OwnedV3Controller,ownedV3Rows,exactCount} from './owned-data-v3';
@@ -58,7 +59,7 @@ import buildInfo from './build-info.json';
 import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 
 @Component({
-  selector: 'app-root', standalone: true, imports:[ServiceStopPanel], templateUrl: './app.html',
+  selector: 'app-root', standalone: true, imports:[ServiceStopPanel,ResidentPackagePanel], templateUrl: './app.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App implements OnDestroy {
@@ -69,12 +70,15 @@ export class App implements OnDestroy {
   private clearHistorySettings(){this.handwritingController.clear();this.#clearPeersC();this.cleanupController.clear();this.fileCredentialController.clear();this.#clearPeersG();}
   private clearExportSettings(){this.exportController.clear();this.#clearPeersJ();this.forgetController.clear();}
   readonly host = currentHost();
-  private clearStorageInitialization(){this.serviceStopEpoch.update(x=>x+1);this.storageInitializationController.clear();}
-  private storageSetupBusy(){return this.storageInitialization().busy||this.serviceStopBusy();}
+  private clearStorageInitialization(){this.residentPackageEpoch.update(x=>x+1);this.serviceStopEpoch.update(x=>x+1);this.storageInitializationController.clear();}
+  private storageSetupBusy(){return this.storageInitialization().busy||this.serviceStopBusy()||this.residentPackageBusy();}
   readonly serviceStopOpen=signal(false);readonly serviceStopBusy=signal(false);readonly serviceStopEpoch=signal(0);
   readonly serviceStopAdapter={serviceStop:(q:import('../host/service-stop-protocol.mjs').ServiceStopRequest)=>this.host.serviceStop!(q)};
   readonly pauseServiceStop=async()=>{const t=this.connection().observation;await this.connectionController.pauseObservation();return !!t&&this.connection().observation===t&&this.profile().inspection;};
-  prepareServiceStop(){this.prepareServiceStopPeers();}
+  readonly residentPackageOpen=signal(false);readonly residentPackageBusy=signal(false);readonly residentPackageEpoch=signal(0);
+  readonly residentPackageAdapter={residentPackage:(q:import('../host/resident-package-protocol.mjs').ResidentPackageRequest)=>this.host.residentPackage!(q)};
+  prepareResidentPackage(){this.serviceStopEpoch.update(x=>x+1);this.prepareServiceStopPeers();}
+  prepareServiceStop(){this.residentPackageEpoch.update(x=>x+1);this.prepareServiceStopPeers();}
   private prepareServiceStopPeers(){this.storageInitializationController.clear();this.ownedV3Controller.clear();this.clearHistorySettings();this.#clearPeersI();this.cacheController.clear();this.savedModeController.clear();this.memoryInspectionController.clear();this.memoryController.clear();this.ownedController.clear();this.runtimeController.clear();this.personalizationController.clear();}
 
   readonly drive = signal(unsupportedDriveState());

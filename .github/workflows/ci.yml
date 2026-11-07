@@ -150,6 +150,7 @@ jobs:
           python -m unittest discover -s tests/owned_data_v3 -v
           python -m unittest discover -s tests/storage_initialization -v
           python -m unittest discover -s tests/service_stop -v
+          python tests/service_stop/check_native_package_lock.py
           python -m unittest discover -s tests/conversation_inventory -v
           python -m unittest discover -s tests/conversation_management -v
           python -m unittest discover -s tests/ordinary_restore -v

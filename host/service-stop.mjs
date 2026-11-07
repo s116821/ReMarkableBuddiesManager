@@ -29,6 +29,7 @@ export class ServiceStopHost{
   const sample=this.observer.lastObservation;if(!same(sample,q))return this.#value('unavailable',q,null,null,'session-changed');
   const unknown=[...this.#records.values()].find(s=>s.outcome==='unknown'&&s.sample.connection_id===q.connection_id);if(unknown)return this.#original(q,unknown);
   if(this.#records.size>=8)return this.#value('capacity',q,null,null,'capacity');
+  if(!this.io.maySubmit(q.connection_id,'service-stop',null))return this.#value('busy',q,null,null,'busy');
   const started=this.now(),token=this.io.acquire('service-stop','review','begin');if(!token)return this.#value('busy',q,null,null,'busy');let a,timer;
   try{
    const reference=this.reference();if(this.#lookup(reference))return this.#value('unavailable',q,null,null,'unavailable');
@@ -71,7 +72,7 @@ export class ServiceStopHost{
   const started=this.now(),token=this.io.acquire('service-stop',s.reference,q.action);if(!token)return this.#value('busy',q,s,null,'busy');let a,timer;
   try{
    this.#epoch++;if(q.action==='refresh')this.#editor=null;this.beforeIO();s.ledger.set(q.invocation,'active');a={s,token,epoch:this.#epoch,invocation:q.invocation,operation:q.action,deadline:started+this.budgetMs,buffers:[]};this.#active=a;
-   if(q.action==='confirm'){if(this.now()>=s.deadline||this.now()>=a.deadline)return this.#value('expired',q,s,null,'expired');s.possible=true;s.outcome='unknown';s.reason='unavailable';this.#editor=null;this.#records.set(s.reference,s);}
+   if(q.action==='confirm'){if(this.now()>=s.deadline||this.now()>=a.deadline)return this.#value('expired',q,s,null,'expired');if(!this.io.fence(q.connection_id,'service-stop',s.reference))return this.#value('busy',q,s,null,'busy');s.possible=true;s.outcome='unknown';s.reason='unavailable';this.#editor=null;this.#records.set(s.reference,s);}
    try{
     const parsed=await Promise.race([this.#raw(a),new Promise((_,reject)=>{timer=setTimeout(()=>{if(this.#active===a&&a.epoch===this.#epoch&&this.io.owns(token)){this.invalidate('expired');this.observer.cancel();}reject(Error('Service stop expired'));},Math.max(1,a.deadline-this.now()));})]);
     if(!this.#current(a))return this.#records.has(s.reference)?this.#original(q,s):this.#value('invalidated',q);

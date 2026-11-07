@@ -14,6 +14,7 @@ from resident_package_recovery import (
 from service_stop_sampler import run_fixed
 from service_stop_transport import STOP_COMMAND
 import wired_observer as shared
+from resident_package_goal import LEASE_SINK, IntentLease, validate_goal, preflight
 
 
 INTENT_MAX_BYTES = 4096
@@ -29,11 +30,15 @@ def intent_path(config_path, boot, activation):
     return Path(config_path).parent / f"resident-stop-{boot}-{activation}.json"
 
 
-def record_intent(path, connection, activation, ownership, removal_plan=None):
+def record_intent(path, connection, activation, ownership, removal_plan=None, *, goal=None):
     payload = {"version": 2, "connection_id": connection, "activation": asdict(activation),
                "ownership": ownership}
     if removal_plan is not None:
         payload.update(version=3, removal_plan=removal_plan)
+    if goal is not None:
+        validate_goal(goal, ownership, removal_plan)
+        payload.update(version=4, goal=goal, removal_plan=removal_plan)
+        preflight(payload)
     write_private_record(path, payload)
 
 
@@ -43,7 +48,12 @@ def write_private_record(path, payload):
     root_identity = checked_root(path.parent)
     require(root_identity is not None)
     try:
-        with exclusive(path, write_through=True) as stream:
+        with exclusive(path, write_through=True, **({'shared_read': True} if payload.get('version') == 4 else {})) as stream:
+            if payload.get('version') == 4:
+                require(LEASE_SINK.get() is not None)
+                lease = IntentLease(stream.fileno())
+                lease.path = str(path)
+                LEASE_SINK.get().append(lease)
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
@@ -138,7 +148,7 @@ def review(config_path, approved_profile_sha256, deadline):
 
 
 def prepare(config_path, expected_connection, expected, approved_profile_sha256, deadline, *,
-            approved_version, removal=False, expected_plan=None):
+            approved_version, removal=False, expected_plan=None, goal=None):
     """Require owned bytes before recording intent and reconfirm ownership after recovery."""
     require_approved(expected, approved_profile_sha256)
     require_package_version(approved_version)
@@ -167,7 +177,10 @@ def prepare(config_path, expected_connection, expected, approved_profile_sha256,
         require(recovery.capture_activation() == expected and time.monotonic() < deadline)
         recovery.require_takeover()
         require(time.monotonic() < deadline)
-        record_intent(path, expected_connection, expected, ownership, plan)
+        if goal is None:
+            record_intent(path, expected_connection, expected, ownership, plan)
+        else:
+            record_intent(path, expected_connection, expected, ownership, plan, goal=goal)
         if time.monotonic() >= deadline:
             raise shared.Refusal("timeout")
         possible = True
@@ -199,11 +212,20 @@ def load_intent(config_path, expected_connection, boot, activation, approved_pro
     path = intent_path(config_path, boot, activation)
     require(checked_root(path.parent) is not None)
     record = json_record(shared.private_bytes(path, parent_private=True, maximum=INTENT_MAX_BYTES))
-    require(type(record.get("version")) is int and record["version"] in (1, 2, 3)
+    require(type(record.get("version")) is int and record["version"] in (1, 2, 3, 4)
             and record.get("connection_id") == expected_connection)
     fields = {"version", "connection_id", "activation"}
     plan = None
-    if record["version"] == 3:
+    if record["version"] == 4:
+        require(set(record) == fields | {"ownership", "removal_plan", "goal"})
+        require_ownership(record["ownership"], boot, approved_version)
+        plan = record["removal_plan"]
+        if plan is not None:
+            require_removal_plan(plan, boot, approved_version)
+            require(plan["ownership"] == record["ownership"])
+        validate_goal(record["goal"], record["ownership"], plan)
+        preflight(record)
+    elif record["version"] == 3:
         require(set(record) == fields | {"ownership", "removal_plan"})
         plan = record["removal_plan"]
         require_removal_plan(plan, boot, approved_version)
