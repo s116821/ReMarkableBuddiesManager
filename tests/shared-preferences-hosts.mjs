@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import {mkdir, mkdtemp} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
 import {chromium, _electron as electron, expect} from '@playwright/test';
 import {startHelper} from '../host/browser-helper.mjs';
 import {fixture, privateText} from './fixtures/shared-preferences.mjs';
 
-const root = path.resolve('dist/manager/browser');
+const packaged = process.argv.includes('--packaged');
+const root = path.resolve(packaged ? 'dist/manager/browser' : 'test-results/development/browser');
+const packageExecutable = path.resolve(
+  'out/packages', `ReMarkableBuddiesManager-${process.platform}-x64`,
+  process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'
+);
 async function isolate(context, origin) {
   await context.route('**/*', route => {
     const url = route.request().url();
@@ -71,25 +77,43 @@ try {
   await browser.close();
   await helper.close();
 }
-console.log('Built browser panel and guarded loopback helper passed with simulated Buddy replies.');
+console.log(`${packaged ? 'Production' : 'Development'} browser panel and guarded loopback helper passed with simulated Buddy replies.`);
 
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MANAGER_')));
 await mkdir('test-results', {recursive: true});
 const profile = await mkdtemp(path.resolve('test-results/shared-preferences-profile-'));
 Object.assign(env, {MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: profile});
 const app = await electron.launch({
-  ...(process.env.SHARED_PREFERENCES_ELECTRON ? {executablePath: process.env.SHARED_PREFERENCES_ELECTRON} : {}),
-  args: ['.', ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env
+  executablePath: packaged ? packageExecutable : process.env.SHARED_PREFERENCES_ELECTRON,
+  args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env
 });
 try {
   const page = await app.firstWindow();
   await isolate(app.context());
-  await app.evaluate(async ({app, BrowserWindow}) => {
+  assert.equal(await app.evaluate(({app}) => app.isPackaged), packaged);
+  if (packaged) {
+    const resources = await app.evaluate(() => process.resourcesPath);
+    const files = ['shared-preferences.mjs', 'shared-preferences-protocol.mjs',
+      'shared_preferences_transport.py', 'portable_configuration_transport.py'];
+    for (const file of files) {
+      assert.deepEqual(await readFile(path.join(resources, 'host', file)),
+        await readFile(path.join('host', file)));
+    }
+    const child = spawnSync(process.env.MANAGER_WIRED_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3'),
+      ['-B', path.join(resources, 'host/shared_preferences_transport.py')],
+      {input: 'PRIVATE_CANARY', encoding: 'utf8', timeout: 3000, windowsHide: true});
+    assert.equal(child.status, 0);
+    assert.equal(child.stderr, '');
+    assert.equal(child.stdout.includes('PRIVATE_CANARY'), false);
+    assert.equal(JSON.parse(child.stdout).status, 'observation-unavailable');
+  }
+  await app.evaluate(async ({app, BrowserWindow}, fixturePath) => {
     const require = process.mainModule.require.bind(process.mainModule);
     const path = require('node:path'), root = app.getAppPath();
-    globalThis.sharedPreferenceHarness = require(path.join(root, 'tests/fixtures/shared-preferences.mjs')).fixture();
-    const {WiredObserver} = require(path.join(root, 'host/observer.mjs'));
-    const {DriveAuth} = require(path.join(root, 'host/drive-auth.mjs'));
+    const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(root, 'host');
+    globalThis.sharedPreferenceHarness = require(fixturePath).fixture();
+    const {WiredObserver} = require(path.join(hostRoot, 'observer.mjs'));
+    const {DriveAuth} = require(path.join(hostRoot, 'drive-auth.mjs'));
     DriveAuth.prototype.status = async () => ({contract_version: 1, status: 'unconfigured', account: null,
       checkedAt: null, error: null, authorizationId: null, backupReady: false});
     WiredObserver.prototype.observe = async function () {
@@ -102,7 +126,7 @@ try {
     };
     const window = BrowserWindow.getAllWindows()[0];
     await window.loadFile(path.join(root, 'dist/manager/browser/index.html'));
-  });
+  }, path.resolve('tests/fixtures/shared-preferences.mjs'));
   assert.equal(await page.evaluate(() => typeof globalThis.window.require), 'undefined');
   await exercise(page,
     state => app.evaluate((_electron, value) => globalThis.sharedPreferenceHarness.set(value), state),
@@ -110,4 +134,4 @@ try {
 } finally {
   await app.close();
 }
-console.log('Built sandboxed Electron panel and guarded IPC passed with simulated Buddy replies.');
+console.log(`${packaged ? 'Packaged' : 'Source'} sandboxed Electron panel and guarded IPC passed with simulated Buddy replies.`);
