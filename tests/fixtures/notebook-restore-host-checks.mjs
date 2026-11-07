@@ -54,8 +54,8 @@ export async function verifyNotebookRestoreUi(page,c,capture){
  if(await page.evaluate(()=>!!window.ng?.getComponent)){
   const edges=await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root')),c=a.notebookRestoreController,s=c.state;
    a.notebookRestore.set({...s,busy:true});
-   const guards=[a.archiveMaintenanceBusy1(),a.archiveMaintenanceBusy2(),a.archiveMaintenanceBusy3(),a.selectedPeerBusy(),a.notebookPeerBusy(),a.restorePeerBusy(),a.handwritingPeerBusy(),a.managementPeerBusy(),a.cleanupPeerBusy(),a.conversationPeerBusy(),a.sourceCachePeerBusy(),a.productPeerBusy(),a.localModePeerBusy()];
-   a.notebookRestore.set(s);const clears=[];for(const name of ['clearArchivePeers','clearSharedArchivePeers2','clearNotebookPeers','clearRestorePeers','clearManagementPeers','clearConversationPeers','clearSourceCachePeers']){c.setDraft('/private/draft');a[name]();clears.push(c.state.draft==='');}return {guards,clears};});
+   const guards=[a.busyConfigPeers(),a.busyDataPeers(),a.busyFilePeers(),a.selectedPeerBusy(),a.notebookPeerBusy(),a.restorePeerBusy(),a.handwritingPeerBusy(),a.managementPeerBusy(),a.cleanupPeerBusy(),a.conversationPeerBusy(),a.sourceCachePeerBusy(),a.productPeerBusy(),a.localModePeerBusy()];
+   a.notebookRestore.set(s);const clears=[];for(const name of ['clearDataSettings','clearHistorySettings','clearNotebookPeers','clearRestorePeers','clearManagementPeers','clearConversationPeers','clearSourceCachePeers']){c.setDraft('/private/draft');a[name]();clears.push(c.state.draft==='');}return {guards,clears};});
   assert.ok(edges.guards.every(Boolean));assert.ok(edges.clears.every(Boolean));
  }
  await field.fill(source);await c.hold();try{await preview.click();await c.entered();await expect(page.locator('#ordinary-restore-source')).toBeDisabled();await expect(page.getByRole('button',{name:'Preview notebook export',exact:true})).toBeDisabled();await section.getByRole('button',{name:'Stop notebook restore wait',exact:true}).click();}finally{await c.release();}

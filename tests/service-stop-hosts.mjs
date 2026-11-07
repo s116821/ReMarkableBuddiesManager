@@ -1,0 +1,143 @@
+import {stageDevelopmentBrowserAssets} from './fixtures/development-browser-assets.mjs';
+import {verifyNotebookArchiveAppBoundaries} from './fixtures/notebook-archive-app-boundaries.mjs';
+import {ServiceStopHost} from '../host/service-stop.mjs';
+import {verifyStorageInitializationAppBoundaries} from './fixtures/storage-initialization-app-boundaries.mjs';
+import {chromium,_electron as electron,expect} from '@playwright/test';
+import {mkdtemp,mkdir,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
+import {startHelper} from '../host/browser-helper.mjs';
+import {serviceStopFixture,tablet,identity} from './fixtures/service-stop.mjs';
+import {ordinaryAliasFixture} from './fixtures/service-stop-profiles.mjs';
+import {selected as portableSelection} from './fixtures/portable-configuration.mjs';
+import {source as notebookRestoreSource} from './fixtures/notebook-restore.mjs';
+import {lanes as sixteen} from './fixtures/maintenance-sixteen-lanes.mjs';
+const lanes={...sixteen,portableConfiguration:{key:'portable_configuration',begin:()=>({action:'prepare',...identity,artifact_base64:portableSelection})},notebookRestore:{key:'ordinary_restore',begin:()=>({action:'prepare',...identity,source:notebookRestoreSource,invocation:randomUUID()})},notebookArchive:{key:'notebook_archive',begin:()=>({action:'prepare-export',...identity,path:'/home/root/backups/notebook-new',invocation:randomUUID()})},localModeChoice:{key:'local_mode_choice',begin:()=>({action:'begin',...identity})},inspectOwnedV3:{key:'owned_data_v3',begin:()=>({...identity})},storageInitialization:{key:'storage_initialization',begin:()=>({action:'begin',...identity})}};
+const routes={portableConfiguration:'portable-configuration',notebookRestore:'notebook-restore',notebookArchive:'notebook-archive',serviceStop:'service-stop',storageInitialization:'storage-initialization',localModeChoice:'local-mode-choice',inspectOwnedV3:'owned-data-v3',productSettings:'product-settings',handwritingRecords:'handwriting-records',selectedArchive:'selected-archive',ordinaryRestore:'ordinary-restore',conversationManagement:'conversation-management',sourceCacheCleanup:'source-cache-cleanup',inspectSourceCache:'source-cache-inventory',inspectConversations:'conversation-inventory',modelSettings:'model-settings',basicSettings:'basic-settings',memoryForget:'memory-forget',ordinaryExport:'ordinary-export',researchSettings:'research-settings',memorySettings:'memory-settings',credentialReference:'credential-reference',modelCredential:'model-credential'};
+const aliasCandidate=ordinaryAliasFixture();
+const packaged=process.argv.includes('--packaged'),begin={action:'begin',...identity},read=n=>n.startsWith('inspect');
+function confirm(name,a,reference){const q=a.change?{action:'save',...identity,reference,change:a.change}:a.changes?{action:'save',...identity,reference,changes:a.changes}:name==='memoryForget'?{action:'confirm',reference}:name==='localModeChoice'?{action:'choose',...identity,reference}:{action:name==='conversationManagement'?'prepare':name==='handwritingRecords'?'confirm-remove':['selectedArchive','notebookArchive'].includes(name)?'confirm-export':'confirm',...identity,reference,invocation:randomUUID()};if(!['storageInitialization','conversationManagement','handwritingRecords','selectedArchive','notebookArchive','ordinaryRestore','notebookRestore','sourceCacheCleanup'].includes(name))delete q.invocation;return q;}
+async function matrix(request,control){let busy=0,invalidated=0;
+ for(const [name,a]of Object.entries(lanes)){
+  await control.hold();const p=request('serviceStop',begin);await control.entered();try{const before=await control.snapshot(),v=(await request(name,a.begin()))[a.key];assert.equal(read(name)?v.status:v.state,'busy',name);assert.deepEqual(await control.snapshot(),before);busy++;}finally{await control.release();}assert.equal((await p).service_stop.state,'unsupported');
+  let q=a.begin();if(name==='storageInitialization'){const r=(await request(name,q))[a.key];q=confirm(name,a,r.reference);}else if(['selectedArchive','notebookArchive','handwritingRecords'].includes(name))q.action='inspect';
+  await control.hold();const peer=request(name,q);await control.entered();try{const before=await control.snapshot();assert.equal((await request('serviceStop',begin)).service_stop.state,'busy',name);assert.deepEqual(await control.snapshot(),before);busy++;}finally{await control.release();}let old=(await peer)[a.key];if(['selectedArchive','notebookArchive','handwritingRecords','storageInitialization'].includes(name))old=(await request(name,a.begin()))[a.key];
+  await request('serviceStop',begin);if(!read(name)){assert.ok(old.reference,name);const v=(await request(name,confirm(name,a,old.reference)))[a.key];assert.ok(['invalidated','unavailable','not-dispatched'].includes(v.state),name+':'+v.state);invalidated++;}
+ }
+ assert.equal(Object.keys(lanes).length,22);assert.equal(busy,44);console.log(JSON.stringify({actual_factory_peers:22,busy_directions:busy,predecessor_previews_invalidated:invalidated,production_profiles_enabled:0}));
+}
+async function reciprocalStorage(request,control){
+ const ready=await control.syntheticReview(request);assert.equal(ready.service_stop.state,'ready');
+ const ref=ready.service_stop.reference,before=await control.snapshot();
+ await request('storageInitialization',begin);
+ const v=await request('serviceStop',{action:'confirm',...identity,reference:ref,invocation:randomUUID()});
+ assert.equal(v.service_stop.state,'unavailable');assert.equal((await control.snapshot()).stops,before.stops);
+ assert.equal(await control.productionClosed(),true);
+ console.log('Actual storage-to-Stop idle review invalidation passes with isolated synthetic review; production profiles remain0');
+}
+async function reciprocalNotebook(request,control){
+ for(const name of ['notebookArchive','notebookRestore']){
+  const lane=lanes[name],ready=await control.syntheticReview(request);assert.equal(ready.service_stop.state,'ready');const ref=ready.service_stop.reference,before=await control.snapshot();
+  await request(name,{action:'retained'});assert.deepEqual(await control.snapshot(),before);
+  const preview=(await request(name,lane.begin()))[lane.key];assert.equal(preview.state,'ready');
+  const stale=(await request('serviceStop',{action:'confirm',...identity,reference:ref,invocation:randomUUID()})).service_stop;assert.equal(stale.state,'unavailable');assert.equal((await control.snapshot()).stops,before.stops);
+  await request('serviceStop',begin);assert.equal((await request(name,confirm(name,lane,preview.reference)))[lane.key].state,name==='notebookRestore'?'not-dispatched':'unavailable');
+  assert.equal(await control.productionClosed(),true);
+ }
+ console.log('Actual notebook export/restore and Stop idle previews invalidate reciprocally; retained lookup has no I/O or invalidation; native profiles remain0');
+}
+async function isolate(context,origin){await context.route('**/*',r=>{const u=r.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return r.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||origin&&new URL(u).origin===origin)return r.continue();return r.abort();});}
+async function loadingDeadline(page,control){
+ if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
+ await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();
+ await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).connectionController.pauseObservation());
+ await page.clock.install();let enter,release,finished;const entered=new Promise(r=>{enter=r;}),gate=new Promise(r=>{release=r;}),done=new Promise(r=>{finished=r;});
+ const handler=async route=>{const response=await route.fetch();enter();await gate;await route.fulfill({response});finished();};
+ await page.route('**/*.js',handler);await page.getByRole('button',{name:'Open Buddy stop controls',exact:true}).click();const before=await control.snapshot();
+ try{await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await entered;await page.clock.runFor(14001);await expect(page.getByTestId('service-stop-status')).toContainText('unavailable');assert.deepEqual(await control.snapshot(),before);release();await done;await page.waitForLoadState('networkidle');assert.deepEqual(await control.snapshot(),before);}
+ finally{release();await page.unroute('**/*.js',handler);await page.clock.resume();}
+ console.log('Actual lazy controller loading shares14-second UI deadline; late module cannot dispatch');
+}
+async function stopOutgoing(page){
+ if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
+ const names=['portableController','notebookController','storageInitializationController','ownedV3Controller','cacheController','handwritingController','selectedController','restoreController','notebookRestoreController','managementController','conversationController','cleanupController','fileCredentialController','credentialController','memorySettingsController','researchController','modelController','localModeController','productController','basicController','forgetController','savedModeController','memoryInspectionController','ownedController','runtimeController','exportController','savedConfigurationController','memoryController','personalizationController'];
+ const epoch=await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.stopOutgoingCounts={};a.stopOutgoingOriginals={};for(const name of names){const c=a[name],old=c.clear;a.stopOutgoingOriginals[name]=old;c.clear=function(...args){a.stopOutgoingCounts[name]=(a.stopOutgoingCounts[name]??0)+1;return old.apply(this,args);};}return a.serviceStopEpoch();},names);
+ try{await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await expect.poll(()=>page.evaluate(()=>Object.keys(window.ng.getComponent(document.querySelector('app-root')).stopOutgoingCounts).length)).toBe(29);await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');const v=await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));return {counts:a.stopOutgoingCounts,epoch:a.serviceStopEpoch()};});assert.ok(Object.values(v.counts).every(x=>x===1),JSON.stringify(v.counts));assert.equal(v.epoch,epoch);}
+ finally{await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));for(const name of names)a[name].clear=a.stopOutgoingOriginals[name];delete a.stopOutgoingCounts;delete a.stopOutgoingOriginals;},names);}
+ console.log('Actual Stop preparation:29 peer/view clears including ordinary export; own epoch preserved');
+}
+async function portableUiPeers(page,control){
+ const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true});
+ const file=page.locator('#portable-file'),confirm=page.getByRole('button',{name:'Confirm preferences import',exact:true}),exportButton=page.getByRole('button',{name:'Export preferences',exact:true});
+ const choose=async()=>{await expect(file).toBeEnabled();await file.setInputFiles({name:'preferences.json',mimeType:'application/json',buffer:Buffer.from(portableSelection,'base64')});await expect(confirm).toBeEnabled();};
+ await control.admission(true);let held=false;
+ try{
+  await choose();await review.click();await expect(stop).toBeEnabled();await expect(confirm).toHaveCount(0);
+  const before=await control.snapshot();await choose();await expect(stop).toHaveCount(0);assert.equal((await control.snapshot()).stops,before.stops);
+  await control.hold();held=true;await review.click();await control.entered();await expect(file).toBeDisabled();await expect(exportButton).toBeDisabled();await control.release();held=false;await expect(stop).toBeEnabled();
+  await control.hold();held=true;await exportButton.click();await control.entered();await expect(review).toBeDisabled();await expect(stop).toHaveCount(0);await control.release();held=false;await expect(page.getByTestId('portable-status')).toContainText('handed to the save flow');
+  assert.equal((await control.snapshot()).stops,before.stops);
+ }finally{if(held)await control.release();await control.admission(false);}
+ assert.equal(await control.productionClosed(),true);console.log('Actual portable preferences and Stop UI reciprocal preview invalidation and Busy guards pass with zero Stop submissions');
+}
+async function notebookUiPeers(page,control){
+ const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true});
+ const cases=[
+  {field:'#notebook-archive-path',action:'export',earlier:'exports',source:'/home/root/backups/notebook-new',state:'notebookArchive',controller:'notebookController'},
+  {field:'#notebook-restore-source',action:'restore',earlier:'restores',source:notebookRestoreSource,state:'notebookRestore',controller:'notebookRestoreController'},
+ ];
+ const reviewReady=async()=>{const before=await control.snapshot();await review.click();await expect.poll(async()=>(await control.snapshot()).all).toBe(before.all+1);await expect(stop).toBeEnabled();};
+ await control.admission(true);
+ try{for(const lane of cases){
+  const field=page.locator(lane.field),preview=page.getByRole('button',{name:`Preview notebook ${lane.action}`,exact:true}),confirm=page.getByRole('button',{name:`Confirm notebook ${lane.action}`,exact:true});
+  await reviewReady();const before=await control.snapshot();
+  await page.getByRole('button',{name:`Show earlier notebook ${lane.earlier}`,exact:true}).click();assert.deepEqual(await control.snapshot(),before);await expect(stop).toBeEnabled();
+  await field.fill(lane.source);await preview.click();await expect(confirm).toBeEnabled();await expect(stop).toHaveCount(0);await expect(field).toHaveValue('');
+  await reviewReady();if(lane.action==='restore')await expect(confirm).toHaveCount(0);else await expect(confirm).toBeDisabled();await expect(field).toHaveValue('');
+  if(await page.evaluate(()=>!!window.ng?.getComponent)){
+   await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).serviceStopBusy.set(true));await expect(field).toBeDisabled();await expect(preview).toBeDisabled();await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).serviceStopBusy.set(false));
+   await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set({...a[lane.state](),busy:true});},lane);await expect(review).toBeDisabled();await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set(a[lane.controller].state);},lane);
+  }
+ }}finally{await control.admission(false);}
+ assert.equal(await control.productionClosed(),true);console.log('Actual notebook export/restore and Stop UI reciprocal ready invalidation, Busy/edit guards and retained no-I/O pass; default profile admission restored');
+}
+async function unknownCoexistence(request,control){
+ const stopBefore=await request('serviceStop',{action:'retained'}),unknown=stopBefore.service_stop.retained.find(r=>r.outcome==='unknown');assert.ok(unknown);
+ const ready=(await request('notebookArchive',{action:'prepare-export',...identity,path:'/home/root/backups/notebook-unknown',invocation:randomUUID()})).notebook_archive;
+ const lost=(await request('notebookArchive',{action:'confirm-export',...identity,reference:ready.reference,invocation:randomUUID()})).notebook_archive;assert.equal(lost.original_outcome,'unknown');const notebook=await request('notebookArchive',{action:'retained'});
+ await request('serviceStop',{action:'refresh',...identity,reference:unknown.reference,invocation:randomUUID()});assert.deepEqual(await request('notebookArchive',{action:'retained'}),notebook);
+ await request('notebookArchive',{action:'check-export',...identity,reference:ready.reference,invocation:randomUUID()});assert.deepEqual(await request('serviceStop',{action:'retained'}),stopBefore);
+ assert.equal(await control.productionClosed(),true);console.log('Actual notebook and Stop unknown histories survive reciprocal current-only refresh/check with no original upgrade');
+}
+async function syntheticLifecycle(page,control){
+ await control.admission(true);
+ try{
+  const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true}),status=page.getByTestId('service-stop-status');
+  await review.click();await expect(stop).toBeEnabled();await control.inactive();await stop.click();await expect(status).toContainText('Stop requested');await expect(page.locator('service-stop-panel')).toContainText('Current service: inactive');
+  await review.click();await expect(stop).toBeEnabled();await control.unknown(true);await stop.click();await expect(status).toContainText('not confirmed');await expect(page.locator('service-stop-panel')).toContainText('Stop request unconfirmed');await control.unknown(false);
+  await page.getByRole('button',{name:'Check service state',exact:true}).last().click();try{await expect(page.locator('service-stop-panel')).toContainText('Current service: inactive');}catch(e){console.log('Synthetic refresh trace',await control.debug());throw e;}await expect(page.locator('service-stop-panel')).toContainText('Stop request unconfirmed');const before=await control.snapshot();await expect(review).toBeDisabled();assert.deepEqual(await control.snapshot(),before,'Unknown blocks another review/submission');
+ }finally{await control.unknown(false);await control.admission(false);}
+ assert.equal(await control.productionClosed(),true);console.log('Actual shared UI synthetic accepted/unknown/current separation passes; default production admission restored');
+}
+async function ui(page){await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await page.getByRole('button',{name:'Open Buddy stop controls',exact:true}).click();const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true});await expect(review).toBeEnabled();await review.focus();await expect(review).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');await expect(page.getByRole('button',{name:'Stop Buddy',exact:true})).toHaveCount(0);for(const width of [390,1280]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}const html=await page.content();for(const x of ['sample_sha256','recovery_profile_base64','lease_base64',identity.connection_id,identity.boot_id])assert.equal(html.includes(x),false);}
+await mkdir('test-results',{recursive:true});
+let capturedStop,savedStopAdmission;const originalStopRequest=ServiceStopHost.prototype.request;ServiceStopHost.prototype.request=function(q){capturedStop=this;return originalStopRequest.call(this,q);};
+const f=serviceStopFixture(),helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer:f.observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){}}}),browser=await chromium.launch();
+try{const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();await page.goto(helper.origin+'/preview/');
+ const request=async(name,q)=>{const r=await context.request.post(helper.origin+'/manager-'+routes[name],{headers:{Origin:helper.origin,'Content-Type':'application/json'},data:q});assert.equal(r.status(),200,name);return r.json();};
+ const control={hold:async()=>{let resolve;const promise=new Promise(r=>{resolve=r;});f.initialization.gate={resolve,promise,entered:false};},entered:()=>expect.poll(()=>f.initialization.gate?.entered).toBe(true),snapshot:async()=>({all:f.initialization.all,stops:f.stop.calls.filter(q=>q.selector==='stop').length,cancels:f.observer.cancels}),release:async()=>{const g=f.initialization.gate;f.initialization.gate=null;g.resolve();},syntheticReview:async request=>{const admit=capturedStop.admitProfile;capturedStop.admitProfile=()=> 'ordinary-manual';try{return await request('serviceStop',begin);}finally{capturedStop.admitProfile=admit;}},productionClosed:async()=>capturedStop.admitProfile(aliasCandidate.observation,aliasCandidate.raw)===null,debug:async()=>({requests:f.stop.calls,raw:f.stop.raw,service:f.observer.lastObservation?.service}),admission:async enabled=>{if(enabled){savedStopAdmission=capturedStop.admitProfile;capturedStop.admitProfile=()=> 'ordinary-manual';}else{capturedStop.admitProfile=savedStopAdmission;}},inactive:async()=>{f.observer.lastObservation.service={LoadState:'loaded',ActiveState:'inactive',SubState:'dead'};},unknown:async enabled=>{f.stop.raw=enabled?{selector:'stop',command:'unknown',reason:'unavailable',buddy:null,helper:null,stock:null,process:null,platform:null,artifacts:null,recovery_profile_base64:null,lease_base64:null,lease_observation:'not-read',configuration:{read:'not-read',effective_mode:'unverified'}}:null;}};
+ await matrix(request,control);await reciprocalStorage(request,control);await reciprocalNotebook(request,control);
+ for(const [origin,q,code] of [['https://invalid.example',begin,403],[helper.origin,{...begin,unit:'OTHER'},400],[helper.origin,{action:'stop',...identity},400]]){const r=await context.request.post(helper.origin+'/manager-service-stop',{headers:{Origin:origin,'Content-Type':'application/json'},data:q});assert.equal(r.status(),code);}
+ await page.reload();await loadingDeadline(page,control);await page.reload();await ui(page);await stopOutgoing(page);await portableUiPeers(page,control);await notebookUiPeers(page,control);await verifyNotebookArchiveAppBoundaries(page);assert.equal(f.stop.calls.some(q=>q.selector==='stop'),false);await syntheticLifecycle(page,control);await unknownCoexistence(request,control);await verifyStorageInitializationAppBoundaries(page,'service-stop');console.log('Browser guarded route, unsupported keyboard UI, responsive geometry and private reduction pass');
+}finally{ServiceStopHost.prototype.request=originalStopRequest;f.initialization.gate?.resolve();await browser.close();await helper.close();}
+const folder=await mkdtemp(path.join(os.tmpdir(),'manager-service-stop-')),env={...process.env};for(const k of Object.keys(env))if(k.startsWith('MANAGER_'))delete env[k];Object.assign(env,{MANAGER_TEST:'1',MANAGER_TEST_DEFER_LOAD:'1',MANAGER_TEST_PROFILE:folder});
+const restoreAssets=packaged?async()=>{}:await stageDevelopmentBrowserAssets();
+const app=await electron.launch({executablePath:packaged?path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform==='win32'?'ReMarkableBuddiesManager.exe':'ReMarkableBuddiesManager'}`):undefined,args:[...(packaged?[]:['.']),...(process.platform==='linux'?['--disable-gpu']:[])],env});
+try{const page=await app.firstWindow();await page.waitForLoadState('domcontentloaded');await isolate(app.context());
+ await app.evaluate(async({app},fixture)=>{const require=process.mainModule.require.bind(process.mainModule),path=require('node:path'),root=app.isPackaged?path.join(process.resourcesPath,'host'):path.join(app.getAppPath(),'host'),{WiredObserver}=require(path.join(root,'observer.mjs')),{DriveAuth}=require(path.join(root,'drive-auth.mjs')),{serviceStopFixture}=require(path.join(fixture.root,'tests/fixtures/service-stop.mjs'));globalThis.stopHarness=serviceStopFixture();const {ServiceStopHost}=require(path.join(root,'service-stop.mjs')),original=ServiceStopHost.prototype.request;ServiceStopHost.prototype.request=async function(q){globalThis.actualStopHost=this;const v=await original.call(this,q);globalThis.lastStopSummary={action:q.action,state:v.service_stop.state,reason:v.service_stop.reason,current:v.service_stop.current};return v;};DriveAuth.prototype.status=async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false});WiredObserver.prototype.observe=async function(){globalThis.stopObserver=this;this.lastObservation=structuredClone(fixture.tablet);return {contract_version:1,status:'observed',observation:this.lastObservation};};WiredObserver.prototype.run=async function(...args){return globalThis.stopHarness.observer.run.apply(this,args);};},{root:path.resolve('.'),tablet});
+ await app.evaluate(async({app,BrowserWindow})=>{await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`);BrowserWindow.getAllWindows()[0].show();});
+ for(const code of ['window.managerHost.serviceStop()','window.managerHost.serviceStop({}, {})','window.managerHost.serviceStop({unit:"OTHER"})'])assert.equal(await page.evaluate(code+'.then(()=>false,()=>true)'),true);
+ assert.equal(await app.evaluate(async({ipcMain,BrowserWindow})=>{const h=ipcMain._invokeHandlers.get('manager:serviceStop'),c=BrowserWindow.getAllWindows()[0].webContents;let refused=0;for(const e of [{},{sender:c,senderFrame:{url:c.getURL()}}])try{await h(e,{});}catch{refused++;}return refused;}),2);
+ await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+ const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
+ const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.stopHarness.initialization.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.stopHarness.initialization.gate?.entered)).toBe(true),snapshot:()=>app.evaluate(()=>({all:globalThis.stopHarness.initialization.all,stops:globalThis.stopHarness.stop.calls.filter(q=>q.selector==='stop').length,cancels:globalThis.stopObserver.generation})),release:()=>app.evaluate(()=>{const s=globalThis.stopHarness.initialization,g=s.gate;s.gate=null;g.resolve();}),syntheticReview:async request=>{await app.evaluate(()=>{const h=globalThis.actualStopHost;globalThis.originalStopAdmission=h.admitProfile;h.admitProfile=()=> 'ordinary-manual';});try{return await request('serviceStop',begin);}finally{await app.evaluate(()=>{globalThis.actualStopHost.admitProfile=globalThis.originalStopAdmission;delete globalThis.originalStopAdmission;});}},productionClosed:()=>app.evaluate((_electron,{observation,raw})=>globalThis.actualStopHost.admitProfile(observation,raw)===null,{observation:aliasCandidate.observation,raw:aliasCandidate.raw}),debug:()=>app.evaluate(()=>({requests:globalThis.stopHarness.stop.calls,raw:globalThis.stopHarness.stop.raw,service:globalThis.stopObserver.lastObservation?.service,summary:globalThis.lastStopSummary})),admission:enabled=>app.evaluate((_electron,enabled)=>{const h=globalThis.actualStopHost;if(enabled){globalThis.savedUIAdmission=h.admitProfile;h.admitProfile=()=> 'ordinary-manual';}else{h.admitProfile=globalThis.savedUIAdmission;delete globalThis.savedUIAdmission;}},enabled),inactive:()=>app.evaluate(()=>{globalThis.stopObserver.lastObservation.service={LoadState:'loaded',ActiveState:'inactive',SubState:'dead'};}),unknown:enabled=>app.evaluate((_electron,enabled)=>{globalThis.stopHarness.stop.raw=enabled?{selector:'stop',command:'unknown',reason:'unavailable',buddy:null,helper:null,stock:null,process:null,platform:null,artifacts:null,recovery_profile_base64:null,lease_base64:null,lease_observation:'not-read',configuration:{read:'not-read',effective_mode:'unverified'}}:null;},enabled)};
+ await matrix(request,control);await reciprocalStorage(request,control);await reciprocalNotebook(request,control);await page.reload();await ui(page);await stopOutgoing(page);await portableUiPeers(page,control);await notebookUiPeers(page,control);await verifyNotebookArchiveAppBoundaries(page);assert.equal(await app.evaluate(()=>globalThis.stopHarness.stop.calls.some(q=>q.selector==='stop')),false);await syntheticLifecycle(page,control);await unknownCoexistence(request,control);console.log('Electron guarded IPC/preload, unsupported shared UI and actual factory controls pass');
+}finally{await app.close();await restoreAssets();await rm(folder,{recursive:true,force:true});}

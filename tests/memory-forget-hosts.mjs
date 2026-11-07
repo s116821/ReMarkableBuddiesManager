@@ -75,7 +75,7 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
   const terminal=new Promise((resolve,reject)=>{terminalResolve=resolve;terminalTimer=setTimeout(()=>reject(Error('Initial preparation did not terminate within14s')),14000);});
   const [response,request]=await Promise.all([pending,terminal,button.click()]);assert.equal(request,response.request());assert.equal(requests.size,1);assert.equal(response.status(),200);
   const remaining=()=>Math.max(1,14000-(performance.now()-started));
-  await page.waitForFunction(()=>{const text=document.querySelector('[data-testid="memory-forget-preview"]')?.textContent??'';return window.forgetPrepareResponseEvents?.includes('eof')&&window.forgetPrepareResponseEvents?.at(-1)==='cancel-complete'&&['Café Ω','Selected memory publication','Observed: 9007199254740991','Author asserted:'].every(value=>text.includes(value));},null,{timeout:remaining()});
+  await page.waitForFunction(()=>{const text=document.querySelector('[data-testid="memory-forget-preview"]')?.textContent??'';return window.forgetPrepareResponseEvents?.includes('eof')&&window.forgetPrepareResponseEvents?.at(-1)==='cancel-complete'&&['Café Ω','Selected memory publication','Observed: 9007199254740991','Author asserted:'].every(value=>text.includes(value));},null,{timeout:remaining(),polling:100});
   const rendered=await consumed();assert.equal(completeForgetPrepare({events,...rendered}),true);assert.ok(performance.now()-started<14000);
   // Full renderer consumption and the unchanged preview assertions validate the body; avoid a second CDP body read.
   console.log('Initial browser preparation public response complete before unchanged UI assertions:',JSON.stringify({events,...rendered,ms:Math.ceil(performance.now()-started),bound:14000}));
@@ -96,7 +96,7 @@ try{const context=await browser.newContext();await isolate(context,helper.origin
   const terminalPromise=new Promise((resolve,reject)=>{terminalResolve=resolve;terminalTimer=setTimeout(()=>reject(Error('Reload status did not terminate within14s')),14000);});
   const [response,terminalRequest]=await Promise.all([responsePromise,terminalPromise,page.reload()]);assert.equal(terminalRequest,response.request());assert.equal(requests.size,1);
   const remaining=()=>Math.max(1,14000-(performance.now()-started));
-  await page.waitForFunction(()=>window.forgetResponseEvents?.includes('eof')&&window.forgetResponseEvents?.at(-1)==='cancel-complete'&&document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry',null,{timeout:remaining()});
+  await page.waitForFunction(()=>window.forgetResponseEvents?.includes('eof')&&window.forgetResponseEvents?.at(-1)==='cancel-complete'&&document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry',null,{timeout:remaining(),polling:100});
   const consumed=await page.evaluate(()=>({readerEvents:[...window.forgetResponseEvents],unknownRendered:document.querySelector('[data-testid="memory-forget-status"]')?.textContent?.trim()==='Original request outcome unknown — no automatic retry'}));
   assert.equal(completeForgetReload({events,...consumed}),true);assert.ok(performance.now()-started<14000);
   events.push({event:'startup-status-response',ms:Math.ceil(performance.now()-started)});
