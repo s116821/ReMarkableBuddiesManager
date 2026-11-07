@@ -1,0 +1,25 @@
+{
+  "node": "v24.11.0",
+  "source_contents_commit": "e5bf3b8ad7f5681f3f90d7cfc097aee3cae53ca3",
+  "artifacts": [
+    {
+      "file": "export-rich.artifact.compact.json",
+      "actual_rust_bytes_sha256": "3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e",
+      "js_sorted_compact_sha256": "3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e",
+      "byte_equal": true
+    },
+    {
+      "file": "export-sparse.artifact.compact.json",
+      "actual_rust_bytes_sha256": "fca920100fba76af55484a06d1f825348a8bb076f353bdd6ecf35cb738cd498c",
+      "js_sorted_compact_sha256": "fca920100fba76af55484a06d1f825348a8bb076f353bdd6ecf35cb738cd498c",
+      "byte_equal": true
+    },
+    {
+      "file": "export-empty.artifact.compact.json",
+      "actual_rust_bytes_sha256": "797107f8787531be8341104cdd5757d65152e8f3fae7afe72fe34bcf532ac666",
+      "js_sorted_compact_sha256": "797107f8787531be8341104cdd5757d65152e8f3fae7afe72fe34bcf532ac666",
+      "byte_equal": true
+    }
+  ],
+  "original_cases_verified": 26
+}

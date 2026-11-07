@@ -5,6 +5,28 @@
   <h1 class="my-4 font-serif text-4xl font-normal tracking-tight sm:text-6xl">A home for your Buddies.</h1>
   <p class="text-lg text-muted">Manage Reader and Writer from one place.<br>This foundation preview is the first step.</p>
 
+<section class="ui-panel my-5 min-w-0" aria-labelledby="portable-title">
+  <h2 id="portable-title">Preferences file</h2>
+  <p>Move Reader/Writer, personalization and research preferences between tablets. Only preferences included in the file change; other destination settings are kept, including explicitly empty settings.</p>
+  <p>The file may contain your personalization text. Choose a private save location and check the downloaded file and its permissions.</p>
+  <div class="flex flex-wrap items-end gap-3 my-3">
+    <button class="ui-button ui-button-secondary" type="button" (click)="exportPortable()" [disabled]="!portableAvailable()">Export preferences</button>
+    <div class="min-w-0 max-w-full"><label class="block font-semibold" for="portable-file">Choose file to review import</label>
+    <input class="ui-field min-w-0 max-w-full" id="portable-file" type="file" accept=".json,application/json" (change)="choosePortable($event)" [disabled]="!portableAvailable()"></div>
+    <button class="ui-button ui-button-secondary" type="button" (click)="stopPortable()" [disabled]="!portable().busy && portable().view?.state !== 'ready'">Stop preferences wait</button>
+  </div>
+  <p role="status" data-testid="portable-status">{{ portable().status }}</p>
+  @if (portable().view?.state === 'ready') {
+    <ul data-testid="portable-preview">@for (row of portableRows(); track row.key) {<li>{{ row.label }}: {{ row.before }} → {{ row.after }}</li>}</ul>
+    <p>Only preferences listed here will change. If saved settings change before confirmation, review the file again.</p>
+    <button class="ui-button ui-button-primary" type="button" (click)="confirmPortable()" [disabled]="!portableAvailable()">Confirm preferences import</button>
+  }
+  @for (record of portable().retained; track record.reference; let i = $index) {
+    <article class="ui-panel my-3" data-testid="portable-retained"><p>Unconfirmed import {{ i + 1 }} — original outcome remains uncertain.</p><button class="ui-button ui-button-secondary" type="button" (click)="statusPortable(record)" [disabled]="!portableAvailable()">Check original preference file {{ i + 1 }}</button></article>
+  }
+</section>
+
+
 <section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
     <div class="grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-boundary bg-paper font-serif text-muted" aria-hidden="true"><span>rM</span></div>
     <div class="min-w-0 flex-1" aria-live="polite"><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">{{ connectionLabels[connection().status] }}</h2>

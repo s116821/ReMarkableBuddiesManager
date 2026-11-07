@@ -1,0 +1,836 @@
+{
+  "fixture_version": 1,
+  "source_contents_commit": "e5bf3b8ad7f5681f3f90d7cfc097aee3cae53ca3",
+  "docs_commit": "2087f0cec22ceb405275bda30dcb4271a9a26789",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "capture_root": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+  "source_worktree": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import_ReMarkableBuddies",
+  "producer": {
+    "path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+    "bytes": 57581056,
+    "sha256": "5693b941fea877b31a1ccc9363c733cf9ed47d95da05b41517dab065e0cbd904"
+  },
+  "producer_version_stdout": "remarkable-reader-buddy dev.v0.73.0-dirty\n",
+  "build_identity_note": "Existing actual CLI compiled from the working-tree source contents subsequently committed as e5bf3b8. Its truthful precommit dev.v0.73.0-dirty metadata is retained; no clean-commit/release build is fabricated.",
+  "setup_helper_source": {
+    "path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\setup.rs",
+    "bytes": 831,
+    "sha256": "6b7fb73102b7937410dc8b72b88395457070388fdfde24c80f9790fd666b92f2"
+  },
+  "setup_helper_binary": {
+    "path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\setup.exe",
+    "bytes": 8228352,
+    "sha256": "273a3a6d9031bdc82e51bb53aaae638189226920cbff0e9a0fcce7b497d2feb0"
+  },
+  "setup_rlib": {
+    "path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\deps\\libremarkable_reader_buddy-6b8a86c58140f756.rlib",
+    "bytes": 546048150,
+    "sha256": "9b25134e2e10ed04209ab680ef7e015a907176b9fd8c783ecf89c81d6e6ad25e"
+  },
+  "capture_script": {
+    "path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\capture.py",
+    "bytes": 10826,
+    "sha256": "49b45079b005d82c961ae7a1fe6afd161412146ba42f3641e0acb3310aa9667b"
+  },
+  "setup_commands": [
+    {
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\setup.exe",
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy",
+        "legacy"
+      ],
+      "exit": 0,
+      "stdout_base64": "",
+      "stderr_base64": ""
+    },
+    {
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\setup.exe",
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook",
+        "notebook"
+      ],
+      "exit": 0,
+      "stdout_base64": "",
+      "stderr_base64": ""
+    },
+    {
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\setup.exe",
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy",
+        "hold"
+      ],
+      "exit": 0,
+      "stdout_base64": "cmVhZHkK",
+      "stderr_base64": ""
+    }
+  ],
+  "artifacts": [
+    {
+      "case": "export-rich",
+      "file": "export-rich.artifact.compact.json",
+      "bytes": 237,
+      "sha256": "3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e",
+      "basis": "exact byte span from actual Rust stdout, not rewritten",
+      "stdout_byte_start": 100,
+      "stdout_byte_end": 337,
+      "producer_digest": "3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e"
+    },
+    {
+      "case": "export-sparse",
+      "file": "export-sparse.artifact.compact.json",
+      "bytes": 180,
+      "sha256": "fca920100fba76af55484a06d1f825348a8bb076f353bdd6ecf35cb738cd498c",
+      "basis": "exact byte span from actual Rust stdout, not rewritten",
+      "stdout_byte_start": 100,
+      "stdout_byte_end": 280,
+      "producer_digest": "fca920100fba76af55484a06d1f825348a8bb076f353bdd6ecf35cb738cd498c"
+    },
+    {
+      "case": "export-empty",
+      "file": "export-empty.artifact.compact.json",
+      "bytes": 50,
+      "sha256": "797107f8787531be8341104cdd5757d65152e8f3fae7afe72fe34bcf532ac666",
+      "basis": "exact byte span from actual Rust stdout, not rewritten",
+      "stdout_byte_start": 100,
+      "stdout_byte_end": 150,
+      "producer_digest": "797107f8787531be8341104cdd5757d65152e8f3fae7afe72fe34bcf532ac666"
+    }
+  ],
+  "cases": [
+    {
+      "name": "export-rich",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--export-portable-configuration",
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\rich.source.json"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export\",\"status\":\"ok\",\"runtime_activation\":\"unverified\",\"artifact\":{\"portable_configuration_version\":1,\"settings\":{\"personalization\":{\"enabled\":false,\"text\":\"Synthetic é 日本語 😀\\r\\n\\t\\b\\f\\u0001 \\\" \\\\   \"},\"product_settings\":{\"reader_enabled\":false,\"schema_version\":1},\"research_policy\":null}},\"summary\":{\"artifact_sha256\":\"3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e\",\"declared_settings\":3,\"personalization_included\":true}}\n",
+      "stdout_sha256": "17ff93b05e6826d0b532664a6d44665808eeec8eb747936a628175f79b6944c2",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "export-sparse",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--export-portable-configuration",
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\sparse.source.json"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export\",\"status\":\"ok\",\"runtime_activation\":\"unverified\",\"artifact\":{\"portable_configuration_version\":1,\"settings\":{\"personalization\":{\"text\":\"Synthetic é 日本語 😀\\r\\n\\t\\b\\f\\u0001 \\\" \\\\   \"},\"product_settings\":{},\"research_policy\":null}},\"summary\":{\"artifact_sha256\":\"fca920100fba76af55484a06d1f825348a8bb076f353bdd6ecf35cb738cd498c\",\"declared_settings\":3,\"personalization_included\":true}}\n",
+      "stdout_sha256": "5d5c8825084c426c152cc0221dfd1aad16b1881186bd4fa4e070fee47af7e6c2",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "export-empty",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--export-portable-configuration",
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\empty.source.json"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"export\",\"status\":\"ok\",\"runtime_activation\":\"unverified\",\"artifact\":{\"portable_configuration_version\":1,\"settings\":{}},\"summary\":{\"artifact_sha256\":\"797107f8787531be8341104cdd5757d65152e8f3fae7afe72fe34bcf532ac666\",\"declared_settings\":0,\"personalization_included\":false}}\n",
+      "stdout_sha256": "1ceb3fc3ef8605f1e10291a0598a93dd960a636fe962f4c4a17cd404429729e7",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-prepare-inspect",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"base_sha256\":\"157346b5a34ad3480d24074374fc63622efc15488803d5cbc5ef77a6c97dd5e9\",\"config_path_sha256\":\"e9e8e93d89260a67c7cad3111b9f3ac8d6b499eed40d7f18886e89740f6f6a12\",\"current\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared\"}}}\n",
+      "stdout_sha256": "cbbcef592b7a6dad43b50f2781a95b4875015e30873f6eb9fa6993359558438d",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-prepare",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "prepare",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJlbmFibGVkIjpmYWxzZSwidGV4dCI6IlN5bnRoZXRpYyDDqSDml6XmnKzoqp4g8J+YgFxyXG5cdFxiXGZcdTAwMDEgXCIgXFwg4oCo4oCpIn0sInByb2R1Y3Rfc2V0dGluZ3MiOnsicmVhZGVyX2VuYWJsZWQiOmZhbHNlLCJzY2hlbWFfdmVyc2lvbiI6MX0sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJiYXNlX3NoYTI1NiI6IjE1NzM0NmI1YTM0YWQzNDgwZDI0MDc0Mzc0ZmM2MzYyMmVmYzE1NDg4ODAzZDVjYmM1ZWY3N2E2Yzk3ZGQ1ZTkiLCJjb25maWdfcGF0aF9zaGEyNTYiOiJlOWU4ZTkzZDg5MjYwYTY3YzdjYWQzMTExYjlmM2FjOGQ2YjQ5OWVlZDQwZDdmMTg4ODZlODk3NDBmNmY2YTEyIiwib3BlcmF0aW9uIjoiNjIzODAwYzYtMTg0OC00ZTc3LWIwZjAtODRmYzhhMDZiZWIwIiwicG9ydGFibGVfaW1wb3J0X3ZlcnNpb24iOjF9",
+      "stdin_sha256": "448b5ecf133906ac2fd166fc040537952deea578e0a58aee5eb2029780ff3f9f",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"prepared\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"after\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared-null\"},\"before\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared\"},\"changed_settings\":[\"personalization\",\"product_settings\",\"research_policy\"],\"intent\":{\"artifact_sha256\":\"3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e\",\"base_sha256\":\"157346b5a34ad3480d24074374fc63622efc15488803d5cbc5ef77a6c97dd5e9\",\"config_path_sha256\":\"e9e8e93d89260a67c7cad3111b9f3ac8d6b499eed40d7f18886e89740f6f6a12\",\"operation\":\"623800c6-1848-4e77-b0f0-84fc8a06beb0\",\"portable_import_version\":1,\"target_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\"}}}\n",
+      "stdout_sha256": "a8fb7edfe4ab4b0fa0502ca86eb0d3e3badfe46cfc5186f4651d7ef1c0fa8dea",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "nul-text-prepare-refused-inspect",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"base_sha256\":\"157346b5a34ad3480d24074374fc63622efc15488803d5cbc5ef77a6c97dd5e9\",\"config_path_sha256\":\"e9e8e93d89260a67c7cad3111b9f3ac8d6b499eed40d7f18886e89740f6f6a12\",\"current\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared\"}}}\n",
+      "stdout_sha256": "cbbcef592b7a6dad43b50f2781a95b4875015e30873f6eb9fa6993359558438d",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "nul-text-prepare-refused",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "prepare",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJ0ZXh0IjoiU3ludGhldGljXHUwMDAwcmVmdXNlZCJ9fX0sImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI0MDliOGQ0OS04MDVlLTRlZWEtYTlmMy04YzE5NmU4ZDgyYTYiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MX0=",
+      "stdin_sha256": "4b50d1462e8eb36ec16a37ec8b1c22fd0fe1b055ffbbbb6e2da251e9ca8f54f7",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"invalid-input\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "dcada7fb674c564d3fa0e6bd129084ac20b5f3b1501715e5eaa1db0f61c5db9b",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-status-before",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "status",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "823cbce6364888d398bb5df573eb1d4f67bb34a22dc19a68f61c0bbef1d159f2",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"ok\",\"outcome\":\"unresolved\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"observed_sha256\":\"157346b5a34ad3480d24074374fc63622efc15488803d5cbc5ef77a6c97dd5e9\"}}\n",
+      "stdout_sha256": "6568af762995baae3e2d560633eda112b3fff95ba24b115832d27f6b9e39cfd4",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-apply-busy",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "apply",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJlbmFibGVkIjpmYWxzZSwidGV4dCI6IlN5bnRoZXRpYyDDqSDml6XmnKzoqp4g8J+YgFxyXG5cdFxiXGZcdTAwMDEgXCIgXFwg4oCo4oCpIn0sInByb2R1Y3Rfc2V0dGluZ3MiOnsicmVhZGVyX2VuYWJsZWQiOmZhbHNlLCJzY2hlbWFfdmVyc2lvbiI6MX0sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "f68e43f280dc6dc8555c53e1e5f0dc2b9e425fca090b96a44f1363a51280a8cc",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"busy\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "c374bd070b4d82d4eab71625bfe8a9e6c4a9665a29339202d820c5099c71df57",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-apply",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "apply",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJlbmFibGVkIjpmYWxzZSwidGV4dCI6IlN5bnRoZXRpYyDDqSDml6XmnKzoqp4g8J+YgFxyXG5cdFxiXGZcdTAwMDEgXCIgXFwg4oCo4oCpIn0sInByb2R1Y3Rfc2V0dGluZ3MiOnsicmVhZGVyX2VuYWJsZWQiOmZhbHNlLCJzY2hlbWFfdmVyc2lvbiI6MX0sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "f68e43f280dc6dc8555c53e1e5f0dc2b9e425fca090b96a44f1363a51280a8cc",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"ok\",\"outcome\":\"verified\",\"disk_readback_verified\":true,\"runtime_activation\":\"unverified\",\"data\":{\"changed_settings\":[\"personalization\",\"product_settings\",\"research_policy\"],\"target_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\"}}\n",
+      "stdout_sha256": "6e5930084660d390a269ca0fb4f16726bca4bccb1ad6a7dd931643343a6b4065",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-status-after",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "status",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "823cbce6364888d398bb5df573eb1d4f67bb34a22dc19a68f61c0bbef1d159f2",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"ok\",\"outcome\":\"desired-file-observed\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"observed_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\"}}\n",
+      "stdout_sha256": "1a864aa2bebf6d6a6fd96a7c5c964155deef87204251d94b7df6fad8f3fbbe26",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-prepare-nochange-inspect",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"base_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\",\"config_path_sha256\":\"e9e8e93d89260a67c7cad3111b9f3ac8d6b499eed40d7f18886e89740f6f6a12\",\"current\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared-null\"}}}\n",
+      "stdout_sha256": "23cdc77899c7f597db93b5d19c5033aff33bef8c803e39a14ecb28f4b1a20031",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-prepare-nochange",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "prepare",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJlbmFibGVkIjpmYWxzZSwidGV4dCI6IlN5bnRoZXRpYyDDqSDml6XmnKzoqp4g8J+YgFxyXG5cdFxiXGZcdTAwMDEgXCIgXFwg4oCo4oCpIn0sInByb2R1Y3Rfc2V0dGluZ3MiOnsicmVhZGVyX2VuYWJsZWQiOmZhbHNlLCJzY2hlbWFfdmVyc2lvbiI6MX0sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJiYXNlX3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEiLCJjb25maWdfcGF0aF9zaGEyNTYiOiJlOWU4ZTkzZDg5MjYwYTY3YzdjYWQzMTExYjlmM2FjOGQ2YjQ5OWVlZDQwZDdmMTg4ODZlODk3NDBmNmY2YTEyIiwib3BlcmF0aW9uIjoiM2JhY2E2MjQtMzM3MS00OWI1LWFmNTQtZTM2NTFiNjliMTk1IiwicG9ydGFibGVfaW1wb3J0X3ZlcnNpb24iOjF9",
+      "stdin_sha256": "f57c1d59121bac4a12ceafa55329c3543595e14643ede9d0e5db79a529511901",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"no-change\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"artifact_sha256\":\"3b2612e9a27ebb0824ad3482698c17d12d94ecef7d67ef4086dfabc76c578d6e\",\"base_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\",\"changed_settings\":[]}}\n",
+      "stdout_sha256": "71ebc2da141e9f9bd1f5702b8222b0a278988728ec98a53336b6325ef90a2b5c",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "empty-prepare-nochange-inspect",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"base_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\",\"config_path_sha256\":\"e9e8e93d89260a67c7cad3111b9f3ac8d6b499eed40d7f18886e89740f6f6a12\",\"current\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared-null\"}}}\n",
+      "stdout_sha256": "23cdc77899c7f597db93b5d19c5033aff33bef8c803e39a14ecb28f4b1a20031",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "empty-prepare-nochange",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "prepare",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7fX0sImJhc2Vfc2hhMjU2IjoiOGY2NjIyYTMzNDE4ZWFkOTk3M2JmMjQ3MGI3OThmODkzMDU0NzVhNzkzMmJiZTE2MmJmYWMxNDI3MDVmOTQ1MSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI4ZmY2NjA1ZC1lMWRjLTQzNmUtOThjNC1lOTU5NWZiNjQ3MmMiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MX0=",
+      "stdin_sha256": "5fe6679ef29aa4f6f704a7c3c6e9ece2cfc905c6da3a918f29c599a384ca9c8b",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"no-change\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"artifact_sha256\":\"797107f8787531be8341104cdd5757d65152e8f3fae7afe72fe34bcf532ac666\",\"base_sha256\":\"8f6622a33418ead9973bf2470b798f89305475a7932bbe162bfac142705f9451\",\"changed_settings\":[]}}\n",
+      "stdout_sha256": "fc5c25c8983cafe61eafd661c716b01026e9cc183d169a1ff3953b98895fde06",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-apply-stale",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "apply",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJlbmFibGVkIjpmYWxzZSwidGV4dCI6IlN5bnRoZXRpYyDDqSDml6XmnKzoqp4g8J+YgFxyXG5cdFxiXGZcdTAwMDEgXCIgXFwg4oCo4oCpIn0sInByb2R1Y3Rfc2V0dGluZ3MiOnsicmVhZGVyX2VuYWJsZWQiOmZhbHNlLCJzY2hlbWFfdmVyc2lvbiI6MX0sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "f68e43f280dc6dc8555c53e1e5f0dc2b9e425fca090b96a44f1363a51280a8cc",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"conflict\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "f63c557f2b0f378ab3181a82e272ad0171ac0683d6401ccad78a4eaca997a7ab",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "rich-apply-foreign-artifact",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "apply",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJlbmFibGVkIjpmYWxzZSwidGV4dCI6IlN5bnRoZXRpYyDDqSDml6XmnKzoqp4g8J+YgFxyXG5cdFxiXGZcdTAwMDEgXCIgXFwg4oCo4oCpIn0sInByb2R1Y3Rfc2V0dGluZ3MiOnsicmVhZGVyX2VuYWJsZWQiOmZhbHNlLCJzY2hlbWFfdmVyc2lvbiI6MX0sInJlc2VhcmNoX3BvbGljeSI6InJlcXVpcmVkIn19LCJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "f8e54bc4e7c2943852254d75eee96ae6ab33737b6e673666323412c4e645c376",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"conflict\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "f63c557f2b0f378ab3181a82e272ad0171ac0683d6401ccad78a4eaca997a7ab",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "status-unsupported-version",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "status",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MiwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "7a7e27aaf27100451a0ccf165c26c1aa6caaec48b827e25dda22cb32f69339be",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"unsupported\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "b0936ed3b08ffc8edf2c4a0b47e9d94f5e5cce124cbfcedf287f73f02a155b15",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "apply-duplicate-member",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "apply",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\legacy\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJpbnRlbnQiOnt9LCJpbnRlbnQiOnt9LCJhcnRpZmFjdCI6e319",
+      "stdin_sha256": "4e7e54265fc5fbbafa09b3e081e08a9b17e1fb746bdf12beb1c3761e103b2fc0",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"invalid-input\",\"outcome\":\"not-dispatched\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "5160ee218c635824c6271a2c9984dc7c0729aee94d04cee79e2cb357de2ae39d",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "status-alternate-path",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "status",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\alternate-config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\alternate-config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiM2IyNjEyZTlhMjdlYmIwODI0YWQzNDgyNjk4YzE3ZDEyZDk0ZWNlZjdkNjdlZjQwODZkZmFiYzc2YzU3OGQ2ZSIsImJhc2Vfc2hhMjU2IjoiMTU3MzQ2YjVhMzRhZDM0ODBkMjQwNzQzNzRmYzYzNjIyZWZjMTU0ODg4MDNkNWNiYzVlZjc3YTZjOTdkZDVlOSIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImU5ZThlOTNkODkyNjBhNjdjN2NhZDMxMTFiOWYzYWM4ZDZiNDk5ZWVkNDBkN2YxODg4NmU4OTc0MGY2ZjZhMTIiLCJvcGVyYXRpb24iOiI2MjM4MDBjNi0xODQ4LTRlNzctYjBmMC04NGZjOGEwNmJlYjAiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjhmNjYyMmEzMzQxOGVhZDk5NzNiZjI0NzBiNzk4Zjg5MzA1NDc1YTc5MzJiYmUxNjJiZmFjMTQyNzA1Zjk0NTEifX0=",
+      "stdin_sha256": "823cbce6364888d398bb5df573eb1d4f67bb34a22dc19a68f61c0bbef1d159f2",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"conflict\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "f7f5d5e277242265b22019dd7ec379757efdc2c04f0892411346bce14c223794",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "inspect-missing",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\does-not-exist.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\does-not-exist.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"unavailable\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "20f4b625559d49ea4e637c88dc5097bee3bda8bbc83ce320c24c14d5543602a6",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "inspect-invalid-whole-config",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\invalid-config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\invalid-config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"invalid-input\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":null}\n",
+      "stdout_sha256": "b4ab27dbdf700f84d07ee4b7cfe7613523607ba816b93db75055a7495eb0adb5",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "sparse-notebook-prepare-inspect",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "inspect"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "",
+      "stdin_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"inspect\",\"status\":\"ok\",\"outcome\":\"read-only\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"base_sha256\":\"c00fa0904d618e79eeec370fb38f6f2c538010b38aa14e984a02cb2a46edb0cb\",\"config_path_sha256\":\"feb53acfc99435029e5dfb4354126bb39bf9519c1df1de052eff4e4656684651\",\"current\":{\"personalization\":\"declared\",\"product_settings\":\"declared-null\",\"research_policy\":\"declared\"}}}\n",
+      "stdout_sha256": "db2832be8af13ba8f0f41b64963c8049f870f968dcf5b3b519901e5ace428c02",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "sparse-notebook-prepare",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "prepare",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJ0ZXh0IjoiU3ludGhldGljIMOpIOaXpeacrOiqniDwn5iAXHJcblx0XGJcZlx1MDAwMSBcIiBcXCDigKjigKkifSwicHJvZHVjdF9zZXR0aW5ncyI6e30sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJiYXNlX3NoYTI1NiI6ImMwMGZhMDkwNGQ2MThlNzllZWVjMzcwZmIzOGY2ZjJjNTM4MDEwYjM4YWExNGU5ODRhMDJjYjJhNDZlZGIwY2IiLCJjb25maWdfcGF0aF9zaGEyNTYiOiJmZWI1M2FjZmM5OTQzNTAyOWU1ZGZiNDM1NDEyNmJiMzliZjk1MTljMWRmMWRlMDUyZWZmNGU0NjU2Njg0NjUxIiwib3BlcmF0aW9uIjoiYTBmODc4YTQtMzk0Zi00NzhmLWE4NmItNjc0YmEwYjA0YThjIiwicG9ydGFibGVfaW1wb3J0X3ZlcnNpb24iOjF9",
+      "stdin_sha256": "e97b4b7051d670a61d50ae12a5a43feabc7de1e03f1cf3710c9476b5289f3d7a",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"prepare\",\"status\":\"ok\",\"outcome\":\"prepared\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"after\":{\"personalization\":\"declared\",\"product_settings\":\"declared\",\"research_policy\":\"declared-null\"},\"before\":{\"personalization\":\"declared\",\"product_settings\":\"declared-null\",\"research_policy\":\"declared\"},\"changed_settings\":[\"personalization\",\"product_settings\",\"research_policy\"],\"intent\":{\"artifact_sha256\":\"fca920100fba76af55484a06d1f825348a8bb076f353bdd6ecf35cb738cd498c\",\"base_sha256\":\"c00fa0904d618e79eeec370fb38f6f2c538010b38aa14e984a02cb2a46edb0cb\",\"config_path_sha256\":\"feb53acfc99435029e5dfb4354126bb39bf9519c1df1de052eff4e4656684651\",\"operation\":\"a0f878a4-394f-478f-a86b-674ba0b04a8c\",\"portable_import_version\":1,\"target_sha256\":\"83459d9238c3e7a552ce989a6ba35c0081a4f860348ec9b4b8831de037cbf232\"}}}\n",
+      "stdout_sha256": "ec506705d503edbc4164b1bbd37f9a9c0a9eb82cfef52f262b43cf06cfa4e3c5",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "sparse-notebook-apply",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "apply",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJhcnRpZmFjdCI6eyJwb3J0YWJsZV9jb25maWd1cmF0aW9uX3ZlcnNpb24iOjEsInNldHRpbmdzIjp7InBlcnNvbmFsaXphdGlvbiI6eyJ0ZXh0IjoiU3ludGhldGljIMOpIOaXpeacrOiqniDwn5iAXHJcblx0XGJcZlx1MDAwMSBcIiBcXCDigKjigKkifSwicHJvZHVjdF9zZXR0aW5ncyI6e30sInJlc2VhcmNoX3BvbGljeSI6bnVsbH19LCJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiZmNhOTIwMTAwZmJhNzZhZjU1NDg0YTA2ZDFmODI1MzQ4YThiYjA3NmYzNTNiZGQ2ZWNmMzVjYjczOGNkNDk4YyIsImJhc2Vfc2hhMjU2IjoiYzAwZmEwOTA0ZDYxOGU3OWVlZWMzNzBmYjM4ZjZmMmM1MzgwMTBiMzhhYTE0ZTk4NGEwMmNiMmE0NmVkYjBjYiIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImZlYjUzYWNmYzk5NDM1MDI5ZTVkZmI0MzU0MTI2YmIzOWJmOTUxOWMxZGYxZGUwNTJlZmY0ZTQ2NTY2ODQ2NTEiLCJvcGVyYXRpb24iOiJhMGY4NzhhNC0zOTRmLTQ3OGYtYTg2Yi02NzRiYTBiMDRhOGMiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjgzNDU5ZDkyMzhjM2U3YTU1MmNlOTg5YTZiYTM1YzAwODFhNGY4NjAzNDhlYzliNGI4ODMxZGUwMzdjYmYyMzIifX0=",
+      "stdin_sha256": "6e289cc4fc113262b00b9cb3bd49840c14cce58d3574a031229ff075f4cfc34f",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"apply\",\"status\":\"ok\",\"outcome\":\"verified\",\"disk_readback_verified\":true,\"runtime_activation\":\"unverified\",\"data\":{\"changed_settings\":[\"personalization\",\"product_settings\",\"research_policy\"],\"target_sha256\":\"83459d9238c3e7a552ce989a6ba35c0081a4f860348ec9b4b8831de037cbf232\"}}\n",
+      "stdout_sha256": "06aeac3fe05bcf91e195a319fb46d1bc0b6b0ec4eeadbf9eba8b573844dda008",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "sparse-notebook-status",
+      "argv": [
+        "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\ordinary-configuration-target\\debug\\reader-buddy.exe",
+        "--portable-configuration-operation",
+        "status",
+        "--portable-configuration-input",
+        "-"
+      ],
+      "cwd": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329",
+      "selected_config_path": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+      "stdin_mode": "piped exact bytes then EOF",
+      "environment": {
+        "SystemRoot": "C:\\WINDOWS",
+        "SystemDrive": "C:",
+        "TEMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "TMP": "C:\\Users\\steve\\AppData\\Local\\Temp",
+        "REMARKABLE_BUDDIES_CONFIG": "C:\\Users\\steve\\Documents\\Codex\\2026-09-16\\remarkable-buddies-mvp\\work\\portable-import-corpus-e5bf\\run-7cef1c7c-b9f0-4262-bdd7-140aa085d329\\notebook\\config.json",
+        "OPENAI_API_KEY": "SYNTHETIC_UNUSED",
+        "OPENAI_BASE_URL": "http://127.0.0.1:1/unused"
+      },
+      "stdin_base64": "eyJpbnRlbnQiOnsiYXJ0aWZhY3Rfc2hhMjU2IjoiZmNhOTIwMTAwZmJhNzZhZjU1NDg0YTA2ZDFmODI1MzQ4YThiYjA3NmYzNTNiZGQ2ZWNmMzVjYjczOGNkNDk4YyIsImJhc2Vfc2hhMjU2IjoiYzAwZmEwOTA0ZDYxOGU3OWVlZWMzNzBmYjM4ZjZmMmM1MzgwMTBiMzhhYTE0ZTk4NGEwMmNiMmE0NmVkYjBjYiIsImNvbmZpZ19wYXRoX3NoYTI1NiI6ImZlYjUzYWNmYzk5NDM1MDI5ZTVkZmI0MzU0MTI2YmIzOWJmOTUxOWMxZGYxZGUwNTJlZmY0ZTQ2NTY2ODQ2NTEiLCJvcGVyYXRpb24iOiJhMGY4NzhhNC0zOTRmLTQ3OGYtYTg2Yi02NzRiYTBiMDRhOGMiLCJwb3J0YWJsZV9pbXBvcnRfdmVyc2lvbiI6MSwidGFyZ2V0X3NoYTI1NiI6IjgzNDU5ZDkyMzhjM2U3YTU1MmNlOTg5YTZiYTM1YzAwODFhNGY4NjAzNDhlYzliNGI4ODMxZGUwMzdjYmYyMzIifX0=",
+      "stdin_sha256": "b55e0d62fe0b47d005b7b18e1e820e9d2a52c294cd565291e534968e6bbb66a9",
+      "stdout_utf8": "{\"report_version\":1,\"operation\":\"status\",\"status\":\"ok\",\"outcome\":\"desired-file-observed\",\"disk_readback_verified\":false,\"runtime_activation\":\"unverified\",\"data\":{\"observed_sha256\":\"83459d9238c3e7a552ce989a6ba35c0081a4f860348ec9b4b8831de037cbf232\"}}\n",
+      "stdout_sha256": "cb3cf948e7ac6da87183056926deb9a4095625316031448ddb2220967a807843",
+      "stderr_utf8": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    }
+  ],
+  "limits": "Synthetic actual Windows CLI/Store corpus; host paths are original, not tablet paths. No provider/tablet/native/runtime activation. Raw stdout/stderr/stdin are retained unchanged; JSON strings/base64 are lossless representations, not replacement producer output."
+}

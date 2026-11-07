@@ -53,7 +53,8 @@
     "test:owned-notebook-hosts": "node tests/owned-data-v3-hosts.mjs",
     "test:storage-initialization-hosts": "node tests/storage-initialization-hosts.mjs",
     "test:service-stop-hosts": "node tests/service-stop-hosts.mjs",
-    "test:notebook-archive-hosts": "node tests/notebook-archive-hosts.mjs"
+    "test:notebook-archive-hosts": "node tests/notebook-archive-hosts.mjs",
+    "test:portable-configuration-hosts": "node tests/portable-configuration-hosts.mjs"
   },
   "dependencies": {
     "@angular/common": "22.2.0",

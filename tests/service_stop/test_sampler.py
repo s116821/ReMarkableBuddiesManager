@@ -84,7 +84,8 @@ class Files:
    slot='buddy_executable' if path=='/proc/20/exe' else self.by_path[path]
    return 0,(self.raw['artifacts'][slot]['sha256']+'  '+path+'\n').encode(),b''
   if parts[0]=='readlink':return 0,(s.APPS[self.profile]+'\n').encode(),b''
-  if parts[0]=='head':
+  if parts[0]=='dd':
+   path=next(x[3:] for x in parts if x.startswith('if='))
    if path=='/proc/20/stat':out=('20 (reader-buddy) S '+' '.join(['0']*18+['40'])).encode()
    elif path=='/proc/20/cmdline':out=s.APPS[self.profile].encode()+b'\0'+(b'SECRET' if self.extra_argv else b'')
    elif path=='/proc/20/status':out=b'Uid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\n'
@@ -95,7 +96,7 @@ class Files:
    elif path=='/etc/os-release':out=b'IMG_VERSION="3.28.0.172"\n'
    elif path=='/proc/sys/kernel/osrelease':out=b'5.4.70-v1.6.3-rm11x\n'
    else:out=self.contents[path]
-   return 0,out[:int(parts[2])],b''
+   return 0,out[:int(next(x[6:] for x in parts if x.startswith('count=')))],b''
   raise AssertionError('unexpected fixed command')
  def sampler(self):return s.Sampler(Mock(),time.monotonic()+12,run=self.run)
 
@@ -247,5 +248,24 @@ class SamplerTests(unittest.TestCase):
    with self.assertRaises(Exception):t.execute(Mock(),request)
    run.assert_not_called()
   self.assertEqual(t.QUALIFIED_PROFILES,())
+
+class BoundedByteReads(unittest.TestCase):
+ def test_literal_bytes_and_exact_cap(self):
+  for value in (b'',b'a',b'a\0b\n'):
+   run=Mock(return_value=(0,value,b''));sampler=s.Sampler(Mock(),time.monotonic()+5,run=run)
+   self.assertEqual(sampler.text('/proc/20/cmdline',4),value)
+   script=shlex.split(run.call_args.args[1])[-1]
+   self.assertEqual(script,'dd bs=1 count=5 if=/proc/20/cmdline 2>/dev/null')
+   self.assertEqual(run.call_args.args[3],5)
+ def test_excess_nonzero_partial_missing_and_stderr_refuse(self):
+  for result in ((0,b'12345',b''),(1,b'123',b''),(127,b'',b''),(0,b'123',b'unexpected')):
+   run=Mock(return_value=result);sampler=s.Sampler(Mock(),time.monotonic()+5,run=run)
+   with self.assertRaises(ValueError):sampler.text('/proc/20/stat',4)
+   self.assertEqual(run.call_count,1)
+ def test_input_operand_is_one_shell_word(self):
+  path="/fixed/a b'c;$(false)"
+  run=Mock(return_value=(0,b'',b''));s.Sampler(Mock(),time.monotonic()+5,run=run).text(path,4)
+  script=shlex.split(run.call_args.args[1])[-1]
+  self.assertEqual(shlex.split(script),['dd','bs=1','count=5','if='+path,'2>/dev/null'])
 
 if __name__=='__main__':unittest.main()
