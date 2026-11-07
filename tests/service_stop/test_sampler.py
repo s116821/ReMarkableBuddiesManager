@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path, PurePosixPath
 import shlex
+import shutil
 import subprocess
 import tempfile
 import sys
@@ -118,16 +119,53 @@ class Channel:
 class SamplerTests(unittest.TestCase):
  @unittest.skipUnless(sys.platform=='linux','local POSIX GNU stat fixture')
  def test_actual_local_posix_stat_format_quoting_and_nofollow(self):
+  self.exercise_local_stat()
+ @unittest.skipUnless(sys.platform=='linux' and shutil.which('busybox'),'local BusyBox stat fixture')
+ def test_actual_local_busybox_stat_format_quoting_and_nofollow(self):
+  self.exercise_local_stat(shutil.which('busybox'))
+ def exercise_local_stat(self,busybox=None):
   def local(_transport,command,deadline,cap):
    r=subprocess.run(command,shell=True,capture_output=True,timeout=max(.01,deadline-time.monotonic()))
    if len(r.stdout)>cap or len(r.stderr)>8192:raise ValueError('fixture bound')
    return r.returncode,r.stdout,r.stderr
   with tempfile.TemporaryDirectory() as folder:
-   p=Path(folder)/"unit ' quoted";p.write_bytes(b'local fixture')
-   sampler=s.Sampler(Mock(),time.monotonic()+12,run=local)
-   evidence,links=sampler.stat(str(p));self.assertEqual(evidence['mtime_ns'],str(p.stat().st_mtime_ns));self.assertEqual(evidence['length'],'13');self.assertEqual(links,1)
-   link=Path(folder)/'alias';link.symlink_to(p)
-   with self.assertRaises(ValueError):sampler.stat(str(link))
+   fixture=Path(folder);prefix=s.PREFIX
+   if busybox:
+    # Resolve stat through an owned shim; run the actual producer script and
+    # installed BusyBox applet, not an emulation of its output/formatting.
+    binary=fixture/'bin';binary.mkdir();shim=binary/'stat'
+    shim.write_text('#!/bin/sh\nexec '+shlex.quote(busybox)+' stat "$@"\n');shim.chmod(0o700)
+    prefix='/usr/bin/env -i HOME=/home/root PATH='+shlex.quote(str(binary)+':/usr/bin:/bin')+' LC_ALL=C /bin/sh -c '
+   with patch.object(s,'PREFIX',prefix):
+    p=fixture/"unit ' quoted";p.write_bytes(b'local fixture')
+    os.utime(p,ns=(1700000000123456789,1700000000987654321))
+    sampler=s.Sampler(Mock(),time.monotonic()+12,run=local)
+    evidence,links=sampler.stat(str(p));actual=p.stat()
+    self.assertEqual(evidence['mtime_ns'],str(actual.st_mtime_ns));self.assertEqual(evidence['ctime_ns'],str(actual.st_ctime_ns));self.assertEqual(evidence['length'],'13');self.assertEqual(links,1)
+    link=fixture/'alias';link.symlink_to(p)
+    with self.assertRaises(ValueError):sampler.stat(str(link))
+    self.assertEqual(sampler.stat(str(link),follow=True),(evidence,links))
+    absent=fixture/'missing-final-component'
+    self.assertIsNone(sampler.stat(str(absent),missing=True))
+    with self.assertRaises(ValueError):sampler.stat(str(absent))
+    dangling=fixture/'dangling';dangling.symlink_to(absent)
+    with self.assertRaises(ValueError):sampler.stat(str(dangling),missing=True)
+ def test_only_exact_qualified_missing_final_envelopes_are_absence(self):
+  path="/fixed/missing ' quoted"
+  for prefix in ('cannot statx',"can't stat"):
+   expected=("stat: "+prefix+" '"+path+"': No such file or directory\n").encode()
+   run=Mock(return_value=(1,b'',expected));sampler=s.Sampler(Mock(),time.monotonic()+5,run=run)
+   self.assertIsNone(sampler.stat(path,missing=True));self.assertEqual(run.call_count,1)
+   for code,out,err in [(0,b'',expected),(2,b'',expected),(1,b'partial',expected),
+      (1,b'',expected+b'\n'),(1,b'',expected+b'extra diagnostic\n'),
+      (1,b'',expected.replace(b'missing',b'another')),
+      (1,b'',expected.replace(b'No such file or directory',b'Permission denied')),
+      (1,b'',expected.replace(b'No such file or directory',b'Not a directory')),
+      (1,b'',expected.replace(b'stat: ',b'')),(1,b'',expected[:-1])]:
+    with self.subTest(prefix=prefix,code=code,out=out,err=err):
+     run=Mock(return_value=(code,out,err));sampler=s.Sampler(Mock(),time.monotonic()+5,run=run)
+     with self.assertRaises(ValueError):sampler.stat(path,missing=True)
+     self.assertEqual(run.call_count,1)
  def test_collected_private_dto_and_candidate_semantics_cross_the_actual_node_boundary(self):
   root=Path(__file__).resolve().parents[2]
   imports=json.dumps((root/'host/service-stop-profiles.mjs').as_uri());private=json.dumps((root/'host/service-stop-private.mjs').as_uri())
@@ -213,7 +251,8 @@ class SamplerTests(unittest.TestCase):
  def test_metadata_framing_and_nanosecond_precision(self):
   f=Files();meta,n=s.metadata(f.meta('/etc/systemd/system/reader-buddy.service'))
   self.assertEqual(meta['mtime_ns'],'1767225600000000001');self.assertEqual(n,1)
-  for data in [b'bad',f.meta('/').replace(b' +0000',b' UTC'),f.meta('/').replace(b'1 1 0',b'-1 1 0')]:
+  for data in [b'bad',f.meta('/').replace(b' +0000',b' UTC'),f.meta('/').replace(b'1 1 0',b'-1 1 0'),
+    f.meta('/').replace(b'\n',b'\\n'),f.meta('/')+b'\n',f.meta('/').replace(b'.000000001',b'.000001')]:
    with self.assertRaises(ValueError):s.metadata(data)
  def test_actual_command_drain_bounds_empty_stdin_and_deadline(self):
   for out,err,cap,ok in [(b'abc',b'',3,True),(b'abcd',b'',3,False),(b'',b'x'*8193,3,False)]:
