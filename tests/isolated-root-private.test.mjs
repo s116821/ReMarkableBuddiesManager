@@ -105,19 +105,33 @@ test('all explicit outcomes preserve producer status and uncertainty',()=>{
  }
 });
 
-test('historical original results cannot be relabeled as current after a new epoch, mode, device, backup or grant',()=>{
+test('valid later epochs preserve historical results without accepting contradictory current evidence',()=>{
  for(const fn of [
-  s=>{s.epoch=id(8);},s=>{s.device=id(8);},s=>{s.mode.backup=id(8);},
-  s=>{s.mode.binding_sha256=sha(3);},s=>{s.mode={kind:'local-only'};},
-  s=>{s.device=null;s.epoch=null;s.mode=null;}
+  ()=>{},s=>{s.mode={kind:'local-only'};},
+  s=>{s.mode={kind:'shared-group',group:id(6),binding_sha256:sha(3),root_id:'private-root'};},
+  s=>{s.mode.backup=id(8);s.mode.binding_sha256=sha(3);}
  ]){
-  const r=report();fn(r.data.current_snapshot);
+  const r=report();r.data.current_snapshot.epoch=id(8);r.data.current_snapshot.token.sha256=sha(3);
+  fn(r.data.current_snapshot);
   assert.throws(()=>parseIsolatedRootRaw(encode(r),original()));
   r.data.isolated_root.currency='historical';
   assert.equal(parseIsolatedRootRaw(encode(r),original()).result.currency,'historical');
  }
  const r=report();r.data.isolated_root.currency='historical';
  assert.throws(()=>parseIsolatedRootRaw(encode(r),original()));
+});
+
+test('an original result requires immutable device, epoch/token agreement and backup grant continuity',()=>{
+ for(const fn of [
+  s=>{s.token.sha256=sha(3);},s=>{s.device=id(8);},s=>{s.mode.backup=id(8);},
+  s=>{s.mode.binding_sha256=sha(3);},s=>{s.mode={kind:'local-only'};},
+  s=>{s.device=null;s.epoch=null;s.mode=null;},s=>{s.epoch=id(8);},
+  s=>{s.epoch=id(8);s.token.sha256=sha(3);s.mode.binding_sha256=sha(3);},
+  s=>{s.epoch=id(8);s.token.sha256=sha(3);s.device=id(8);}
+ ])for(const currency of ['current','historical']){
+  const r=report();fn(r.data.current_snapshot);r.data.isolated_root.currency=currency;
+  assert.throws(()=>parseIsolatedRootRaw(encode(r),original()));
+ }
 });
 
 test('foreign operation, actor and original identifiers refuse, including historical output',()=>{
@@ -152,6 +166,7 @@ test('closed report/data/result schemas reject unknown authority, null result an
   r=>{r.data.isolated_root=null;},r=>{r.data.receipt={operation:id(5)};},
   r=>{r.data.receipt_status='current';},r=>{r.data.control={outcome:'created'};},
   r=>{r.data.isolated_root.root_id='private-root';},r=>{r.data.isolated_root.outcome='backup-completed';},
+  r=>{r.data.isolated_root.outcome=['root-verified'];},r=>{r.data.isolated_root.outcome={};},
   r=>{r.data.isolated_root.currency='fresh';},r=>{r.data.current_snapshot.mode.extra=true;}
  ])assert.throws(()=>parseIsolatedRootRaw(encode(mutate(report(),fn)),original()));
  const newer={...report(),report_version:2};
@@ -169,4 +184,18 @@ test('raw framing refuses duplicate members, malformed UTF-8, BOM, partial, mult
  const prefix=valid.subarray(0,-1),atLimit=Buffer.concat([prefix,Buffer.alloc(16384-prefix.length-1,32),Buffer.from('\n')]);
  assert.equal(parseIsolatedRootRaw(atLimit,original()).result.outcome,'root-verified');
  assert.throws(()=>parseIsolatedRootRaw(Buffer.concat([Buffer.from(' '),atLimit]),original()));
+});
+
+test('raw decoding failures expose only a fixed redacted refusal, including preparation',()=>{
+ for(const raw of [
+  Buffer.from('{"private":"SYNTHETIC_SECRET_SENTINEL","bad":INVALID}\n'),
+  Buffer.from('SYNTHETIC_SECRET_SENTINEL\n'),
+  Buffer.from('{"private":"\xff"}\n','latin1')
+ ])for(const consume of [()=>prepareIsolatedRoot(raw,id(5)),()=>parseIsolatedRootRaw(raw,original())]){
+  assert.throws(consume,error=>{
+   assert.equal(error.message,'Isolated backup preparation response refused');
+   assert.equal(error.stack.includes('SYNTHETIC_SECRET_SENTINEL'),false);
+   return true;
+  });
+ }
 });

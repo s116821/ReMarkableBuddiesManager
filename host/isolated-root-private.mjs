@@ -19,9 +19,11 @@ export class IsolatedRootUnsupported extends Error {
 }
 function frame(raw){
  if(!(raw instanceof Uint8Array)||raw.byteLength<1||raw.byteLength>16384)refuse();
- const text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw);
- if(text.charCodeAt(0)===0xfeff||!text.endsWith('\n')||text.split('\n').length!==2)refuse();
- return strictJson(raw);
+ try{
+  const text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw);
+  if(text.charCodeAt(0)===0xfeff||!text.endsWith('\n')||text.split('\n').length!==2)refuse();
+  return strictJson(raw);
+ }catch{refuse();}
 }
 function savedSnapshot(value){
  return parseSavedModeReport({report_version:1,operation:'inspect',status:'ok',
@@ -74,13 +76,18 @@ export function parseIsolatedRootRaw(raw,original){
  if(keys(root)!=='backup,currency,device,epoch,operation,outcome'||
   root.operation!==retained.input.operation||root.device!==retained.view.device||
   root.backup!==retained.view.backup||root.epoch!==retained.view.epoch||
-  !Object.hasOwn(outcomes,root.outcome)||!['current','historical'].includes(root.currency))refuse();
+  typeof root.outcome!=='string'||!Object.hasOwn(outcomes,root.outcome)||
+  !['current','historical'].includes(root.currency))refuse();
  const [status,incomplete]=outcomes[root.outcome];
  if(report.status!==status||report.incomplete!==incomplete)refuse();
- const current=reduced.current.kind==='isolated-backup'&&
-  reduced.current.device===retained.view.device&&reduced.current.backup===retained.view.backup&&
-  reduced.current.epoch===retained.view.epoch&&
-  data.current_snapshot.mode.binding_sha256===retained.snapshot.mode.binding_sha256;
+ // An admitted original cannot lose its Store's persisted device or become
+ // unconfigured. The producer keeps one immutable token/choice per epoch.
+ if(reduced.current.device!==retained.view.device||reduced.current.kind==='unconfigured')refuse();
+ const current=reduced.current.epoch===retained.view.epoch;
+ const originalToken=data.current_snapshot.token.sha256===retained.input.expected.sha256;
+ const originalBackup=reduced.current.kind==='isolated-backup'&&reduced.current.backup===retained.view.backup;
+ if(originalBackup&&data.current_snapshot.mode.binding_sha256!==retained.snapshot.mode.binding_sha256)refuse();
+ if(current?(!originalToken||!originalBackup):originalToken)refuse();
  if(root.currency!==(current?'current':'historical'))refuse();
  reduced.result={device:root.device,backup:root.backup,epoch:root.epoch,
   outcome:root.outcome,currency:root.currency};
