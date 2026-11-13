@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -21,6 +22,16 @@ def choose(body=ORIGINAL):
     return dict(REQUEST, selector='choose', input_base64=base64.b64encode(json.dumps(body).encode()).decode())
 
 
+PROVISION_ORIGINAL = {'control_version': 1, 'operation': BOOT, 'expected': ORIGINAL['expected']}
+
+
+def provision(body=None, budget_ms=45000):
+    if body is None:
+        body = json.dumps(PROVISION_ORIGINAL).encode()
+    return dict(REQUEST, selector='provision-isolated-backup', budget_ms=budget_ms,
+                input_base64=base64.b64encode(body).decode())
+
+
 class Transport(unittest.TestCase):
     def channel(self, raw=None, code=0):
         channel = Mock()
@@ -32,6 +43,106 @@ class Transport(unittest.TestCase):
         transport = Mock()
         transport.open_session.return_value = channel
         return transport, channel
+
+    def test_provision_accepts_only_the_exact_v1_input_with_its_own_budget(self):
+        raw = json.dumps(PROVISION_ORIGINAL, indent=2).encode() + b' \n'
+        exact_limit = raw + b' ' * (16384 - len(raw))
+        self.assertEqual(q.request(json.dumps(provision(exact_limit)).encode()), provision(exact_limit))
+        for v in [
+                provision(exact_limit + b' '), provision(b'\xff'),
+                provision(b'{"control_version":1,"control_version":1}'),
+                provision(b'{}'), provision(b'\xef\xbb\xbf' + raw),
+                provision(raw + b'{}'), provision(budget_ms=45001), provision(budget_ms=True),
+                dict(provision(), input_base64=None), dict(provision(), input_base64='Zh=='),
+                dict(provision(), selector=q.PROVISION + ' --anything'),
+                dict(provision(), selector=['inspect']), dict(choose(), budget_ms=12001),
+                dict(REQUEST, budget_ms=12001),
+        ]:
+            with self.subTest(v=str(v)[:110]), self.assertRaises((ValueError, UnicodeError)):
+                q.request(json.dumps(v).encode())
+        for body in [
+                dict(PROVISION_ORIGINAL, control_version=True),
+                dict(PROVISION_ORIGINAL, control_version=1.0),
+                dict(PROVISION_ORIGINAL, control_version=2),
+                dict(PROVISION_ORIGINAL, endpoint='refused'),
+                dict(PROVISION_ORIGINAL, expected=dict(ORIGINAL['expected'], extra=True)),
+                ORIGINAL,
+        ]:
+            with self.assertRaises(ValueError):
+                q.request(json.dumps(provision(json.dumps(body).encode())).encode())
+
+    def test_provision_sends_original_bytes_once_and_preserves_report_frame(self):
+        original_bytes = b'  ' + json.dumps(PROVISION_ORIGINAL, indent=2).encode() + b'\n '
+        report = json.dumps(dict(REPORT, operation=q.PROVISION)).encode() + b'\n'
+        transport, channel = self.channel(report)
+        with patch.object(q.shared, 'inspect', side_effect=[{'boot_id': BOOT}, {'boot_id': BOOT}]) as inspect:
+            result = q.execute(transport, q.request(json.dumps(provision(original_bytes)).encode()))
+        self.assertEqual(inspect.call_count, 2)
+        channel.exec_command.assert_called_once_with(q.PREFIX + q.PROVISION + ' --sync-mode-input -')
+        channel.sendall.assert_called_once_with(original_bytes)
+        channel.shutdown_write.assert_called_once()
+        channel.close.assert_called_once()
+        self.assertEqual(base64.b64decode(result['_local_mode_raw']['stdout_base64']), report)
+
+    def test_provision_deadline_closes_the_channel_even_during_exec_ack(self):
+        transport, channel = self.channel()
+        closed = threading.Event()
+        channel.close.side_effect = closed.set
+        def blocked_exec(_):
+            self.assertTrue(closed.wait(2), 'exec wait was not interrupted')
+            raise OSError('ignored diagnostic')
+        channel.exec_command.side_effect = blocked_exec
+        real_timer = threading.Timer
+        def accelerated(delay, callback):
+            self.assertAlmostEqual(delay, 35, delta=.2)
+            return real_timer(.02, callback)
+        with (patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}),
+              patch.object(q.threading, 'Timer', side_effect=accelerated)):
+            with self.assertRaises(q.shared.Refusal) as error:
+                q.execute(transport, provision())
+        self.assertEqual(error.exception.status, 'timeout')
+        channel.exec_command.assert_called_once()
+        channel.sendall.assert_not_called()
+        channel.close.assert_called_once()
+
+    def test_ordinary_command_still_expires_after_eight_seconds(self):
+        transport, channel = self.channel()
+        channel.recv_ready.side_effect = None
+        channel.recv_ready.return_value = False
+        channel.exit_status_ready.return_value = False
+        clock = [0]
+        def advance(_):
+            clock[0] = 8.01
+        with (patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}),
+              patch.object(q.time, 'monotonic', side_effect=lambda: clock[0]),
+              patch.object(q.time, 'sleep', side_effect=advance)):
+            with self.assertRaises(q.shared.Refusal) as error:
+                q.execute(transport, REQUEST)
+        self.assertEqual(error.exception.status, 'timeout')
+        channel.close.assert_called_once()
+
+    def test_provision_keeps_post_send_failures_unacknowledged(self):
+        valid = json.dumps(dict(REPORT, operation=q.PROVISION)).encode() + b'\n'
+        transport, channel = self.channel(valid)
+        with patch.object(q.shared, 'inspect', side_effect=[{'boot_id': BOOT}, {'boot_id': 'changed'}]):
+            with self.assertRaises(q.shared.Refusal) as error:
+                q.execute(transport, provision())
+        self.assertEqual(error.exception.status, 'cable-lost')
+        channel.sendall.assert_called_once()
+        channel.close.assert_called_once()
+        transport, channel = self.channel(valid)
+        channel.shutdown_write.side_effect = OSError('synthetic EOF failure')
+        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+            with self.assertRaises(OSError):
+                q.execute(transport, provision())
+        channel.sendall.assert_called_once()
+        channel.recv_exit_status.assert_not_called()
+        for raw, code in [(valid[:-1], 0), (valid + valid, 0), (b'PRIVATE_CANARY', 1)]:
+            transport, channel = self.channel(raw, code)
+            with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+                result = q.execute(transport, provision())
+            self.assertEqual(result['_local_mode_raw'], {'status': 'unavailable', 'stdout_base64': None})
+            channel.sendall.assert_called_once()
 
     def test_private_request_exactness_and_inclusive_bounds(self):
         for v in [REQUEST, choose()]:

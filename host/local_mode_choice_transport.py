@@ -1,4 +1,4 @@
-"""Bounded Local-only mode choice using existing identity-verified wired callbacks."""
+"""Bounded saved-mode controls using existing identity-verified wired callbacks."""
 import base64
 import json
 import os
@@ -11,7 +11,8 @@ import wired_observer as shared
 MAX_REQUEST = 24576
 MAX_RESPONSE = 16384
 PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json /opt/bin/reader-buddy --sync-mode-operation '
-SELECTORS = {'inspect', 'choose'}
+PROVISION = 'provision-isolated-backup'
+REQUEST_BUDGET_MS = {'inspect': 12000, 'choose': 12000, PROVISION: 45000}
 
 
 def parse(raw, limit):
@@ -42,12 +43,19 @@ def uuid(value):
             and value != '00000000-0000-0000-0000-000000000000')
 
 
-def original(value):
-    exact(value, 'operation expected choice')
+def original(value, selector):
+    if selector == PROVISION:
+        exact(value, 'control_version operation expected')
+        if type(value['control_version']) is not int or value['control_version'] != 1:
+            raise ValueError('input refused')
+    else:
+        exact(value, 'operation expected choice')
+        exact(value['choice'], 'kind')
+        if value['choice']['kind'] != 'local-only':
+            raise ValueError('input refused')
     exact(value['expected'], 'actor sha256')
-    exact(value['choice'], 'kind')
     if (not uuid(value['operation']) or not uuid(value['expected']['actor'])
-            or not digest(value['expected']['sha256']) or value['choice']['kind'] != 'local-only'):
+            or not digest(value['expected']['sha256'])):
         raise ValueError('input refused')
 
 
@@ -63,11 +71,12 @@ def report_shape(report, selector):
 def request(raw):
     v = parse(raw, MAX_REQUEST)
     exact(v, 'connection_id boot_id selector input_base64 budget_ms')
+    selector = v['selector']
     if (not digest(v['connection_id']) or not uuid(v['boot_id'])
-            or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 12000
-            or v['selector'] not in SELECTORS):
+            or not isinstance(selector, str) or selector not in REQUEST_BUDGET_MS
+            or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= REQUEST_BUDGET_MS[selector]):
         raise ValueError('input refused')
-    if v['selector'] == 'inspect':
+    if selector == 'inspect':
         if v['input_base64'] is not None:
             raise ValueError('input refused')
     else:
@@ -76,7 +85,7 @@ def request(raw):
         body = base64.b64decode(v['input_base64'], validate=True)
         if base64.b64encode(body).decode('ascii') != v['input_base64']:
             raise ValueError('input refused')
-        original(parse(body, 16384))
+        original(parse(body, 16384), selector)
     return v
 
 
@@ -93,27 +102,52 @@ def execute(transport, v, deadline=None):
     remaining()
     if before['boot_id'] != v['boot_id']:
         raise shared.Refusal('cable-lost')
+    selector = v['selector']
+    provisioning = selector == PROVISION
+    command_deadline = min(deadline, time.monotonic() + 35) if provisioning else None
     channel = transport.open_session(timeout=min(2, remaining()))
+    timed_out = threading.Event()
+    timer = None
+    def command_remaining():
+        if timed_out.is_set() or (command_deadline is not None and time.monotonic() >= command_deadline):
+            raise shared.Refusal('timeout')
+        return remaining()
+    def expire_command():
+        timed_out.set()
+        try:
+            channel.close()
+        except Exception:
+            pass
     try:
-        channel.settimeout(min(2, remaining()))
-        remaining()
-        channel.exec_command(PREFIX + v['selector'] + ('' if v['selector'] == 'inspect' else ' --sync-mode-input -'))
-        if v['selector'] != 'inspect':
+        if provisioning:
+            # Paramiko's exec acknowledgment can wait independently of the
+            # channel read timeout. Closing the channel also bounds that wait.
+            timer = threading.Timer(command_deadline - time.monotonic(), expire_command)
+            timer.daemon = True
+            timer.start()
+        channel.settimeout(min(2, command_remaining()))
+        channel.exec_command(PREFIX + selector + ('' if selector == 'inspect' else ' --sync-mode-input -'))
+        command_remaining()
+        if selector != 'inspect':
             channel.sendall(base64.b64decode(v['input_base64'], validate=True))
+        command_remaining()
         try:
             channel.shutdown_write()
         except (OSError, EOFError):
-            pass
+            if provisioning:
+                raise
         output, discarded = bytearray(), 0
-        command_deadline = min(deadline, time.monotonic() + 8)
+        if not provisioning:
+            command_deadline = min(deadline, time.monotonic() + 8)
         while True:
-            if time.monotonic() >= command_deadline:
-                raise shared.Refusal('timeout')
+            command_remaining()
             while channel.recv_ready():
+                command_remaining()
                 output.extend(channel.recv(4096))
                 if len(output) > MAX_RESPONSE:
                     raise ValueError('oversized response')
             while channel.recv_stderr_ready():
+                command_remaining()
                 discarded += len(channel.recv_stderr(4096))
                 if discarded > 8192:
                     raise ValueError('oversized diagnostics')
@@ -121,19 +155,27 @@ def execute(transport, v, deadline=None):
                 break
             time.sleep(.01)
         code = channel.recv_exit_status()
-        one_line = output.endswith(b'\n') and output.count(b'\n') == 1
-        report = parse(output, MAX_RESPONSE) if code == 0 and one_line else None
-        if report is not None:
-            report_shape(report, v['selector'])
-        status = 'reported' if report is not None else 'unsupported' if code in (2, 126, 127) else 'unavailable'
-        remaining()
-        if shared.inspect(transport) != before:
-            raise shared.Refusal('cable-lost')
-        remaining()
-        before['_local_mode_raw'] = {'status': status, 'stdout_base64': base64.b64encode(output).decode('ascii') if report is not None else None}
-        return before
+        command_remaining()
     finally:
-        channel.close()
+        if timer:
+            timer.cancel()
+        try:
+            if not timed_out.is_set():
+                channel.close()
+        finally:
+            if timed_out.is_set():
+                raise shared.Refusal('timeout')
+    one_line = output.endswith(b'\n') and output.count(b'\n') == 1
+    report = parse(output, MAX_RESPONSE) if code == 0 and one_line else None
+    if report is not None:
+        report_shape(report, selector)
+    status = 'reported' if report is not None else 'unsupported' if code in (2, 126, 127) else 'unavailable'
+    remaining()
+    if shared.inspect(transport) != before:
+        raise shared.Refusal('cable-lost')
+    remaining()
+    before['_local_mode_raw'] = {'status': status, 'stdout_base64': base64.b64encode(output).decode('ascii') if report is not None else None}
+    return before
 
 
 def main():

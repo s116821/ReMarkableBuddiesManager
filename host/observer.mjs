@@ -17,9 +17,11 @@ export { statuses, result, validateResult } from './observation-protocol.mjs';
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
-    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs = 13000 } = {}) {
+    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform,
+    timeoutMs = 13000, provisioningTimeoutMs = 45000 } = {}) {
     this.config = config; this.python = python; this.script = script; this.platform = platform;
     this.active = null; this.generation = 0; this.timeoutMs = timeoutMs;
+    this.provisioningTimeoutMs = provisioningTimeoutMs;
   }
   cancel() { this.generation++; this.active?.kill('SIGKILL'); return result('cancelled'); }
   async observe() {
@@ -113,13 +115,18 @@ export class WiredObserver {
     const archive=action==='ordinary-export';
     const model = action === 'model-settings';
     const localMode = action === 'local-mode-choice';
+    const provisioning = localMode && request?.selector === 'provision-isolated-backup';
     const product = action === 'product-settings';
     const basic = action === 'basic-settings';
     const configuration = action === 'saved-configuration';
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
     const refusal = status => cachePrivate ? {...result(status),[portable?'portable_configuration_raw':storageInitialization?'storage_initialization_raw':ownedV3?'owned_data_v3_raw':handwriting?'handwriting_raw':(selected||notebook)?'archive_raw':restore?'ordinary_restore_raw':management?'conversation_management_raw':conversation?'conversation_inventory_raw':cacheCleanup?'source_cache_cleanup_raw':'source_cache_inventory_raw']:{status:'unavailable',stdout_base64:null}} : modelCredential ? {...result(status),model_credential_raw:{status:'unavailable',stdout_base64:null}} : credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : localMode ? {...result(status),local_mode_raw:{status:'unavailable',stdout_base64:null}} : product ? {...result(status),product_settings_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
-    if((localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>12000))return refusal('observation-unavailable');
+    const budgeted = localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate;
+    const maxBudget = provisioning ? 45000 : 12000;
+    if(budgeted&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>maxBudget))return refusal('observation-unavailable');
+    const observerTimeout = provisioning ? this.provisioningTimeoutMs : this.timeoutMs;
+    const waitMs = budgeted ? Math.min(observerTimeout, request.budget_ms) : observerTimeout;
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
@@ -131,7 +138,7 @@ export class WiredObserver {
       child.once('spawn', () => { launched = true; });
       if (personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
-      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
+      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, waitMs);
       child.stdout.on('data', data => {
         if((modelCredential||cachePrivate||localMode)&&(oversized||expired||generation!==this.generation||outputBytes+data.length>(portable?196608:storageInitialization?24576:ownedV3?49152:handwriting?360448:management?49152:(restore||selected||notebook)?24576:cachePrivate&&!cacheCleanup?16384:24576))){data.fill(0);oversized=true;child.kill('SIGKILL');return;}
         chunks.push(data); outputBytes += data.length;
@@ -155,6 +162,15 @@ export class WiredObserver {
             if(Object.keys(value).sort().join()!==wanted)throw Error('Private response refused');
             validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});
             const q=value[rawKey];if(!q||Object.keys(q).sort().join()!=='status,stdout_base64'||!['reported','unsupported','unavailable'].includes(q.status)||(q.status==='reported'?value.status!=='observed'||typeof q.stdout_base64!=='string':q.stdout_base64!==null))throw Error('Private response refused');
+            if (provisioning && q.status === 'reported') {
+              const encoded = q.stdout_base64;
+              if (encoded.length > Math.ceil(16384 / 3) * 4) throw Error('Private response refused');
+              const report = Buffer.from(encoded, 'base64');
+              try {
+                if (!report.length || report.length > 16384 || report.toString('base64') !== encoded ||
+                    report.at(-1) !== 10 || report.indexOf(10) !== report.length - 1) throw Error('Private response refused');
+              } finally { report.fill(0); }
+            }
             if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Private identity refused');
             return resolve(value);
           }
