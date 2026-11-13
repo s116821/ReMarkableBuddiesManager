@@ -26,6 +26,8 @@ app.whenReady().then(async () => {
   const { ProductSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'product-settings.mjs')).href);
   const { BasicSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'basic-settings.mjs')).href);
   const {LocalModeChoiceHost}=await import(pathToFileURL(path.join(hostRoot,'local-mode-choice.mjs')).href);
+  const {IsolatedRootHost}=await import(pathToFileURL(path.join(hostRoot,'isolated-root.mjs')).href);
+  const {parseIsolatedRootRequest,parseIsolatedRootResult}=await import(pathToFileURL(path.join(hostRoot,'isolated-root-protocol.mjs')).href);
   const {parseLocalModeRequest,parseLocalModeResult}=await import(pathToFileURL(path.join(hostRoot,'local-mode-choice-protocol.mjs')).href);
   const { MaintenanceIO }=await import(pathToFileURL(path.join(hostRoot,'maintenance-io.mjs')).href);
   const { parseProductSettingsRequest,parseProductSettingsResult }=await import(pathToFileURL(path.join(hostRoot,'product-settings-protocol.mjs')).href);
@@ -56,8 +58,8 @@ app.whenReady().then(async () => {
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
   const {SharedPreferencesHost, registerSharedPreferenceHandler} = await import(pathToFileURL(path.join(hostRoot, 'shared-preferences.mjs')).href);
-  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -82,6 +84,7 @@ app.whenReady().then(async () => {
   notebook=new NotebookArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebook)});
   handwriting=new HandwritingRecordsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(handwriting)});
   localMode=new LocalModeChoiceHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(localMode)});
+  isolatedRoot=new IsolatedRootHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
@@ -194,6 +197,10 @@ app.whenReady().then(async () => {
     let request=parseModelSettingsRequest(args[0]);args.length=0;
     try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
   });
+  ipcMain.handle('manager:isolatedRoot',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Isolated backup caller refused');
+    const request=parseIsolatedRootRequest(args[0]);const value=parseIsolatedRootResult(await isolatedRoot.request(request),request,validateResult);return isolatedRoot.assertCurrent(value);
+  });
   ipcMain.handle('manager:localModeChoice',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Local-only choice caller refused');
     const request=parseLocalModeRequest(args[0]);const value=parseLocalModeResult(await localMode.request(request),request,validateResult);return localMode.assertCurrent(value);
@@ -247,7 +254,7 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

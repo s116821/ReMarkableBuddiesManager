@@ -9,6 +9,8 @@ import type {StorageInitializationAdapter} from './storage-initialization';
 import type {OwnedV3Adapter} from './owned-data-v3';
 import type {LocalModeAdapter} from './local-mode-choice';
 import type {LocalModeResult} from '../host/local-mode-choice-protocol.mjs';
+import type {IsolatedRootRequest,IsolatedRootResult} from '../host/isolated-root-protocol.mjs';
+import {strictJson as strictIsolatedRootJson} from '../host/strict-json.mjs';
 import type{HandwritingRequest,HandwritingResult}from'../host/handwriting-records-protocol.mjs';
 import{parseHandwritingJson}from'../host/handwriting-records-protocol.mjs';
 import type {ArchiveRequest,ArchiveResult} from '../host/selected-archive-protocol.mjs';
@@ -63,6 +65,7 @@ const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restor
     };
 
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly isolatedRoot?:(request:IsolatedRootRequest)=>Promise<IsolatedRootResult>;
   readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
   readonly sharedPreferences?: SharedPreferenceAdapter;
   readonly portableConfiguration?:PortableAdapter['portableConfiguration'];
@@ -273,6 +276,13 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Model settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelSettingsResult;
+    },
+    isolatedRoot: async (request:IsolatedRootRequest) => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Isolated backup helper unavailable');
+      const response=await fetch('/manager-isolated-root',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(46000)});
+      if(!response.ok||!response.body)throw Error('Isolated backup helper unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      try{for(;;){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;if(bytes>8192)throw Error('Isolated backup response refused');chunks.push(part.value);}}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const part of chunks){raw.set(part,offset);offset+=part.byteLength;}return strictIsolatedRootJson(raw) as IsolatedRootResult;
     },
     localModeChoice: async (request: import('../host/local-mode-choice-protocol.mjs').LocalModeRequest) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Local-only helper unavailable');
