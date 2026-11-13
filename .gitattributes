@@ -9,3 +9,6 @@ tests/fixtures/notebook-archive-interop/source.receipt.json -diff
 tests/fixtures/portable-configuration-e5bf3b8/** -text
 # Captured Windows comparison stdout is immutable byte evidence.
 tests/fixtures/portable-configuration-e5bf3b8/json-digest-check.log -diff
+
+# Original isolated provisioning stdin/report bytes from the command harness.
+tests/fixtures/isolated-root-provisioning/** -text

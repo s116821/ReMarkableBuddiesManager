@@ -95,3 +95,18 @@ reports. The selected-after-refused-conflict report is the same healthy tombston
 as before the rejected setup attempt; selected-unrelated-refusal is the separate
 actual whole-view CLI refusal. Disposable host Store/binary evidence does not
 qualify deployment or native behavior. The synthetic peer/UI fixtures stay separate.
+
+`isolated-root-provisioning/` contains the original stdin bytes and three report
+lines captured from Buddy's real provisioning command harness on Windows on
+2026-11-13. The production control is based on `00e45e630b25f6cbfa0f02dbf541bfe3ff0eba0d`;
+the capture harness uses synthetic mode/grant identities and a test-only localhost
+adapter. The unqualified case exercises the production gate without that adapter.
+The current case verifies the fixture root; the historical case repeats the same
+original operation after LocalOnly becomes current. These are in-process command
+reports, not a CLI subprocess or tablet/provider qualification.
+
+The source log SHA-256 is
+`059b09f4f57c79402d502f9cfd758438e08b46df3ff4c864c03f17013d3dc83a`.
+The private-parser test verifies the four original-byte hashes before consuming
+them. The request has no trailing LF; every report has one. Do not reserialize
+these files. Their successful parsing does not prove a connected Manager action.
