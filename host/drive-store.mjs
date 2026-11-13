@@ -22,6 +22,10 @@ export class DriveStore {
   }
   client() { return this.operation({ operation: 'read-client' }); }
   grant() { return this.operation({ operation: 'read-grant' }); }
+  isolatedRootOperations() { return this.operation({ operation: 'read-isolated-root-operations' }); }
+  appendIsolatedRootOperation(record, expectedDigest) {
+    return this.operation({ operation: 'append-isolated-root-operation', record, expected_digest: expectedDigest });
+  }
   save(value, client_digest, grant_digest) { return this.operation({ operation: 'save', value, client_digest, grant_digest }); }
   disconnect(client_digest, grant_digest) { return this.operation({ operation: 'disconnect', client_digest, grant_digest }); }
 }
