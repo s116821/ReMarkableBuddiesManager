@@ -13,6 +13,18 @@ import zipfile
 
 PACKAGES = ("manager-browser.zip", "manager-win32-x64.zip", "manager-linux-x64.zip")
 MAX_PACKAGE = 512 * 1024 * 1024
+MAX_METADATA = 16 * 1024
+ORACLE_REQUIRED_FROM = (1, 0, 0)
+ORACLE_PATH = "resources/host/buddy-oracle"
+ORACLE_PIN = ORACLE_PATH + "-source.json"
+ORACLE_PROVENANCE = ORACLE_PATH + "/provenance.json"
+ORACLE_NOTICES = "resources/host/third-party/buddy-oracle"
+MAX_NOTICE = 16 * 1024 * 1024
+MAX_NOTICES = 32 * 1024 * 1024
+ORACLE_PLATFORMS = {
+    "manager-win32-x64.zip": ("reader-buddy.exe", "x86_64-pc-windows-msvc", 0o644),
+    "manager-linux-x64.zip": ("reader-buddy", "x86_64-unknown-linux-gnu", 0o755),
+}
 WINDOWS = os.name == "nt"
 PINS = {
     "artifacts.py": "4c0386ae79b1de55f84bea1cb349e62620ef2a763d90c0366a939aec37cdc94c",
@@ -57,6 +69,31 @@ def bounded_read(path, limit):
     return data
 
 
+def stream_digest(source, size):
+    digest = hashlib.sha256()
+    count = 0
+    while data := source.read(64 * 1024):
+        count += len(data)
+        if count > size:
+            refuse()
+        digest.update(data)
+    if count != size:
+        refuse()
+    return digest.hexdigest()
+
+
+def file_receipt(path, limit):
+    before = regular(path, limit)
+    with path.open("rb") as source:
+        handle = opened(before, source)
+        digest = stream_digest(source, before.st_size)
+        if identity(handle) != identity(os.fstat(source.fileno())):
+            refuse()
+    if identity(before) != identity(path.lstat()):
+        refuse()
+    return {"bytes": before.st_size, "sha256": digest}
+
+
 def pairs(items):
     value = {}
     for key, item in items:
@@ -78,6 +115,133 @@ def exact(value, keys):
         refuse()
 
 
+def hexadecimal(value, length):
+    return type(value) is str and len(value) == length and re.fullmatch(r"[a-f0-9]+", value) is not None
+
+
+def member_json(archive, name, mode=None):
+    entry = archive.getinfo(name)
+    if (not 0 < entry.file_size <= MAX_METADATA or not 0 < entry.compress_size <= 64 * 1024
+            or (mode is not None and entry.external_attr >> 16 != (stat.S_IFREG | mode))):
+        refuse()
+    with archive.open(entry) as member:
+        data = member.read(MAX_METADATA + 1)
+    if len(data) != entry.file_size:
+        refuse()
+    return data, decode(data, MAX_METADATA)
+
+
+def verify_source(value):
+    exact(value, ("schema", "repository", "sourceSha", "sourceTree", "cargoLockSha256", "sdkRevision"))
+    if (type(value["schema"]) is not int or value["schema"] != 1
+            or value["repository"] != "s116821/ReMarkableBuddies"
+            or not all(hexadecimal(value[key], 40) for key in ("sourceSha", "sourceTree", "sdkRevision"))
+            or not hexadecimal(value["cargoLockSha256"], 64)):
+        refuse()
+
+
+def short_name(part, prefix):
+    base = part.split(".", 1)[0]
+    return (len(base) <= 8 and part.startswith(prefix)
+            and re.fullmatch(r"[^. ~]{1,6}~[0-9]+(?:\.[^. ]{1,3})?", part) is not None)
+
+
+def oracle_members(names, windows):
+    root = ORACLE_PATH.split("/")
+    pin = ORACLE_PIN.split("/")
+    # The ZIP parser has already rejected slash, stream, and relative aliases.
+    # Windows also folds case and can ignore trailing dots and spaces.
+    subtree = set()
+    for name in names:
+        parts = name.split("/")
+        key = [part.rstrip(" .").upper().casefold() for part in parts] if windows else parts
+        if "" in key or key == root[:len(key)]:
+            refuse()
+        if key[:len(root)] == root:
+            subtree.add(name)
+        if key[:len(pin)] == pin and name != ORACLE_PIN:
+            refuse()
+        # Refuse DOS short-name spellings at the long resource namespace levels.
+        if windows and (short_name(key[0], "re") or (
+                len(key) >= 3 and key[:2] == root[:2] and short_name(key[2], "bu"))):
+            refuse()
+    return subtree
+
+
+def verify_member(archive, name, size, digest, mode, limit):
+    entry = archive.getinfo(name)
+    if (type(size) is not int or not 0 < size <= limit or not hexadecimal(digest, 64)
+            or entry.file_size != size or not 0 < entry.compress_size <= MAX_PACKAGE
+            or entry.external_attr >> 16 != (stat.S_IFREG | mode)
+            or (entry.compress_type == zipfile.ZIP_STORED and entry.compress_size != size)):
+        refuse()
+    # ZipFile checks the member CRC at EOF.
+    with archive.open(entry) as member:
+        if stream_digest(member, size) != digest:
+            refuse()
+
+
+def observe_notices(archive, names, expected, windows):
+    root = ORACLE_NOTICES.split("/")
+    members = set()
+    for name in names:
+        parts = name.split("/")
+        key = [part.rstrip(" .").upper().casefold() for part in parts] if windows else parts
+        if key == root[:len(key)]:
+            refuse()
+        if key[:len(root)] == root:
+            members.add(name)
+        if windows and key[:2] == root[:2] and len(key) >= 3:
+            if short_name(key[2], "th") or (
+                    len(key) >= 4 and key[:3] == root[:3] and short_name(key[3], "bu")):
+                refuse()
+    if members != set(expected):
+        refuse()
+    remaining = MAX_NOTICES
+    for name, receipt in expected.items():
+        exact(receipt, ("bytes", "sha256"))
+        size = receipt["bytes"]
+        verify_member(archive, name, size, receipt["sha256"], 0o644, min(MAX_NOTICE, remaining))
+        remaining -= size
+
+
+def observe_oracle(archive, names, package, expected_source, provenance_digest, expected_notices):
+    subtree = oracle_members(names, package != "manager-linux-x64.zip")
+    platform = ORACLE_PLATFORMS.get(package)
+    if not subtree:
+        return None
+    if platform is None:
+        refuse()
+    filename, target, mode = platform
+    executable_path = ORACLE_PATH + "/" + filename
+    if subtree != {ORACLE_PROVENANCE, executable_path} or ORACLE_PIN not in names:
+        refuse()
+    _, pin = member_json(archive, ORACLE_PIN, 0o644)
+    raw, provenance = member_json(archive, ORACLE_PROVENANCE, 0o644)
+    verify_source(pin)
+    exact(provenance, ("schema", "source", "target", "profile", "features", "rustc", "version", "executable"))
+    verify_source(provenance["source"])
+    rustc, version = provenance["rustc"], provenance["version"]
+    if (type(provenance["schema"]) is not int or provenance["schema"] != 1
+            or provenance["source"] != pin or provenance["target"] != target
+            or provenance["profile"] != "release" or provenance["features"] != []
+            or type(rustc) is not str or not re.fullmatch(r"[\x20-\x7e]{1,256}", rustc)
+            or type(version) is not str or not re.fullmatch(r"dev\.[\x21-\x7e]{1,124}", version)
+            or version == "dev.unknown"):
+        refuse()
+    if ((expected_source is not None and pin != expected_source)
+            or (provenance_digest is not None and hashlib.sha256(raw).hexdigest() != provenance_digest)):
+        refuse()
+    executable = provenance["executable"]
+    exact(executable, ("name", "bytes", "sha256"))
+    if executable["name"] != filename:
+        refuse()
+    verify_member(archive, executable_path, executable["bytes"], executable["sha256"], mode, MAX_PACKAGE)
+    if expected_notices is not None:
+        observe_notices(archive, names, expected_notices, package == "manager-win32-x64.zip")
+    return pin
+
+
 def qualified_producer():
     # Only hash-qualified trusted checkout code is compiled, never archive data.
     root = Path(__file__).resolve().parent.parent / "host/qualified-producer"
@@ -96,20 +260,13 @@ def qualified_producer():
     return modules["artifacts.py"]
 
 
-def observe_zip(path, expected, expected_digest):
+def observe_zip(path, expected, expected_digest, expected_source, provenance_digest, expected_notices):
     before = regular(path, MAX_PACKAGE)
     with path.open("rb") as source:
         handle = opened(before, source)
         if before.st_size < 68:
             refuse()
-        digest = hashlib.sha256()
-        count = 0
-        while data := source.read(64 * 1024):
-            count += len(data)
-            if count > before.st_size or count > MAX_PACKAGE:
-                refuse()
-            digest.update(data)
-        if count != before.st_size or digest.hexdigest() != expected_digest:
+        if stream_digest(source, before.st_size) != expected_digest:
             refuse()
         source.seek(-22, os.SEEK_END)
         end = struct.unpack("<4s4H2LH", source.read(22))
@@ -154,24 +311,35 @@ def observe_zip(path, expected, expected_digest):
                     refuse()
             if "build-info.json" not in names:
                 refuse()
-            metadata = archive.getinfo("build-info.json")
-            if not 0 < metadata.file_size <= 16 * 1024 or metadata.compress_size > 64 * 1024:
-                refuse()
-            with archive.open(metadata) as member:
-                data = member.read(16 * 1024 + 1)
-            value = decode(data, 16 * 1024)
+            _, value = member_json(archive, "build-info.json")
             exact(value, ("version", "sha", "tag", "official"))
             if value != expected or value["official"] is not True:
                 refuse()
+            pin = observe_oracle(archive, names, path.name, expected_source, provenance_digest, expected_notices)
         if identity(handle) != identity(os.fstat(source.fileno())):
             refuse()
     if identity(before) != identity(path.lstat()):
         refuse()
+    return pin
 
 
-def verify(directory, tag, sha):
-    if sys.version_info[:2] != (3, 12) or not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag) or len(tag) > 64 or not re.fullmatch(r"[a-f0-9]{40}", sha):
+def inspect_bundle(directory, tag, sha, *, expected_source=None, retained_provenance_sha256=None,
+                   retained_notices=None):
+    """Observe candidate ZIPs; optional expectations belong to trusted shipping CI."""
+    if (len(tag) > 64 or not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag)
+            or not hexadecimal(sha, 40)):
         refuse()
+    version = tuple(int(part) for part in tag[1:].split("."))
+    if expected_source is not None:
+        verify_source(expected_source)
+    if retained_provenance_sha256 is not None:
+        exact(retained_provenance_sha256, ORACLE_PLATFORMS)
+        if not all(hexadecimal(digest, 64) for digest in retained_provenance_sha256.values()):
+            refuse()
+    if retained_notices is not None:
+        exact(retained_notices, ORACLE_PLATFORMS)
+        if not all(isinstance(notices, dict) and notices for notices in retained_notices.values()):
+            refuse()
     root = Path(directory)
     if not root.is_absolute() or root.resolve() != root or root.is_symlink() or not root.is_dir():
         refuse()
@@ -189,12 +357,30 @@ def verify(directory, tag, sha):
     if sum(regular(root / name, MAX_PACKAGE).st_size for name in PACKAGES) + manifest.stat().st_size > 768 * 1024 * 1024:
         refuse()
     expected = {"version": tag[1:], "sha": sha, "tag": tag, "official": True}
+    pins = []
     for name in PACKAGES:
-        observe_zip(root / name, expected, provenance["packages"][name])
+        retained_digest = retained_provenance_sha256.get(name) if retained_provenance_sha256 is not None else None
+        notices = retained_notices.get(name) if retained_notices is not None else None
+        pin = observe_zip(root / name, expected, provenance["packages"][name], expected_source, retained_digest, notices)
+        if name in ORACLE_PLATFORMS:
+            pins.append(pin)
+    required = (version >= ORACLE_REQUIRED_FROM or expected_source is not None
+                or retained_provenance_sha256 is not None or retained_notices is not None)
+    if pins[0] != pins[1] or (required and pins[0] is None):
+        refuse()
     # Reuse the unchanged pure identity validator. Do not call the producer's
     # unbounded pathname-based ZIP/manifest rereads on downloaded input.
     producer = qualified_producer()
-    producer.verify_identity(provenance, producer.Release(tag, sha), PACKAGES)
+    # The producer's Release constructor enforces its publishing hold. Observation
+    # only needs the validated identity fields and grants no publishing authority.
+    producer.verify_identity(provenance, types.SimpleNamespace(tag=tag, sha=sha), PACKAGES)
+    return provenance
+
+
+def verify(directory, tag, sha):
+    if sys.version_info[:2] != (3, 12):
+        refuse()
+    inspect_bundle(directory, tag, sha)
     return {"ok": True, "embeddedIdentityVerified": True, "archivesExtracted": False, "payloadExecuted": False}
 
 

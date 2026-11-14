@@ -39,7 +39,12 @@ const publicState = (status, account = null, checkedAt = null, error = null) => 
   account: account ? { label: account.label } : null, checkedAt, error, authorizationId: null, backupReady: false });
 
 export class DriveAuth {
-  constructor({ store = new DriveStore(), endpoints = GOOGLE_ENDPOINTS, ttlMs = 300000, requestMs = 15000 } = {}) {
+  #readFactory;
+  #freshRead = null;
+  #disposed = false;
+  #guardClosures = new Set();
+  #disposal;
+  constructor({ store = new DriveStore(), endpoints = GOOGLE_ENDPOINTS, ttlMs = 300000, requestMs = 15000, backupReadFactory = null } = {}) {
     require(Object.keys(endpoints).sort().join() === endpointKeys, 'configuration-unavailable');
     // Constructor-only trusted test seam. Product callers never receive endpoints/client/path arguments.
     if (endpoints !== GOOGLE_ENDPOINTS) {
@@ -48,6 +53,8 @@ export class DriveAuth {
     }
     this.store = store; this.endpoints = Object.freeze({ ...endpoints }); this.ttlMs = ttlMs; this.requestMs = requestMs;
     this.generation = 0; this.flow = null; this.work = null; this.state = publicState('unconfigured'); this.freshDigest = null;
+    require(backupReadFactory === null || typeof backupReadFactory === 'function', 'configuration-unavailable');
+    this.#readFactory = backupReadFactory;
   }
   snapshot() {
     const clientRecord = this.store.client(); const config = registration(clientRecord);
@@ -70,8 +77,155 @@ export class DriveAuth {
     }
     return this.state = Object.freeze({ ...publicState(status, account, new Date(checkedAt).toISOString()), authorizationId: this.authorization.id });
   }
+  #recordFreshRead(clientDigest, grantDigest, expiry) {
+    if (!this.#readFactory || this.#disposed) return;
+    const original = { clientDigest, grantDigest, expiry, generation: this.generation, controller: new AbortController() };
+    original.timer = setTimeout(() => {
+      if (this.#freshRead === original) this.#invalidateRead();
+    }, Math.max(1, expiry - Date.now()));
+    original.timer.unref();
+    this.#freshRead = original;
+  }
+  #invalidateRead() {
+    const original = this.#freshRead;
+    this.#freshRead = null;
+    if (original) {
+      clearTimeout(original.timer);
+      original.controller.abort();
+    }
+  }
+  #readCurrent(original) {
+    return !!original && this.#freshRead === original && !this.#disposed && !this.flow && !this.work &&
+      this.generation === original.generation && this.state.status === 'connected' && original.expiry > Date.now();
+  }
+  #readSnapshot(original) {
+    if (!this.#readCurrent(original)) return null;
+    try {
+      const snapshot = this.snapshot();
+      require(snapshot.config && snapshot.saved && snapshot.clientRecord.digest === original.clientDigest &&
+        snapshot.grantRecord.digest === original.grantDigest && snapshot.saved.tokens.expiry_date === original.expiry &&
+        original.expiry > Date.now());
+      return snapshot;
+    } catch {
+      if (this.#freshRead === original) this.#invalidateRead();
+      return null;
+    }
+  }
+  // Host-only. The factory is trusted composition, and can decline namespace
+  // qualification for the exact protected registration and grant it receives.
+  openBackupRead(signal) {
+    if (this.#disposed || signal.aborted) return { status: 'invalidated' };
+    if (!this.#readFactory) return { status: 'unqualified' };
+    const original = this.#freshRead, snapshot = this.#readSnapshot(original);
+    if (!snapshot) return { status: 'unavailable' };
+    const authority = AbortSignal.any([signal, original.controller.signal]);
+    const persistent = typeof this.store.openReadGuard === 'function';
+    let guardPromise = null;
+    const memoryCurrent = () => !authority.aborted && this.#readCurrent(original);
+    const current = () => memoryCurrent() && (persistent || !!this.#readSnapshot(original));
+    const invalidate = () => { if (this.#freshRead === original) this.#invalidateRead(); };
+    let closing;
+    const closeGuard = () => {
+      if (guardPromise && !closing) {
+        closing = guardPromise.then(guard => guard?.close());
+        this.#guardClosures.add(closing);
+        const settled = () => this.#guardClosures.delete(closing);
+        void closing.then(settled, settled);
+      }
+      return closing;
+    };
+    const validate = async (query, active) => {
+      require(!active.aborted && current());
+      if (guardPromise) {
+        try {
+          const guard = await guardPromise;
+          require(guard && !guard.signal.aborted);
+          await guard.check({signal: active, timeoutMs: query.timeoutMs});
+        } catch {
+          invalidate();
+          await closeGuard();
+          throw new Error('authorization-failed');
+        }
+      }
+      require(!active.aborted && current());
+    };
+    try {
+      const binding = this.#readFactory({
+        registration: structuredClone(snapshot.config), grant: structuredClone(snapshot.saved),
+        clientDigest: original.clientDigest, grantDigest: original.grantDigest, signal: authority,
+      });
+      if (!current()) return { status: 'invalidated' };
+      if (binding === null) return { status: 'unqualified' };
+      if (!['list', 'readMetadata', 'readMarker'].every(method => typeof binding?.[method] === 'function')) {
+        return { status: 'unavailable' };
+      }
+      if (persistent) {
+        guardPromise = Promise.resolve(this.store.openReadGuard({clientDigest: original.clientDigest,
+          grantDigest: original.grantDigest, signal: authority})).then(guard => {
+          guard.signal.addEventListener('abort', invalidate, {once: true});
+          if (guard.signal.aborted) invalidate();
+          return guard;
+        }).catch(() => { invalidate(); return null; });
+        authority.addEventListener('abort', () => { void closeGuard(); }, {once: true});
+        if (authority.aborted) void closeGuard();
+      }
+      const bind = method => async query => {
+        // The reader handles its own request deadline. The protected grant
+        // signal also cancels a transport that is still waiting on the provider.
+        const active = AbortSignal.any([authority, query.signal]);
+        try {
+          await validate(query, active);
+          return await binding[method]({ ...query, signal: active });
+        } finally {
+          try { await validate(query, active); }
+          finally { if (authority.aborted) await closeGuard(); }
+        }
+      };
+      const guarded = {
+        isCurrent: current, list: bind('list'), readMetadata: bind('readMetadata'), readMarker: bind('readMarker'),
+        checkCurrent: query => validate(query, AbortSignal.any([authority, query.signal])),
+      };
+      // Optional private download capabilities use this exact capture. A
+      // metadata-only adapter cannot silently acquire a replacement grant.
+      if (['listObject', 'readObjectMetadata', 'streamObject'].every(method => typeof binding[method] === 'function')) {
+        guarded.listObject = bind('listObject');
+        guarded.readObjectMetadata = bind('readObjectMetadata');
+        guarded.streamObject = async function* (query) {
+          const controller = new AbortController();
+          const active = AbortSignal.any([authority, query.signal, controller.signal]);
+          let iterator, completed = false;
+          try {
+            await validate(query, active);
+            const source = await binding.streamObject({...query, signal: active});
+            // Take custody before checking a late factory result, so an abort
+            // while opening the response still closes and joins that response.
+            iterator = source?.[Symbol.asyncIterator]?.();
+            require(iterator && typeof iterator.next === 'function' && typeof iterator.return === 'function');
+            for (;;) {
+              await validate(query, active);
+              const item = await iterator.next();
+              await validate(query, active);
+              if (item.done) { completed = true; return; }
+              yield item.value;
+            }
+          } finally {
+            // Abort before return(): a producer can be waiting for its abort
+            // while its return promise joins the outstanding request.
+            controller.abort();
+            try {
+              if (typeof iterator?.return === 'function') await iterator.return();
+              if (completed) await validate(query, AbortSignal.any([authority, query.signal]));
+            } finally {
+              if (authority.aborted || query.signal.aborted) await closeGuard();
+            }
+          }
+        };
+      }
+      return { status: 'qualified', signal: authority, binding: Object.freeze(guarded) };
+    } catch { return { status: authority.aborted ? 'invalidated' : 'unavailable' }; }
+  }
   stop() {
-    this.generation++; this.work?.abort(); this.work = null;
+    this.generation++; this.#invalidateRead(); this.work?.abort(); this.work = null;
     if (this.flow) { clearTimeout(this.flow.timer); this.flow.abort.abort(); this.flow.server?.closeAllConnections(); this.flow.server?.close(); }
     this.flow = null;
   }
@@ -158,6 +312,7 @@ export class DriveAuth {
     const committed = this.store.save(value, flow.clientRecord.digest, flow.grantRecord.digest);
     require(committed.committed && typeof committed.digest === 'string', 'storage-unavailable');
     this.freshDigest = committed.digest; this.publish('connected', value.account, value.checkedAt, { clientRecord: flow.clientRecord, grantRecord: { digest: committed.digest } });
+    this.#recordFreshRead(flow.clientRecord.digest, committed.digest, value.tokens.expiry_date);
   }
   async exchange(flow, code) {
     try {
@@ -181,6 +336,7 @@ export class DriveAuth {
       const committed = this.store.save({ schema: 1, clientId: baseline.config.clientId, ...observed, checkedAt: Date.now() }, baseline.clientRecord.digest, baseline.grantRecord.digest);
       require(committed.committed && typeof committed.digest === 'string', 'storage-unavailable');
       this.freshDigest = committed.digest; this.publish('connected', observed.account, Date.now(), { clientRecord: baseline.clientRecord, grantRecord: { digest: committed.digest } });
+      this.#recordFreshRead(baseline.clientRecord.digest, committed.digest, observed.tokens.expiry_date);
     } catch { if (generation === this.generation) this.state = publicState('authorization-failed', baseline?.saved?.account ?? null, baseline?.saved ? new Date(baseline.saved.checkedAt).toISOString() : null, 'authorization-required'); }
     finally { if (generation === this.generation) this.work = null; }
     return this.state;
@@ -205,5 +361,12 @@ export class DriveAuth {
     finally { if (generation === this.generation) this.work = null; }
     return this.state;
   }
-  dispose() { this.stop(); }
+  dispose() {
+    if (!this.#disposal) {
+      this.#disposal = Promise.resolve().then(async () => { await Promise.allSettled(this.#guardClosures); });
+      this.#disposed = true;
+      this.stop();
+    }
+    return this.#disposal;
+  }
 }

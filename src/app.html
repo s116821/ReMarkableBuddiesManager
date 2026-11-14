@@ -377,7 +377,7 @@
     <h2 id="saved-mode-title">Saved storage mode</h2>
     <p class="text-sm text-muted">Read the choice saved in Buddy-owned data. This does not change it or verify sync, service or cloud readiness.</p>
     <div class="flex flex-wrap gap-2 my-3">
-      <button class="ui-button ui-button-secondary" type="button" (click)="inspectSavedMode()" [disabled]="!profile().savedModeProbe || !host.inspectSavedMode || savedMode().busy">Read saved storage mode</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="inspectSavedMode()" [disabled]="!profile().savedModeProbe || !host.inspectSavedMode || savedMode().busy || isolatedRoot().busy">Read saved storage mode</button>
       <button class="ui-button ui-button-secondary" type="button" (click)="cancelSavedMode()" [disabled]="!savedMode().busy">Cancel mode inspection</button>
     </div>
     <p role="status" data-testid="saved-mode-status">{{ savedMode().status }}</p>
@@ -395,6 +395,52 @@
     @if (!host.inspectSavedMode) { <p class="ui-warning">This Manager host does not support saved mode inspection.</p> }
     <p class="text-sm text-muted">Busy means the data cannot be inspected now. Try again later; this action does not stop or unlock the app.</p>
   </section>
+
+<section class="ui-panel my-5 min-w-0" aria-labelledby="shared-preferences-title">
+  <h2 id="shared-preferences-title">Shared group preferences</h2>
+  <p>Inspect the shared preferences available to Buddy’s next admitted request. A running request may be using an earlier snapshot.</p>
+  <div class="my-3 flex flex-wrap gap-3">
+    <button class="ui-button ui-button-secondary" type="button" (click)="inspectSharedPreferences(false)" [disabled]="!canInspectSharedPreferences()">Inspect shared preferences</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="inspectSharedPreferences(true)" [disabled]="!canInspectSharedPreferences()">Inspect and reveal private prompt</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="refreshSharedPreferenceOriginals()" [disabled]="sharedPreferences().busy || !host.sharedPreferences">Refresh original edits</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="stopSharedPreference()" [disabled]="!sharedPreferences().busy && !sharedPreferences().view">Clear shared view or stop waiting</button>
+  </div>
+  <p role="status" data-testid="shared-preference-status">{{ sharedPreferences().busy ? 'Waiting for Buddy…' : sharedLabels[sharedPreferences().state] }}</p>
+  @if (sharedPreferences().view; as view) {
+    <p>Group {{ view.group }} · {{ view.disposition }}</p>
+    <ul>
+      <li>Reader {{ view.effective.reader_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.reader_enabled }})</li>
+      <li>Writer {{ view.effective.writer_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.writer_enabled }})</li>
+      <li>Export {{ view.effective.export_destination }} ({{ view.effective.origins.export_destination }})</li>
+      <li>Research {{ view.effective.research_policy }} ({{ view.effective.origins.research_policy }})</li>
+      <li>Personalization {{ view.effective.personalization_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.personalization_enabled }})</li>
+      <li>Prompt {{ view.effective.personalization_text_present ? 'present' : 'absent' }} ({{ view.effective.origins.personalization_text }})</li>
+    </ul>
+    @if (view.effective.personalization_text !== null) {
+      <pre class="whitespace-pre-wrap wrap-anywhere">{{ view.effective.personalization_text }}</pre>
+    }
+    <form class="my-3 grid gap-3" (submit)="editSharedPreferences($event)">
+      <p>Choose only the declarations you want to change.</p>
+      <label>Reader <select class="ui-field" name="reader"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label>Writer <select class="ui-field" name="writer"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label>Export <select class="ui-field" name="export"><option value="">Leave unchanged</option><option value="mem">Mem</option><option value="disabled">Disable</option></select></label>
+      <label><input type="checkbox" name="product-null"> Explicitly set the shared Reader, Writer and export group to its defaults instead of the individual choices above</label>
+      <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Explicit default</option></select></label>
+      <label>Personalization <select class="ui-field" name="personalization"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label><input type="checkbox" name="replace-text"> Replace the shared prompt with the text below</label>
+      <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4"></textarea></label>
+      <label><input type="checkbox" name="confirm" required> Apply these declarations to this shared group</label>
+      <button class="ui-button ui-button-primary" type="submit" [disabled]="!canInspectSharedPreferences()">Save shared preferences</button>
+    </form>
+  }
+  @for (record of sharedPreferences().retained; track record.reference; let i = $index) {
+    <p><button class="ui-button ui-button-secondary" type="button" (click)="checkSharedPreference(record.reference)" [disabled]="!canCheckSharedPreference(record)">Check original shared edit {{ i + 1 }}</button></p>
+  } @empty {
+    @if (sharedPreferences().state === 'unknown' && sharedPreferences().reference; as reference) {
+      <p><button class="ui-button ui-button-secondary" type="button" (click)="checkSharedPreference(reference)" [disabled]="!canInspectSharedPreferences()">Check original shared edit</button></p>
+    }
+  }
+</section>
 
   <section aria-labelledby="local-mode-choice-title" class="ui-panel my-6">
     <h2 id="local-mode-choice-title">Save Local-only mode</h2>
@@ -431,6 +477,61 @@
     }
     @if (!host.localModeChoice) { <p class="ui-warning">This version of Manager cannot save Local-only mode.</p> }
   </section>
+
+  @if (host.isolatedRoot) {
+    <section aria-labelledby="isolated-root-title" class="ui-panel my-6">
+      <h2 id="isolated-root-title">Prepare isolated backup storage</h2>
+      <p>Prepare cloud storage for a backup already selected on the tablet.</p>
+      <div class="flex flex-wrap gap-2 my-3">
+        <button class="ui-button ui-button-secondary" type="button" (click)="beginIsolatedRoot()" [disabled]="!canBeginIsolatedRoot()">Review saved backup</button>
+        <button class="ui-button ui-button-secondary" type="button" (click)="refreshIsolatedRootOriginals()" [disabled]="isolatedRoot().busy || isolatedRoot().view?.state === 'ready'">Refresh preparation history</button>
+        @if (isolatedRoot().busy || isolatedRoot().view?.state === 'ready') {
+          <button class="ui-button ui-button-secondary" type="button" (click)="stopIsolatedRoot()">{{ isolatedRoot().busy ? 'Stop waiting for preparation' : 'Cancel backup review' }}</button>
+        }
+      </div>
+      <p role="status" data-testid="isolated-root-status">{{ isolatedRoot().status }}</p>
+      @if (isolatedRoot().view?.preview; as preview) {
+        <div class="my-3 wrap-anywhere" data-testid="isolated-root-preview">
+          <h3 class="font-semibold">Saved mode</h3>
+          <p>{{ localModeLabels[preview.kind] }}</p>
+          <p>Backup {{ preview.backup }}</p>
+          <p>Device {{ preview.device }}</p>
+          <p class="text-sm text-muted my-3">This review expires after two minutes.</p>
+          <button class="ui-button ui-button-primary" type="button" (click)="prepareIsolatedRoot()" [disabled]="!canPrepareIsolatedRoot()">Prepare cloud storage</button>
+        </div>
+      }
+      @if (isolatedRoot().view?.report; as report) {
+        <div class="my-3" data-testid="isolated-root-report">
+          <h3 class="font-semibold">Buddy’s preparation report</h3>
+          @if (report.result?.outcome !== 'root-verified') {
+            <p>{{ isolatedRootReportLabel(report) }}</p>
+          }
+          @if (report.current; as current) {
+            <p>Saved mode reported by Buddy · {{ localModeLabels[current.kind] }}</p>
+          }
+          @if (report.result?.outcome === 'root-verified') {
+            <p class="text-sm text-muted">Backup packages, Buddy runtime, and native pages need separate verification.</p>
+          }
+        </div>
+      }
+      @if (isolatedRoot().retained.length) {
+        <h3 class="font-semibold mt-3">Retained preparations</h3>
+        <ul class="space-y-3" data-testid="isolated-root-retained">
+          @for (record of isolatedRoot().retained; track record.reference) {
+            <li class="wrap-anywhere">
+              <p>Backup {{ record.backup }}</p>
+              <p>Device {{ record.device }} · Saved setting {{ record.epoch }}</p>
+              <p>{{ record.state === 'unknown' ? 'Preparation outcome is unknown.' : 'Verified cloud storage evidence retained.' }}</p>
+              @if (record.state === 'unknown') {
+                <button class="ui-button ui-button-secondary" type="button" (click)="retryIsolatedRoot(record)" [disabled]="!canRetryIsolatedRoot(record)">Retry original preparation</button>
+              }
+            </li>
+          }
+        </ul>
+        <p class="text-sm text-muted mt-3">Retry requires the original tablet connection and boot session.</p>
+      }
+    </section>
+  }
 
   <section aria-labelledby="handwriting-title" class="ui-panel my-6">
   <h2 id="handwriting-title">Saved handwriting corrections</h2>
@@ -613,7 +714,57 @@
       <button class="ui-button ui-button-secondary" type="button" (click)="revokeDrive()" [disabled]="!drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(drive().status)">Remove Google access…</button>
     </div>
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
-    <p class="mt-4 text-sm text-muted">Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.</p>
+    @if (host.isolatedBackup) {
+      <div class="mt-5">
+        <h3 class="font-semibold">Cloud backups</h3>
+        <div class="my-3 flex flex-wrap gap-3">
+          <button class="ui-button ui-button-secondary" type="button" (click)="scanCloudBackups()" [disabled]="!canBrowseCloudBackups()">Scan for cloud backups</button>
+          @if (cloudBackup().busy || cloudBackup().backups.length) {
+            <button class="ui-button ui-button-secondary" type="button" (click)="clearCloudBackups()">{{ cloudBackup().downloading ? 'Cancel download' : cloudBackup().busy ? 'Cancel backup check' : 'Clear backup results' }}</button>
+          }
+        </div>
+        <p role="status" data-testid="cloud-backup-status">{{ cloudBackup().message }}</p>
+        @if (cloudBackup().cleanupPending) {
+          <p role="alert" class="ui-warning">Manager could not confirm removal of the temporary backup files.</p>
+        }
+        @if (cloudBackup().backups.length) {
+          <ul class="my-3 space-y-4" data-testid="cloud-backup-list">
+            @for (backup of cloudBackup().backups; track backup.backup) {
+              <li class="wrap-anywhere">
+                <p class="font-semibold">Backup {{ backup.backup }}</p>
+                <p class="text-sm text-muted">Device {{ backup.device }}</p>
+                @if (backup.revisions.length) {
+                  <ul class="mt-2 space-y-2">
+                    @for (revision of backup.revisions; track revision.reference) {
+                      <li class="flex flex-wrap items-center gap-2">
+                        <code>{{ revision.sha256.slice(0, 12) }}</code>
+                        @if (revision.newestObserved) { <span>Newest in this scan</span> }
+                        <button class="ui-button ui-button-secondary" type="button" (click)="selectCloudBackup(revision.reference)" [disabled]="!canBrowseCloudBackups() || cloudBackup().selectedChoice === revision.reference">
+                          {{ cloudBackup().selectedChoice === revision.reference ? 'Selected revision' : 'Select revision' }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p>No revisions found for this backup.</p>
+                }
+              </li>
+            }
+          </ul>
+        }
+        @if (cloudBackup().selected; as selected) {
+          <p class="my-3 wrap-anywhere" data-testid="cloud-backup-selection">Verified revision marker <code>{{ selected.sha256 }}</code>.</p>
+          @if (!cloudBackup().downloadAttempted) {
+            <button class="ui-button ui-button-primary" type="button" (click)="downloadCloudBackup()" [disabled]="!canBrowseCloudBackups()">Download and verify</button>
+          }
+          @if (cloudBackup().inspection; as inspection) {
+            <p class="mt-3" data-testid="cloud-backup-verification">{{ inspection.manifests }} archive manifests and {{ inspection.objects }} stored objects verified.</p>
+          }
+        }
+      </div>
+    } @else {
+      <p class="mt-4 text-sm text-muted">This Manager host does not support cloud backup browsing.</p>
+    }
   </section>
   <section class="ui-panel mt-6" aria-labelledby="selected-archive-title">
     <h2 id="selected-archive-title" class="ui-heading">Check an archive or export Buddy history</h2>

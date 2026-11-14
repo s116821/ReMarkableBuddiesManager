@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       tag: ${{ steps.freeze.outputs.tag }}
       sha: ${{ steps.freeze.outputs.sha }}
@@ -52,6 +52,390 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Admit the exact host pin and reviewed notice inputs
+        id: oracle_pin
+        run: |
+          python - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          pin = json.loads(Path('host/buddy-oracle-source.json').read_text())
+          assert set(pin) == {'schema', 'repository', 'sourceSha', 'sourceTree', 'cargoLockSha256', 'sdkRevision'}
+          assert pin['schema'] == 1 and pin['repository'] == 's116821/ReMarkableBuddies'
+          for name in ('sourceSha', 'sourceTree', 'sdkRevision'):
+              assert re.fullmatch('[0-9a-f]{40}', pin[name])
+          assert re.fullmatch('[0-9a-f]{64}', pin['cargoLockSha256'])
+          subprocess.run(['git', 'check-ignore', '-q', 'out/buddy-oracle-source'], check=True)
+          # These inputs must be prepared/reviewed by Root. Missing is a hard failure,
+          # never a manufactured root grant or a 'complete' placeholder notice.
+          directory = Path('cicd/host-oracle-notices')
+          for name in ('x86_64-unknown-linux-gnu.toml', 'x86_64-pc-windows-msvc.toml',
+                       'windows-vendor-inputs.json'):
+              path = directory / name
+              assert path.is_file() and not path.is_symlink() and path.stat().st_size > 0, 'Missing reviewed notice input: ' + name
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('source_sha=' + pin['sourceSha'] + '\n')
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: s116821/ReMarkableBuddies
+          ref: ${{ steps.oracle_pin.outputs.source_sha }}
+          path: out/buddy-oracle-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: 1.98.1
+          targets: x86_64-unknown-linux-gnu,x86_64-pc-windows-msvc
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-xwin@0.23.1,cargo-about@0.9.3,cargo-binstall@1.26.2
+          fallback: none
+          checksum: true
+      - name: Install the maintained xwin CLI without a source-build fallback
+        run: cargo binstall --no-confirm --locked --disable-strategies quick-install,compile xwin@0.10.0
+      - uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0 # v2.0.9
+        with:
+          version: "22.1.8"
+          force-url: https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-Linux-X64.tar.xz
+          directory: ${{ runner.temp }}/buddy-oracle-llvm
+          env: false
+      - name: Install signed Jammy NASM and cabinet extraction tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y nasm=2.15.05-1 cabextract=1.9-3
+      - name: Build and retain both ordinary host commands before their test harnesses
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, re, shutil, subprocess, tomllib, urllib.request, zipfile
+          from pathlib import Path
+
+          manager = Path.cwd().resolve()
+          source = (manager / 'out/buddy-oracle-source').resolve(strict=True)
+          scratch = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+          oracle = scratch / 'buddy-host-oracle'
+          tests = scratch / 'buddy-host-tests'
+          target_dir = scratch / 'buddy-oracle-target'
+          pin = json.loads((manager / 'host/buddy-oracle-source.json').read_text())
+          settings = manager / 'cicd/host-oracle-notices'
+          vendor_inputs = json.loads((settings / 'windows-vendor-inputs.json').read_text())
+
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+          def write(path, value):
+              with path.open('x', encoding='utf-8', newline='\n') as stream:
+                  json.dump(value, stream, indent=2)
+                  stream.write('\n')
+
+          def git(*args):
+              return subprocess.check_output(['git', '-C', str(source), *args])
+
+          def clean():
+              assert git('rev-parse', 'HEAD').decode().strip() == pin['sourceSha']
+              assert git('rev-parse', 'HEAD^{tree}').decode().strip() == pin['sourceTree']
+              assert not git('status', '--porcelain', '--untracked-files=normal').strip()
+
+          clean()
+          lock = git('show', 'HEAD:Cargo.lock')
+          assert hashlib.sha256(lock).hexdigest() == pin['cargoLockSha256']
+          sdk = [p for p in tomllib.loads(lock.decode())['package'] if p['name'] == 'remarkable-open-sdk']
+          assert len(sdk) == 1 and sdk[0]['source'].endswith('#' + pin['sdkRevision'])
+          assert shutil.disk_usage(scratch).free >= 16 * 1024**3, 'Insufficient space for two host targets/test receipts'
+          for root in (oracle, tests, target_dir):
+              root.mkdir(exist_ok=False)
+
+          tool_names = ('rustc', 'cargo-xwin', 'cargo-about', 'xwin', 'cabextract', 'clang', 'clang-cl', 'lld-link', 'llvm-ar', 'llvm-lib', 'llvm-readobj', 'nasm')
+          tools = {}
+          llvm = Path(os.environ['LLVM_PATH']).resolve(strict=True)
+          for name in tool_names:
+              found = shutil.which(name)
+              assert found, 'Missing qualified tool: ' + name
+              executable = Path(found).resolve(strict=True)
+              # llvm-lib has lib.exe-compatible flags and no --version. Its exact file
+              # still belongs to the qualified LLVM root and is hash-bound below.
+              argument = '/?' if name == 'llvm-lib' else '-version' if name == 'nasm' else '--version'
+              # LLVM multicall tools select their driver from the alias basename.
+              # Probe that alias; retain the resolved file only for hashing/containment.
+              report = subprocess.check_output([found, argument], timeout=15).decode().strip()
+              assert 0 < len(report) <= 8192
+              if name in ('clang', 'clang-cl', 'lld-link', 'llvm-ar', 'llvm-lib', 'llvm-readobj'):
+                  assert executable.is_relative_to(llvm)
+                  if name != 'llvm-lib':
+                      assert '22.1.8' in report
+              expected = {'rustc': 'rustc 1.98.1 ', 'cargo-xwin': '0.23.1', 'cargo-about': '0.9.3',
+                  'xwin': '0.10.0', 'cabextract': '1.9', 'nasm': 'NASM version 2.15.05'}
+              if name in expected:
+                  assert expected[name] in report, name + ' version mismatch'
+              tools[name] = dict(path=str(executable), version=report, sha256=sha(executable))
+          assert subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', 'nasm']).decode() == '2.15.05-1'
+          assert subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', 'cabextract']).decode() == '1.9-3'
+          assert len(tools['rustc']['version']) <= 256 and '\n' not in tools['rustc']['version']
+
+          environment = os.environ.copy()
+          for key in list(environment):
+              if key in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS') or key.startswith(('READER_BUDDY_RELEASE_', 'READER_BUDDY_CANDIDATE_', 'VERGEN_')):
+                  environment.pop(key)
+          environment.update(CARGO_TARGET_DIR=str(target_dir), CARGO_INCREMENTAL='0', CARGO_BUILD_JOBS='4',
+              CARGO_PROFILE_RELEASE_DEBUG='0', XWIN_CACHE_DIR=str(scratch / 'buddy-xwin-0.23.1'))
+          metadata = json.loads(subprocess.check_output(['cargo', '+1.98.1', 'metadata', '--locked', '--format-version=1'], cwd=source, env=environment))
+          roots = [p for p in metadata['packages'] if Path(p['manifest_path']).resolve() == source / 'Cargo.toml']
+          assert len(roots) == 1 and roots[0]['name'] == 'remarkable-reader-buddy'
+          root_id = roots[0]['id']
+          sdks = [p for p in metadata['packages'] if p['name'] == 'remarkable-open-sdk']
+          assert len(sdks) == 1 and sdks[0]['source'].endswith('#' + pin['sdkRevision'])
+          sdk_root = Path(sdks[0]['manifest_path']).parent
+
+          def cargo_messages(arguments, log, env):
+              # cargo-xwin may print maintained progress text around Cargo JSON. Keep the
+              # original log; only well-formed Cargo messages supply artifact identities.
+              with log.open('xb') as output, log.with_suffix('.stderr').open('xb') as errors:
+                  subprocess.run(arguments, cwd=source, env=env, stdout=output, stderr=errors, check=True)
+              assert log.stat().st_size <= 32 * 1024**2
+              records = []
+              for line in log.read_text().splitlines():
+                  if line.startswith('{'):
+                      item = json.loads(line)
+                      if 'reason' in item:
+                          records.append(item)
+              finished = [item for item in records if item['reason'] == 'build-finished']
+              assert len(finished) == 1 and finished[0]['success'] is True
+              return records
+
+          def executable(records, name, kind, target):
+              candidates = [r for r in records if r['reason'] == 'compiler-artifact' and r['package_id'] == root_id
+                  and r['target']['name'] == name and r['target']['kind'] == [kind] and r.get('executable')]
+              assert len(candidates) == 1 and candidates[0]['features'] == []
+              reported = Path(candidates[0]['executable'])
+              assert reported.is_absolute() and not reported.is_symlink()
+              result = reported.resolve(strict=True)
+              expected_parent = target_dir / target / 'release'
+              if kind == 'test':
+                  expected_parent /= 'deps'
+                  assert result.name.startswith('archive_cli-')
+              assert result.is_file() and result.parent == expected_parent
+              assert candidates[0]['profile']['test'] is (kind == 'test')
+              return result
+
+          def prime_windows(test_root, env):
+              # The maintained CLI downloads to the SAME cache its library consumes.
+              # Retain metadata before cargo-xwin's normal first splat removes dl/.
+              base = Path(env['XWIN_CACHE_DIR'])
+              assert not base.exists(), 'Refuse a previous Windows cache or fabricated DONE'
+              cache = base / 'xwin'
+              arguments = ['xwin', '--accept-license', '--cache-dir', str(cache),
+                  '--arch', 'x86_64', '--variant', 'desktop', '--sdk-version', '10.0.26100',
+                  '--crt-version', '14.44.17.14']
+              with (test_root / 'xwin-list.txt').open('xb') as output:
+                  subprocess.run(arguments + ['--manifest-version', '17', 'list'], env=env,
+                      stdout=output, stderr=subprocess.STDOUT, check=True, timeout=180)
+              channel = cache / 'dl/manifest_17.json'
+              with (test_root / 'xwin-download.txt').open('xb') as output:
+                  subprocess.run(arguments + ['--manifest', str(channel), 'download'], env=env,
+                      stdout=output, stderr=subprocess.STDOUT, check=True, timeout=900)
+              catalogs = list((cache / 'dl').glob('pkg_manifest_*.vsman'))
+              assert len(catalogs) == 1 and not (cache / 'DONE').exists()
+              catalog = catalogs[0]
+              for original, name in ((channel, 'xwin-channel.json'), (catalog, 'xwin-packages.vsman')):
+                  assert not original.is_symlink() and 0 < original.stat().st_size <= 64 * 1024**2
+                  shutil.copyfile(original, test_root / name)
+              files = sorted((cache / 'dl').rglob('*'))
+              assert 0 < len(files) <= 512
+              inventory = {}
+              for path in files:
+                  assert not path.is_symlink()
+                  if path.is_dir():
+                      continue
+                  assert path.is_file()
+                  inventory[path.relative_to(cache / 'dl').as_posix()] = dict(bytes=path.stat().st_size, sha256=sha(path))
+              payload_hashes = {entry['sha256'] for name, entry in inventory.items()
+                  if name not in (channel.name, catalog.name)}
+              assert payload_hashes
+              packages, matched = [], set()
+              # Attribute actual downloaded bytes to their original publisher records;
+              # selection, MSI/CAB resolution and extraction remain xwin's work.
+              for package in json.loads(catalog.read_text())['packages']:
+                  payloads = [p for p in package.get('payloads', []) if p['sha256'].lower() in payload_hashes]
+                  if payloads:
+                      packages.append(dict(id=package['id'], version=package['version'], payloads=payloads))
+                      matched.update(p['sha256'].lower() for p in payloads)
+              assert matched == payload_hashes, 'Downloaded Windows input lacks a publisher record'
+              observed = {(p['id'], p['version']) for p in packages}
+              assert all((p['id'], p['version']) in observed for p in vendor_inputs['selectedPackages']), 'Recheck notice inputs for changed SDK/CRT packages'
+              write(test_root / 'xwin-inputs.json', dict(arguments=arguments, files=inventory, packages=packages))
+              return ['xwin-list.txt', 'xwin-download.txt', 'xwin-channel.json', 'xwin-packages.vsman', 'xwin-inputs.json']
+
+          def microsoft_notices(notices):
+              # Only notice archives are fetched here; xwin owns SDK/toolchain inputs.
+              downloads = scratch / 'microsoft-notice-inputs'
+              downloads.mkdir(exist_ok=False)
+              for item in vendor_inputs['inputs']:
+                  path = downloads / item['file']
+                  assert path.parent == downloads and item['url'].startswith('https://')
+                  with urllib.request.urlopen(item['url'], timeout=90) as response:
+                      data = response.read(item['bytes'] + 1)
+                  assert len(data) == item['bytes'] and hashlib.sha256(data).hexdigest() == item['sha256']
+                  path.write_bytes(data)
+                  for notice in item['notices']:
+                      destination = notices / notice['name']
+                      assert destination.parent == notices and 0 < notice['bytes'] <= 8 * 1024**2
+                      with destination.open('xb') as output:
+                          if item['format'] == 'cab':
+                              subprocess.run(['cabextract', '--pipe', '--filter', notice['member'], str(path)],
+                                  stdout=output, check=True, timeout=30)
+                          elif item['format'] == 'zip':
+                              with zipfile.ZipFile(path) as archive:
+                                  member = archive.getinfo(notice['member'])
+                                  assert member.file_size == notice['bytes']
+                                  with archive.open(member) as source:
+                                      shutil.copyfileobj(source, output, 64 * 1024)
+                          else:
+                              assert item['format'] == 'raw'
+                              output.write(data)
+                      assert destination.stat().st_size == notice['bytes'] and sha(destination) == notice['sha256']
+              shutil.copyfile(settings / 'windows-vendor-inputs.json', notices / 'WINDOWS-NOTICE-ORIGINS.json')
+
+          manifest = dict(schema=1, source=pin, manifest_directory=str(source), platforms={}, fixtures={})
+          for target, filename in [('x86_64-unknown-linux-gnu', 'reader-buddy'), ('x86_64-pc-windows-msvc', 'reader-buddy.exe')]:
+              retained = oracle / target
+              resource = retained / 'buddy-oracle'
+              resource.mkdir(parents=True, exist_ok=False)
+              test_root = tests / target
+              test_root.mkdir()
+              env = environment.copy()
+              suffix = target.replace('-', '_')
+              for key, value in {'USE_SYSTEM': '0', 'STATIC': '1', 'CMAKE_BUILDER': '0', 'PREBUILT_NASM': '0', 'NO_ASM': '0'}.items():
+                  env['AWS_LC_SYS_' + key + '_' + suffix] = value
+              # Contradictory source/system or compiler overrides fail instead of being adopted.
+              for key in ('AWS_LC_SYS_SYSTEM_DIR', 'AWS_LC_SYS_SYSTEM_DIR_' + suffix):
+                  assert not env.get(key), 'Unexpected system AWS-LC override'
+              windows = target.endswith('windows-msvc')
+              flags = []
+              input_logs = []
+              if windows:
+                  flags = ['-C', 'target-feature=+crt-static']
+                  env['CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS'] = ' '.join(flags)
+                  input_logs = prime_windows(test_root, env)
+              prefix = ['cargo', '+1.98.1'] + (['xwin'] if windows else [])
+              selectors = ['--cross-compiler', 'clang-cl', '--xwin-arch', 'x86_64', '--xwin-variant', 'desktop',
+                  '--xwin-version', '17', '--xwin-sdk-version', '10.0.26100', '--xwin-crt-version', '14.44.17.14',
+                  '--xwin-cache-dir', env['XWIN_CACHE_DIR'], '--xwin-http-retries', '0'] if windows else []
+              build_args = prefix + ['build', '--locked', '--release', '--bin', 'reader-buddy', '--target', target,
+                  '--message-format=json-render-diagnostics'] + selectors
+              records = cargo_messages(build_args, test_root / 'ordinary-build.jsonl', env)
+              ordinary = executable(records, 'reader-buddy', 'bin', target)
+              assert ordinary.name == filename and ordinary.parent == target_dir / target / 'release'
+              scripts = [r for r in records if r['reason'] == 'build-script-executed' and r['package_id'] == root_id]
+              assert len(scripts) == 1
+              values = dict(scripts[0]['env'])
+              version = values['READER_BUDDY_VERSION']
+              assert re.fullmatch(r'dev\.\S{1,123}', version) and version != 'dev.unknown'
+              assert values['VERGEN_GIT_SHA'] == pin['sourceSha'] and values['VERGEN_GIT_DIRTY'] == 'false'
+              binary = resource / filename
+              shutil.copy2(ordinary, binary)  # BEFORE any test compilation can unify SDK dev features.
+              binary.chmod(0o644 if windows else 0o755)
+              reference = dict(name=filename, bytes=binary.stat().st_size, sha256=sha(binary))
+              provenance = dict(schema=1, source=pin, target=target, profile='release', features=[],
+                  rustc=tools['rustc']['version'], version=version, executable=reference)
+              write(resource / 'provenance.json', provenance)
+              log_names = ['ordinary-build.jsonl', 'ordinary-build.stderr', 'test-build.jsonl', 'test-build.stderr'] + input_logs
+              if windows:
+                  # Inspect PE imports on Linux; never run the cross-compiled program.
+                  imports = subprocess.check_output(['llvm-readobj', '--coff-imports', str(binary)], timeout=30)
+                  assert 0 < len(imports) <= 1024**2
+                  names = re.findall(r'^\s*Name:\s+(\S+)\s*$', imports.decode(), re.MULTILINE)
+                  assert names and all(name.lower().endswith('.dll') for name in names)
+                  assert not any(re.match(r'(?i)^(vcruntime|msvcp|msvcr|ucrtbase|api-ms-win-crt-)', name)
+                      for name in names), 'Unexpected dynamic Microsoft CRT dependency'
+                  with (test_root / 'pe-imports.txt').open('xb') as output:
+                      output.write(imports)
+                  log_names.append('pe-imports.txt')
+              else:
+                  dependencies = subprocess.check_output(['llvm-readobj', '--needed-libs', '--version-info', str(binary)], timeout=30)
+                  assert 0 < len(dependencies) <= 1024**2
+                  with (test_root / 'elf-dependencies.txt').open('xb') as output:
+                      output.write(dependencies)
+                  log_names.append('elf-dependencies.txt')
+
+              notices = retained / 'notices'
+              notices.mkdir()
+              config = settings / (target + '.toml')
+              policy = tomllib.loads(config.read_text())
+              assert policy.get('targets') == [target] and policy.get('ignore-dev-dependencies') is True
+              assert policy.get('ignore-build-dependencies') is True and not policy.get('ignore-transitive-dependencies', False)
+              assert not policy.get('private', {}).get('ignore', False) and policy.get('accepted')
+              subprocess.run(['cargo', '+1.98.1', 'about', 'generate', '--locked', '--fail', '--format', 'json',
+                  '--manifest-path', str(source / 'Cargo.toml'), '--config', str(config),
+                  '--output-file', str(notices / 'cargo-about.json')], cwd=source, env=env, check=True)
+              report = json.loads((notices / 'cargo-about.json').read_text())
+              assert report.get('licenses') and report.get('overview')
+              assert report.get('crates') and all(p['license'].lower() not in ('ignore', 'unknown', 'none', 'noassertion')
+                  for p in report['crates'])
+              foreign_sdk = []
+              for license in report['licenses']:
+                  assert license['text'].strip() and license['id'].lower() not in ('ignore', 'unknown', 'none', 'noassertion')
+                  for user in license['used_by']:
+                      package = user['crate']
+                      if package['name'] == 'remarkable-open-sdk':
+                          foreign_sdk.append(package)
+              assert foreign_sdk and all(p['source'] == sdks[0]['source'] for p in foreign_sdk), 'Foreign Git SDK notices missing'
+              for origin, name in [(source / 'LICENSE', 'BUDDY-LICENSE'),
+                  (source / 'THIRD_PARTY_NOTICES.md', 'BUDDY-THIRD-PARTY-NOTICES.md'), (sdk_root / 'LICENSE', 'SDK-LICENSE'),
+                  (sdk_root / 'THIRD_PARTY_NOTICES.md', 'SDK-THIRD-PARTY-NOTICES.md')]:
+                  assert origin.is_file() and origin.stat().st_size > 0
+                  shutil.copyfile(origin, notices / name)
+              # Use the actual qualified toolchain's library notice and accompanying
+              # texts. Missing installed inputs fail qualification; never substitute a
+              # placeholder or download unrelated docs to make a completeness claim.
+              sysroot = Path(subprocess.check_output(['rustc', '--print', 'sysroot'], env=env).decode().strip()).resolve(strict=True)
+              rust_docs = sysroot / 'share/doc/rust'
+              library_notice = rust_docs / 'COPYRIGHT-library.html'
+              license_root = rust_docs / 'licenses'
+              assert library_notice.is_file() and library_notice.stat().st_size > 0
+              assert all((license_root / name).is_file() for name in ('MIT.txt', 'Apache-2.0.txt'))
+              shutil.copyfile(library_notice, notices / 'RUST-COPYRIGHT-library.html')
+              for text in sorted(license_root.iterdir()):
+                  assert text.is_file() and not text.is_symlink() and 0 < text.stat().st_size <= 8 * 1024**2
+                  shutil.copyfile(text, notices / ('RUST-LICENSE-' + text.name))
+              if windows:
+                  microsoft_notices(notices)
+
+              test_args = prefix + ['test', '--locked', '--release', '--test', 'archive_cli', '--no-run',
+                  '--target', target, '--message-format=json-render-diagnostics'] + selectors
+              test_records = cargo_messages(test_args, test_root / 'test-build.jsonl', env)
+              test_binary = executable(test_records, 'archive_cli', 'test', target)
+              test_name = 'archive_cli.exe' if windows else 'archive_cli'
+              shutil.copy2(test_binary, test_root / test_name)
+              (test_root / test_name).chmod(0o644 if windows else 0o755)
+              assert binary.stat().st_size == reference['bytes'] and sha(binary) == reference['sha256']
+              (test_root / 'buddy-oracle').mkdir()
+              shutil.copyfile(resource / 'provenance.json', test_root / 'buddy-oracle/provenance.json')
+              shutil.copytree(notices, test_root / 'notices')
+              record = dict(target=target, command=reference, version=version,
+                  provenance_sha256=sha(resource / 'provenance.json'),
+                  test=dict(name=test_name, bytes=(test_root / test_name).stat().st_size, sha256=sha(test_root / test_name)),
+                  build=dict(arguments=build_args, test_arguments=test_args, target_rustflags=flags, tools=tools,
+                      aws_lc=dict(use_system=False, static=True, cmake_builder=False, prebuilt_nasm=False, no_asm=False),
+                      xwin_selectors=selectors, rust_notice_source=str(rust_docs),
+                      sdk_resolution_evidence='xwin-inputs.json with original channel/package records' if windows else None),
+                  logs={name: dict(bytes=(test_root / name).stat().st_size, sha256=sha(test_root / name)) for name in log_names},
+                  notices={p.name: dict(bytes=p.stat().st_size, sha256=sha(p)) for p in sorted(notices.iterdir())})
+              write(test_root / 'qualification.json', record)
+              manifest['platforms'][target] = record
+
+          for name in ('writer-notebook-create-replay.json', 'writer-notebook-source.json'):
+              relative = 'docs/simulator/scenarios/' + name
+              destination = tests / 'source-fixtures' / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(source / relative, destination)
+              manifest['fixtures'][relative] = dict(bytes=destination.stat().st_size, sha256=sha(destination))
+          clean()
+          assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=normal'], cwd=manager).strip()
+          write(tests / 'receipt.json', manifest)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('ORACLE_ROOT=' + str(oracle) + '\n')
+              output.write('ORACLE_TEST_ROOT=' + str(tests) + '\n')
+          PY
       - name: Build development, production and native packages
         env:
           MANAGER_CANDIDATE_TAG: ${{ steps.freeze.outputs.tag }}
@@ -62,10 +446,37 @@ jobs:
           MANAGER_PACKAGE_PLATFORM=win32 npm run package
           MANAGER_PACKAGE_PLATFORM=linux npm run package
       - name: Assemble fixed release inventory
-        run: python cicd/release/build.py assemble --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+        run: python cicd/release/build.py assemble --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages" --oracle-root "$ORACLE_ROOT"
         env:
           TAG: ${{ steps.freeze.outputs.tag }}
           SHA: ${{ steps.freeze.outputs.sha }}
+      - name: Retain the CI-only host tests without duplicating shipping commands
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, tarfile
+          from pathlib import Path
+          root = Path(os.environ['ORACLE_TEST_ROOT'])
+          oracle = Path(os.environ['ORACLE_ROOT'])
+          receipt = json.loads((root / 'receipt.json').read_text())
+          for target, record in receipt['platforms'].items():
+              binary = oracle / target / 'buddy-oracle' / record['command']['name']
+              assert binary.stat().st_size == record['command']['bytes']
+              with binary.open('rb') as stream:
+                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == record['command']['sha256']
+          destination = Path('test-results/development/host-oracle')
+          destination.mkdir(parents=True, exist_ok=False)
+          with tarfile.open(destination / 'buddy-host-tests.tar', 'w') as archive:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file():
+                      assert not path.is_symlink()
+                      name = path.relative_to(root).as_posix()
+                      # No duplicated ordinary executable is admitted to this CI-only tar.
+                      assert path.name not in ('reader-buddy', 'reader-buddy.exe')
+                      item = archive.gettarinfo(str(path), arcname=name)
+                      item.mode = 0o755 if name == 'x86_64-unknown-linux-gnu/archive_cli' else 0o644
+                      with path.open('rb') as stream:
+                          archive.addfile(item, stream)
+          PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: artifacts
         with:
@@ -77,7 +488,9 @@ jobs:
         id: development
         with:
           name: development-browser-${{ inputs.source_sha }}-${{ github.run_attempt }}
-          path: test-results/development/browser/
+          path: |
+            test-results/development/browser/
+            test-results/development/host-oracle/buddy-host-tests.tar
           if-no-files-found: error
           retention-days: 14
     defaults:
@@ -92,7 +505,7 @@ jobs:
         os:
           - ubuntu-latest
           - windows-latest
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-latest' && 'ubuntu-22.04' || matrix.os }}
     env:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
@@ -114,8 +527,109 @@ jobs:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: ${{ runner.temp }}/packages
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
+          path: test-results/development
+          merge-multiple: true
+      - name: Validate and extract the original Build host test receipt
+        env:
+          HOST_ORACLE_TAR: ${{ github.workspace }}/test-results/development/host-oracle/buddy-host-tests.tar
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, re, tarfile
+          from pathlib import Path, PurePosixPath
+
+          manager = Path.cwd().resolve()
+          scratch = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+          archive_path = Path(os.environ['HOST_ORACLE_TAR']).resolve(strict=True)
+          root = scratch / 'buddy-host-tests'
+          pin = json.loads((manager / 'host/buddy-oracle-source.json').read_text())
+          targets = {'x86_64-unknown-linux-gnu': 'archive_cli', 'x86_64-pc-windows-msvc': 'archive_cli.exe'}
+
+          def digest(path):
+              with path.open('rb') as source:
+                  return hashlib.file_digest(source, 'sha256').hexdigest()
+
+          with tarfile.open(archive_path, 'r:') as archive:
+              members = archive.getmembers()
+              assert 0 < len(members) <= 128 and sum(m.size for m in members) <= 1024**3
+              names = set()
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  assert member.isfile() and not path.is_absolute() and '..' not in path.parts
+                  assert '\\' not in member.name and ':' not in member.name
+                  assert member.name == str(path) and member.name not in names
+                  names.add(member.name)
+              assert 'receipt.json' in names
+              member = archive.getmember('receipt.json')
+              assert member.size <= 64 * 1024
+              receipt = json.load(archive.extractfile(member))
+              assert set(receipt) == {'schema', 'source', 'manifest_directory', 'platforms', 'fixtures'}
+              assert receipt['schema'] == 1 and receipt['source'] == pin
+              assert set(receipt['platforms']) == set(targets)
+              expected = {'receipt.json'}
+              for target, record in receipt['platforms'].items():
+                  assert record['target'] == target and record['test']['name'] == targets[target]
+                  assert re.fullmatch('[0-9a-f]{64}', record['test']['sha256'])
+                  assert 0 < record['test']['bytes'] <= 512 * 1024**2
+                  assert re.fullmatch('[0-9a-f]{64}', record['provenance_sha256'])
+                  expected.update(target + '/' + name for name in (targets[target], 'qualification.json', 'buddy-oracle/provenance.json'))
+                  log_names = {'ordinary-build.jsonl', 'ordinary-build.stderr', 'test-build.jsonl', 'test-build.stderr'}
+                  if target.endswith('windows-msvc'):
+                      log_names.update(('pe-imports.txt', 'xwin-list.txt', 'xwin-download.txt',
+                          'xwin-channel.json', 'xwin-packages.vsman', 'xwin-inputs.json'))
+                  else:
+                      log_names.add('elf-dependencies.txt')
+                  assert set(record['logs']) == log_names
+                  expected.update(target + '/' + name for name in log_names)
+                  expected.update(target + '/notices/' + name for name in record['notices'])
+                  assert all('/' not in name and '\\' not in name and name not in ('', '.', '..') for name in record['notices'])
+              assert set(receipt['fixtures']) == {'docs/simulator/scenarios/writer-notebook-create-replay.json',
+                  'docs/simulator/scenarios/writer-notebook-source.json'}
+              expected.update('source-fixtures/' + name for name in receipt['fixtures'])
+              assert names == expected, 'Unexpected CI tar membership'
+              root.mkdir(exist_ok=False)
+              for member in members:
+                  destination = root / member.name
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  with destination.open('xb') as output:
+                      stream = archive.extractfile(member)
+                      remaining = member.size
+                      while remaining:
+                          chunk = stream.read(min(64 * 1024, remaining))
+                          assert chunk, 'Short CI member'
+                          output.write(chunk)
+                          remaining -= len(chunk)
+                      assert not stream.read(1)
+                  # Executable mode is retained inside tar, not by the artifact service.
+                  expected_mode = 0o755 if member.name == 'x86_64-unknown-linux-gnu/archive_cli' else 0o644
+                  assert member.mode == expected_mode
+                  if os.name != 'nt':
+                      destination.chmod(expected_mode)
+
+          for target, record in receipt['platforms'].items():
+              assert json.loads((root / target / 'qualification.json').read_text()) == record
+              assert digest(root / target / 'buddy-oracle/provenance.json') == record['provenance_sha256']
+              provenance = json.loads((root / target / 'buddy-oracle/provenance.json').read_text())
+              assert provenance['source'] == pin and provenance['target'] == target
+              assert provenance['executable'] == record['command'] and provenance['version'] == record['version']
+              test = root / target / record['test']['name']
+              assert test.stat().st_size == record['test']['bytes'] and digest(test) == record['test']['sha256']
+              for name, entry in record['logs'].items():
+                  file = root / target / name
+                  assert file.stat().st_size == entry['bytes'] and digest(file) == entry['sha256']
+              for name, entry in record['notices'].items():
+                  file = root / target / 'notices' / name
+                  assert file.stat().st_size == entry['bytes'] and digest(file) == entry['sha256']
+          for name, entry in receipt['fixtures'].items():
+              file = root / 'source-fixtures' / name
+              assert file.stat().st_size == entry['bytes'] and digest(file) == entry['sha256']
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('ORACLE_ROOT=' + str(root) + '\n')
+          PY
       - shell: bash
-        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages" --oracle-root "$ORACLE_ROOT"
       - name: Extract verified Linux artifacts without rebuilding
         if: runner.os == 'Linux'
         run: |
@@ -130,11 +644,6 @@ jobs:
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP/packages/manager-browser.zip" -DestinationPath dist/manager/browser
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP/packages/manager-win32-x64.zip" -DestinationPath out/packages/ReMarkableBuddiesManager-win32-x64
           Copy-Item -LiteralPath dist/manager/browser/build-info.json -Destination electron/build-info.json
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
-          path: test-results/development/browser
-          merge-multiple: true
       - name: Set trusted host interpreter for retained-package controls
         shell: bash
         run: |
@@ -144,6 +653,15 @@ jobs:
               for name in ('MANAGER_WIRED_PYTHON', 'MANAGER_DRIVE_PYTHON'):
                   output.write(f'{name}={sys.executable}\n')
           PYTHON
+      - name: Preserve Windows native API and NTFS custody controls
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m pip install -r host/requirements.txt
+          python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
+          python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
+          python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v
+          node --test tests/isolated-backup-staging.test.mjs tests/drive-read-guard.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node tests/hosts.mjs --development
       - if: runner.os == 'Linux'
@@ -188,6 +706,10 @@ jobs:
           xvfb-run -a npm run test:storage-initialization-hosts -- --packaged
           xvfb-run -a npm run test:local-mode-choice-hosts
           xvfb-run -a npm run test:local-mode-choice-hosts -- --packaged
+          xvfb-run -a npm run test:isolated-root-hosts
+          xvfb-run -a npm run test:isolated-root-hosts -- --packaged
+          xvfb-run -a npm run test:isolated-backup-hosts
+          xvfb-run -a npm run test:isolated-backup-hosts -- --packaged
           xvfb-run -a npm run test:model-settings-hosts
           xvfb-run -a npm run test:model-settings-hosts -- --packaged
           xvfb-run -a npm run test:research-settings-hosts
@@ -218,6 +740,8 @@ jobs:
           xvfb-run -a npm run test:ordinary-export-hosts -- --packaged
           xvfb-run -a npm run test:portable-configuration-hosts
           xvfb-run -a npm run test:portable-configuration-hosts -- --packaged
+          xvfb-run -a npm run test:shared-preferences-hosts
+          xvfb-run -a npm run test:shared-preferences-hosts -- --packaged
       - if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -259,6 +783,10 @@ jobs:
           npm run test:storage-initialization-hosts -- --packaged
           npm run test:local-mode-choice-hosts
           npm run test:local-mode-choice-hosts -- --packaged
+          npm run test:isolated-root-hosts
+          npm run test:isolated-root-hosts -- --packaged
+          npm run test:isolated-backup-hosts
+          npm run test:isolated-backup-hosts -- --packaged
           npm run test:model-settings-hosts
           npm run test:model-settings-hosts -- --packaged
           npm run test:research-settings-hosts
@@ -289,16 +817,108 @@ jobs:
           npm run test:ordinary-export-hosts -- --packaged
           npm run test:portable-configuration-hosts
           npm run test:portable-configuration-hosts -- --packaged
+          npm run test:shared-preferences-hosts
+          npm run test:shared-preferences-hosts -- --packaged
       - name: Confirm integration preserved upload bytes
         shell: bash
-        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
-      - name: Preserve Windows native API and NTFS custody controls
-        if: runner.os == 'Windows'
-        shell: bash
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages" --oracle-root "$ORACLE_ROOT"
+      - name: Bind the native retained test to the unpacked shipping oracle
         run: |
-          python -m pip install -r host/requirements.txt
-          python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
-          python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
+          python - <<'PY'
+          import hashlib, json, os, shutil, subprocess
+          from pathlib import Path
+
+          root = Path(os.environ['ORACLE_ROOT']).resolve(strict=True)
+          manager = Path.cwd().resolve()
+          receipt = json.loads((root / 'receipt.json').read_text())
+          pin = json.loads((manager / 'host/buddy-oracle-source.json').read_text())
+          assert receipt['source'] == pin
+          windows = os.name == 'nt'
+          target = 'x86_64-pc-windows-msvc' if windows else 'x86_64-unknown-linux-gnu'
+          platform = 'win32' if windows else 'linux'
+          record = receipt['platforms'][target]
+          resource = manager / ('out/packages/ReMarkableBuddiesManager-' + platform + '-x64/resources/host/buddy-oracle')
+          binary = resource / record['command']['name']
+          test = root / target / record['test']['name']
+
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+          assert resource.is_dir() and not resource.is_symlink()
+          assert set(p.name for p in resource.iterdir()) == {record['command']['name'], 'provenance.json'}
+          assert sha(resource / 'provenance.json') == record['provenance_sha256']
+          assert (resource / 'provenance.json').read_bytes() == (root / target / 'buddy-oracle/provenance.json').read_bytes()
+          assert binary.is_file() and not binary.is_symlink()
+          assert binary.stat().st_size == record['command']['bytes'] and sha(binary) == record['command']['sha256']
+          assert test.stat().st_size == record['test']['bytes'] and sha(test) == record['test']['sha256']
+          if not windows:
+              assert binary.stat().st_mode & 0o111
+              # Only the two original hash-bound runtime inputs are restored. The test
+              # binary's compile-time CARGO_MANIFEST_DIR must remain exact; do not skip it.
+              original = Path(receipt['manifest_directory'])
+              assert original == manager / 'out/buddy-oracle-source'
+              original.mkdir(exist_ok=False)
+              for relative, entry in receipt['fixtures'].items():
+                  source = root / 'source-fixtures' / relative
+                  assert source.stat().st_size == entry['bytes'] and sha(source) == entry['sha256']
+                  destination = original / relative
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  with destination.open('xb') as output:
+                      output.write(source.read_bytes())
+          command = str(binary.resolve(strict=True))
+          if windows:
+              # Rust canonicalize uses the verbatim prefix; Node realpath drops it again
+              # when the Manager test obtains its ordinary trusted resource directory.
+              command = os.path.realpath('\\\\?\\' + command, strict=True)
+          clean_env = {key: os.environ[key] for key in ('SystemRoot', 'WINDIR') if key in os.environ}
+          observed = subprocess.run([command, '--version'], cwd=root, env=clean_env,
+              capture_output=True, check=True, timeout=15)
+          assert not observed.stderr and len(observed.stdout) <= 256
+          version = observed.stdout.decode().strip().split()
+          assert len(version) == 2 and version[-1] == record['version'], 'Built/script/runtime identity mismatch'
+          values = {'READER_BUDDY_ARCHIVE_TEST_COMMAND': command,
+              'READER_BUDDY_ARCHIVE_TEST_BYTES': str(record['command']['bytes']),
+              'READER_BUDDY_ARCHIVE_TEST_SHA256': record['command']['sha256'],
+              'ORACLE_TEST_EXECUTABLE': str(test.resolve(strict=True))}
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              for key, value in values.items():
+                  output.write(key + '=' + value + '\n')
+          PY
+      - name: Exercise the retained command through the precompiled archive tests
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          subprocess.run([os.environ['ORACLE_TEST_EXECUTABLE'], '--nocapture'], check=True, timeout=900)
+          PY
+      - name: Verify native Windows resource locking with the retained command
+        if: runner.os == 'Windows'
+        run: node --test --test-name-pattern '^native Windows' tests/isolated-backup-verifier.test.mjs
+      - name: Verify actual producer packages through the retained Manager oracle
+        env:
+          MANAGER_REQUIRE_RETAINED_ORACLE: "1"
+        run: node --test --test-name-pattern '^retained host oracle' tests/isolated-backup-retained.test.mjs
+      - name: Confirm native tests preserved command, harness and original provenance bytes
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['ORACLE_ROOT'])
+          receipt = json.loads((root / 'receipt.json').read_text())
+          target = 'x86_64-pc-windows-msvc' if os.name == 'nt' else 'x86_64-unknown-linux-gnu'
+          record = receipt['platforms'][target]
+          binary = Path(os.environ['READER_BUDDY_ARCHIVE_TEST_COMMAND'])
+          test = Path(os.environ['ORACLE_TEST_EXECUTABLE'])
+          for path, reference in [(binary, record['command']), (test, record['test'])]:
+              assert path.stat().st_size == reference['bytes']
+              with path.open('rb') as stream:
+                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == reference['sha256']
+          original = (root / target / 'buddy-oracle/provenance.json').read_bytes()
+          assert hashlib.sha256(original).hexdigest() == record['provenance_sha256']
+          assert (binary.parent / 'provenance.json').read_bytes() == original
+          PY
+      - name: Confirm native qualification preserved every original ZIP
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages" --oracle-root "$ORACLE_ROOT"
     defaults:
       run:
         shell: bash
@@ -352,8 +972,109 @@ jobs:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: ${{ runner.temp }}/packages
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.development_artifact_id }}
+          path: test-results/development
+          merge-multiple: true
+      - name: Validate and extract the original Build host test receipt
+        env:
+          HOST_ORACLE_TAR: ${{ github.workspace }}/test-results/development/host-oracle/buddy-host-tests.tar
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, re, tarfile
+          from pathlib import Path, PurePosixPath
+
+          manager = Path.cwd().resolve()
+          scratch = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+          archive_path = Path(os.environ['HOST_ORACLE_TAR']).resolve(strict=True)
+          root = scratch / 'buddy-host-tests'
+          pin = json.loads((manager / 'host/buddy-oracle-source.json').read_text())
+          targets = {'x86_64-unknown-linux-gnu': 'archive_cli', 'x86_64-pc-windows-msvc': 'archive_cli.exe'}
+
+          def digest(path):
+              with path.open('rb') as source:
+                  return hashlib.file_digest(source, 'sha256').hexdigest()
+
+          with tarfile.open(archive_path, 'r:') as archive:
+              members = archive.getmembers()
+              assert 0 < len(members) <= 128 and sum(m.size for m in members) <= 1024**3
+              names = set()
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  assert member.isfile() and not path.is_absolute() and '..' not in path.parts
+                  assert '\\' not in member.name and ':' not in member.name
+                  assert member.name == str(path) and member.name not in names
+                  names.add(member.name)
+              assert 'receipt.json' in names
+              member = archive.getmember('receipt.json')
+              assert member.size <= 64 * 1024
+              receipt = json.load(archive.extractfile(member))
+              assert set(receipt) == {'schema', 'source', 'manifest_directory', 'platforms', 'fixtures'}
+              assert receipt['schema'] == 1 and receipt['source'] == pin
+              assert set(receipt['platforms']) == set(targets)
+              expected = {'receipt.json'}
+              for target, record in receipt['platforms'].items():
+                  assert record['target'] == target and record['test']['name'] == targets[target]
+                  assert re.fullmatch('[0-9a-f]{64}', record['test']['sha256'])
+                  assert 0 < record['test']['bytes'] <= 512 * 1024**2
+                  assert re.fullmatch('[0-9a-f]{64}', record['provenance_sha256'])
+                  expected.update(target + '/' + name for name in (targets[target], 'qualification.json', 'buddy-oracle/provenance.json'))
+                  log_names = {'ordinary-build.jsonl', 'ordinary-build.stderr', 'test-build.jsonl', 'test-build.stderr'}
+                  if target.endswith('windows-msvc'):
+                      log_names.update(('pe-imports.txt', 'xwin-list.txt', 'xwin-download.txt',
+                          'xwin-channel.json', 'xwin-packages.vsman', 'xwin-inputs.json'))
+                  else:
+                      log_names.add('elf-dependencies.txt')
+                  assert set(record['logs']) == log_names
+                  expected.update(target + '/' + name for name in log_names)
+                  expected.update(target + '/notices/' + name for name in record['notices'])
+                  assert all('/' not in name and '\\' not in name and name not in ('', '.', '..') for name in record['notices'])
+              assert set(receipt['fixtures']) == {'docs/simulator/scenarios/writer-notebook-create-replay.json',
+                  'docs/simulator/scenarios/writer-notebook-source.json'}
+              expected.update('source-fixtures/' + name for name in receipt['fixtures'])
+              assert names == expected, 'Unexpected CI tar membership'
+              root.mkdir(exist_ok=False)
+              for member in members:
+                  destination = root / member.name
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  with destination.open('xb') as output:
+                      stream = archive.extractfile(member)
+                      remaining = member.size
+                      while remaining:
+                          chunk = stream.read(min(64 * 1024, remaining))
+                          assert chunk, 'Short CI member'
+                          output.write(chunk)
+                          remaining -= len(chunk)
+                      assert not stream.read(1)
+                  # Executable mode is retained inside tar, not by the artifact service.
+                  expected_mode = 0o755 if member.name == 'x86_64-unknown-linux-gnu/archive_cli' else 0o644
+                  assert member.mode == expected_mode
+                  if os.name != 'nt':
+                      destination.chmod(expected_mode)
+
+          for target, record in receipt['platforms'].items():
+              assert json.loads((root / target / 'qualification.json').read_text()) == record
+              assert digest(root / target / 'buddy-oracle/provenance.json') == record['provenance_sha256']
+              provenance = json.loads((root / target / 'buddy-oracle/provenance.json').read_text())
+              assert provenance['source'] == pin and provenance['target'] == target
+              assert provenance['executable'] == record['command'] and provenance['version'] == record['version']
+              test = root / target / record['test']['name']
+              assert test.stat().st_size == record['test']['bytes'] and digest(test) == record['test']['sha256']
+              for name, entry in record['logs'].items():
+                  file = root / target / name
+                  assert file.stat().st_size == entry['bytes'] and digest(file) == entry['sha256']
+              for name, entry in record['notices'].items():
+                  file = root / target / 'notices' / name
+                  assert file.stat().st_size == entry['bytes'] and digest(file) == entry['sha256']
+          for name, entry in receipt['fixtures'].items():
+              file = root / 'source-fixtures' / name
+              assert file.stat().st_size == entry['bytes'] and digest(file) == entry['sha256']
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('ORACLE_ROOT=' + str(root) + '\n')
+          PY
       - name: Verify the exact integration-tested upload inventory
-        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
+        run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages" --oracle-root "$ORACLE_ROOT"
       - name: Official tag only after every preceding job passed
         run: |
           set -euo pipefail
@@ -415,7 +1136,7 @@ jobs:
           RELEASE_OBSERVATION: ${{ steps.before_upload.outputs.data }}
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_ID: ${{ steps.create.outputs.data && fromJSON(steps.create.outputs.data).id || steps.lookup_proof.outputs.release_id }}
-        run: python cicd/release/verify_release.py retained --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages"
+        run: python cicd/release/verify_release.py retained --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages" --oracle-root "$ORACLE_ROOT"
       - uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de
         if: steps.retained.outputs.draft == 'true' && steps.retained.outputs.files != ''
         with:
@@ -446,7 +1167,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           EXPECTED_ID: ${{ steps.retained.outputs.release_id }}
         run: |
-          python cicd/release/verify_release.py retained --complete --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages"
+          python cicd/release/verify_release.py retained --complete --tag "$TAG" --sha "$SHA" --release-id "$EXPECTED_ID" --packages "$RUNNER_TEMP/packages" --missing "$RUNNER_TEMP/missing-packages" --oracle-root "$ORACLE_ROOT"
           python cicd/release/freeze.py remote --tag "$TAG" --sha "$SHA"
       - uses: octokit/request-action@b91aabaa861c777dcdb14e2387e30eddf04619ae
         if: steps.complete.outputs.draft == 'true'

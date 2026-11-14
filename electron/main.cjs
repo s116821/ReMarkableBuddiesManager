@@ -1,12 +1,70 @@
 const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
+const { stat } = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const GUIDE = 'https://github.com/s116821/RemarkableBuddiesDocs';
+const browserHelperMode = app.isPackaged && process.argv.slice(1).includes('--browser-helper');
+
+async function runBrowserHelper(hostRoot, backupComposition) {
+  let helper, quitting = false, stopped = false, stopping;
+  const stop = (code = 0) => stopping ??= Promise.resolve().then(async () => {
+    let cleanupPending;
+    try {
+      const result = await (helper ? helper.close() : backupComposition.dispose());
+      cleanupPending = result?.cleanupPending;
+    } catch (error) {
+      cleanupPending = error?.cleanupPending;
+      code = 1;
+    }
+    finally {
+      if (cleanupPending) console.error('Manager could not confirm backup staging cleanup');
+      if (code) console.error('Manager browser helper unavailable');
+      stopped = true;
+      if (code) app.exit(code);
+      else app.quit();
+    }
+  });
+  // Wait for startup to settle before allowing quit to complete.
+  const startup = (async () => {
+    const { startHelper } = await import(pathToFileURL(path.join(hostRoot, 'browser-helper.mjs')).href);
+    const root = path.join(app.getAppPath(), 'dist', 'manager', 'browser');
+    if (!(await stat(path.join(root, 'index.html'))).isFile()) throw Error('Missing browser UI');
+    helper = await startHelper({ root, backupComposition });
+  })();
+  const quit = () => { void startup.then(() => stop(), () => stop(1)); };
+  app.on('before-quit', event => {
+    if (stopped) return;
+    event.preventDefault();
+    quitting = true;
+    quit();
+  });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+    quitting = true;
+    quit();
+  });
+  try {
+    await startup;
+    if (quitting) return;
+    const origin = new URL(helper.origin);
+    if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1' || !origin.port || origin.origin !== helper.origin) {
+      throw Error('Invalid helper origin');
+    }
+    const url = new URL('/preview/', origin).href;
+    if (process.env.MANAGER_TEST !== '1') await shell.openExternal(url);
+    if (quitting) return;
+    if (process.env.MANAGER_TEST === '1') globalThis.managerBrowserHelperOrigin = origin.origin;
+    console.log('Open the local Manager: ' + url);
+  } catch { await stop(1); }
+}
 
 app.setName('ReMarkableBuddies Manager');
 if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_PROFILE) app.setPath('userData', process.env.MANAGER_TEST_PROFILE);
 app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
+  const {createIsolatedBackupComposition} =
+    await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-composition.mjs')).href);
+  const backupComposition = createIsolatedBackupComposition({hostRoot});
+  if (browserHelperMode) return runBrowserHelper(hostRoot, backupComposition);
   const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
   const { parseMemoryInspectionRequest, parseMemoryInspectionResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-inspection.mjs')).href);
   const { parseSavedConfigurationRequest, parseSavedConfigurationResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-configuration.mjs')).href);
@@ -26,6 +84,8 @@ app.whenReady().then(async () => {
   const { ProductSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'product-settings.mjs')).href);
   const { BasicSettingsHost }=await import(pathToFileURL(path.join(hostRoot,'basic-settings.mjs')).href);
   const {LocalModeChoiceHost}=await import(pathToFileURL(path.join(hostRoot,'local-mode-choice.mjs')).href);
+  const {IsolatedRootHost}=await import(pathToFileURL(path.join(hostRoot,'isolated-root.mjs')).href);
+  const {parseIsolatedRootRequest,parseIsolatedRootResult}=await import(pathToFileURL(path.join(hostRoot,'isolated-root-protocol.mjs')).href);
   const {parseLocalModeRequest,parseLocalModeResult}=await import(pathToFileURL(path.join(hostRoot,'local-mode-choice-protocol.mjs')).href);
   const { MaintenanceIO }=await import(pathToFileURL(path.join(hostRoot,'maintenance-io.mjs')).href);
   const { parseProductSettingsRequest,parseProductSettingsResult }=await import(pathToFileURL(path.join(hostRoot,'product-settings-protocol.mjs')).href);
@@ -55,8 +115,9 @@ app.whenReady().then(async () => {
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
-  const io=new MaintenanceIO();let portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const {SharedPreferencesHost, registerSharedPreferenceHandler} = await import(pathToFileURL(path.join(hostRoot, 'shared-preferences.mjs')).href);
+  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -75,13 +136,16 @@ app.whenReady().then(async () => {
   management=new ConversationManagementHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(management)});
   restore=new OrdinaryRestoreHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(restore)});
   notebookRestore=new OrdinaryRestoreHost({family:'notebook',observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebookRestore)});
+  sharedPreferences = new SharedPreferencesHost({observer: rawObserver, io, beforeIO: () => invalidatePeers(sharedPreferences)});
   const observer = forget.wrap();
   selected=new SelectedArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(selected)});
   notebook=new NotebookArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebook)});
   handwriting=new HandwritingRecordsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(handwriting)});
   localMode=new LocalModeChoiceHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(localMode)});
-  const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
-  const driveAuth = new DriveAuth();
+  isolatedRoot=new IsolatedRootHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
+  const {driveAuth, isolatedBackup} = backupComposition;
+  const {ISOLATED_BACKUP_REQUEST_BYTES, parseIsolatedBackupRequest, parseIsolatedBackupResult} =
+    await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-protocol.mjs')).href);
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
   const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -92,7 +156,9 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true },
   });
   const ui = path.join(__dirname, '../dist/manager/browser/index.html');
-  const authorized = (event, args) => args.length === 0 && event.sender === window.webContents &&
+  let quitting = false, drained = false, closing;
+  let backupDocument = Symbol();
+  const authorized = (event, args) => !closing && args.length === 0 && event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(ui).href;
   for (const action of ['observe', 'cancel', 'inspectOwned', 'inspectRuntime']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
@@ -106,7 +172,14 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
   });
-  window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  window.webContents.on('did-start-navigation', event => {
+    if (event.isMainFrame && !event.isSameDocument) {
+      backupDocument = Symbol();
+      observer.cancel();
+      isolatedBackup.invalidate();
+    }
+  });
+  registerSharedPreferenceHandler(ipcMain, authorized, sharedPreferences);
   ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Portable preferences caller refused');
     let q=parsePortableRequest(args[0]);const context=portableContext(q),pending=portable.request(q);q=null;const value=parsePortableResult(await pending,context,validateResult);return portable.assertCurrent(value);
@@ -191,6 +264,19 @@ app.whenReady().then(async () => {
     let request=parseModelSettingsRequest(args[0]);args.length=0;
     try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
   });
+  ipcMain.handle('manager:isolated-backup', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw Error('Backup inspection caller refused');
+    const request = parseIsolatedBackupRequest(args[0]);
+    if (Buffer.byteLength(JSON.stringify(request)) > ISOLATED_BACKUP_REQUEST_BYTES) throw Error('Backup inspection input refused');
+    const admittedDocument = backupDocument;
+    const result = await isolatedBackup.request(request);
+    if (admittedDocument !== backupDocument || !authorized(event, [])) throw Error('Backup inspection caller refused');
+    return parseIsolatedBackupResult(result, request);
+  });
+  ipcMain.handle('manager:isolatedRoot',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Isolated backup caller refused');
+    const request=parseIsolatedRootRequest(args[0]);const value=parseIsolatedRootResult(await isolatedRoot.request(request),request,validateResult);return isolatedRoot.assertCurrent(value);
+  });
   ipcMain.handle('manager:localModeChoice',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Local-only choice caller refused');
     const request=parseLocalModeRequest(args[0]);const value=parseLocalModeResult(await localMode.request(request),request,validateResult);return localMode.assertCurrent(value);
@@ -244,7 +330,43 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  const close = () => closing ??= Promise.resolve().then(async () => {
+    const download = downloads.active?.promise;
+    const results = await Promise.allSettled([
+      () => restore.dispose(),
+      () => notebookRestore.dispose(),
+      () => backupComposition.dispose(),
+      () => downloads.dispose(),
+      () => sharedPreferences.dispose(),
+      () => portable.dispose(),
+      () => observer.cancel(),
+      () => localMode.dispose(),
+      () => isolatedRoot.dispose(),
+      () => download,
+    ].map(stop => Promise.resolve().then(stop)));
+    const [ordinary, notebook, backup] = results;
+    if (ordinary.value === true || notebook.value === true || backup.value?.cleanupPending === true ||
+        [ordinary, notebook, backup].some(result => result.reason?.cleanupPending === true)) {
+      console.error('Manager could not confirm backup staging cleanup');
+    }
+    if (results.some(result => result.status === 'rejected')) {
+      throw Error('Manager shutdown failed');
+    }
+  });
+  app.on('before-quit', event => {
+    if (drained) return;
+    event.preventDefault();
+    if (quitting) return;
+    quitting = true;
+    void close().then(() => {
+      drained = true;
+      app.quit();
+    }, () => {
+      console.error('Manager shutdown failed');
+      app.exit(1);
+    });
+  });
+  window.on('closed', () => { void close().catch(() => {}); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);
@@ -257,4 +379,4 @@ app.whenReady().then(async () => {
     void window.loadFile(ui);
   }
 });
-app.on('window-all-closed', () => app.quit());
+if (!browserHelperMode) app.on('window-all-closed', () => app.quit());
