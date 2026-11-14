@@ -1,0 +1,253 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import test from 'node:test';
+import {DriveAuth, DRIVE_SCOPE} from '../host/drive-auth.mjs';
+import {IsolatedBackupHost} from '../host/isolated-backup-host.mjs';
+import {
+  ISOLATED_BACKUP_REQUEST_BYTES, ISOLATED_BACKUP_RESPONSE_BYTES,
+  parseIsolatedBackupJson, parseIsolatedBackupRequest, parseIsolatedBackupResult,
+} from '../host/isolated-backup-protocol.mjs';
+
+const sha = raw => createHash('sha256').update(raw).digest('hex');
+const json = value => Buffer.from(JSON.stringify(value));
+const backup = 'db766c9e-d346-41fd-aad4-17d754fd50c7';
+const device = '3696d8c3-8889-4b67-917d-ea52b54cefe1';
+const markerBytes = json({isolated_backup_version: 1, data_backup: {bytes: 20, sha256: 'a'.repeat(64)},
+  portable_configuration: {bytes: 10, sha256: 'b'.repeat(64)}});
+function file(id, size, properties) {
+  return {id, size: String(size), spaces: ['appDataFolder'], mimeType: 'application/octet-stream', trashed: false,
+    appProperties: {buddy_isolated: '1', root: 'PrivateRoot', backup, ...properties}};
+}
+const root = file('PrivateRoot', 0, {kind: 'root', device, grant: 'c'.repeat(64)});
+const marker = file('PrivateMarker', markerBytes.length,
+  {kind: 'marker', predecessor: root.id, sha256: sha(markerBytes)});
+const scan = {version: 1, action: 'scan'};
+const status = operation => ({version: 1, action: 'status', operation});
+const cancel = operation => ({version: 1, action: 'cancel', operation});
+const select = (inspection, choice) => ({version: 1, action: 'select', inspection, choice});
+const deferred = () => Promise.withResolvers();
+
+function fixture(t, {qualified = true, bindingPresent = true, tokenLifetime = 900000} = {}) {
+  let config = {schema: 1, type: 'google-desktop', clientId: '123456789012-fixture.apps.googleusercontent.com', clientSecret: 'private-client'};
+  let grant = {schema: 1, clientId: config.clientId, account: {permissionId: 'private-account', label: 'fixture@example.invalid'},
+    checkedAt: Date.now(), tokens: {access_token: 'private-access', refresh_token: 'private-refresh', expiry_date: Date.now() + 900000,
+      scope: DRIVE_SCOPE, token_type: 'Bearer'}};
+  const record = value => ({value: structuredClone(value), digest: value ? sha(json(value)) : null});
+  const writes = [], provider = [], factories = [];
+  const reads = {
+    list: q => json({files: [q.kind === 'root' ? root : marker], incompleteSearch: false}),
+    readMetadata: q => json(q.kind === 'root' ? root : marker),
+    readMarker: () => markerBytes,
+  };
+  const store = {
+    client: () => record(config),
+    grant: () => record(grant),
+    save(value, clientDigest, grantDigest) {
+      assert.equal(clientDigest, record(config).digest);
+      assert.equal(grantDigest, record(grant).digest);
+      writes.push('save');
+      grant = structuredClone(value);
+      return {committed: true, digest: record(grant).digest};
+    },
+    disconnect(clientDigest, grantDigest) {
+      assert.equal(clientDigest, record(config).digest);
+      assert.equal(grantDigest, record(grant).digest);
+      writes.push('disconnect');
+      grant = null;
+    },
+  };
+  const auth = new DriveAuth({store, backupReadFactory: bindingPresent ? capture => {
+    factories.push(capture);
+    if (!qualified) return null;
+    return reads;
+  } : null});
+  auth.oauth = () => ({
+    setCredentials() {},
+    refreshAccessToken() { throw Error('Unexpected refresh'); },
+    async revokeToken() { provider.push('revoke'); },
+    async generateCodeVerifierAsync() { throw Error('Synthetic login disallowed'); },
+  });
+  auth.account = async () => {
+    provider.push('account');
+    return {account: structuredClone(grant.account),
+      tokens: {...grant.tokens, expiry_date: Date.now() + tokenLifetime}};
+  };
+  const host = new IsolatedBackupHost({driveAuth: auth});
+  t.after(() => { host.dispose(); auth.dispose(); });
+  return {
+    auth, host, writes, provider, factories, reads,
+    replaceClient() { config = {...config, clientSecret: 'replacement'}; },
+    replaceGrant() { grant = {...grant, account: {...grant.account, permissionId: 'replacement'}}; },
+  };
+}
+
+async function settle(host, operation) {
+  for (let i = 0; i < 200; i++) {
+    const state = host.request(status(operation));
+    if (!['scanning', 'selecting'].includes(state.status)) return state;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail('Operation did not settle');
+}
+
+test('versioned protocol refuses private inputs and malformed reduced frames', () => {
+  assert.equal(parseIsolatedBackupRequest(scan), scan);
+  for (const input of [{action: 'scan'}, {...scan, authorizationId: 'a'.repeat(64)}, {'action,version': 1},
+    {...scan, path: 'private'}, {version: 1, action: 'select', inspection: 'a'.repeat(64)}, status('PrivateMarker')]) {
+    assert.throws(() => parseIsolatedBackupRequest(input), /frame refused/);
+  }
+  for (const bytes of [Buffer.alloc(513), Buffer.from('{"action":"scan","action":"scan","version":1}'), Buffer.from([255])]) {
+    assert.throws(() => parseIsolatedBackupJson(bytes, ISOLATED_BACKUP_REQUEST_BYTES), /frame refused/);
+  }
+  assert.throws(() => parseIsolatedBackupJson(Buffer.alloc(ISOLATED_BACKUP_RESPONSE_BYTES + 1),
+    ISOLATED_BACKUP_RESPONSE_BYTES), /frame refused/);
+  const frame = {version: 1, status: 'selected', operation: 'a'.repeat(64), backups: [],
+    selection: {backup, device, reference: 'b'.repeat(64), sha256: 'c'.repeat(64)}};
+  assert.equal(parseIsolatedBackupResult(frame, status(frame.operation)), frame);
+  assert.throws(() => parseIsolatedBackupResult(frame, status('f'.repeat(64))), /frame refused/);
+  assert.throws(() => parseIsolatedBackupResult({...frame, selection: {...frame.selection, root: 'private'}}, scan), /frame refused/);
+});
+
+test('reserves asynchronous scan before I/O; selects only original inspection and hides protected custody', async t => {
+  const f = fixture(t);
+  assert.equal(f.auth.status().status, 'cached');
+  assert.equal((await settle(f.host, f.host.request(scan).operation)).status, 'unavailable');
+  assert.equal(f.factories.length, 0);
+  await f.auth.check();
+  const initial = f.host.request(scan);
+  assert.equal(initial.status, 'scanning');
+  assert.equal(f.factories.length, 0);
+  assert.equal(f.host.request(scan).status, 'busy');
+  const inspected = await settle(f.host, initial.operation);
+  assert.equal(inspected.status, 'observed');
+  const [choice] = inspected.backups[0].revisions;
+  assert.equal(f.host.request(select('f'.repeat(64), choice.reference)).status, 'invalidated');
+  assert.equal(f.host.request(select(initial.operation, 'f'.repeat(64))).status, 'invalidated');
+  inspected.backups[0].revisions.length = 0;
+  const selected = await settle(f.host, f.host.request(select(initial.operation, choice.reference)).operation);
+  assert.equal(selected.status, 'selected');
+  assert.equal(selected.selection.sha256, sha(markerBytes));
+  assert.equal(f.factories[0].grant.tokens.access_token, 'private-access');
+  assert.deepEqual(f.host.readSelection(selected.operation, selected.selection.reference).markerBytes, markerBytes);
+  assert.match(f.factories[0].clientDigest, /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(JSON.stringify([initial, inspected, selected]), /PrivateRoot|PrivateMarker|private-|appProperties|markerBytes|grantDigest/);
+  assert.equal(f.auth.status().backupReady, false);
+  assert.deepEqual(f.provider, ['account']);
+  assert.deepEqual(f.writes, ['save']);
+});
+
+test('absent and declining read factories leave even freshly connected accounts unqualified', async t => {
+  for (const options of [{bindingPresent: false}, {qualified: false}]) {
+    const f = fixture(t, options);
+    await f.auth.check();
+    assert.equal(f.auth.status().status, 'connected');
+    const result = await settle(f.host, f.host.request(scan).operation);
+    assert.equal(result.status, 'unqualified');
+    assert.deepEqual(result.backups, []);
+    assert.deepEqual(f.provider, ['account']);
+  }
+});
+
+test('stale cancellation cannot touch a newer scan or selection; exact cancel drops custody', async t => {
+  const f = fixture(t);
+  await f.auth.check();
+  const first = await settle(f.host, f.host.request(scan).operation);
+  const again = f.host.request(scan);
+  f.host.request(cancel(first.operation));
+  assert.equal(f.host.request(status(again.operation)).status, 'scanning');
+  const inspection = await settle(f.host, again.operation);
+  const [choice] = inspection.backups[0].revisions;
+  const gate = deferred(), started = deferred();
+  f.reads.readMarker = q => { started.resolve(q.signal); return gate.promise; };
+  const selection = f.host.request(select(inspection.operation, choice.reference));
+  const pendingSignal = await started.promise;
+  f.host.request(cancel(inspection.operation));
+  assert.equal(pendingSignal.aborted, false);
+  assert.equal(f.host.request(status(selection.operation)).status, 'selecting');
+  f.host.request(cancel(selection.operation));
+  assert.ok(pendingSignal.aborted);
+  gate.resolve(markerBytes);
+  assert.equal((await settle(f.host, selection.operation)).status, 'invalidated');
+  assert.equal(f.host.request(status(inspection.operation)).status, 'invalidated');
+});
+
+test('auth transitions revoke pending and retained operations without another provider read', async t => {
+  for (const action of ['begin', 'check', 'cancel', 'disconnect', 'revoke', 'dispose']) {
+    const f = fixture(t);
+    await f.auth.check();
+    const entering = deferred(), gate = deferred();
+    f.reads.list = q => { entering.resolve(q.signal); return gate.promise; };
+    const operation = f.host.request(scan).operation;
+    const signal = await entering.promise;
+    const authorizationId = f.auth.status().authorizationId;
+    await f.auth[action](authorizationId);
+    assert.ok(signal.aborted, action);
+    assert.ok(f.factories[0].signal.aborted, action);
+    gate.resolve(json({files: [root], incompleteSearch: false}));
+    assert.equal(f.host.request(status(operation)).status, 'invalidated', action);
+  }
+});
+
+test('external registration and grant changes refuse before capture or completion and never resume that generation', async t => {
+  const unissued = fixture(t);
+  await unissued.auth.check();
+  unissued.replaceClient();
+  const refused = await settle(unissued.host, unissued.host.request(scan).operation);
+  assert.equal(refused.status, 'unavailable');
+  assert.equal(unissued.factories.length, 0);
+  for (const mutate of ['replaceClient', 'replaceGrant']) {
+    const f = fixture(t);
+    await f.auth.check();
+    const entering = deferred(), gate = deferred();
+    f.reads.list = q => { entering.resolve(q.signal); return gate.promise; };
+    const operation = f.host.request(scan).operation;
+    const signal = await entering.promise;
+    f[mutate]();
+    gate.resolve(json({files: [root], incompleteSearch: false}));
+    // Let the pending read's completion see the replacement before polling.
+    await new Promise(resolve => setImmediate(resolve));
+    assert.ok(signal.aborted, mutate);
+    assert.equal(f.host.request(status(operation)).status, 'invalidated');
+    assert.deepEqual(f.writes, ['save']);
+    assert.deepEqual(f.provider, ['account']);
+  }
+});
+
+test('host disposal revokes a retained marker and process restarts cannot recover it', async t => {
+  const f = fixture(t);
+  await f.auth.check();
+  const inspected = await settle(f.host, f.host.request(scan).operation);
+  const selected = await settle(f.host, f.host.request(select(inspected.operation, inspected.backups[0].revisions[0].reference)).operation);
+  const privateValue = f.host.readSelection(selected.operation, selected.selection.reference);
+  const restarted = new IsolatedBackupHost({driveAuth: f.auth});
+  assert.equal(restarted.request(status(selected.operation)).status, 'invalidated');
+  restarted.dispose();
+  f.host.dispose();
+  assert.ok(privateValue.signal.aborted);
+  assert.equal(f.host.readSelection(selected.operation, selected.selection.reference), null);
+  assert.equal(f.host.request(scan).status, 'invalidated');
+});
+
+test('authorization expiry aborts an outstanding read without polling or refreshing', async t => {
+  const f = fixture(t, {tokenLifetime: 250});
+  await f.auth.check();
+  const entering = deferred(), aborted = deferred();
+  f.reads.list = query => {
+    query.signal.addEventListener('abort', aborted.resolve, {once: true});
+    entering.resolve();
+    return new Promise(() => {});
+  };
+  const operation = f.host.request(scan).operation;
+  await entering.promise;
+  let watchdog;
+  try {
+    await Promise.race([aborted.promise, new Promise((_, reject) => {
+      watchdog = setTimeout(() => reject(Error('Authorization expiry did not abort the read')), 2000);
+    })]);
+  } finally {
+    clearTimeout(watchdog);
+  }
+  assert.equal(f.host.request(status(operation)).status, 'invalidated');
+  assert.deepEqual(f.provider, ['account']);
+  assert.deepEqual(f.writes, ['save']);
+});
