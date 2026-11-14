@@ -66,8 +66,10 @@ import {parseRestoreRequest,parseRestoreResult,parseNotebookRestoreResult,restor
 import {ConversationManagementHost} from './conversation-management.mjs';
 import {parseManagementRequest,parseManagementResult} from './conversation-management-protocol.mjs';
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
-export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads(), isolatedRootStore }) {
-  const isolatedBackup = new IsolatedBackupHost({driveAuth});
+export async function startHelper({ root, observer = new WiredObserver(), driveAuth, downloads = new ManagerDownloads(),
+  isolatedRootStore, backupComposition }) {
+  driveAuth = backupComposition?.driveAuth ?? driveAuth ?? new DriveAuth();
+  const isolatedBackup = backupComposition?.isolatedBackup ?? new IsolatedBackupHost({driveAuth});
   let backupDocument = Symbol();
   const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
   const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
@@ -317,7 +319,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
         }
         request = parseIsolatedBackupRequest(parseIsolatedBackupJson(Buffer.concat(chunks), ISOLATED_BACKUP_REQUEST_BYTES));
       } catch { return refuse(400); }
-      if (admittedDocument !== backupDocument) return refuse(409);
+      if (closing || admittedDocument !== backupDocument) return refuse(409);
       try {
         const result = parseIsolatedBackupResult(isolatedBackup.request(request), request);
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result));
@@ -379,6 +381,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       let value; try { value = JSON.parse(body); } catch { return refuse(400); }
       if (!value || body !== JSON.stringify(value) || !DRIVE_ACTIONS.includes(value.action) || Object.keys(value).sort().join() !== (value.action === 'revoke' ? 'action,authorizationId' : 'action') ||
           (value.action === 'revoke' && (typeof value.authorizationId !== 'string' || !/^[a-f0-9]{64}$/.test(value.authorizationId)))) return refuse(400);
+      if (closing) return refuse(503);
       try {
         const output = value.action === 'revoke' ? await driveAuth.revoke(value.authorizationId) : await driveAuth[value.action]();
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(output));
@@ -427,11 +430,13 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       notebookRestore.dispose();
       localMode.dispose();
       isolatedRoot.dispose();
-      isolatedBackup.dispose();
-      driveAuth.dispose();
+      const backup = backupComposition ? backupComposition.dispose() :
+        Promise.all([isolatedBackup.dispose(), driveAuth.dispose()]);
       const download = downloads.active?.promise;
       downloads.dispose();
-      await download;
+      const results = await Promise.allSettled([backup, download]);
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
     } finally { await stopped; }
   });
   try {

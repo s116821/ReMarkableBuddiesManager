@@ -114,6 +114,7 @@ export class IsolatedBackupReader {
   #inspection = null;
   #selected = null;
   #disposed = false;
+  #pending = new Set();
 
   constructor({binding = null, now = () => performance.now(), timeoutMs = TIMEOUT_MS} = {}) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > TIMEOUT_MS) throw new Error('Invalid backup reader timeout');
@@ -133,6 +134,7 @@ export class IsolatedBackupReader {
   dispose() {
     this.#disposed = true;
     this.cancel();
+    return Promise.allSettled(this.#pending).then(() => {});
   }
 
   #clearSelection() {
@@ -170,7 +172,12 @@ export class IsolatedBackupReader {
     const timer = setTimeout(() => controller.abort(new ReaderFailure('incomplete')), this.#timeoutMs);
     try {
       this.#check(work);
-      const value = await Promise.race([handler(work), stopped]);
+      // The public race settles on abort. Shutdown still joins the transport.
+      const pending = handler(work);
+      this.#pending.add(pending);
+      const settled = () => this.#pending.delete(pending);
+      void pending.then(settled, settled);
+      const value = await Promise.race([pending, stopped]);
       this.#check(work);
       return publish(value);
     } catch (error) {

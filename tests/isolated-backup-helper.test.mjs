@@ -6,6 +6,7 @@ import {mkdtemp, realpath, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {startHelper} from '../host/browser-helper.mjs';
+import {IsolatedBackupHost} from '../host/isolated-backup-host.mjs';
 import {parseIsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
 
 // Source-derived synthetic frames. This exercises the actual loopback bridge;
@@ -25,7 +26,7 @@ const scan = {version: 1, action: 'scan'};
 const status = operation => ({version: 1, action: 'status', operation});
 const cancel = operation => ({version: 1, action: 'cancel', operation});
 
-async function open(t, {qualified = false, delayed = false, downloads} = {}) {
+async function open(t, {qualified = false, delayed = false, downloads, backupDrain} = {}) {
   const parent = await realpath(os.tmpdir());
   const directory = await mkdtemp(path.join(parent, 'manager-backup-helper-'));
   await writeFile(path.join(directory, 'index.html'), '<main>fixture</main>');
@@ -40,7 +41,7 @@ async function open(t, {qualified = false, delayed = false, downloads} = {}) {
         isCurrent: () => !combined.aborted,
         list(query) {
           reads.push(query);
-          if (delayed) return new Promise(() => {});
+          if (delayed) return new Promise(resolve => query.signal.addEventListener('abort', resolve, {once: true}));
           return json({files: [query.kind === 'root' ? root : marker], incompleteSearch: false});
         },
         readMetadata: query => json(query.kind === 'root' ? root : marker),
@@ -51,7 +52,16 @@ async function open(t, {qualified = false, delayed = false, downloads} = {}) {
     dispose() { driveDisposals++; authority.abort(); },
   };
   const observer = {generation: 0, cancel() {}, observe() { tabletCalls++; throw Error('Unexpected tablet access'); }};
-  const helper = await startHelper({root: directory, observer, driveAuth, downloads});
+  const options = {root: directory, observer, downloads};
+  if (backupDrain) {
+    const isolatedBackup = new IsolatedBackupHost({driveAuth});
+    options.backupComposition = {driveAuth, isolatedBackup, async dispose() {
+      const joined = isolatedBackup.dispose();
+      driveAuth.dispose();
+      await Promise.all([joined, backupDrain]);
+    }};
+  } else options.driveAuth = driveAuth;
+  const helper = await startHelper(options);
   const {close} = helper;
   t.after(async () => {
     await close();
@@ -148,10 +158,10 @@ test('actual browser navigation and helper disposal abort original reads without
   assert.equal(h.reads[1].signal.aborted, true);
 });
 
-test('concurrent helper closes stop admission and join an active release download once', async t => {
-  const download = Promise.withResolvers();
+test('concurrent helper closes stop admission and await both backup and release disposal once', async t => {
+  const download = Promise.withResolvers(), backupDrain = Promise.withResolvers();
   let disposed = 0, settled = false;
-  const h = await open(t, {qualified: true, delayed: true, downloads: {
+  const h = await open(t, {qualified: true, delayed: true, backupDrain: backupDrain.promise, downloads: {
     active: {promise: download.promise},
     dispose() { disposed++; },
   }});
@@ -169,6 +179,9 @@ test('concurrent helper closes stop admission and join an active release downloa
     assert.equal(disposed, 1);
     assert.equal(settled, false);
     download.resolve();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false);
+    backupDrain.resolve();
     await completion;
     assert.equal(settled, true);
     assert.equal(h.close(), first);
@@ -176,6 +189,7 @@ test('concurrent helper closes stop admission and join an active release downloa
     assert.equal(disposed, 1);
   } finally {
     download.resolve();
+    backupDrain.resolve();
   }
 });
 

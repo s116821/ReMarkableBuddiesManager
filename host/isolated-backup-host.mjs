@@ -13,9 +13,17 @@ export class IsolatedBackupHost {
   #selection = null;
   #active = null;
   #disposed = false;
+  #pending = new Set();
+  #disposal;
 
   constructor({driveAuth}) {
     this.#driveAuth = driveAuth;
+  }
+
+  #join(pending) {
+    this.#pending.add(pending);
+    const settled = () => this.#pending.delete(pending);
+    void pending.then(settled, settled);
   }
 
   #discardSession() {
@@ -23,7 +31,7 @@ export class IsolatedBackupHost {
     this.#session = null;
     if (session) {
       session.authority?.removeEventListener('abort', session.invalidate);
-      session.reader?.dispose();
+      this.#join(session.reader.dispose());
       session.controller.abort();
     }
   }
@@ -80,7 +88,7 @@ export class IsolatedBackupHost {
       this.#selection = initial;
     }
     this.#active = attempt;
-    void this.#run(attempt);
+    this.#join(this.#run(attempt));
     return structuredClone(initial);
   }
 
@@ -160,7 +168,11 @@ export class IsolatedBackupHost {
   }
 
   dispose() {
-    this.#disposed = true;
-    this.#clear();
+    if (!this.#disposal) {
+      this.#disposal = Promise.resolve().then(async () => { await Promise.allSettled(this.#pending); });
+      this.#disposed = true;
+      this.#clear();
+    }
+    return this.#disposal;
   }
 }

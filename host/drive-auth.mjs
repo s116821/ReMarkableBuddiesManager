@@ -42,6 +42,8 @@ export class DriveAuth {
   #readFactory;
   #freshRead = null;
   #disposed = false;
+  #guardClosures = new Set();
+  #disposal;
   constructor({ store = new DriveStore(), endpoints = GOOGLE_ENDPOINTS, ttlMs = 300000, requestMs = 15000, backupReadFactory = null } = {}) {
     require(Object.keys(endpoints).sort().join() === endpointKeys, 'configuration-unavailable');
     // Constructor-only trusted test seam. Product callers never receive endpoints/client/path arguments.
@@ -122,7 +124,16 @@ export class DriveAuth {
     const memoryCurrent = () => !authority.aborted && this.#readCurrent(original);
     const current = () => memoryCurrent() && (persistent || !!this.#readSnapshot(original));
     const invalidate = () => { if (this.#freshRead === original) this.#invalidateRead(); };
-    const closeGuard = async () => { await (await guardPromise)?.close(); };
+    let closing;
+    const closeGuard = () => {
+      if (guardPromise && !closing) {
+        closing = guardPromise.then(guard => guard?.close());
+        this.#guardClosures.add(closing);
+        const settled = () => this.#guardClosures.delete(closing);
+        void closing.then(settled, settled);
+      }
+      return closing;
+    };
     const validate = async (query, active) => {
       require(!active.aborted && current());
       if (guardPromise) {
@@ -350,5 +361,12 @@ export class DriveAuth {
     finally { if (generation === this.generation) this.work = null; }
     return this.state;
   }
-  dispose() { this.#disposed = true; this.stop(); }
+  dispose() {
+    if (!this.#disposal) {
+      this.#disposal = Promise.resolve().then(async () => { await Promise.allSettled(this.#guardClosures); });
+      this.#disposed = true;
+      this.stop();
+    }
+    return this.#disposal;
+  }
 }

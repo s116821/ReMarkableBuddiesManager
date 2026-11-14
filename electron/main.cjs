@@ -5,10 +5,10 @@ const { pathToFileURL } = require('node:url');
 const GUIDE = 'https://github.com/s116821/RemarkableBuddiesDocs';
 const browserHelperMode = app.isPackaged && process.argv.slice(1).includes('--browser-helper');
 
-async function runBrowserHelper(hostRoot) {
+async function runBrowserHelper(hostRoot, backupComposition) {
   let helper, quitting = false, stopped = false, stopping;
   const stop = (code = 0) => stopping ??= Promise.resolve().then(async () => {
-    try { if (helper) await helper.close(); }
+    try { if (helper) await helper.close(); else await backupComposition.dispose(); }
     catch { code = 1; }
     finally {
       if (code) console.error('Manager browser helper unavailable');
@@ -22,7 +22,7 @@ async function runBrowserHelper(hostRoot) {
     const { startHelper } = await import(pathToFileURL(path.join(hostRoot, 'browser-helper.mjs')).href);
     const root = path.join(app.getAppPath(), 'dist', 'manager', 'browser');
     if (!(await stat(path.join(root, 'index.html'))).isFile()) throw Error('Missing browser UI');
-    helper = await startHelper({ root });
+    helper = await startHelper({ root, backupComposition });
   })();
   const quit = () => { void startup.then(() => stop(), () => stop(1)); };
   app.on('before-quit', event => {
@@ -54,7 +54,10 @@ app.setName('ReMarkableBuddies Manager');
 if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_PROFILE) app.setPath('userData', process.env.MANAGER_TEST_PROFILE);
 app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
-  if (browserHelperMode) return runBrowserHelper(hostRoot);
+  const {createIsolatedBackupComposition} =
+    await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-composition.mjs')).href);
+  const backupComposition = createIsolatedBackupComposition({hostRoot});
+  if (browserHelperMode) return runBrowserHelper(hostRoot, backupComposition);
   const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
   const { parseMemoryInspectionRequest, parseMemoryInspectionResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-inspection.mjs')).href);
   const { parseSavedConfigurationRequest, parseSavedConfigurationResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-configuration.mjs')).href);
@@ -133,12 +136,9 @@ app.whenReady().then(async () => {
   handwriting=new HandwritingRecordsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(handwriting)});
   localMode=new LocalModeChoiceHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(localMode)});
   isolatedRoot=new IsolatedRootHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
-  const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
-  const driveAuth = new DriveAuth();
-  const {IsolatedBackupHost} = await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-host.mjs')).href);
+  const {driveAuth, isolatedBackup} = backupComposition;
   const {ISOLATED_BACKUP_REQUEST_BYTES, parseIsolatedBackupRequest, parseIsolatedBackupResult} =
     await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-protocol.mjs')).href);
-  const isolatedBackup = new IsolatedBackupHost({driveAuth});
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
   const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -149,7 +149,8 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true },
   });
   const ui = path.join(__dirname, '../dist/manager/browser/index.html');
-  const authorized = (event, args) => args.length === 0 && event.sender === window.webContents &&
+  let quitting = false, drained = false;
+  const authorized = (event, args) => !quitting && args.length === 0 && event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(ui).href;
   for (const action of ['observe', 'cancel', 'inspectOwned', 'inspectRuntime']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
@@ -314,7 +315,17 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); isolatedBackup.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  app.on('before-quit', event => {
+    if (drained) return;
+    event.preventDefault();
+    if (quitting) return;
+    quitting = true;
+    void backupComposition.dispose().then(() => {
+      drained = true;
+      app.quit();
+    }, () => app.exit(1));
+  });
+  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); void backupComposition.dispose().catch(() => {}); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

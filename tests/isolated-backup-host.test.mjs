@@ -73,7 +73,7 @@ function fixture(t, {qualified = true, bindingPresent = true, tokenLifetime = 90
       tokens: {...grant.tokens, expiry_date: Date.now() + tokenLifetime}};
   };
   const host = new IsolatedBackupHost({driveAuth: auth});
-  t.after(() => { host.dispose(); auth.dispose(); });
+  t.after(() => Promise.all([host.dispose(), auth.dispose()]));
   return {
     auth, host, writes, provider, factories, reads, store,
     replaceClient() { config = {...config, clientSecret: 'replacement'}; },
@@ -146,6 +146,75 @@ test('absent and declining read factories leave even freshly connected accounts 
     assert.deepEqual(result.backups, []);
     assert.deepEqual(f.provider, ['account']);
   }
+});
+
+test('disposal joins both a cancelled inspection and its successor', async t => {
+  const f = fixture(t);
+  await f.auth.check();
+  const reads = [deferred(), deferred()], entered = [deferred(), deferred()];
+  t.after(() => reads.forEach(value => value.resolve()));
+  let index = 0;
+  f.reads.list = ({signal}) => {
+    const next = index++;
+    entered[next].resolve(signal);
+    return reads[next].promise;
+  };
+  const first = f.host.request(scan);
+  const original = await entered[0].promise;
+  f.host.request(cancel(first.operation));
+  const second = f.host.request(scan);
+  assert.notEqual(second.operation, first.operation);
+  const successor = await entered[1].promise;
+  assert.equal(original.aborted, true);
+  assert.equal(successor.aborted, false);
+
+  let disposed = false;
+  const closed = f.host.dispose();
+  assert.equal(f.host.dispose(), closed);
+  assert.equal(f.host.request(scan).status, 'invalidated');
+  assert.equal(successor.aborted, true);
+  void closed.then(() => { disposed = true; });
+  reads[1].resolve();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(disposed, false);
+  reads[0].resolve();
+  await closed;
+  assert.equal(disposed, true);
+});
+
+test('Drive disposal joins idle guard opens and closes across captures', async t => {
+  const f = fixture(t);
+  const opened = Promise.withResolvers(), firstClose = Promise.withResolvers(), lastClose = Promise.withResolvers();
+  const firstJoined = Promise.withResolvers(), lastJoined = Promise.withResolvers();
+  function guard(entered, closed) {
+    return {signal: new AbortController().signal, close() { entered.resolve(); return closed.promise; }};
+  }
+  const first = guard(firstJoined, firstClose);
+  const last = guard(lastJoined, lastClose);
+  t.after(() => { opened.resolve(last); firstClose.resolve(); lastClose.resolve(); });
+  let captures = 0;
+  f.store.openReadGuard = () => captures++ === 0 ? Promise.resolve(first) : opened.promise;
+  await f.auth.check();
+  const firstLifetime = new AbortController();
+  const old = f.auth.openBackupRead(firstLifetime.signal);
+  firstLifetime.abort();
+  await firstJoined.promise;
+  const current = f.auth.openBackupRead(new AbortController().signal);
+  assert.equal(old.status, 'qualified');
+  assert.equal(current.status, 'qualified');
+  const closed = f.auth.dispose();
+  assert.equal(f.auth.dispose(), closed);
+  assert.equal(current.signal.aborted, true);
+  assert.equal(f.auth.openBackupRead(new AbortController().signal).status, 'invalidated');
+  let settled = false;
+  void closed.then(() => { settled = true; });
+  firstClose.resolve();
+  opened.resolve(last);
+  await lastJoined.promise;
+  assert.equal(settled, false);
+  lastClose.resolve();
+  await closed;
+  assert.equal(settled, true);
 });
 
 test('stale cancellation cannot touch a newer scan or selection; exact cancel drops custody', async t => {
@@ -235,7 +304,7 @@ test('authorization expiry aborts an outstanding read without polling or refresh
   f.reads.list = query => {
     query.signal.addEventListener('abort', aborted.resolve, {once: true});
     entering.resolve();
-    return new Promise(() => {});
+    return aborted.promise;
   };
   const operation = f.host.request(scan).operation;
   await entering.promise;
