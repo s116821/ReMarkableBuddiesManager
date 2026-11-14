@@ -119,7 +119,8 @@ function capture({operation, reference, selection}) {
  * must support bounded abort and joined close through its async iterator.
  *
  * Trusted staging exposes available(), freeBytes(), create(). A stage exposes
- * root, openExclusive(relativeName), assertOwned(exactRelativeFiles), release().
+ * root, openExclusive(relativeName), assertOwned(exactRelativeFiles),
+ * readVerified(member, exactRelativeFiles, bounds, write), release().
  * It owns canonical parent/privacy checks, directory and file identities,
  * exclusive allocation, completed membership, and checked nonrecursive teardown.
  * create() owns rollback if it throws before returning custody; release() must
@@ -156,8 +157,8 @@ export class IsolatedBackupDownload {
     return {signal: job.controller.signal, maxBytes, timeoutMs: Math.max(1, Math.ceil(job.deadline - this.#now()))};
   }
 
-  async #authority(job) {
-    await job.binding.checkCurrent(this.#options(job, 0));
+  async #authority(job, options = this.#options(job, 0)) {
+    await job.binding.checkCurrent(options);
     this.#check(job);
   }
 
@@ -359,8 +360,8 @@ export class IsolatedBackupDownload {
     return job.retiring;
   }
 
-  // Host-only, one-shot handoff. The recipient must honor the original
-  // signal and settle after all of its file access has stopped.
+  // Host-only, one-shot handoff. Join the admitted broker read even if the
+  // recipient returned early or retained the callback.
   async handoff(operation, reference, consume) {
     const job = this.#job;
     if (!job?.inspection || job.handoff || job.operation !== operation || job.reference !== reference) return reply('invalidated');
@@ -370,15 +371,54 @@ export class IsolatedBackupDownload {
       let status = 'handed-off';
       try {
         this.#check(job);
-        require(await job.stage.assertOwned(job.files.map(file => file.name), this.#options(job, 0)) === true);
+        const files = Object.freeze([...job.files]);
+        const names = files.map(file => file.name);
+        require(await job.stage.assertOwned(names, this.#options(job, 0)) === true);
         await this.#authority(job);
         const components = Object.freeze({
           data: Object.freeze({...job.selection.components.data}),
           preferences: Object.freeze({...job.selection.components.preferences}),
         });
-        await consume({root: job.stage.root, inspection: {...job.inspection},
-          files: Object.freeze([...job.files]), components, ...this.#options(job, 0)});
-        require(await job.stage.assertOwned(job.files.map(file => file.name), this.#options(job, 0)) === true);
+        const reader = new AbortController();
+        const signal = AbortSignal.any([job.controller.signal, reader.signal]);
+        let reading, readFailed = false;
+        const readFile = (name, write) => {
+          const member = files.find(file => file.name === name);
+          if (signal.aborted || reading || readFailed || !member || typeof write !== 'function') {
+            return Promise.reject(new DownloadFailure('invalid'));
+          }
+          const bounds = () => {
+            signal.throwIfAborted();
+            return {...this.#options(job, 0), signal};
+          };
+          reading = (async () => {
+            await this.#authority(job, bounds());
+            bounds();
+            await job.stage.readVerified(member, names, bounds, async chunk => {
+              bounds();
+              await write(chunk, signal);
+            });
+            await this.#authority(job, bounds());
+            bounds();
+          })().catch(error => {
+            readFailed = true;
+            throw error;
+          }).finally(() => { reading = undefined; });
+          // The handoff joins this promise even if its recipient discards it.
+          void reading.catch(() => {});
+          return reading;
+        };
+        try {
+          await consume({inspection: {...job.inspection}, files, components, readFile, ...this.#options(job, 0)});
+        } finally {
+          reader.abort();
+          if (reading) {
+            try { await reading; }
+            finally { readFailed = true; }
+          }
+        }
+        require(!readFailed);
+        require(await job.stage.assertOwned(names, this.#options(job, 0)) === true);
         await this.#authority(job);
         this.#check(job);
       } catch {

@@ -21,6 +21,7 @@ FIXED = {'data/backup.json': 8 * MIB, 'portable-configuration.json': 128 * 1024,
          'isolated-backup.json': 16 * 1024}
 OBJECT = re.compile(r'data/objects/[0-9a-f]{64}\Z')
 LINE_LIMIT = 400_000
+READ_CHUNK = 64 * 1024
 
 
 def key(info):
@@ -122,6 +123,7 @@ class Broker:
         self.dirs = {}
         self.files = {}
         self.stream = None
+        self.reader = None
         self.written = 0
         self.total = 0
         self.synced = False
@@ -211,7 +213,7 @@ class Broker:
             require(info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o600)
 
     def open_file(self, relative, maximum):
-        require(self.root is not None and self.stream is None and not self.marker_closed
+        require(self.root is not None and self.stream is None and self.reader is None and not self.marker_closed
                 and relative not in self.files and len(self.files) < 4099)
         file_limit = FIXED.get(relative)
         if file_limit is None:
@@ -312,8 +314,79 @@ class Broker:
                     pass
 
     def assert_owned(self, names):
-        require(self.marker_closed and len(names) == len(self.files) and set(names) == self.files.keys())
+        require(self.reader is None and self.marker_closed
+                and len(names) == len(self.files) and set(names) == self.files.keys())
         self.check_tree(True)
+        return True
+
+    @contextmanager
+    def open_checked_reader(self, relative):
+        directory, leaf = self.split_file(relative)
+        target = self.root / relative
+        with self.pin_dirs(), ExitStack() as stack:
+            if self.windows:
+                import win32con
+                import win32file
+                from pywintypes import error as win_error
+                handle = stack.enter_context(checked_handle(
+                    target, directory=False, access=win32con.GENERIC_READ | win32con.READ_CONTROL,
+                    share=win32con.FILE_SHARE_READ))
+                windows_check_handle(handle)
+
+                def check():
+                    self.validate_file(relative, target.lstat(), True, win_key(handle))
+
+                def read():
+                    try:
+                        status, data = win32file.ReadFile(handle, READ_CHUNK)
+                    except win_error as error:
+                        if error.winerror != 38:  # ERROR_HANDLE_EOF
+                            raise
+                        return b''
+                    require(status == 0)
+                    return data
+            else:
+                fd = os.open(leaf, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=self.fd(directory))
+                stack.callback(os.close, fd)
+
+                def check():
+                    info = os.fstat(fd)
+                    self.validate_file(relative, info, True, key(info))
+                    with self.checked_file(relative, completed=True):
+                        pass
+
+                def read():
+                    return os.read(fd, READ_CHUNK)
+
+            check()
+            yield check, read
+
+    def open_read(self, relative, names):
+        require(type(relative) is str and relative in self.files and type(names) is list)
+        self.assert_owned(names)
+        context = self.open_checked_reader(relative)
+        self.reader = (context, *context.__enter__())
+        return True
+
+    def read_chunk(self):
+        require(self.reader is not None)
+        _, check, read = self.reader
+        with self.pin_dirs():
+            check()
+            chunk = read()
+            check()
+        if chunk:
+            return base64.b64encode(chunk).decode('ascii')
+        self.close_read()
+        self.check_tree(True)
+        return None
+
+    def close_read(self):
+        if self.reader is not None:
+            context, *_ = self.reader
+            self.reader = None
+            context.__exit__(None, None, None)
         return True
 
     def release(self):
@@ -326,6 +399,7 @@ class Broker:
             raise
 
     def release_owned(self):
+        self.close_read()
         if self.stream is not None:
             self.close()
         if self.root is None:
@@ -377,6 +451,12 @@ class Broker:
             return self.close()
         if action == 'assert':
             return self.assert_owned(request['files'])
+        if action == 'open-read':
+            return self.open_read(request['name'], request['files'])
+        if action == 'read':
+            return self.read_chunk()
+        if action == 'close-read':
+            return self.close_read()
         if action == 'release':
             return self.release()
         require(False)

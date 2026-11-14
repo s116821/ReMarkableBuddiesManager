@@ -116,7 +116,8 @@ test('complete exact staging, zero-byte object, marker last and one private hand
   assert.equal(await f.worker.handoff('0'.repeat(64), reference, () => {}).then(value => value.status), 'invalidated');
   assert.equal(f.staged.size, 5);
   const output = await f.worker.handoff(operation, reference, async value => {
-    assert.equal(value.root, stageRoot);
+    assert.equal(Object.hasOwn(value, 'root'), false);
+    assert.equal(typeof value.readFile, 'function');
     assert.equal(value.signal.aborted, false);
     assert.deepEqual(f.read(markerName), f.args.selection.markerBytes);
   });

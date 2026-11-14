@@ -1,4 +1,5 @@
 import {spawn} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {strictJson} from './strict-json.mjs';
@@ -7,6 +8,8 @@ const helper = fileURLToPath(new URL('./isolated-backup-staging.py', import.meta
 const unavailable = () => new Error('Private backup staging unavailable');
 const STAGE_NAME = /^isolated-backup-[a-f0-9]{32}$/;
 const TIMEOUT = 5000;
+const READ_CHUNK = 64 * 1024;
+const READ_RESPONSE = Math.ceil(READ_CHUNK / 3) * 4 + 64;
 const createUncertain = () => Object.assign(unavailable(), {cleanupPending: true});
 
 function trustedPath(value) {
@@ -58,7 +61,7 @@ class StagingProcess {
   }
 
   #receive(chunk) {
-    if (!this.#pending || chunk.length + this.#stdout.length > 8192) {
+    if (!this.#pending || chunk.length + this.#stdout.length > this.#pending.responseLimit) {
       this.#terminate();
       return;
     }
@@ -83,7 +86,7 @@ class StagingProcess {
     this.#finish(null, frame.value);
   }
 
-  call(request, timeoutMs = TIMEOUT) {
+  call(request, timeoutMs = TIMEOUT, responseLimit = 8192) {
     if (this.#closed || this.#pending) return Promise.reject(unavailable());
     const input = JSON.stringify(request) + '\n';
     if (Buffer.byteLength(input) > 400000) return Promise.reject(unavailable());
@@ -91,7 +94,7 @@ class StagingProcess {
       const timer = setTimeout(() => {
         this.#terminate();
       }, Math.min(TIMEOUT, Math.max(1, timeoutMs)));
-      this.#pending = {resolve, reject, timer};
+      this.#pending = {resolve, reject, timer, responseLimit};
       this.#child.stdin.write(input);
     });
   }
@@ -101,6 +104,10 @@ class StagingProcess {
     const timer = setTimeout(() => this.#child.kill(), TIMEOUT);
     try { return await this.#exited; }
     finally { clearTimeout(timer); }
+  }
+
+  async joinClosed() {
+    if (this.#closed) await this.#exited;
   }
 }
 
@@ -142,7 +149,7 @@ export class IsolatedBackupStaging {
 
   async freeBytes(root, bounds) {
     if (root === null) return this.#probe('free', bounds);
-    if (root !== this.#active?.root) throw unavailable();
+    if (!this.#active || root !== this.#active.root || this.#active.reader) throw unavailable();
     bounds.signal.throwIfAborted();
     return this.#active.process.call({action: 'free'}, bounds.timeoutMs);
   }
@@ -160,6 +167,7 @@ export class IsolatedBackupStaging {
         root: active.root,
         openExclusive: (name, options) => this.#open(active, name, options),
         assertOwned: (files, options) => this.#assert(active, files, options),
+        readVerified: (member, files, bounds, write) => this.#read(active, member, files, bounds, write),
         release: () => this.#release(active),
       };
     } catch {
@@ -178,7 +186,7 @@ export class IsolatedBackupStaging {
   }
 
   async #open(active, name, options) {
-    if (this.#active !== active || active.file || active.release) throw unavailable();
+    if (this.#active !== active || active.file || active.reader || active.release) throw unavailable();
     options.signal.throwIfAborted();
     await active.process.call({action: 'open', name, maxBytes: options.maxBytes}, options.timeoutMs);
     let closed = false;
@@ -205,15 +213,55 @@ export class IsolatedBackupStaging {
   }
 
   async #assert(active, files, options) {
-    if (this.#active !== active || active.file || active.release) return false;
+    if (this.#active !== active || active.file || active.reader || active.release) return false;
     options.signal.throwIfAborted();
     try { return await active.process.call({action: 'assert', files}, options.timeoutMs) === true; }
     catch { return false; }
   }
 
+  async #read(active, member, files, bounds, write) {
+    if (this.#active !== active || active.file || active.reader || active.release) throw unavailable();
+    let opened = false, bytes = 0;
+    const hash = createHash('sha256');
+    active.reader = true;
+    const call = (request, limit) => {
+      const {signal, timeoutMs} = bounds();
+      signal.throwIfAborted();
+      return active.process.call(request, timeoutMs, limit);
+    };
+    try {
+      if (await call({action: 'open-read', name: member.name, files}) !== true) throw unavailable();
+      opened = true;
+      for (;;) {
+        const encoded = await call({action: 'read'}, READ_RESPONSE);
+        if (encoded === null) {
+          opened = false;
+          break;
+        }
+        bounds().signal.throwIfAborted();
+        if (typeof encoded !== 'string') throw unavailable();
+        const chunk = Buffer.from(encoded, 'base64');
+        if (!chunk.length || chunk.length > READ_CHUNK || chunk.toString('base64') !== encoded ||
+            chunk.length > member.bytes - bytes) throw unavailable();
+        bytes += chunk.length;
+        hash.update(chunk);
+        await write(chunk);
+      }
+      bounds().signal.throwIfAborted();
+      if (bytes !== member.bytes || hash.digest('hex') !== member.sha256) throw unavailable();
+    } finally {
+      try {
+        if (opened) await active.process.call({action: 'close-read'});
+      } finally {
+        await active.process.joinClosed();
+        active.reader = false;
+      }
+    }
+  }
+
   async #release(active) {
     if (active.release) return active.release;
-    if (this.#active !== active || active.file) throw unavailable();
+    if (this.#active !== active || active.file || active.reader) throw unavailable();
     active.release = (async () => {
       try { await active.process.call({action: 'release'}); }
       finally {

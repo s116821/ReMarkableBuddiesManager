@@ -82,6 +82,17 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
       return {async write(bytes) { chunks.push(Buffer.from(bytes)); }, async sync() {}, async close() {}};
     },
     async assertOwned(names) { return names.length === files.size && names.every(name => files.has(name)); },
+    async readVerified(member, names, bounds, write) {
+      assert.ok(Object.isFrozen(member));
+      assert.deepEqual(names, [...files.keys()]);
+      const chunks = files.get(member.name);
+      assert.deepEqual(ref(Buffer.concat(chunks)), {bytes: member.bytes, sha256: member.sha256});
+      for (const chunk of chunks) {
+        bounds().signal.throwIfAborted();
+        await write(Buffer.from(chunk));
+      }
+      bounds().signal.throwIfAborted();
+    },
     async release() {
       events.push('stage-release');
       releaseEntered.resolve();
@@ -203,7 +214,8 @@ async function stagedRestore(t, {digest = hash(data), ...options} = {}) {
     return true;
   }, async release() { events.push('destination-release'); return true; }};
   const transfer = async input => {
-    assert.equal(input.root, stageRoot);
+    assert.equal(Object.hasOwn(input, 'root'), false);
+    assert.equal(typeof input.readFile, 'function');
     assert.deepEqual(input.components, {data: ref(data), preferences: ref(preferences)});
     assert.ok(input.timeoutMs > 0 && input.timeoutMs <= 13000);
     assert.ok(restore.io.ownerFor('ordinary-restore', 'prepare'));
@@ -243,6 +255,56 @@ test('restore preview adopts one exact destination and explicit Confirm preserve
   assert.equal(reconciled.apply_outcome, 'unknown');
   assert.equal(f.restore.calls.at(-1).input, input);
   assert.equal(f.restoreEvents.filter(event => event === 'destination-release').length, 1);
+});
+
+test('handoff exposes only original members and fences retained and overlapping reads', async t => {
+  const f = await stagedRestore(t);
+  f.releaseDone.resolve();
+  let readFile;
+  const preview = await f.prepare(async source => {
+    assert.equal(Object.hasOwn(source, 'root'), false);
+    assert.ok(Object.isFrozen(source.files));
+    readFile = source.readFile;
+    await assert.rejects(readFile('../data/backup.json', () => assert.fail()));
+    const chunks = [];
+    await readFile('data/backup.json', async (chunk, signal) => {
+      assert.equal(signal.aborted, false);
+      assert.ok(f.restore.io.ownerFor('ordinary-restore', 'prepare'));
+      await assert.rejects(readFile('isolated-backup.json', () => assert.fail()));
+      chunks.push(chunk);
+    });
+    assert.deepEqual(Buffer.concat(chunks), data);
+    return f.prepared;
+  });
+  assert.equal(preview.status, 'ready');
+  await assert.rejects(readFile('data/backup.json', () => assert.fail()));
+});
+
+test('returning during a broker read aborts and joins it before staging release', {timeout: 5000}, async t => {
+  const f = await stagedRestore(t);
+  f.releaseDone.resolve();
+  const entered = Promise.withResolvers(), exited = Promise.withResolvers();
+  t.after(() => exited.resolve());
+  let reading, reduced;
+  const transfer = f.prepare(async source => {
+    reading = source.readFile('data/backup.json', async (_chunk, signal) => {
+      entered.resolve(signal);
+      await exited.promise;
+      f.events.push('read-joined');
+    });
+    reduced = assert.rejects(reading);
+    await entered.promise;
+    return f.prepared;
+  });
+  try {
+    const signal = await entered.promise;
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(signal.aborted, true);
+    assert.equal(f.events.includes('stage-release'), false);
+  } finally { exited.resolve(); }
+  await reduced;
+  assert.equal((await transfer).status, 'unavailable');
+  assert.deepEqual(f.events.slice(-2), ['read-joined', 'stage-release']);
 });
 
 test('a changed adopted destination refuses Confirm and retires only that destination', async t => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {mkdir, mkdtemp, lstat, readdir, readFile, realpath, rename, rmdir, symlink, open, unlink, chmod, writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {mkdir, mkdtemp, lstat, readdir, readFile, realpath, rename, rmdir, symlink, link, open, unlink, chmod, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -69,10 +70,65 @@ async function write(stage, name, bytes) {
   const payload = Buffer.from(bytes);
   const file = await stage.openExclusive(name, options(payload.length));
   try {
-    if (payload.length) await file.write(payload);
+    for (let i = 0; i < payload.length; i += 65536) await file.write(payload.subarray(i, i + 65536));
     await file.sync();
   } finally { await file.close(); }
 }
+
+const member = (name, payload) => ({name, bytes: payload.length, sha256: createHash('sha256').update(payload).digest('hex')});
+
+test('native broker reads exact sealed bytes through EOF and serializes file access', {skip: !native}, async t => {
+  const f = await fixture(t);
+  const stage = await f.adapter.create(options());
+  const data = Buffer.alloc(65537, 42);
+  const file = member('data/backup.json', data), empty = member('data/objects/' + '1'.repeat(64), Buffer.alloc(0));
+  const preferences = 'portable-configuration.json', marker = 'isolated-backup.json';
+  const names = [file.name, empty.name, preferences, marker];
+  try {
+    await write(stage, file.name, data);
+    await write(stage, empty.name, '');
+    await write(stage, preferences, 'settings');
+    await assert.rejects(stage.readVerified(file, names, options, () => assert.fail()), /staging unavailable/);
+    await write(stage, marker, 'marker');
+    const observed = [];
+    await stage.readVerified(file, names, options, async chunk => {
+      observed.push(chunk);
+      await assert.rejects(stage.readVerified(empty, names, options, () => assert.fail()), /staging unavailable/);
+      await assert.rejects(stage.openExclusive(empty.name, options()), /staging unavailable/);
+      await assert.rejects(stage.release(), /staging unavailable/);
+      assert.equal(await stage.assertOwned(names, options()), false);
+    });
+    assert.deepEqual(observed.map(chunk => chunk.length), [65536, 1]);
+    assert.deepEqual(Buffer.concat(observed), data);
+    await stage.readVerified(empty, names, options, () => assert.fail('Empty object emitted bytes'));
+    await assert.rejects(stage.readVerified({...file, bytes: data.length - 1}, names, options, () => {}), /staging unavailable/);
+    await assert.rejects(stage.readVerified({...file, bytes: data.length + 1}, names, options, () => {}), /staging unavailable/);
+    await assert.rejects(stage.readVerified({...file, sha256: '0'.repeat(64)}, names, options, () => {}), /staging unavailable/);
+    await assert.rejects(stage.readVerified({...file, name: '../outside'}, names, options, () => assert.fail()), /staging unavailable/);
+    await assert.rejects(stage.readVerified(file, names.slice(1), options, () => assert.fail()), /staging unavailable/);
+    const cancellation = new AbortController();
+    await assert.rejects(stage.readVerified(file, names, () => ({...options(), signal: cancellation.signal}), async () => {
+      cancellation.abort();
+      await assert.rejects(stage.release(), /staging unavailable/);
+    }), {name: 'AbortError'});
+    assert.equal(await stage.assertOwned(names, options()), true);
+    const extra = path.join(stage.root, 'extra');
+    await writeFile(extra, 'extra', {flag: 'wx', mode: 0o600});
+    const extraId = await inspect(extra);
+    try {
+      await assert.rejects(stage.readVerified(file, names, options, () => assert.fail()), /staging unavailable/);
+    } finally { await removeOwned(extra, extraId, false); }
+    const outside = path.join(f.parent, 'hard-linked');
+    await link(path.join(stage.root, ...file.name.split('/')), outside);
+    const linkedId = await inspect(outside);
+    try {
+      await assert.rejects(stage.readVerified(file, names, options, () => assert.fail()), /staging unavailable/);
+    } finally { await removeOwned(outside, linkedId, false); }
+    await writeFile(path.join(stage.root, ...file.name.split('/')), Buffer.alloc(data.length, 43));
+    await assert.rejects(stage.readVerified(file, names, options, () => assert.fail()), /staging unavailable/);
+  } finally { await stage.release(); }
+  await assert.rejects(stage.readVerified(file, names, options, () => assert.fail()), /staging unavailable/);
+});
 
 test('default and relative-path staging stay unavailable', async () => {
   for (const adapter of [new IsolatedBackupStaging(), new IsolatedBackupStaging({parent: '.', python: 'python'})]) {
@@ -141,6 +197,13 @@ test('native cleanup preserves unexpected files and refuses replacement identity
       const dirIds = await Promise.all(dirs.map(inspect));
       const data = path.join(stage.root, 'data', 'backup.json');
       await write(stage, 'data/backup.json', 'original');
+      const names = ['data/backup.json', 'portable-configuration.json', 'isolated-backup.json'];
+      await write(stage, names[1], 'settings');
+      await write(stage, names[2], 'marker');
+      const artifacts = await Promise.all(names.slice(1).map(async name => {
+        const file = path.join(stage.root, name);
+        return [file, await inspect(file)];
+      }));
       const dataId = await inspect(data);
       const moved = path.join(stage.root, 'data', 'moved'), unexpected = replace ? data : path.join(stage.root, 'unexpected');
       if (replace) await rename(data, moved);
@@ -148,11 +211,14 @@ test('native cleanup preserves unexpected files and refuses replacement identity
       await extra.writeFile('replacement');
       await extra.close();
       const extraId = await inspect(unexpected);
+      await assert.rejects(stage.readVerified(member(names[0], Buffer.from('original')), names, options, () => assert.fail()),
+        /staging unavailable/);
       await assert.rejects(stage.release(), /staging unavailable/);
       assert.equal((await readFile(unexpected)).toString(), 'replacement');
       assert.equal((await readFile(replace ? moved : data)).toString(), 'original');
       await removeOwned(unexpected, extraId, false);
       await removeOwned(replace ? moved : data, dataId, false);
+      for (const [file, id] of artifacts) await removeOwned(file, id, false);
       for (let i = dirs.length - 1; i >= 0; i--) await removeOwned(dirs[i], dirIds[i], true);
     }
   });
