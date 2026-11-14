@@ -251,3 +251,152 @@ test('authorization expiry aborts an outstanding read without polling or refresh
   assert.deepEqual(f.provider, ['account']);
   assert.deepEqual(f.writes, ['save']);
 });
+
+function downloadReads(f, streamObject) {
+  f.reads.listObject = () => json({files: [], incompleteSearch: false});
+  f.reads.readObjectMetadata = () => json({id: 'PrivateObject'});
+  f.reads.streamObject = streamObject;
+}
+const bounds = signal => ({signal, maxBytes: 1024, timeoutMs: 1000});
+
+test('private download context retains the selected marker and original binding without recapture', async t => {
+  const f = fixture(t);
+  downloadReads(f, async function* () { yield Buffer.from('fixture'); });
+  await f.auth.check();
+  const inspection = await settle(f.host, f.host.request(scan).operation);
+  const selected = await settle(f.host,
+    f.host.request(select(inspection.operation, inspection.backups[0].revisions[0].reference)).operation);
+  const {operation, selection: {reference}} = selected;
+  assert.equal(f.host.captureDownload(inspection.operation, reference), null);
+  assert.equal(f.host.captureDownload(operation, 'f'.repeat(64)), null);
+  const context = f.host.captureDownload(operation, reference);
+  assert.equal(context.current(), true);
+  assert.equal(context.binding.isCurrent(), true);
+  assert.deepEqual(context.selection.markerBytes, markerBytes);
+  assert.equal(typeof context.binding.streamObject, 'function');
+  assert.equal(f.factories.length, 1);
+  // Starting another scan cannot revive this original marker context.
+  await settle(f.host, f.host.request(scan).operation);
+  assert.equal(context.current(), false);
+  assert.equal(context.selection.signal.aborted, true);
+  assert.equal(f.host.captureDownload(operation, reference), null);
+  assert.equal(f.factories.length, 2);
+  assert.deepEqual(f.provider, ['account']);
+});
+
+test('download capabilities are all-or-none and absent from a metadata-only capture', async t => {
+  const f = fixture(t);
+  f.reads.listObject = () => json({files: [], incompleteSearch: false});
+  await f.auth.check();
+  const opened = f.auth.openBackupRead(new AbortController().signal);
+  assert.equal(opened.status, 'qualified');
+  for (const method of ['listObject', 'readObjectMetadata', 'streamObject']) assert.equal(opened.binding[method], undefined);
+});
+
+test('download metadata checks the original protected records after each asynchronous result', async t => {
+  for (const method of ['listObject', 'readObjectMetadata']) {
+    const f = fixture(t);
+    downloadReads(f, async function* () {});
+    const entered = deferred(), finish = deferred();
+    f.reads[method] = query => { entered.resolve(query.signal); return finish.promise; };
+    await f.auth.check();
+    const opened = f.auth.openBackupRead(new AbortController().signal);
+    const pending = opened.binding[method](bounds(new AbortController().signal));
+    const signal = await entered.promise;
+    f.replaceGrant();
+    finish.resolve(json({files: []}));
+    await assert.rejects(pending, /authorization-failed/);
+    assert.equal(signal.aborted, true);
+    assert.equal(f.factories.length, 1);
+  }
+});
+
+test('streamed chunks cannot cross protected client or grant replacement; shutdown is joined', {timeout: 2000}, async t => {
+  for (const mutate of ['replaceClient', 'replaceGrant']) {
+    const f = fixture(t), entered = deferred(), chunk = deferred(), returning = deferred(), joined = deferred();
+    let requestSignal, closed = false;
+    downloadReads(f, query => {
+      requestSignal = query.signal;
+      return {[Symbol.asyncIterator]() { return {
+        next() { entered.resolve(); return chunk.promise; },
+        async return() {
+          assert.equal(requestSignal.aborted, true);
+          returning.resolve();
+          await joined.promise;
+          closed = true;
+          return {done: true};
+        },
+      }; }};
+    });
+    await f.auth.check();
+    const opened = f.auth.openBackupRead(new AbortController().signal);
+    const iterator = opened.binding.streamObject(bounds(new AbortController().signal));
+    const pending = iterator.next();
+    const refused = assert.rejects(pending, /authorization-failed/);
+    await entered.promise;
+    f[mutate]();
+    chunk.resolve({done: false, value: Buffer.from('must not escape')});
+    await returning.promise;
+    assert.equal(closed, false);
+    joined.resolve();
+    await refused;
+    assert.equal(closed, true);
+    assert.equal(f.factories.length, 1);
+    assert.deepEqual(f.provider, ['account']);
+  }
+});
+
+test('aborting while a response opens still takes custody and joins its iterator', {timeout: 2000}, async t => {
+  const f = fixture(t), entered = deferred(), openedResponse = deferred(), returned = deferred();
+  let providerSignal, nextCalls = 0;
+  downloadReads(f, query => { providerSignal = query.signal; entered.resolve(); return openedResponse.promise; });
+  await f.auth.check();
+  const controller = new AbortController();
+  const opened = f.auth.openBackupRead(new AbortController().signal);
+  const iterator = opened.binding.streamObject(bounds(controller.signal));
+  const rejected = assert.rejects(iterator.next(), /authorization-failed/);
+  await entered.promise;
+  controller.abort();
+  openedResponse.resolve({[Symbol.asyncIterator]() { return {
+    next() { nextCalls++; return Promise.resolve({done: true}); },
+    return() { assert.equal(providerSignal.aborted, true); returned.resolve(); return Promise.resolve({done: true}); },
+  }; }});
+  await rejected;
+  await returned.promise;
+  assert.equal(nextCalls, 0);
+});
+
+test('early consumer return aborts before joining; ordinary EOF rechecks authority after join', {timeout: 2000}, async t => {
+  for (const eof of [false, true]) {
+    const f = fixture(t), returning = deferred(), joined = deferred();
+    let providerSignal, closed = false;
+    downloadReads(f, query => {
+      providerSignal = query.signal;
+      return {[Symbol.asyncIterator]() { return {
+        next() { return Promise.resolve(eof ? {done: true} : {done: false, value: Buffer.from('one')}); },
+        async return() {
+          assert.equal(providerSignal.aborted, true);
+          returning.resolve();
+          await joined.promise;
+          closed = true;
+          return {done: true};
+        },
+      }; }};
+    });
+    await f.auth.check();
+    const opened = f.auth.openBackupRead(new AbortController().signal);
+    const iterator = opened.binding.streamObject(bounds(new AbortController().signal));
+    let result;
+    if (eof) result = assert.rejects(iterator.next(), /authorization-failed/);
+    else {
+      assert.deepEqual(await iterator.next(), {done: false, value: Buffer.from('one')});
+      result = iterator.return();
+    }
+    await returning.promise;
+    assert.equal(closed, false);
+    if (eof) f.replaceGrant();
+    joined.resolve();
+    await result;
+    assert.equal(closed, true);
+  }
+});

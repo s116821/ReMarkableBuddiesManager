@@ -136,9 +136,42 @@ export class DriveAuth {
           require(!active.aborted && current());
         }
       };
-      return { status: 'qualified', signal: authority, binding: {
+      const guarded = {
         isCurrent: current, list: bind('list'), readMetadata: bind('readMetadata'), readMarker: bind('readMarker'),
-      } };
+      };
+      // Optional private download capabilities use this exact capture. A
+      // metadata-only adapter cannot silently acquire a replacement grant.
+      if (['listObject', 'readObjectMetadata', 'streamObject'].every(method => typeof binding[method] === 'function')) {
+        guarded.listObject = bind('listObject');
+        guarded.readObjectMetadata = bind('readObjectMetadata');
+        guarded.streamObject = async function* (query) {
+          const controller = new AbortController();
+          const active = AbortSignal.any([authority, query.signal, controller.signal]);
+          let iterator, completed = false;
+          try {
+            require(!active.aborted && current());
+            const source = await binding.streamObject({...query, signal: active});
+            // Take custody before checking a late factory result, so an abort
+            // while opening the response still closes and joins that response.
+            iterator = source?.[Symbol.asyncIterator]?.();
+            require(iterator && typeof iterator.next === 'function' && typeof iterator.return === 'function');
+            for (;;) {
+              require(!active.aborted && current());
+              const item = await iterator.next();
+              require(!active.aborted && current());
+              if (item.done) { completed = true; return; }
+              yield item.value;
+            }
+          } finally {
+            // Abort before return(): a producer can be waiting for its abort
+            // while its return promise joins the outstanding request.
+            controller.abort();
+            if (typeof iterator?.return === 'function') await iterator.return();
+            if (completed) require(!query.signal.aborted && current());
+          }
+        };
+      }
+      return { status: 'qualified', signal: authority, binding: Object.freeze(guarded) };
     } catch { return { status: authority.aborted ? 'invalidated' : 'unavailable' }; }
   }
   stop() {

@@ -142,6 +142,19 @@ export class IsolatedBackupHost {
     return this.#session.reader.readSelection(reference);
   }
 
+  // Host-only: download reuses both the original selection and its protected
+  // read binding. No additional factory call, grant or marker is admitted.
+  captureDownload(operation, reference) {
+    const selection = this.readSelection(operation, reference);
+    if (!selection) return null;
+    const session = this.#session, selected = this.#selection;
+    return Object.freeze({operation, reference, selection, binding: session.binding, current: () => {
+      this.#validateSession();
+      return this.#session === session && this.#selection === selected &&
+        selected.status === 'selected' && !!session.reader.readSelection(reference);
+    }});
+  }
+
   // A new browser document drops the old view without replacing the auth owner.
   invalidate() {
     this.#clear();

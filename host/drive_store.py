@@ -151,7 +151,7 @@ def windows_private_writer(path, disposition, access):
     attributes = pywintypes.SECURITY_ATTRIBUTES()
     attributes.SECURITY_DESCRIPTOR = sd
     return win32file.CreateFile(str(path), access, 0, attributes, disposition,
-                                win32con.FILE_FLAG_OPEN_REPARSE_POINT, None)
+                                win32file.FILE_FLAG_OPEN_REPARSE_POINT, None)
 
 
 def identity(raw):
