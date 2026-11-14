@@ -96,12 +96,9 @@ jobs:
     env:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
-      CARGO_TARGET_DIR: ${{ runner.temp }}/buddy-oracle-target
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_RELEASE_DEBUG: "0"
       RUSTFLAGS: ""
-      ORACLE_TARGET: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
-      ORACLE_FILENAME: ${{ runner.os == 'Windows' && 'reader-buddy.exe' || 'reader-buddy' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -319,6 +316,20 @@ jobs:
           python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
           python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v
           node --test tests/isolated-backup-staging.test.mjs tests/drive-read-guard.test.mjs
+      - name: Configure native host qualification paths
+        if: ${{ !inputs.release }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          windows = os.environ["RUNNER_OS"] == "Windows"
+          values = dict(CARGO_TARGET_DIR=str(Path(os.environ["RUNNER_TEMP"]) / "buddy-oracle-target"),
+              ORACLE_TARGET="x86_64-pc-windows-msvc" if windows else "x86_64-unknown-linux-gnu",
+              ORACLE_FILENAME="reader-buddy.exe" if windows else "reader-buddy")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              for key, value in values.items():
+                  env.write(key + "=" + value + "\n")
+          PY
       - name: Read the exact host dependency pin
         if: ${{ !inputs.release }}
         id: pin
@@ -408,8 +419,12 @@ jobs:
           (output / "host-platform.json").write_text(json.dumps(dict(platform=platform.platform(),
               libc=platform.libc_ver(), image=os.environ.get("ImageOS"),
               imageVersion=os.environ.get("ImageVersion")), indent=2) + "\n", encoding="utf-8")
+          command = str(binary.resolve(strict=True))
+          if os.name == "nt":
+              # Rust fs::canonicalize retains the Win32 verbatim prefix.
+              command = os.path.realpath("\\\\?\\" + command, strict=True)
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
-              for key, value in {"COMMAND": str(binary.resolve()), "SHA256": metadata["executable"]["sha256"],
+              for key, value in {"COMMAND": command, "SHA256": metadata["executable"]["sha256"],
                                  "BYTES": str(metadata["executable"]["bytes"])}.items():
                   env.write("READER_BUDDY_ARCHIVE_TEST_" + key + "=" + value + "\n")
           print(json.dumps(metadata, indent=2))

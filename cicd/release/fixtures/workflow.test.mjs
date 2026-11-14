@@ -249,10 +249,16 @@ function isOracleQualificationBuild(step) {
 test('offline oracle qualification stays within native integration and retains exact executable custody', () => {
   const pipeline = workflow('pipeline'), integration = pipeline.jobs.integration;
   assert.deepEqual(Object.keys(pipeline.jobs), ['build', 'integration', 'release']);
+  for (const value of Object.values(integration.env)) assert.doesNotMatch(String(value), /\brunner\./);
+  const configure = integration.steps.find(s => s.name === 'Configure native host qualification paths');
+  assert.equal(configure.if, expr('!inputs.release'));
+  for (const key of ['CARGO_TARGET_DIR', 'ORACLE_TARGET', 'ORACLE_FILENAME', 'RUNNER_TEMP', 'RUNNER_OS', 'GITHUB_ENV'])
+    assert.ok(configure.run.includes(key));
   const build = integration.steps.find(isOracleQualificationBuild);
   assert.ok(build);
   const pin = integration.steps.find(s => s.id === 'pin');
   const checkout = integration.steps.find(s => s.with?.repository === 's116821/ReMarkableBuddies');
+  assert.ok(integration.steps.indexOf(configure) < integration.steps.indexOf(pin));
   assert.equal(checkout.with.ref, expr('steps.pin.outputs.source_sha'));
   assert.equal(checkout.with['persist-credentials'], false);
   assert.equal(checkout.with['fetch-depth'], 0);
@@ -266,6 +272,8 @@ test('offline oracle qualification stays within native integration and retains e
   for (const step of [pin, checkout, build, retained, tests, after]) assert.equal(step.if, expr('!inputs.release'));
   for (const field of ['sourceSha', 'sourceTree', 'cargoLockSha256', 'sdkRevision']) assert.ok(build.run.includes(field));
   assert.match(retained.run, /READER_BUDDY_ARCHIVE_TEST_/);
+  assert.ok(retained.run.includes('command = os.path.realpath('));
+  assert.ok(retained.run.includes('"COMMAND": command'));
   assert.match(after.run, /READER_BUDDY_ARCHIVE_TEST_SHA256/);
   assert.match(after.run, /tarfile.open/);
   assert.equal(repeatsCommonChecks('integration', tests), false);
