@@ -164,6 +164,8 @@ async function installSyntheticDrive(app) {
 }
 
 async function verifyQuitWaitsForRestore(app) {
+  // Playwright disposes its process lookup when the application closes.
+  const child = app.process();
   await app.evaluate(({app}) => {
     const require = process.mainModule.require.bind(process.mainModule);
     const path = require('node:path');
@@ -198,10 +200,10 @@ async function verifyQuitWaitsForRestore(app) {
   } finally {
     await Promise.all([
       app.waitForEvent('close', {timeout: 10000}),
+      expect.poll(() => child.exitCode, {timeout: 10000}).toBe(0),
       app.evaluate(() => { setImmediate(globalThis.isolatedBackupQuitFixture.release); }),
     ]);
   }
-  assert.equal(app.process().exitCode, 0);
 }
 
 function helperStatus(url, headers) {
