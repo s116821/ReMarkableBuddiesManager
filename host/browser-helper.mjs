@@ -401,10 +401,13 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       let value;
       try { value = JSON.parse(body); } catch { return refuse(400); }
       if (!value || typeof value !== 'object' || Object.keys(value).join() !== 'action' || !['identity', 'observe', 'cancel', 'inspect-owned', 'inspect-runtime'].includes(value.action)) return refuse(400);
-      res.setHeader('Content-Type', 'application/json');
-      const output = value.action === 'identity' ? { contract_version: 1, kind: 'browser', transport: 'wired-maintenance' } :
-        value.action === 'cancel' ? observer.cancel() : value.action === 'inspect-runtime' ? await observer.inspectRuntime() : value.action === 'inspect-owned' ? await observer.inspectOwned() : await observer.observe();
-      res.end(JSON.stringify(output)); return;
+      try {
+        const output = value.action === 'identity' ? { contract_version: 1, kind: 'browser', transport: 'wired-maintenance' } :
+          value.action === 'cancel' ? observer.cancel() : value.action === 'inspect-runtime' ? await observer.inspectRuntime() : value.action === 'inspect-owned' ? await observer.inspectOwned() : await observer.observe();
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(output));
+      } catch { return refuse(409); }
+      return;
     }
     if (req.method !== 'GET' || !url.pathname.startsWith('/preview/')) return refuse(404);
     try {

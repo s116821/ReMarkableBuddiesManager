@@ -12,6 +12,7 @@ import {createIsolatedBackupDrive} from '../host/isolated-backup-drive.mjs';
 import {IsolatedBackupStaging} from '../host/isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-restore.mjs';
+import {portableFixture, artifact as portableArtifact} from './fixtures/portable-configuration.mjs';
 
 const json = value => Buffer.from(JSON.stringify(value));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -35,7 +36,13 @@ const objects = [data, preferences].map((bytes, index) =>
   file('Object' + index, bytes.length, {kind: 'object', sha256: hash(bytes)}));
 
 function setup(t, {stageConfigured = true, hold = null, unavailable = false, unbound = false, beforeRelease,
-  readFactory} = {}) {
+  readFactory, portableBytes = preferences, holdMemberRead, onMemberRead, memberChunk} = {}) {
+  const packageMarker = portableBytes === preferences ? markerBytes :
+    json({isolated_backup_version: 1, data_backup: ref(data), portable_configuration: ref(portableBytes)});
+  const packageMarkerFile = portableBytes === preferences ? marker :
+    file(marker.id, packageMarker.length, {kind: 'marker', predecessor: root.id, sha256: hash(packageMarker)});
+  const packageObjects = portableBytes === preferences ? objects :
+    [objects[0], file(objects[1].id, portableBytes.length, {kind: 'object', sha256: hash(portableBytes)})];
   const registration = {schema: 1, type: 'google-desktop', clientId: '123456789012-fixture.apps.googleusercontent.com',
     clientSecret: null};
   let grant = {schema: 1, clientId: registration.clientId, account: {permissionId: 'fixture', label: 'fixture@example.invalid'},
@@ -65,15 +72,15 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
   t.mock.method(IsolatedBackupVerifier.prototype, 'available', async () => !unavailable);
   t.mock.method(IsolatedBackupVerifier.prototype, 'verify', async ({root, markerSha256, signal}) => {
     assert.equal(root, stageRoot);
-    assert.equal(markerSha256, hash(markerBytes));
-    assert.deepEqual(Buffer.concat(files.get('isolated-backup.json')), markerBytes);
+    assert.equal(markerSha256, hash(packageMarker));
+    assert.deepEqual(Buffer.concat(files.get('isolated-backup.json')), packageMarker);
     assert.deepEqual(Buffer.concat(files.get('data/backup.json')), data);
-    assert.deepEqual(Buffer.concat(files.get('portable-configuration.json')), preferences);
+    assert.deepEqual(Buffer.concat(files.get('portable-configuration.json')), portableBytes);
     if (hold === 'verifier') await holdUntilJoined(signal);
     return Buffer.concat([json({report_version: 1, operation: 'inspect-isolated', status: 'ok', incomplete: true,
       activation_performed: false, data: {isolated_package: {
-        marker_sha256: hash(markerBytes), data_backup: ref(data), portable_configuration: ref(preferences),
-        declared_settings: 0, data: {format: 1, manifests: 1, objects: 0, selected_scopes: 0, selection_receipts: 0,
+        marker_sha256: hash(packageMarker), data_backup: ref(data), portable_configuration: ref(portableBytes),
+        declared_settings: Object.keys(JSON.parse(portableBytes).settings).length, data: {format: 1, manifests: 1, objects: 0, selected_scopes: 0, selection_receipts: 0,
           complete_media: false, configuration_included: false},
       }}}), Buffer.from('\n')]);
   });
@@ -93,9 +100,13 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
       assert.deepEqual(names, [...files.keys()]);
       const chunks = files.get(member.name);
       assert.deepEqual(ref(Buffer.concat(chunks)), {bytes: member.bytes, sha256: member.sha256});
+      onMemberRead?.(member);
+      if (holdMemberRead && member.name === 'portable-configuration.json') {
+        await holdMemberRead(bounds);
+      }
       for (const chunk of chunks) {
         bounds().signal.throwIfAborted();
-        await write(Buffer.from(chunk));
+        await write(Buffer.from(memberChunk ? memberChunk(member, chunk) : chunk));
       }
       bounds().signal.throwIfAborted();
     },
@@ -113,19 +124,19 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
     backupReadFactory: unbound ? null : (readFactory ?? (capture => {
       captures.push(capture);
       return {
-        list: ({kind}) => json({files: [kind === 'root' ? root : marker], incompleteSearch: false}),
-        readMetadata: ({kind}) => json(kind === 'root' ? root : marker),
-        readMarker() { events.push('marker'); return markerBytes; },
+        list: ({kind}) => json({files: [kind === 'root' ? root : packageMarkerFile], incompleteSearch: false}),
+        readMetadata: ({kind}) => json(kind === 'root' ? root : packageMarkerFile),
+        readMarker() { events.push('marker'); return packageMarker; },
         listObject(query) {
           events.push('object-list');
           assert.equal(query.rootId, root.id);
           assert.equal(query.backup, backup);
-          return json({files: objects.filter(item => item.appProperties.sha256 === query.sha256), incompleteSearch: false});
+          return json({files: packageObjects.filter(item => item.appProperties.sha256 === query.sha256), incompleteSearch: false});
         },
-        readObjectMetadata: ({id}) => json(objects.find(item => item.id === id)),
+        readObjectMetadata: ({id}) => json(packageObjects.find(item => item.id === id)),
         async *streamObject({id, signal}) {
           if (hold === 'stream') await holdUntilJoined(signal);
-          else yield id === objects[0].id ? data : preferences;
+          else yield id === packageObjects[0].id ? data : portableBytes;
         },
       };
     })),
@@ -520,6 +531,207 @@ test('cancelled or expired handoff joins the original transfer and Prepare befor
       assert.equal(f.events.includes('stage-release'), true);
       assert.equal(f.restoreEvents.includes('destination-release'), true);
       assert.deepEqual(f.restore.calls.map(call => call.selector), mode === 'cancel-prepare' ? ['prepare'] : []);
+    });
+  }
+});
+
+
+async function stagedPreferences(t, options = {}) {
+  const f = setup(t, {portableBytes: json(portableArtifact), ...options});
+  const target = portableFixture();
+  const original = await selection(f.composition);
+  const [operation, reference] = original;
+  const host = f.composition.isolatedBackup;
+  assert.equal(host.request({version: 1, action: 'download', operation, reference}).status, 'downloading');
+  const deadline = performance.now() + 3000;
+  let receipt;
+  do {
+    receipt = host.request({version: 1, action: 'status', operation});
+    if (receipt.status !== 'downloading') break;
+    await delay(5);
+  } while (performance.now() < deadline);
+  assert.equal(receipt.status, 'verified');
+  assert.equal(host.canHandoff(operation, reference), true);
+  t.after(() => {
+    f.releaseDone.resolve();
+    return Promise.all([f.composition.dispose(), target.portable.dispose()]);
+  });
+  const prepare = (observation = identity) =>
+    f.composition.preparePreferences(...original, {portable: target.portable, target: observation});
+  return {...f, ...target, original, prepare};
+}
+
+test('verified preferences use one sealed member and wait for retirement before explicit Confirm', {timeout: 10000}, async t => {
+  for (const noop of [false, true]) {
+    await t.test(noop ? 'no change' : 'ready', async t => {
+      const members = [];
+      const f = await stagedPreferences(t, {onMemberRead: member => members.push(member)});
+      f.portableState.noop = noop;
+      const [operation, reference] = f.original;
+      const host = f.composition.isolatedBackup;
+      assert.equal((await f.composition.preparePreferences(operation, reference)).status, 'unavailable');
+      const restore = f.io.acquire('ordinary-restore', 'prepare', 'prepare');
+      assert.ok(restore);
+      assert.equal((await f.prepare()).status, 'busy');
+      f.io.release(restore);
+      assert.equal((await f.prepare({...identity, boot_id: 'c'.repeat(36)})).status, 'invalidated');
+      assert.equal(host.canHandoff(operation, reference), true);
+      assert.deepEqual(f.calls, []);
+
+      const actions = () => f.calls.map(call => call.selector);
+      const pending = f.prepare();
+      let published = false;
+      void pending.then(() => { published = true; });
+      await f.releaseEntered.promise;
+      assert.equal(published, false);
+      assert.equal(f.io.acquire('ordinary-restore', 'prepare', 'prepare'), null);
+      assert.deepEqual(actions(), ['inspect', 'prepare']);
+      assert.deepEqual(members, [{name: 'portable-configuration.json', ...ref(json(portableArtifact))}]);
+      assert.deepEqual(f.calls[1].body.artifact, portableArtifact);
+      assert.deepEqual(
+        {connection_id: f.portableState.packets[1].connection_id, boot_id: f.portableState.packets[1].boot_id},
+        identity
+      );
+
+      f.releaseDone.resolve();
+      const result = await pending;
+      assert.equal(result.cleanupPending, false);
+      const preview = result.preview.portable_configuration;
+      assert.equal(result.status, noop ? 'no-change' : 'ready');
+      assert.equal(preview.state, result.status);
+      assert.equal(preview.export_file, null);
+      assert.equal(JSON.stringify(result).includes('SYNTHETIC_PRIVATE_PORTABLE'), false);
+      assert.equal(JSON.stringify(result).includes('artifact_base64'), false);
+      assert.equal(host.canHandoff(operation, reference), false);
+      assert.equal((await f.prepare()).status, 'invalidated');
+      assert.deepEqual(actions(), ['inspect', 'prepare']);
+      if (noop) {
+        assert.equal(preview.reference, null);
+      } else {
+        const confirmed = await f.portable.request({action: 'confirm', ...identity, reference: preview.reference});
+        assert.equal(confirmed.portable_configuration.state, 'verified');
+        assert.deepEqual(actions(), ['inspect', 'prepare', 'apply']);
+        const original = f.portableState.prepared.get(f.calls[1].body.operation);
+        assert.deepEqual(f.calls[2].body, {intent: original.intent, artifact: portableArtifact});
+      }
+      assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+    });
+  }
+});
+
+test('preferences preview refuses a lost source, changed target or uncertain cleanup', {timeout: 10000}, async t => {
+  const readbackFaults = {
+    'wrong-readback': (_, bytes) => Buffer.alloc(bytes.length, 7),
+    'short-readback': (_, bytes) => bytes.subarray(0, bytes.length - 1),
+    'excess-readback': (_, bytes) => Buffer.concat([bytes, Buffer.from([0])]),
+  };
+  for (const mode of ['missing-member', 'changed-member', ...Object.keys(readbackFaults),
+    'unsupported', 'source', 'target', 'cleanup-pending']) {
+    await t.test(mode, async t => {
+      const f = await stagedPreferences(t, {memberChunk: readbackFaults[mode]});
+      if (mode === 'missing-member') f.files.delete('portable-configuration.json');
+      if (mode === 'changed-member') f.files.set('portable-configuration.json', [Buffer.from('wrong bytes')]);
+      if (mode === 'unsupported') {
+        const run = f.observer.run;
+        f.observer.run = async function(action, request) {
+          const value = await run.call(this, action, request);
+          return {...value, portable_configuration_raw: {status: 'unsupported', stdout_base64: null}};
+        };
+      }
+      const pending = f.prepare();
+      await f.releaseEntered.promise;
+      if (mode === 'source') f.composition.isolatedBackup.invalidate();
+      if (mode === 'target') f.observer.lastObservation.boot_id = 'c'.repeat(36);
+      if (mode === 'cleanup-pending') f.releaseDone.reject(Error('Unconfirmed cleanup'));
+      else f.releaseDone.resolve();
+
+      const {status, preview, cleanupPending} = await pending;
+      const expected = {unsupported: 'unsupported', source: 'invalidated', target: 'invalidated'};
+      assert.equal(status, expected[mode] ?? 'unavailable');
+      assert.equal(preview, null);
+      assert.equal(cleanupPending, mode === 'cleanup-pending');
+      if (mode === 'cleanup-pending') {
+        const [operation] = f.original;
+        const retired = await f.composition.isolatedBackup.request({version: 1, action: 'cancel', operation});
+        assert.equal(retired.cleanupPending, true);
+      }
+      const actions = f.calls.map(call => call.selector);
+      const invalidMember = ['missing-member', 'changed-member'].includes(mode) || Object.hasOwn(readbackFaults, mode);
+      assert.deepEqual(actions, mode === 'unsupported' ? ['inspect'] : invalidMember ? [] : ['inspect', 'prepare']);
+      assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+    });
+  }
+});
+
+test('private preferences keep the lane through canceled read, late command and repeated disposal', {timeout: 12000}, async t => {
+  for (const phase of ['read', 'inspect', 'prepare']) {
+    await t.test(phase, async t => {
+      const entered = Promise.withResolvers(), proceed = Promise.withResolvers();
+      const aborted = Promise.withResolvers();
+      t.after(() => proceed.resolve());
+      const f = await stagedPreferences(t, {holdMemberRead: phase === 'read' ? async bounds => {
+        bounds().signal.addEventListener('abort', aborted.resolve, {once: true});
+        entered.resolve();
+        await proceed.promise;
+      } : undefined});
+      const hold = async value => {
+        entered.resolve();
+        await proceed.promise;
+        return value;
+      };
+      if (phase === 'inspect') {
+        f.portableState.onInspect = hold;
+        f.portable.budgetMs = 1000;
+      }
+      if (phase === 'prepare') f.portableState.onPrepare = hold;
+      const rawCancel = f.observer.cancel;
+      f.observer.cancel = function() {
+        if (phase === 'inspect' && f.calls.length === 1) aborted.resolve();
+        return rawCancel.call(this);
+      };
+      let externalCalls = 0;
+      const observe = f.observer.observe;
+      f.observer.observe = function(...args) {
+        externalCalls++;
+        return observe.apply(this, args);
+      };
+      const wrapped = f.forget.wrap();
+      const pending = f.prepare();
+      await entered.promise;
+      let disposal;
+      if (phase === 'read') {
+        const cancels = f.observer.cancels;
+        assert.equal(wrapped.cancel().status, 'cancelled');
+        assert.equal(f.observer.cancels, cancels);
+        await aborted.promise;
+      } else if (phase === 'inspect') {
+        await aborted.promise; // Original deadline expires while Inspect is pending.
+      } else {
+        disposal = f.portable.dispose();
+        assert.equal(f.portable.dispose(), disposal);
+      }
+      assert.throws(() => wrapped.observe(), /Maintenance operation is draining/);
+      assert.equal(externalCalls, 0);
+      assert.equal(f.io.acquire('ordinary-restore', 'prepare', 'prepare'), null);
+      assert.equal(f.events.includes('stage-release'), false);
+
+      let settled = false;
+      if (disposal) void disposal.then(() => { settled = true; });
+      proceed.resolve();
+      await f.releaseEntered.promise;
+      assert.equal(f.io.acquire('ordinary-restore', 'prepare', 'prepare'), null);
+      assert.equal(settled, false);
+      f.releaseDone.resolve();
+      assert.deepEqual(await pending, {status: 'invalidated', preview: null, cleanupPending: false});
+      await disposal;
+      assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+      assert.deepEqual(f.calls.map(call => call.selector),
+        phase === 'read' ? [] : phase === 'inspect' ? ['inspect'] : ['inspect', 'prepare']);
+      await wrapped.observe();
+      assert.equal(externalCalls, 1);
+      const next = f.io.acquire('ordinary-restore', 'prepare', 'prepare');
+      assert.ok(next);
+      f.io.release(next);
     });
   }
 });

@@ -49,6 +49,11 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
   }
   const isolatedBackup = new IsolatedBackupHost({driveAuth, downloadSelection,
     releaseSelection: (operation, reference) => coordinator?.release(operation, reference)});
+
+  function takeHandoff(operation, reference) {
+    return !closing && isolatedBackup.takeVerifiedHandoff(operation, reference);
+  }
+
   return Object.freeze({
     driveAuth,
     isolatedBackup,
@@ -59,11 +64,41 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
         return {status: 'invalidated', preview: null, cleanupPending: false};
       }
       return restore.prepareHandoff(target, consume => {
-        if (!isolatedBackup.takeVerifiedHandoff(operation, reference)) {
+        if (!takeHandoff(operation, reference)) {
           return Promise.resolve({status: 'invalidated', cleanupPending: false});
         }
         return coordinator.handoff(operation, reference, consume);
       }, stageDestination);
+    },
+    async preparePreferences(operation, reference, {portable, target} = {}) {
+      if (closing || !coordinator || typeof portable?.prepareHandoff !== 'function') {
+        return {status: 'unavailable', preview: null, cleanupPending: false};
+      }
+      if (!isolatedBackup.canHandoff(operation, reference)) {
+        return {status: 'invalidated', preview: null, cleanupPending: false};
+      }
+      return portable.prepareHandoff(target, async (consume, signal) => {
+        if (signal.aborted || !takeHandoff(operation, reference)) {
+          return {status: 'invalidated', cleanupPending: false};
+        }
+        let release;
+        const abort = () => {
+          release ??= coordinator.release(operation, reference).catch(() => ({cleanupPending: true}));
+        };
+        signal.addEventListener('abort', abort, {once: true});
+        let result, retired;
+        try {
+          result = await coordinator.handoff(operation, reference, consume);
+        } catch {
+          result = {status: 'unavailable', cleanupPending: false};
+          abort();
+        } finally {
+          signal.removeEventListener('abort', abort);
+          // release joins handoff. Await it here, outside the consumer.
+          retired = await release;
+        }
+        return retired?.cleanupPending ? {...result, cleanupPending: true} : result;
+      });
     },
     dispose() {
       if (!closing) {
