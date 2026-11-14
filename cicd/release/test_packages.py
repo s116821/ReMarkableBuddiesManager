@@ -1,5 +1,6 @@
 """Project ZIP identity/modes and corruption controls; no application compilation."""
 import json
+import hashlib
 from pathlib import Path
 import stat
 import subprocess
@@ -24,10 +25,8 @@ class PackageControls(unittest.TestCase):
             members = {
                 "index.html": b"synthetic only",
                 **{name: b"synthetic executable marker" for name in existing_executables},
-                oracle: b"\x00synthetic oracle\r\n\xff",
                 "reader-buddy": b"unrelated root entry",
                 "resources/host/other/reader-buddy": b"unrelated resource entry",
-                "resources/host/buddy-oracle/provenance.json": b"{}",
             }
             for directory in ("dist/manager/browser", "out/packages/ReMarkableBuddiesManager-win32-x64",
                               "out/packages/ReMarkableBuddiesManager-linux-x64"):
@@ -35,17 +34,70 @@ class PackageControls(unittest.TestCase):
                     file = root / directory / member
                     file.parent.mkdir(parents=True, exist_ok=True)
                     file.write_bytes(content)
+            pin = dict(schema=1, repository="s116821/ReMarkableBuddies", sourceSha="1" * 40,
+                       sourceTree="2" * 40, cargoLockSha256="3" * 64, sdkRevision="4" * 40)
+            (root / "host").mkdir()
+            pin_path = root / "host/buddy-oracle-source.json"
+            pin_path.write_text(json.dumps(pin))
+            retained = root / "retained"
+            payload = b"\x00synthetic oracle\r\n\xff"
+            for platform, target, filename in (
+                ("win32", "x86_64-pc-windows-msvc", "reader-buddy.exe"),
+                ("linux", "x86_64-unknown-linux-gnu", "reader-buddy"),
+            ):
+                host = root / f"out/packages/ReMarkableBuddiesManager-{platform}-x64/resources/host"
+                (host / "buddy-oracle-source.json").write_bytes(pin_path.read_bytes())
+                resource = retained / target / "buddy-oracle"
+                resource.mkdir(parents=True)
+                (resource / filename).write_bytes(payload)
+                provenance = dict(schema=1, source=pin, target=target, profile="release", features=[],
+                    rustc="rustc synthetic fixture", version="dev.fixture-1-g1111111",
+                    executable=dict(name=filename, bytes=len(payload), sha256=hashlib.sha256(payload).hexdigest()))
+                (resource / "provenance.json").write_text(json.dumps(provenance))
+                notices = resource.parent / "notices"
+                notices.mkdir()
+                (notices / "NOTICE").write_text("Synthetic fixture only; not redistribution evidence.")
             packages = root / "packages"
             with patch("build.source_identity") as source:
-                assemble(root, candidate, packages)
+                hosts = [root / f"out/packages/ReMarkableBuddiesManager-{platform}-x64/resources/host"
+                         for platform in ("win32", "linux")]
+                packages.mkdir()
+                with self.assertRaises(FileExistsError):
+                    assemble(root, candidate, packages, oracle_root=retained)
+                self.assertTrue(all(not (host / "buddy-oracle").exists() for host in hosts))
+                self.assertTrue(all(not (host / "third-party/buddy-oracle").exists() for host in hosts))
+                packages.rmdir()
+                second_notice = retained / "x86_64-unknown-linux-gnu/notices/NOTICE"
+                notice_bytes = second_notice.read_bytes()
+                second_notice.unlink()
+                with self.assertRaisesRegex(ValueError, "notices"):
+                    assemble(root, candidate, packages, oracle_root=retained)
+                self.assertFalse(packages.exists())
+                self.assertTrue(all(not (host / "buddy-oracle").exists() for host in hosts))
+                self.assertTrue(all(not (host / "third-party/buddy-oracle").exists() for host in hosts))
+                second_notice.write_bytes(notice_bytes)
+                blocked_parent = hosts[1] / "third-party"
+                blocked_parent.write_bytes(b"existing unrelated file")
+                with self.assertRaisesRegex(ValueError, "destination parent"):
+                    assemble(root, candidate, packages, oracle_root=retained)
+                self.assertFalse(packages.exists())
+                self.assertTrue(all(not (host / "buddy-oracle").exists() for host in hosts))
+                self.assertFalse((hosts[0] / "third-party").exists())
+                self.assertEqual(blocked_parent.read_bytes(), b"existing unrelated file")
+                blocked_parent.unlink()
+                source.reset_mock()
+                assemble(root, candidate, packages, oracle_root=retained)
                 source.assert_called_once_with(root, candidate)
-            verified = verify_packages(packages, candidate)
+            verified = verify_packages(packages, candidate, oracle_root=retained, repo=root)
             self.assertEqual(set(packages.iterdir()), {packages / name for name in verified["packages"]} | {packages / "provenance.json"})
             self.assertEqual(set(verified["packages"]), {
                 "manager-browser.zip", "manager-linux-x64.zip", "manager-win32-x64.zip",
             })
-            member_bytes = {**members, "build-info.json": (root / "electron/build-info.json").read_bytes()}
             for filename in verified["packages"]:
+                directory = root / ("dist/manager/browser" if filename == "manager-browser.zip" else
+                    "out/packages/ReMarkableBuddiesManager-" + filename.removeprefix("manager-").removesuffix(".zip"))
+                member_bytes = {file.relative_to(directory).as_posix(): file.read_bytes()
+                                for file in directory.rglob("*") if file.is_file()}
                 executable_paths = existing_executables | {oracle} if filename == "manager-linux-x64.zip" else set()
                 with zipfile.ZipFile(packages / filename) as archive:
                     self.assertCountEqual(archive.namelist(), member_bytes)
@@ -54,6 +106,24 @@ class PackageControls(unittest.TestCase):
                             self.assertEqual(archive.read(member), content)
                             mode = archive.getinfo(member).external_attr >> 16
                             self.assertEqual(mode, stat.S_IFREG | (0o755 if member in executable_paths else 0o644))
+                    if filename == "manager-browser.zip":
+                        self.assertFalse(any(name.startswith("resources/host/buddy-oracle") for name in archive.namelist()))
+                    else:
+                        command = oracle if "linux" in filename else oracle + ".exe"
+                        self.assertEqual(archive.read(command), payload)
+                        self.assertIn("resources/host/third-party/buddy-oracle/NOTICE", archive.namelist())
+            # Trusted original inputs are independent of the candidate ZIP metadata.
+            pin_path.write_text(json.dumps(dict(pin, sourceSha="9" * 40)))
+            with self.assertRaisesRegex(ValueError, "bundle-refused"):
+                verify_packages(packages, candidate, oracle_root=retained, repo=root)
+            pin_path.write_text(json.dumps(pin))
+            original = retained / "x86_64-pc-windows-msvc/buddy-oracle/provenance.json"
+            original_bytes = original.read_bytes()
+            original.write_bytes(original_bytes + b" ")
+            with self.assertRaisesRegex(ValueError, "bundle-refused"):
+                verify_packages(packages, candidate, oracle_root=retained, repo=root)
+            original.write_bytes(original_bytes)
+            self.assertEqual(verify_packages(packages, candidate, oracle_root=retained, repo=root), verified)
             # Execute the actual standard Linux extractor on the generated CI ZIP.
             import os
             if os.name != "nt":
@@ -70,7 +140,7 @@ class PackageControls(unittest.TestCase):
                 dest = checkout / "out/packages/ReMarkableBuddiesManager-linux-x64"
                 for member in existing_executables | {oracle}:
                     self.assertEqual(stat.S_IMODE((dest / member).stat().st_mode), 0o755)
-                self.assertEqual((dest / oracle).read_bytes(), members[oracle])
+                self.assertEqual((dest / oracle).read_bytes(), payload)
                 for file in ("dist/manager/browser/build-info.json", "electron/build-info.json"):
                     self.assertEqual(json.loads((checkout / file).read_text()), info)
             # A self-consistent manifest cannot authorize a different embedded identity.
@@ -79,8 +149,8 @@ class PackageControls(unittest.TestCase):
                 archive.writestr("build-info.json", json.dumps(dict(info, sha="b" * 40)))
             verified["packages"][target.name] = sha256(target)
             (packages / "provenance.json").write_text(json.dumps(verified))
-            with self.assertRaisesRegex(ValueError, "Embedded"):
+            with self.assertRaisesRegex(ValueError, "bundle-refused"):
                 verify_packages(packages, candidate)
             (packages / "unexpected").write_text("extra asset")
-            with self.assertRaisesRegex(ValueError, "Unexpected or missing"):
+            with self.assertRaisesRegex(ValueError, "bundle-refused"):
                 verify_packages(packages, candidate)
