@@ -1,6 +1,71 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import {randomUUID} from 'node:crypto';
+import {restorePathHash} from '../host/ordinary-restore-private.mjs';
 import {WiredObserver} from '../host/observer.mjs';import {OrdinaryRestoreHost} from '../host/ordinary-restore.mjs';import {tablet,identity,source} from './fixtures/ordinary-restore.mjs';
 const vectors=JSON.parse(await readFile(new URL('./fixtures/ordinary-restore-reference-vectors.json',import.meta.url),'utf8')),wire=vectors.raw_cases.find(x=>x.id==='prepared-valid-target-media-differs-from-source').stdout_utf8;
+
+test('supervised child loss cannot authorize private destination deletion', {timeout: 15000}, async t => {
+ const prepared = JSON.parse(wire);
+ const root = source;
+ prepared.data.intent.source_path_sha256 = restorePathHash('source', root + '/data');
+ prepared.data.preview.source.configuration_included = false;
+ const encode = report => Buffer.from(report).toString('base64');
+ const preparedBytes = encode(JSON.stringify(prepared) + '\n');
+ const malformedBytes = encode('{"report_version":1}\n');
+ for (const selector of ['prepare', 'apply']) {
+  for (const mode of ['exit', 'timeout', 'malformed', 'unavailable', 'unsupported']) {
+   await t.test(selector + '-' + mode, async t => {
+    const folder = await mkdtemp(path.join(os.tmpdir(), 'manager-restore-reader-'));
+    t.after(() => rm(folder, {recursive: true, force: true}));
+    const record = path.join(folder, 'selectors');
+    await writeFile(path.join(folder, 'ordinary_restore_transport.py'), `
+      const fs = require('node:fs');
+      let input = '';
+      process.stdin.setEncoding('utf8');
+      process.stdin.on('data', bytes => { input += bytes; });
+      process.stdin.on('end', () => {
+        const {selector} = JSON.parse(input);
+        fs.appendFileSync(${JSON.stringify(record)}, selector + '\\n');
+        const failure = selector === ${JSON.stringify(selector)} ? ${JSON.stringify(mode)} : null;
+        if (failure === 'exit') { process.exitCode = 3; return; }
+        if (failure === 'timeout') { setInterval(() => {}, 1000); return; }
+        const unreported = failure === 'unavailable' || failure === 'unsupported';
+        const stdout_base64 = unreported ? null : failure === 'malformed' ? ${JSON.stringify(malformedBytes)} : ${JSON.stringify(preparedBytes)};
+        process.stdout.write(JSON.stringify({contract_version: 1, status: 'observed', observation: ${JSON.stringify(tablet)},
+          ordinary_restore_raw: {status: unreported ? failure : 'reported', stdout_base64}}));
+      });
+    `);
+    const observer = new WiredObserver({config: path.join(folder, 'synthetic'), python: process.execPath,
+     script: path.join(folder, 'wired_observer.py'), timeoutMs: 1500});
+    observer.lastObservation = structuredClone(tablet);
+    const host = new OrdinaryRestoreHost({observer, uuid: () => vectors.context.operation});
+    let releases = 0;
+    const result = await host.prepareHandoff(identity, async consume => {
+     await consume({signal: new AbortController().signal, timeoutMs: 12000, files: [],
+      inspection: {markerSha256: 'a'.repeat(64), completeMedia: prepared.data.preview.source.complete_media},
+      components: {data: {sha256: prepared.data.intent.archive_sha256}}});
+     return {status: 'handed-off', cleanupPending: false};
+    }, async () => ({root, assertOwned: async () => true, async release() { releases++; return true; }}));
+    if (selector === 'prepare') {
+     assert.equal(result.status, 'unavailable');
+     assert.equal(result.preview, null);
+     assert.equal(result.cleanupPending, true);
+    } else {
+     assert.equal(result.status, 'ready');
+     const {reference} = result.preview.ordinary_restore;
+     const reply = await host.request({action: 'confirm', ...identity, reference, invocation: randomUUID()});
+     assert.equal(reply.ordinary_restore.state, 'unknown');
+     assert.equal(reply.ordinary_restore.retained[0].reference, reference);
+    }
+    const disposal = host.dispose();
+    assert.equal(host.dispose(), disposal);
+    assert.equal(await disposal, true);
+    assert.equal(releases, 0);
+    assert.equal((await readFile(record, 'utf8')).trim(), selector === 'prepare' ? 'prepare' : 'prepare\napply');
+   });
+  }
+ }
+});
+
 test('actual supervised restore child exact24576/over/duplicate/identity/exit/timeout with private stdin only',async t=>{
  const folder=await mkdtemp(path.join(os.tmpdir(),'manager-conversation-child-'));t.after(()=>rm(folder,{recursive:true,force:true}));const record=path.join(folder,'requests'),script=path.join(folder,'ordinary_restore_transport.py');
  for(const mode of ['exact','over','duplicate','identity','exit','timeout']){

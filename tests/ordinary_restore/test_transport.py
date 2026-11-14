@@ -95,7 +95,11 @@ class Transport(unittest.TestCase):
         with patch.object(q.shared,'inspect',return_value={'boot_id':BOOT}):self.assertEqual(q.execute(t,request('prepare'))['_ordinary_restore_raw']['status'],'reported')
 
 class ModePeer(Peer):
-    def __init__(self,selector):super().__init__();self.selector=selector;self.received=None
+    def __init__(self, selector, exit_status):
+        super().__init__()
+        self.selector = selector
+        self.exit_status = exit_status
+        self.received = None
     def check_channel_exec_request(self,channel,command):
         if command.decode()==o.COMMAND:return super().check_channel_exec_request(channel,command)
         self.commands.append(command.decode())
@@ -103,7 +107,13 @@ class ModePeer(Peer):
         def send():
             self.received=bytearray()
             while part:=channel.recv(4096):self.received.extend(part)
-            channel.sendall(report(self.selector));channel.send_stderr(b'SYNTHETIC_PRIVATE_STDERR');channel.send_exit_status(0);channel.shutdown_write()
+            channel.sendall(report(self.selector))
+            channel.send_stderr(b'SYNTHETIC_PRIVATE_STDERR')
+            if self.exit_status is None:
+                channel.close()
+            else:
+                channel.send_exit_status(self.exit_status)
+                channel.shutdown_write()
         threading.Thread(target=send,daemon=True).start();return True
 class Notice:
     def recv(self,_):raise socket.timeout()
@@ -111,13 +121,45 @@ class Notice:
 def key(seed):
     p=ed25519.Ed25519PrivateKey.from_private_bytes(seed);b=p.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.OpenSSH,serialization.NoEncryption());return b,paramiko.Ed25519Key.from_private_key(io.StringIO(b.decode()))
 class SSH(unittest.TestCase):
+    def execute_on_peer(self, selector, exit_status=0):
+        with tempfile.TemporaryDirectory() as folder:
+            client_bytes, _ = key(bytes(range(32)))
+            _, hostkey = key(bytes([7]) * 32)
+            identity_file = Path(folder) / 'public-fixture'
+            identity_file.write_bytes(client_bytes)
+            identity_file.chmod(0o600)
+            client, server = socket.socketpair()
+            peer = ModePeer(selector, exit_status)
+            transport = paramiko.Transport(server)
+            transport.add_server_key(hostkey)
+            transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Files)
+            transport.start_server(event=threading.Event(), server=peer)
+            try:
+                value = request(selector)
+                observed = o.observe(
+                    {'host_key_sha256': o.fingerprint(hostkey), 'identity_file': str(identity_file)},
+                    snapshot=lambda _: BASELINE, dial=lambda _: client, notices=Notice(),
+                    expected_connection=IDENTITY, inspection=lambda t: q.execute(t, value))
+                self.assertEqual(peer.commands, [o.COMMAND, q.PREFIX + selector + ' --restore-input -', o.COMMAND])
+                self.assertEqual(peer.received, base64.b64decode(value['input_base64']))
+                self.assertNotIn('SYNTHETIC_PRIVATE_STDERR', json.dumps(observed))
+                return observed['_ordinary_restore_raw']
+            finally:
+                transport.close()
+                client.close()
+                server.close()
+
+    @unittest.skipUnless(sys.platform == 'linux', 'POSIX local SSH fixture, no Windows native USB claim')
+    def test_command_channel_close_without_remote_exit_status_is_unavailable(self):
+        for selector in ('prepare', 'apply'):
+            with self.subTest(selector=selector):
+                raw = self.execute_on_peer(selector, exit_status=None)
+                self.assertEqual(raw, {'status': 'unavailable', 'stdout_base64': None})
+
     @unittest.skipUnless(sys.platform=='linux','POSIX local SSH fixture, no Windows native USB claim')
     def test_real_local_ssh_peer_all_three_selectors_exact_original_stdin(self):
         for selector in ('prepare','apply','status','prepare-notebook','apply-notebook','status-notebook'):
-            with self.subTest(selector=selector),tempfile.TemporaryDirectory() as folder:
-                client_bytes,_=key(bytes(range(32)));_,hostkey=key(bytes([7])*32);p=Path(folder)/'public-fixture';p.write_bytes(client_bytes);p.chmod(0o600)
-                client,server=socket.socketpair();peer=ModePeer(selector);transport=paramiko.Transport(server);transport.add_server_key(hostkey);transport.set_subsystem_handler('sftp',paramiko.SFTPServer,Files);transport.start_server(event=threading.Event(),server=peer)
-                try:
-                    value=request(selector);observed=o.observe({'host_key_sha256':o.fingerprint(hostkey),'identity_file':str(p)},snapshot=lambda _:BASELINE,dial=lambda _:client,notices=Notice(),expected_connection=IDENTITY,inspection=lambda t:q.execute(t,value))
-                    self.assertEqual(peer.commands,[o.COMMAND,q.PREFIX+selector+' --restore-input -',o.COMMAND]);self.assertEqual(peer.received,base64.b64decode(value['input_base64']));self.assertNotIn('SYNTHETIC_PRIVATE_STDERR',json.dumps(observed));self.assertEqual(base64.b64decode(observed['_ordinary_restore_raw']['stdout_base64']),report(selector))
-                finally:transport.close();client.close();server.close()
+            with self.subTest(selector=selector):
+                raw = self.execute_on_peer(selector)
+                self.assertEqual(raw['status'], 'reported')
+                self.assertEqual(base64.b64decode(raw['stdout_base64']), report(selector))

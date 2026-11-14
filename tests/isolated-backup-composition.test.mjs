@@ -14,6 +14,7 @@ import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-restore.mjs';
 import {portableFixture, artifact as portableArtifact, selected as manualArtifact} from './fixtures/portable-configuration.mjs';
 import {IsolatedBackupPreferences} from '../host/isolated-backup-preferences.mjs';
+import {MemoryForgetHost} from '../host/memory-forget.mjs';
 
 const json = value => Buffer.from(JSON.stringify(value));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -365,7 +366,7 @@ async function stagedRestore(t, {digest = hash(data), ...options} = {}) {
   return {...f, restore, original, prepare, prepared, transfer, destination, restoreEvents: events};
 }
 
-test('restore preview adopts one exact destination and explicit Confirm preserves original Status', async t => {
+test('restore preview adopts one exact destination and explicit Confirm preserves original Status', {timeout: 6000}, async t => {
   const f = await stagedRestore(t);
   const preview = f.prepare();
   await f.releaseEntered.promise;
@@ -384,7 +385,21 @@ test('restore preview adopts one exact destination and explicit Confirm preserve
   // A repeat cannot consume another stage or invalidate the existing preview.
   assert.equal((await f.prepare()).status, 'invalidated');
   const ref = result.preview.ordinary_restore.reference;
-  assert.equal((await f.restore.use('confirm', ref)).ordinary_restore.state, 'unknown');
+  const releaseEntered = Promise.withResolvers(), releaseDone = Promise.withResolvers();
+  t.after(() => releaseDone.resolve());
+  const release = f.prepared.release;
+  f.prepared.release = async () => {
+    releaseEntered.resolve();
+    await releaseDone.promise;
+    return release();
+  };
+  const confirmed = f.restore.use('confirm', ref);
+  await releaseEntered.promise;
+  try {
+    assert.equal(f.restore.io.revoke(), false);
+    assert.equal((await f.restore.prepare()).ordinary_restore.state, 'busy');
+  } finally { releaseDone.resolve(); }
+  assert.equal((await confirmed).ordinary_restore.state, 'unknown');
   assert.deepEqual(f.restoreEvents.slice(-2), ['destination-check', 'destination-release']);
   const input = f.restore.calls.find(call => call.selector === 'apply').input;
   f.restore.state.status = 'desired-generation-observed';
@@ -392,6 +407,7 @@ test('restore preview adopts one exact destination and explicit Confirm preserve
   assert.equal(reconciled.state, 'desired-generation-observed');
   assert.equal(reconciled.apply_outcome, 'unknown');
   assert.equal(f.restore.calls.at(-1).input, input);
+  assert.equal(await f.restore.host.dispose(), false);
   assert.equal(f.restoreEvents.filter(event => event === 'destination-release').length, 1);
 });
 
@@ -499,7 +515,7 @@ test('handoff refuses wrong target, corrupt destination and a different Prepare 
   }
 });
 
-test('cancelled or expired handoff joins the original transfer and Prepare before either stage retires', {timeout: 5000}, async t => {
+test('cancelled or expired handoff joins local work without assuming remote Prepare ended', {timeout: 5000}, async t => {
   for (const mode of ['cancel-transfer', 'timeout-transfer', 'cancel-prepare']) {
     await t.test(mode, async t => {
       const entered = Promise.withResolvers(), aborted = Promise.withResolvers(), drained = Promise.withResolvers();
@@ -528,14 +544,90 @@ test('cancelled or expired handoff joins the original transfer and Prepare befor
       assert.equal(f.events.includes('stage-release'), false);
       assert.equal(f.restoreEvents.includes('destination-release'), false);
       drained.resolve();
-      assert.equal((await pending).status, 'invalidated');
+      const uncertain = mode === 'cancel-prepare';
+      const result = await pending;
+      assert.equal(result.status, 'invalidated');
+      assert.equal(result.cleanupPending, uncertain);
       assert.equal(f.events.includes('stage-release'), true);
-      assert.equal(f.restoreEvents.includes('destination-release'), true);
+      assert.equal(f.restoreEvents.includes('destination-release'), !uncertain);
       assert.deepEqual(f.restore.calls.map(call => call.selector), mode === 'cancel-prepare' ? ['prepare'] : []);
     });
   }
 });
 
+
+test('private Prepare permits checked retirement after a terminal refusal and withholds it on ambiguous replies', {timeout: 8000}, async t => {
+  for (const mode of ['refusal', 'lost', 'malformed', 'wrong-operation']) {
+    await t.test(mode, async t => {
+      const f = await stagedRestore(t);
+      f.releaseDone.resolve();
+      f.restore.state.onRaw = report => {
+        if (mode === 'lost') throw Error('Original transport lost');
+        if (mode === 'malformed') return '{malformed';
+        if (mode === 'wrong-operation') {
+          report.data.intent.operation = '66666666-6666-4666-8666-666666666666';
+          return report;
+        }
+        return {...report, status: 'busy', outcome: 'not-dispatched', data: null};
+      };
+      const result = await f.prepare();
+      const ambiguous = mode !== 'refusal';
+      assert.equal(result.status, 'unavailable');
+      assert.equal(result.preview, null);
+      assert.equal(result.cleanupPending, ambiguous);
+      assert.equal(await f.restore.host.dispose(), ambiguous);
+      assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+      assert.equal(f.restoreEvents.filter(event => event === 'destination-release').length, Number(!ambiguous));
+    });
+  }
+});
+
+test('ambiguous stage-backed Apply retains original Status and never releases the destination', {timeout: 8000}, async t => {
+  for (const mode of ['lost', 'malformed', 'cancelled']) {
+    await t.test(mode, async t => {
+      const f = await stagedRestore(t);
+      f.releaseDone.resolve();
+      const prepared = await f.prepare();
+      assert.equal(prepared.status, 'ready');
+      const reference = prepared.preview.ordinary_restore.reference;
+      const entered = Promise.withResolvers(), drained = Promise.withResolvers();
+      t.after(() => drained.resolve());
+      f.restore.state.onRaw = async (report, request) => {
+        if (request.selector !== 'apply') return report;
+        if (mode === 'lost') throw Error('Original transport lost');
+        if (mode === 'malformed') return '{malformed';
+        entered.resolve();
+        await drained.promise;
+        return report;
+      };
+      const pending = f.restore.use('confirm', reference);
+      if (mode === 'cancelled') {
+        await entered.promise;
+        try {
+          const {observer, io, host} = f.restore;
+          const wrapped = new MemoryForgetHost({observer, io, beforeIO: () => host.invalidate()}).wrap();
+          assert.equal(wrapped.cancel().status, 'cancelled');
+          assert.throws(() => wrapped.run('ordinary-restore', {}), /draining/);
+          assert.equal((await f.restore.prepare()).ordinary_restore.state, 'busy');
+          assert.equal(f.restoreEvents.includes('destination-release'), false);
+        } finally { drained.resolve(); }
+      }
+      assert.equal((await pending).ordinary_restore.state, 'unknown');
+      assert.equal(f.restoreEvents.includes('destination-release'), false);
+      const original = f.restore.calls.find(call => call.selector === 'apply').input;
+      f.restore.state.status = 'desired-generation-observed';
+      const status = (await f.restore.use('status', reference)).ordinary_restore;
+      assert.equal(status.state, 'desired-generation-observed');
+      assert.equal(status.apply_outcome, 'unknown');
+      assert.equal(f.restore.calls.at(-1).input, original);
+      assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare', 'apply', 'status']);
+      const disposal = f.restore.host.dispose();
+      assert.equal(f.restore.host.dispose(), disposal);
+      assert.equal(await disposal, true);
+      assert.equal(f.restoreEvents.includes('destination-release'), false);
+    });
+  }
+});
 
 test('backup bridge cancellation remains effective through the joined retirement and preserves its warning', {timeout: 6000}, async t => {
   const releaseEntered = Promise.withResolvers(), releaseDone = Promise.withResolvers();

@@ -21,7 +21,9 @@ export class OrdinaryRestoreHost{
  #retireDestination(s){
   if(!s.destination||s.destinationBusy)return s.destinationCleanup;
   const stage=s.destination;s.destination=null;
-  const pending=releaseDestination(stage).then(uncertain=>{this.#cleanupPending ||= uncertain;return uncertain;});
+  // Local cancellation joins the observer child, which may leave its remote reader running.
+  const release=s.destinationReader ? Promise.resolve(true) : releaseDestination(stage);
+  const pending=release.then(uncertain=>{this.#cleanupPending ||= uncertain;return uncertain;});
   s.destinationCleanup=pending;this.#destinationCleanups.add(pending);
   void pending.then(()=>this.#destinationCleanups.delete(pending));
   return pending;
@@ -75,7 +77,7 @@ export class OrdinaryRestoreHost{
  #current(a){return this.#active===a&&a.epoch===this.#epoch&&this.io.owns(a.token)&&!a.controller?.signal.aborted&&
   !a.sourceSignal?.aborted&&this.now()<a.deadline&&same(a.s.sample,this.observer.lastObservation);}
  #admission(s,invocation){return s.ledger.has(invocation)?'unavailable':s.ledger.size>=32?'capacity':null;}
- async #owned(s,q,handler,joined=false){const started=this.now(),token=this.io.acquire(this.#family.lane,s.reference??'prepare',q.action);if(!token)return this.#fallback(q,'busy');let a,timer;
+ async #owned(s,q,handler,joined=false){const started=this.now(),token=this.io.acquire(this.#family.lane,s.reference??'prepare',q.action,{joined});if(!token)return this.#fallback(q,'busy');let a,timer;
   try{const refused=this.#admission(s,q.invocation);if(refused)return this.#fallback(q,refused);
    if(q.action==='prepare'){this.invalidate();s.reference=this.reference();s.operation=this.uuid();if(this.#lookup(s.reference))throw Error('Ordinary restore reference refused');}
    else if(q.action==='status')this.invalidate();
@@ -101,8 +103,22 @@ export class OrdinaryRestoreHost{
   const signal=a.sourceSignal?AbortSignal.any([a.controller.signal,a.sourceSignal]):a.controller?.signal;
   const cancel=()=>this.observer.cancel();
   signal?.addEventListener('abort',cancel,{once:true});
-  let v;try{v=await this.observer.run('ordinary-restore',q);}finally{signal?.removeEventListener('abort',cancel);q.input_base64=null;}if(!this.#current(a))throw Error('Ordinary restore invalidated');
+  let v;
+  try {
+   if (a.s.destination && (selector === 'prepare' || selector === 'apply')) {
+    if (a.s.destinationReader) throw Error('Original destination reader is unresolved');
+    a.s.destinationReader = a.token;
+   }
+   v = await this.observer.run('ordinary-restore', q);
+  } finally {
+   signal?.removeEventListener('abort', cancel);
+   q.input_base64 = null;
+  }
+  if (!this.#current(a)) throw Error('Ordinary restore invalidated');
   if(keys(v)!=='contract_version,observation,ordinary_restore_raw,status'||Buffer.byteLength(JSON.stringify(v))>24576)throw Error('Ordinary restore transport refused');validateResult({contract_version:v.contract_version,status:v.status,observation:v.observation});const r=v.ordinary_restore_raw;if(keys(r)!=='status,stdout_base64'||!['reported','unsupported','unavailable'].includes(r.status)||(r.status==='reported'?typeof r.stdout_base64!=='string':r.stdout_base64!==null))throw Error('Ordinary restore transport refused');if(v.status!=='observed'||!same(v.observation,a.s.sample))throw Error('Ordinary restore identity refused');if(r.status==='unsupported')throw new RestoreUnsupported();if(r.status!=='reported')throw Error('Ordinary restore unavailable');const raw=Buffer.from(r.stdout_base64,'base64');a.buffers.push(raw);if(raw.length>16384||raw.toString('base64')!==r.stdout_base64)throw Error('Ordinary restore report refused');return raw;
+ }
+ #settleDestinationReader(a) {
+  if (a.s.destinationReader === a.token) a.s.destinationReader = null;
  }
  #packet(s){const p=s.packet;if(!p||this.now()>=s.deadline||restoreHash(p.original)!==p.originalSha||restoreHash(p.input)!==p.inputSha)throw Error('Original restore unavailable');const parsed=this.#parseRaw(p.original,'prepare',{operation:s.operation,source:s.source});if(JSON.stringify({source:s.source,intent:parsed.intent})!==p.input.toString('utf8')||JSON.stringify(parsed.preview)!==JSON.stringify(s.preview))throw Error('Original restore refused');return {...p,intent:parsed.intent};}
  async request(value){if(this.#disposed)throw Error('Restore host disposed');const q=parseRestoreRequest(value);value=null;this.#expire();try{let v;if(q.action==='retained')v=this.#value('none');else if(q.action==='cancel')v=await this.#cancel(q);else if(q.action==='prepare')v=await this.#prepare(q);else v=await this.#use(q);this.#parseResult(v,q,validateResult);return this.assertCurrent(v);}finally{if(q.action==='prepare')q.source=null;}}
@@ -124,6 +140,7 @@ export class OrdinaryRestoreHost{
   a.buffers.push(input);
   const raw=await this.#raw(a,'prepare',input),p=this.#parseRaw(raw,'prepare',{operation:s.operation,source:s.source});
   if(!this.#current(a))throw Error('Ordinary restore invalidated');
+  this.#settleDestinationReader(a);
   if(p.intent){
    if(expectedArchive&&(p.intent.archive_sha256!==expectedArchive.sha256||
      p.preview.source.complete_media!==expectedArchive.completeMedia||p.preview.source.configuration_included)){
@@ -208,7 +225,9 @@ export class OrdinaryRestoreHost{
      if(s.destination!==destination||await this.#checkDestination(a)!==true||!this.#current(a))throw Error('Restore destination refused');
     }
     if(q.action==='confirm'){s.possible=true;s.state='unknown';s.applyOutcome='unknown';this.#editor=null;this.#records.set(s.reference,s);this.#arm(s,this.now()+1800000);}
-    const selector=q.action==='confirm'?'apply':'status',raw=await this.#raw(a,selector,p.input),r=this.#parseRaw(raw,selector,{operation:s.operation,source:s.source,intent:p.intent,preview:s.preview});if(!this.#current(a))throw Error('Ordinary restore invalidated');
+    const selector=q.action==='confirm'?'apply':'status',raw=await this.#raw(a,selector,p.input),r=this.#parseRaw(raw,selector,{operation:s.operation,source:s.source,intent:p.intent,preview:s.preview});
+    if(!this.#current(a))throw Error('Ordinary restore invalidated');
+    if (selector === 'apply') this.#settleDestinationReader(a);
     if(r.report.status==='ok'&&r.inspection){if(q.action==='confirm')s.applyOutcome='restored';this.#drop(s);return this.#value(r.report.outcome,s,{report:r.report,inspection:r.inspection});}
     if(q.action==='confirm'){
      if(r.report.outcome==='not-dispatched'){s.applyOutcome='not-dispatched';this.#drop(s);return this.#value('not-dispatched',s,{report:r.report});}
