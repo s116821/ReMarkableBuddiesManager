@@ -17,8 +17,8 @@ test('lost import survives local clear and failed original Status without replay
 test('backup preview shares Confirm and retains the original across a lost Apply', async t => {
  const f = open();
  t.after(() => f.portable.dispose());
- let cleared = 0;
- const begin = () => f.controller.beginBackupPreview(tablet, performance.now() + 10000, () => cleared++);
+ let backupCancellations = 0;
+ const begin = () => f.controller.beginBackupPreview(tablet, performance.now() + 10000, () => backupCancellations++);
  const {connection_id, boot_id} = tablet;
  const makePreview = async () => ({
   preview: await f.portable.request({action: 'prepare', connection_id, boot_id,
@@ -28,7 +28,7 @@ test('backup preview shares Confirm and retains the original across a lost Apply
  const stale = begin();
  const staleResult = await makePreview();
  f.controller.clear();
- assert.equal(cleared, 1);
+ assert.equal(backupCancellations, 1);
  await f.controller.read(f.adapter, tablet, async () => true, file());
  const successor = f.controller.state.view.reference;
  stale.settle(staleResult);
@@ -40,8 +40,10 @@ test('backup preview shares Confirm and retains the original across a lost Apply
  f.portableState.mode = 'lost';
  const original = f.controller.state.view.reference;
  await f.controller.confirm(f.adapter, tablet);
+ assert.equal(f.controller.state.view.state, 'unknown');
+ assert.equal(f.controller.state.uncertain, true);
  f.controller.clear();
- assert.equal(cleared, 2);
+ assert.equal(backupCancellations, 1, 'clearing after possible Apply must leave backup cancellation detached');
  assert.equal(f.controller.state.retained[0].reference, original);
  f.portableState.mode = 'normal';
  await f.controller.status(f.adapter, tablet, f.controller.state.retained[0], async () => true);
