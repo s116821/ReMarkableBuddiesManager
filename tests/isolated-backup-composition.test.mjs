@@ -6,13 +6,14 @@ import {DRIVE_SCOPE} from '../host/drive-auth.mjs';
 import {createIsolatedBackupComposition} from '../host/isolated-backup-composition.mjs';
 import {IsolatedBackupStaging} from '../host/isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
+import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-restore.mjs';
 
 const json = value => Buffer.from(JSON.stringify(value));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const ref = bytes => ({bytes: bytes.length, sha256: hash(bytes)});
 const backup = '12345678-1234-4123-8123-123456789abc';
 const device = '98765432-4321-4321-8321-cba987654321';
-const data = json({format: 1, manifests: [{}], objects: [], complete_media: true, config_snapshot: null});
+const data = json({format: 1, manifests: [{}], objects: [], complete_media: false, config_snapshot: null});
 const preferences = json({portable_configuration_version: 1, settings: {}});
 const markerBytes = json({isolated_backup_version: 1, data_backup: ref(data), portable_configuration: ref(preferences)});
 const scan = {version: 1, action: 'scan'};
@@ -28,7 +29,7 @@ const marker = file('Marker', markerBytes.length, {kind: 'marker', predecessor: 
 const objects = [data, preferences].map((bytes, index) =>
   file('Object' + index, bytes.length, {kind: 'object', sha256: hash(bytes)}));
 
-function setup(t, {stageConfigured = true, hold = null, unavailable = false, unbound = false} = {}) {
+function setup(t, {stageConfigured = true, hold = null, unavailable = false, unbound = false, beforeRelease} = {}) {
   const registration = {schema: 1, type: 'google-desktop', clientId: '123456789012-fixture.apps.googleusercontent.com',
     clientSecret: null};
   let grant = {schema: 1, clientId: registration.clientId, account: {permissionId: 'fixture', label: 'fixture@example.invalid'},
@@ -63,11 +64,11 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
     assert.deepEqual(Buffer.concat(files.get('data/backup.json')), data);
     assert.deepEqual(Buffer.concat(files.get('portable-configuration.json')), preferences);
     if (hold === 'verifier') await holdUntilJoined(signal);
-    return Buffer.concat([json({report_version: 1, operation: 'inspect-isolated', status: 'ok', incomplete: false,
+    return Buffer.concat([json({report_version: 1, operation: 'inspect-isolated', status: 'ok', incomplete: true,
       activation_performed: false, data: {isolated_package: {
         marker_sha256: hash(markerBytes), data_backup: ref(data), portable_configuration: ref(preferences),
         declared_settings: 0, data: {format: 1, manifests: 1, objects: 0, selected_scopes: 0, selection_receipts: 0,
-          complete_media: true, configuration_included: false},
+          complete_media: false, configuration_included: false},
       }}}), Buffer.from('\n')]);
   });
   t.mock.method(IsolatedBackupStaging.prototype, 'available', async () => true);
@@ -84,6 +85,7 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
     async release() {
       events.push('stage-release');
       releaseEntered.resolve();
+      beforeRelease?.();
       await releaseDone.promise;
       files.clear();
     },
@@ -161,6 +163,179 @@ test('default composition is unbound and missing stage or verifier refuses befor
   }
 });
 
+async function stagedRestore(t, {digest = hash(data), ...options} = {}) {
+  const f = setup(t, options);
+  const restore = restoreFixture({report(selector, body, state) {
+    const report = restoreReport(selector, body, state);
+    if (selector === 'prepare') {
+      report.data.intent.archive_sha256 = digest;
+      report.data.intent.complete_media = false;
+      report.data.intent.staged_configuration_sha256 = null;
+      report.data.preview.source.complete_media = false;
+      report.data.preview.target.complete_media = false;
+      report.data.preview.source.configuration_included = false;
+      report.data.preview.target.configuration_included = false;
+    } else if (report.data?.inspection) {
+      report.data.inspection.configuration_included = false;
+    }
+    return report;
+  }});
+  t.after(() => { f.releaseDone.resolve(); return Promise.all([f.composition.dispose(), restore.host.dispose()]); });
+  const original = await selection(f.composition);
+  const [operation, reference] = original;
+  const {isolatedBackup: host} = f.composition;
+  assert.equal(host.request({version: 1, action: 'download', operation, reference}).status, 'downloading');
+  for (let i = 0; i < 200; i++) {
+    const receipt = await host.request({version: 1, action: 'status', operation});
+    if (receipt.status !== 'downloading') { assert.equal(receipt.status, 'verified'); break; }
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(host.canHandoff(operation, reference), true);
+  const destination = '/home/root/fixture/restore-original';
+  const events = [];
+  const prepared = {root: destination, async assertOwned({signal, connection_id, boot_id, files, markerSha256}) {
+    signal.throwIfAborted();
+    assert.deepEqual({connection_id, boot_id}, identity);
+    assert.equal(markerSha256, hash(markerBytes));
+    assert.deepEqual(files, [{name: 'data/backup.json', ...ref(data)},
+      {name: 'portable-configuration.json', ...ref(preferences)}, {name: 'isolated-backup.json', ...ref(markerBytes)}]);
+    events.push('destination-check');
+    return true;
+  }, async release() { events.push('destination-release'); return true; }};
+  const transfer = async input => {
+    assert.equal(input.root, stageRoot);
+    assert.deepEqual(input.components, {data: ref(data), preferences: ref(preferences)});
+    assert.ok(input.timeoutMs > 0 && input.timeoutMs <= 13000);
+    assert.ok(restore.io.ownerFor('ordinary-restore', 'prepare'));
+    events.push('transfer');
+    return prepared;
+  };
+  const prepare = (stageDestination = transfer, target = identity) =>
+    f.composition.prepareRestore(...original, {restore: restore.host, target, stageDestination});
+  return {...f, restore, original, prepare, prepared, transfer, destination, restoreEvents: events};
+}
+
+test('restore preview adopts one exact destination and explicit Confirm preserves original Status', async t => {
+  const f = await stagedRestore(t);
+  const preview = f.prepare();
+  await f.releaseEntered.promise;
+  assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+  assert.equal(f.restore.calls[0].body.source, f.destination + '/data');
+  assert.equal((await f.restore.prepare()).ordinary_restore.state, 'busy');
+  assert.deepEqual(f.restoreEvents, ['transfer', 'destination-check', 'destination-check']);
+  f.releaseDone.resolve();
+  const result = await preview;
+  assert.equal(result.status, 'ready');
+  assert.equal(result.preview.ordinary_restore.preview.source.complete_media, false);
+  assert.doesNotMatch(JSON.stringify(result), /fixture\/restore-original|archive_sha256|source_path_sha256/);
+  assert.equal((await f.composition.prepareRestore('e'.repeat(64), f.original[1], {
+    restore: f.restore.host, target: identity, stageDestination: () => assert.fail('Stale owner transferred'),
+  })).status, 'invalidated');
+  // A repeat cannot consume another stage or invalidate the existing preview.
+  assert.equal((await f.prepare()).status, 'invalidated');
+  const ref = result.preview.ordinary_restore.reference;
+  assert.equal((await f.restore.use('confirm', ref)).ordinary_restore.state, 'unknown');
+  assert.deepEqual(f.restoreEvents.slice(-2), ['destination-check', 'destination-release']);
+  const input = f.restore.calls.find(call => call.selector === 'apply').input;
+  f.restore.state.status = 'desired-generation-observed';
+  const reconciled = (await f.restore.use('status', ref)).ordinary_restore;
+  assert.equal(reconciled.state, 'desired-generation-observed');
+  assert.equal(reconciled.apply_outcome, 'unknown');
+  assert.equal(f.restore.calls.at(-1).input, input);
+  assert.equal(f.restoreEvents.filter(event => event === 'destination-release').length, 1);
+});
+
+test('a changed adopted destination refuses Confirm and retires only that destination', async t => {
+  const f = await stagedRestore(t);
+  f.releaseDone.resolve();
+  const preview = await f.prepare();
+  assert.equal(preview.status, 'ready');
+  f.prepared.assertOwned = async () => false;
+  const result = await f.restore.use('confirm', preview.preview.ordinary_restore.reference);
+  assert.equal(result.ordinary_restore.state, 'not-dispatched');
+  assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+  assert.equal(f.restoreEvents.filter(event => event === 'destination-release').length, 1);
+});
+
+test('destination expiry waits for checked release on disposal and preserves uncertain cleanup', {timeout: 5000}, async t => {
+  const f = await stagedRestore(t);
+  f.releaseDone.resolve();
+  const releaseStarted = Promise.withResolvers(), released = Promise.withResolvers();
+  t.after(() => released.resolve(false));
+  f.prepared.release = () => { releaseStarted.resolve(); return released.promise; };
+  let now = 0;
+  f.restore.host.now = () => now;
+  const preview = await f.prepare();
+  assert.equal(preview.status, 'ready');
+  now = 120001;
+  assert.throws(() => f.restore.host.assertCurrent(preview.preview), /expired|invalidated/i);
+  await releaseStarted.promise;
+  const disposed = f.restore.host.dispose();
+  let settled = false;
+  void disposed.then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false);
+  released.resolve(false);
+  assert.equal(await disposed, true);
+});
+
+test('handoff refuses wrong target, corrupt destination and a different Prepare archive digest', async t => {
+  for (const mode of ['target', 'corrupt', 'digest', 'lost-authority']) {
+    await t.test(mode, async t => {
+      let authority;
+      const f = await stagedRestore(t, {
+        digest: mode === 'digest' ? 'f'.repeat(64) : hash(data),
+        beforeRelease: () => { if (mode === 'lost-authority') authority.invalidate(); },
+      });
+      authority = f.composition.isolatedBackup;
+      f.releaseDone.resolve();
+      if (mode === 'corrupt') f.prepared.assertOwned = async () => false;
+      const result = await f.prepare(f.transfer, mode === 'target' ? {...identity, boot_id: 'c'.repeat(36)} : identity);
+      assert.equal(result.preview, null);
+      assert.equal(result.status, ['target', 'lost-authority'].includes(mode) ? 'invalidated' : 'unavailable');
+      assert.deepEqual(f.restore.calls.map(call => call.selector), ['digest', 'lost-authority'].includes(mode) ? ['prepare'] : []);
+      assert.equal(f.restoreEvents.includes('destination-release'), mode !== 'target');
+    });
+  }
+});
+
+test('cancelled or expired handoff joins the original transfer and Prepare before either stage retires', {timeout: 5000}, async t => {
+  for (const mode of ['cancel-transfer', 'timeout-transfer', 'cancel-prepare']) {
+    await t.test(mode, async t => {
+      const entered = Promise.withResolvers(), aborted = Promise.withResolvers(), drained = Promise.withResolvers();
+      t.after(() => drained.resolve());
+      const f = await stagedRestore(t);
+      f.releaseDone.resolve();
+      if (mode === 'timeout-transfer') f.restore.host.budgetMs = 50;
+      if (mode === 'cancel-prepare') f.restore.state.onRaw = async report => {
+        entered.resolve();
+        await drained.promise;
+        return report;
+      };
+      const pending = f.prepare(async input => {
+        input.signal.addEventListener('abort', aborted.resolve, {once: true});
+        const result = await f.transfer(input);
+        if (mode !== 'cancel-prepare') {
+          entered.resolve();
+          await drained.promise;
+        }
+        return result;
+      });
+      await entered.promise;
+      if (mode !== 'timeout-transfer') f.composition.isolatedBackup.invalidate();
+      await aborted.promise;
+      assert.equal((await f.restore.prepare()).ordinary_restore.state, 'busy');
+      assert.equal(f.events.includes('stage-release'), false);
+      assert.equal(f.restoreEvents.includes('destination-release'), false);
+      drained.resolve();
+      assert.equal((await pending).status, 'invalidated');
+      assert.equal(f.events.includes('stage-release'), true);
+      assert.equal(f.restoreEvents.includes('destination-release'), true);
+      assert.deepEqual(f.restore.calls.map(call => call.selector), mode === 'cancel-prepare' ? ['prepare'] : []);
+    });
+  }
+});
+
 test('the public phase retains one verified stage and cancel waits for its exact cleanup', {timeout: 5000}, async t => {
   const f = setup(t), {composition} = f, host = composition.isolatedBackup;
   const [operation, reference] = await selection(composition);
@@ -176,7 +351,7 @@ test('the public phase retains one verified stage and cancel waits for its exact
   }
   assert.equal(result.status, 'verified');
   assert.equal(result.inspection.markerSha256, hash(markerBytes));
-  assert.equal(result.inspection.completeMedia, true);
+  assert.equal(result.inspection.completeMedia, false);
   assert.equal(f.files.size, 3);
   assert.equal(f.captures.length, 1);
   assert.equal(f.events.filter(event => event === 'marker').length, 1);

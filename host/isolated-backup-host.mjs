@@ -217,11 +217,28 @@ export class IsolatedBackupHost {
   }
 
   // Future host-owned download orchestration uses this seam, never IPC.
-  readSelection(operation, reference) {
+  isSelectionCurrent(operation, reference) {
     this.#validateSession();
-    if (this.#selection?.status !== 'selected' || this.#selection.operation !== operation ||
-        this.#selection.selection.reference !== reference) return null;
+    return this.#selection?.status === 'selected' && this.#selection.operation === operation &&
+      this.#selection.selection.reference === reference;
+  }
+
+  readSelection(operation, reference) {
+    if (!this.isSelectionCurrent(operation, reference)) return null;
     return this.#session.reader.readSelection(reference);
+  }
+
+  canHandoff(operation, reference) {
+    if (!this.isSelectionCurrent(operation, reference)) return false;
+    const download = this.#download;
+    return download?.operation === operation && download.reference === reference &&
+      !download.retirement && download.result.status === 'verified' && !download.handoff;
+  }
+
+  takeVerifiedHandoff(operation, reference) {
+    if (!this.canHandoff(operation, reference)) return false;
+    this.#download.handoff = true;
+    return true;
   }
 
   // Host-only: download reuses both the original selection and its protected

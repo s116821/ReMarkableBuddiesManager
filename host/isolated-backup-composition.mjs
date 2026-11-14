@@ -30,6 +30,18 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
     driveAuth,
     isolatedBackup,
     downloadSelection,
+    async prepareRestore(operation, reference, {restore, target, stageDestination}) {
+      if (closing || !coordinator) return {status: 'unavailable', preview: null, cleanupPending: false};
+      if (!isolatedBackup.canHandoff(operation, reference)) {
+        return {status: 'invalidated', preview: null, cleanupPending: false};
+      }
+      return restore.prepareHandoff(target, consume => {
+        if (!isolatedBackup.takeVerifiedHandoff(operation, reference)) {
+          return Promise.resolve({status: 'invalidated', cleanupPending: false});
+        }
+        return coordinator.handoff(operation, reference, consume);
+      }, stageDestination);
+    },
     dispose() {
       if (!closing) {
         const completion = Promise.withResolvers();

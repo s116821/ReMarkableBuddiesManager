@@ -245,7 +245,7 @@ export class IsolatedBackupDownload {
       if (file) await file.close();
     }
     this.#check(job);
-    job.files.push(name);
+    job.files.push(Object.freeze({name, bytes: ref.bytes, sha256: ref.sha256}));
     job.written += ref.bytes;
     return collect ? Buffer.concat(chunks, count) : null;
   }
@@ -306,13 +306,13 @@ export class IsolatedBackupDownload {
       await this.#space(job, total - job.written);
       await this.#write(job, 'isolated-backup.json', selection.marker, () => [selection.markerBytes]);
 
-      require(await job.stage.assertOwned([...job.files], this.#options(job, 0)) === true);
+      require(await job.stage.assertOwned(job.files.map(file => file.name), this.#options(job, 0)) === true);
       await this.#authority(job);
       const result = await this.#verifier.verify({root: job.stage.root, markerSha256: selection.marker.sha256,
         ...this.#options(job, MAX_MARKER)});
       await this.#authority(job);
       const inspection = inspectReport(result, selection, manifest);
-      require(await job.stage.assertOwned([...job.files], this.#options(job, 0)) === true);
+      require(await job.stage.assertOwned(job.files.map(file => file.name), this.#options(job, 0)) === true);
       await this.#authority(job);
       this.#check(job);
       job.inspection = inspection;
@@ -370,15 +370,24 @@ export class IsolatedBackupDownload {
       let status = 'handed-off';
       try {
         this.#check(job);
-        require(await job.stage.assertOwned([...job.files], this.#options(job, 0)) === true);
+        require(await job.stage.assertOwned(job.files.map(file => file.name), this.#options(job, 0)) === true);
         await this.#authority(job);
-        await consume({root: job.stage.root, inspection: {...job.inspection}, ...this.#options(job, 0)});
+        const components = Object.freeze({
+          data: Object.freeze({...job.selection.components.data}),
+          preferences: Object.freeze({...job.selection.components.preferences}),
+        });
+        await consume({root: job.stage.root, inspection: {...job.inspection},
+          files: Object.freeze([...job.files]), components, ...this.#options(job, 0)});
+        require(await job.stage.assertOwned(job.files.map(file => file.name), this.#options(job, 0)) === true);
         await this.#authority(job);
         this.#check(job);
       } catch {
         status = job.controller.signal.aborted ? 'invalidated' : 'unavailable';
       }
-      return reply(status, null, await this.#retire(job));
+      const cleanupPending = await this.#retire(job);
+      if (status === 'handed-off' && (job.cancelled || job.selection.signal.aborted ||
+          !job.current() || !job.binding.isCurrent() || this.#now() >= job.deadline)) status = 'invalidated';
+      return reply(status, null, cleanupPending);
     });
     return job.handoff;
   }
