@@ -28,6 +28,10 @@ export function parseIsolatedBackupRequest(value) {
       if (!exact(value, 'action', 'choice', 'inspection', 'version') ||
           !reference(value.choice) || !reference(value.inspection)) refuse();
       break;
+    case 'download':
+      if (!exact(value, 'action', 'operation', 'reference', 'version') ||
+          !reference(value.operation) || !reference(value.reference)) refuse();
+      break;
     case 'status':
     case 'cancel':
       if (!exact(value, 'action', 'operation', 'version') || !reference(value.operation)) refuse();
@@ -42,6 +46,28 @@ const statuses = new Set([
   'scanning', 'selecting', 'observed', 'empty', 'selected', 'unqualified', 'unavailable',
   'invalid', 'incomplete', 'invalidated', 'unsupported', 'busy',
 ]);
+const downloadStatuses = new Set([
+  'downloading', 'verified', 'unavailable', 'invalid', 'incomplete', 'invalidated',
+  'insufficient-space', 'verification-failed', 'busy',
+]);
+const count = (value, minimum, maximum) => Number.isSafeInteger(value) && value >= minimum && value <= maximum;
+
+function parseDownloadResult(value, request) {
+  const {operation, status, inspection, cleanupPending} = value;
+  if (value.version !== 1 || !reference(operation) || !downloadStatuses.has(status) ||
+      typeof cleanupPending !== 'boolean' ||
+      (['downloading', 'verified', 'busy'].includes(status) && cleanupPending)) refuse();
+  if (status === 'verified') {
+    if (!exact(inspection, 'completeMedia', 'declaredSettings', 'manifests', 'markerSha256', 'objects') ||
+        !reference(inspection.markerSha256) || typeof inspection.completeMedia !== 'boolean' ||
+        !count(inspection.declaredSettings, 0, 3) || !count(inspection.manifests, 1, MAX_ENTRIES) ||
+        !count(inspection.objects, 0, MAX_ENTRIES)) refuse();
+  } else if (inspection !== null) refuse();
+  if (request && (!['download', 'status', 'cancel'].includes(request.action) || operation !== request.operation ||
+      (request.action === 'download' && !['downloading', 'busy', 'invalidated'].includes(status)) ||
+      (request.action === 'cancel' && status !== 'invalidated'))) refuse();
+  return value;
+}
 
 function checkBackups(backups) {
   const ids = new Set(), backupsSeen = new Set();
@@ -65,6 +91,8 @@ function checkBackups(backups) {
 }
 
 export function parseIsolatedBackupResult(value, request) {
+  if (exact(value, 'cleanupPending', 'inspection', 'operation', 'status', 'version')) return parseDownloadResult(value, request);
+  if (request?.action === 'download') refuse();
   if (!exact(value, 'backups', 'operation', 'selection', 'status', 'version') || value.version !== 1 ||
       !statuses.has(value.status) || !Array.isArray(value.backups) || value.backups.length > MAX_ENTRIES ||
       value.operation !== null && !reference(value.operation)) refuse();

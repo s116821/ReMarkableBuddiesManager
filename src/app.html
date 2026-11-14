@@ -720,10 +720,13 @@
         <div class="my-3 flex flex-wrap gap-3">
           <button class="ui-button ui-button-secondary" type="button" (click)="scanCloudBackups()" [disabled]="!canBrowseCloudBackups()">Scan for cloud backups</button>
           @if (cloudBackup().busy || cloudBackup().backups.length) {
-            <button class="ui-button ui-button-secondary" type="button" (click)="clearCloudBackups()">{{ cloudBackup().busy ? 'Cancel backup check' : 'Clear backup results' }}</button>
+            <button class="ui-button ui-button-secondary" type="button" (click)="clearCloudBackups()">{{ cloudBackup().downloading ? 'Cancel download' : cloudBackup().busy ? 'Cancel backup check' : 'Clear backup results' }}</button>
           }
         </div>
         <p role="status" data-testid="cloud-backup-status">{{ cloudBackup().message }}</p>
+        @if (cloudBackup().cleanupPending) {
+          <p role="alert" class="ui-warning">Manager could not confirm removal of the temporary backup files.</p>
+        }
         @if (cloudBackup().backups.length) {
           <ul class="my-3 space-y-4" data-testid="cloud-backup-list">
             @for (backup of cloudBackup().backups; track backup.backup) {
@@ -750,7 +753,13 @@
           </ul>
         }
         @if (cloudBackup().selected; as selected) {
-          <p class="my-3 wrap-anywhere" data-testid="cloud-backup-selection">Verified revision marker <code>{{ selected.sha256 }}</code>. Package and media verification require a download.</p>
+          <p class="my-3 wrap-anywhere" data-testid="cloud-backup-selection">Verified revision marker <code>{{ selected.sha256 }}</code>.</p>
+          @if (!cloudBackup().downloadAttempted) {
+            <button class="ui-button ui-button-primary" type="button" (click)="downloadCloudBackup()" [disabled]="!canBrowseCloudBackups()">Download and verify</button>
+          }
+          @if (cloudBackup().inspection; as inspection) {
+            <p class="mt-3" data-testid="cloud-backup-verification">{{ inspection.manifests }} archive manifests and {{ inspection.objects }} stored objects verified.</p>
+          }
         }
       </div>
     } @else {

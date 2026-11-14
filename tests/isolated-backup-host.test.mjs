@@ -108,6 +108,26 @@ test('versioned protocol refuses private inputs and malformed reduced frames', (
   assert.throws(() => parseIsolatedBackupResult({...frame, selection: {...frame.selection, root: 'private'}}, scan), /frame refused/);
 });
 
+test('download frames are closed, match the original operation and bound summaries', () => {
+  const operation = 'a'.repeat(64), reference = 'b'.repeat(64);
+  const request = {version: 1, action: 'download', operation, reference};
+  assert.equal(parseIsolatedBackupRequest(request), request);
+  assert.throws(() => parseIsolatedBackupRequest({...request, path: 'private'}), /frame refused/);
+  const frame = {version: 1, operation, status: 'verified', cleanupPending: false,
+    inspection: {markerSha256: 'c'.repeat(64), manifests: 1, objects: 0, completeMedia: false, declaredSettings: 2}};
+  assert.equal(parseIsolatedBackupResult(frame, status(operation)), frame);
+  for (const changed of [{...frame, cleanupPending: true}, {...frame, status: 'incomplete'},
+    {...frame, inspection: {...frame.inspection, objects: 4097}},
+    {...frame, inspection: {...frame.inspection, manifests: 0}},
+    {...frame, inspection: {...frame.inspection, declaredSettings: 4}},
+    {...frame, inspection: {...frame.inspection, markerSha256: 'private'}},
+    {...frame, inspection: {...frame.inspection, root: 'private'}}]) {
+    assert.throws(() => parseIsolatedBackupResult(changed, status(operation)), /frame refused/);
+  }
+  assert.throws(() => parseIsolatedBackupResult(frame, status(reference)), /frame refused/);
+  assert.throws(() => parseIsolatedBackupResult(frame, scan), /frame refused/);
+});
+
 test('reserves asynchronous scan before I/O; selects only original inspection and hides protected custody', async t => {
   const f = fixture(t);
   assert.equal(f.auth.status().status, 'cached');

@@ -11,7 +11,6 @@ import {IsolatedBackupVerifier} from './isolated-backup-verifier.mjs';
 export function createIsolatedBackupComposition({hostRoot, store = new DriveStore(),
   backupReadFactory = null, stagingParent = null, excludedRoots = []}) {
   const driveAuth = new DriveAuth({store, backupReadFactory});
-  const isolatedBackup = new IsolatedBackupHost({driveAuth});
   const coordinator = backupReadFactory && stagingParent ? new IsolatedBackupDownload({
     staging: new IsolatedBackupStaging({python: store.python, parent: stagingParent,
       excludedRoots: [store.root, ...excludedRoots]}),
@@ -19,15 +18,18 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
   }) : null;
   let closing;
 
+  async function downloadSelection(operation, reference) {
+    const capture = isolatedBackup.captureDownload(operation, reference);
+    if (!capture) return {status: 'invalidated', inspection: null, cleanupPending: false};
+    if (!coordinator) return {status: 'unavailable', inspection: null, cleanupPending: false};
+    return coordinator.download(capture);
+  }
+  const isolatedBackup = new IsolatedBackupHost({driveAuth, downloadSelection,
+    releaseSelection: (operation, reference) => coordinator?.release(operation, reference)});
   return Object.freeze({
     driveAuth,
     isolatedBackup,
-    async downloadSelection(operation, reference) {
-      const capture = isolatedBackup.captureDownload(operation, reference);
-      if (!capture) return {status: 'invalidated', inspection: null, cleanupPending: false};
-      if (!coordinator) return {status: 'unavailable', inspection: null, cleanupPending: false};
-      return coordinator.download(capture);
-    },
+    downloadSelection,
     dispose() {
       if (!closing) {
         const completion = Promise.withResolvers();

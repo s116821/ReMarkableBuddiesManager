@@ -299,14 +299,19 @@ export class IsolatedBackupReader {
 
   // Host-only future download seam. Callers must revalidate selection and
   // protected authority around their own reads, and honor invalidation.
-  readSelection(reference) {
+  isSelectionCurrent(reference) {
     if (!this.#current()) {
       this.cancel();
-      return null;
+      return false;
     }
     const selected = this.#selected;
     if (selected && this.#now() >= selected.expires) this.#clearSelection();
-    if (!this.#selected || reference !== selected.handle) return null;
+    return this.#selected !== null && this.#selected.handle === reference;
+  }
+
+  readSelection(reference) {
+    if (!this.isSelectionCurrent(reference)) return null;
+    const selected = this.#selected;
     return {
       root: {...selected.root}, marker: {...selected.marker}, components: structuredClone(selected.components),
       markerBytes: Buffer.from(selected.raw), signal: selected.controller.signal,

@@ -321,7 +321,8 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       } catch { return refuse(400); }
       if (closing || admittedDocument !== backupDocument) return refuse(409);
       try {
-        const result = parseIsolatedBackupResult(isolatedBackup.request(request), request);
+        const result = parseIsolatedBackupResult(await isolatedBackup.request(request), request);
+        if (closing || admittedDocument !== backupDocument) return refuse(409);
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result));
       } catch { refuse(503); }
       return;

@@ -5,19 +5,27 @@ import {parseIsolatedBackupRequest, parseIsolatedBackupResult} from './isolated-
 const reply = (status, operation = null, backups = [], selection = null) => ({
   version: 1, status, operation, backups, selection,
 });
+const downloadReply = (operation, status, inspection = null, cleanupPending = false) => ({
+  version: 1, operation, status, inspection, cleanupPending,
+});
 
 export class IsolatedBackupHost {
   #driveAuth;
   #session = null;
   #scan = null;
   #selection = null;
+  #download = null;
+  #downloadSelection;
+  #releaseSelection;
   #active = null;
   #disposed = false;
   #pending = new Set();
   #disposal;
 
-  constructor({driveAuth}) {
+  constructor({driveAuth, downloadSelection, releaseSelection}) {
     this.#driveAuth = driveAuth;
+    this.#downloadSelection = downloadSelection;
+    this.#releaseSelection = releaseSelection;
   }
 
   #join(pending) {
@@ -43,15 +51,75 @@ export class IsolatedBackupHost {
     if (this.#scan) this.#scan = reply(status, this.#scan.operation);
     if (this.#selection) this.#selection = reply(status, this.#selection.operation);
     if (active) active.controller.abort();
+    this.#retireDownload();
   }
 
   #validateSession() {
     const session = this.#session;
     if (session?.binding && !session.binding.isCurrent() && this.#session === session) this.#clear();
     const selected = this.#selection;
-    if (selected?.status === 'selected' && !session?.reader?.readSelection(selected.selection.reference)) {
+    if (selected?.status === 'selected' && !session?.reader.isSelectionCurrent(selected.selection.reference)) {
       // An expired marker need not discard the current metadata inspection.
-      if (this.#selection === selected) this.#selection = reply('invalidated', selected.operation);
+      if (this.#selection === selected) {
+        this.#selection = reply('invalidated', selected.operation);
+        this.#retireDownload();
+      }
+    }
+  }
+
+  #retireDownload() {
+    const download = this.#download;
+    if (!download || download.retirement) return download?.retirement;
+    download.retirement = Promise.resolve().then(async () => {
+      let cleanupPending = false;
+      try {
+        const result = await this.#releaseSelection?.(download.operation, download.reference);
+        cleanupPending ||= result?.cleanupPending === true;
+      } catch {
+        cleanupPending = true;
+      }
+      await download.pending;
+      download.result = downloadReply(download.operation, 'invalidated', null,
+        cleanupPending || download.result.cleanupPending || download.cleanupPending);
+      download.retired = true;
+      return {...download.result};
+    });
+    this.#join(download.retirement);
+    return download.retirement;
+  }
+
+  #startDownload(request) {
+    const {operation, reference} = request;
+    const selected = this.#selection;
+    if (this.#disposed || selected?.status !== 'selected' ||
+        selected.operation !== operation || selected.selection.reference !== reference) {
+      return downloadReply(operation, 'invalidated');
+    }
+    const previous = this.#download;
+    if (previous?.operation === operation) return downloadReply(operation, 'invalidated');
+    if (this.#active || (previous && !previous.retired)) return downloadReply(operation, 'busy');
+    const attempt = {operation, reference, cleanupPending: false, result: downloadReply(operation, 'downloading')};
+    this.#download = attempt;
+    attempt.pending = this.#runDownload(attempt);
+    this.#join(attempt.pending);
+    return {...attempt.result};
+  }
+
+  async #runDownload(attempt) {
+    await Promise.resolve();
+    if (attempt.retirement) return;
+    try {
+      const result = await this.#downloadSelection?.(attempt.operation, attempt.reference);
+      if (result?.cleanupPending === true) attempt.cleanupPending = true;
+      if (attempt.retirement) return;
+      this.#validateSession();
+      if (!attempt.retirement) {
+        attempt.result = result ? parseIsolatedBackupResult(downloadReply(attempt.operation,
+          result.status, result.inspection, result.cleanupPending)) :
+          downloadReply(attempt.operation, 'unavailable');
+      }
+    } catch {
+      if (!attempt.retirement) attempt.result = downloadReply(attempt.operation, 'unavailable', null, attempt.cleanupPending);
     }
   }
 
@@ -59,7 +127,11 @@ export class IsolatedBackupHost {
     const request = {...parseIsolatedBackupRequest(value)};
     this.#validateSession();
     const {action, operation} = request;
+    if (action === 'download') return this.#startDownload(request);
+    const download = this.#download;
     if (action === 'status') {
+      if (download?.operation === operation) return download.retirement?.then(result => ({...result})) ??
+        structuredClone(download.result);
       const state = [this.#scan, this.#selection].find(record => record?.operation === operation);
       return structuredClone(state ?? reply('invalidated', operation));
     }
@@ -68,10 +140,11 @@ export class IsolatedBackupHost {
       // selection but no longer owns its outstanding wait or result.
       const owner = this.#selection ?? this.#scan;
       if (owner?.operation === operation) this.#clear();
+      if (download?.operation === operation) return this.#retireDownload().then(result => ({...result}));
       return reply('invalidated', operation);
     }
     if (this.#disposed) return reply('invalidated');
-    if (this.#active) return reply('busy');
+    if (this.#active || (download?.result.status === 'downloading' && !download.retirement)) return reply('busy');
     if (action === 'select' && (this.#scan?.status !== 'observed' ||
         request.inspection !== this.#scan.operation ||
         !this.#scan.backups.some(backup => backup.revisions.some(revision => revision.reference === request.choice)))) {
@@ -80,6 +153,7 @@ export class IsolatedBackupHost {
 
     const attempt = {id: randomBytes(32).toString('hex'), controller: new AbortController(), request};
     const initial = reply(action === 'scan' ? 'scanning' : 'selecting', attempt.id);
+    this.#retireDownload();
     if (action === 'scan') {
       this.#discardSession();
       this.#selection = null;

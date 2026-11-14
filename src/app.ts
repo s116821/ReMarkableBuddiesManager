@@ -735,7 +735,10 @@ export class App implements OnDestroy {
   selectCloudBackup(choice: string) {
     if (this.canBrowseCloudBackups()) void this.cloudBackupController.select(choice);
   }
-  clearCloudBackups() { this.cloudBackupController.clear(); }
+  downloadCloudBackup() {
+    if (this.canBrowseCloudBackups()) void this.cloudBackupController.download();
+  }
+  clearCloudBackups() { this.cloudBackupController.cancel(); }
   signInDrive() { this.clearCloudBackups(); void this.driveController.begin(); }
   checkDrive() { this.clearCloudBackups(); void this.driveController.action('check'); }
   cancelDrive() { this.clearCloudBackups(); void this.driveController.action('cancel'); }

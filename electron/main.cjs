@@ -150,6 +150,7 @@ app.whenReady().then(async () => {
   });
   const ui = path.join(__dirname, '../dist/manager/browser/index.html');
   let quitting = false, drained = false;
+  let backupDocument = Symbol();
   const authorized = (event, args) => !quitting && args.length === 0 && event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(ui).href;
   for (const action of ['observe', 'cancel', 'inspectOwned', 'inspectRuntime']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
@@ -165,7 +166,11 @@ app.whenReady().then(async () => {
     return observer.memoryQuery(args[0]);
   });
   window.webContents.on('did-start-navigation', event => {
-    if (event.isMainFrame && !event.isSameDocument) { observer.cancel(); isolatedBackup.invalidate(); }
+    if (event.isMainFrame && !event.isSameDocument) {
+      backupDocument = Symbol();
+      observer.cancel();
+      isolatedBackup.invalidate();
+    }
   });
   registerSharedPreferenceHandler(ipcMain, authorized, sharedPreferences);
   ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
@@ -252,11 +257,14 @@ app.whenReady().then(async () => {
     let request=parseModelSettingsRequest(args[0]);args.length=0;
     try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
   });
-  ipcMain.handle('manager:isolated-backup', (event, ...args) => {
+  ipcMain.handle('manager:isolated-backup', async (event, ...args) => {
     if (!authorized(event, []) || args.length !== 1) throw Error('Backup inspection caller refused');
     const request = parseIsolatedBackupRequest(args[0]);
     if (Buffer.byteLength(JSON.stringify(request)) > ISOLATED_BACKUP_REQUEST_BYTES) throw Error('Backup inspection input refused');
-    return parseIsolatedBackupResult(isolatedBackup.request(request), request);
+    const admittedDocument = backupDocument;
+    const result = await isolatedBackup.request(request);
+    if (admittedDocument !== backupDocument || !authorized(event, [])) throw Error('Backup inspection caller refused');
+    return parseIsolatedBackupResult(result, request);
   });
   ipcMain.handle('manager:isolatedRoot',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Isolated backup caller refused');

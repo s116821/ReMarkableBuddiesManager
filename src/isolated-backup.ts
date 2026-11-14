@@ -1,6 +1,7 @@
 import {
   parseIsolatedBackupResult, type IsolatedBackupRequest, type IsolatedBackupResult,
-  type IsolatedBackupSelection, type IsolatedBackupStatus, type IsolatedBackupSummary,
+  type IsolatedBackupDownloadResult, type IsolatedBackupInspection, type IsolatedBackupSelection,
+  type IsolatedBackupStatus, type IsolatedBackupSummary,
 } from '../host/isolated-backup-protocol.mjs';
 
 export type IsolatedBackupAdapter = (request: IsolatedBackupRequest) => Promise<IsolatedBackupResult>;
@@ -19,6 +20,17 @@ const labels: Record<IsolatedBackupStatus, string> = {
   unsupported: 'This backup revision uses an unsupported format.',
   busy: 'Another backup check is still running.',
 };
+const downloadLabels: Record<IsolatedBackupDownloadResult['status'], string> = {
+  downloading: 'Downloading and verifying the selected revision…',
+  verified: 'Backup verified.',
+  unavailable: 'Backup download is unavailable on this Manager host.',
+  invalid: 'The downloaded backup did not match the selected revision.',
+  incomplete: 'Backup download was incomplete. Run a new scan to try again.',
+  invalidated: 'Backup download was cancelled or expired.',
+  'insufficient-space': 'There is not enough space to download this backup.',
+  'verification-failed': 'Manager could not verify the downloaded backup.',
+  busy: 'Another backup download is still running.',
+};
 
 interface BackupView {
   busy: boolean;
@@ -26,10 +38,14 @@ interface BackupView {
   backups: IsolatedBackupSummary[];
   selected: IsolatedBackupSelection | null;
   selectedChoice: string | null;
+  downloading: boolean;
+  downloadAttempted: boolean;
+  inspection: IsolatedBackupInspection | null;
+  cleanupPending: boolean;
 }
 
 interface Pending {
-  request: Extract<IsolatedBackupRequest, {action: 'scan' | 'select'}>;
+  request: Extract<IsolatedBackupRequest, {action: 'scan' | 'select' | 'download'}>;
   operation: string | null;
   deadline: number;
   startedAt: number;
@@ -42,13 +58,16 @@ const maxWaitMs = 65000;
 const selectionMs = 120000;
 
 export class IsolatedBackupController {
-  state: BackupView = {busy: false, message: idle, backups: [], selected: null, selectedChoice: null};
+  state: BackupView = {busy: false, message: idle, backups: [], selected: null, selectedChoice: null,
+    downloading: false, downloadAttempted: false, inspection: null, cleanupPending: false};
   private inspection: string | null = null;
   private owner: string | null = null;
   private waiting: Pending | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private expiry: ReturnType<typeof setTimeout> | undefined;
   private watchdog: ReturnType<typeof setTimeout> | undefined;
+  private selectionDeadline = 0;
+  private viewGeneration = 0;
   private disposed = false;
   private readonly adapter: IsolatedBackupAdapter;
   private readonly changed: (state: BackupView) => void;
@@ -65,13 +84,22 @@ export class IsolatedBackupController {
     this.changed(this.state);
   }
 
-  private async cancelOperation(operation: string) {
+  private async cancelOperation(operation: string, visibleGeneration?: number) {
     // An exact old operation cannot cancel its successor.
-    try { await this.adapter({version: 1, action: 'cancel', operation}); }
-    catch { /* Local view has already been invalidated. */ }
+    let cleanupPending = true;
+    try {
+      const request = {version: 1, action: 'cancel', operation} as const;
+      const result = parseIsolatedBackupResult(await this.adapter(request), request);
+      cleanupPending = !('cleanupPending' in result) || result.cleanupPending;
+    } catch {
+      // The host may still be retiring private staging after transport fails.
+    }
+    if (!this.disposed && visibleGeneration === this.viewGeneration && cleanupPending) {
+      this.publish({cleanupPending: true});
+    }
   }
 
-  clear(message = idle) {
+  clear(message = idle, reportCleanup = false) {
     clearTimeout(this.timer);
     clearTimeout(this.expiry);
     clearTimeout(this.watchdog);
@@ -79,8 +107,15 @@ export class IsolatedBackupController {
     this.waiting = null;
     this.owner = null;
     this.inspection = null;
-    if (operation) void this.cancelOperation(operation);
-    this.publish({busy: false, message, backups: [], selected: null, selectedChoice: null});
+    this.selectionDeadline = 0;
+    const generation = ++this.viewGeneration;
+    this.publish({busy: false, message, backups: [], selected: null, selectedChoice: null,
+      downloading: false, downloadAttempted: false, inspection: null, cleanupPending: false});
+    if (operation) void this.cancelOperation(operation, reportCleanup ? generation : undefined);
+  }
+
+  cancel() {
+    this.clear(this.state.downloadAttempted ? downloadLabels.invalidated : idle, this.state.downloadAttempted);
   }
 
   dispose() {
@@ -103,26 +138,40 @@ export class IsolatedBackupController {
     }
   }
 
+  download() {
+    const {selected, busy, downloadAttempted} = this.state;
+    if (this.disposed || busy || downloadAttempted || !this.owner || !selected ||
+        performance.now() >= this.selectionDeadline) return;
+    return this.start({version: 1, action: 'download', operation: this.owner, reference: selected.reference});
+  }
+
   private async start(request: Pending['request'], expected?: Pending['expected']) {
-    clearTimeout(this.expiry);
+    ++this.viewGeneration;
     const startedAt = performance.now();
-    const attempt: Pending = {request, expected, operation: null, startedAt, deadline: startedAt + maxWaitMs};
+    const download = request.action === 'download';
+    if (!download) clearTimeout(this.expiry);
+    const attempt: Pending = {request, expected, operation: download ? request.operation : null,
+      startedAt, deadline: download ? this.selectionDeadline : startedAt + maxWaitMs};
     this.waiting = attempt;
     this.watchdog = setTimeout(() => {
-      if (this.waiting === attempt) this.clear(labels.incomplete);
-    }, maxWaitMs);
-    this.publish({busy: true, message: labels[request.action === 'scan' ? 'scanning' : 'selecting'],
-      selected: null, selectedChoice: null});
+      if (this.waiting === attempt) this.clear(download ? downloadLabels.incomplete : labels.incomplete, download);
+    }, Math.max(0, attempt.deadline - startedAt));
+    if (download) {
+      this.publish({busy: true, downloading: true, downloadAttempted: true, message: downloadLabels.downloading});
+    } else {
+      this.publish({busy: true, message: labels[request.action === 'scan' ? 'scanning' : 'selecting'],
+        selected: null, selectedChoice: null, downloadAttempted: false, inspection: null, cleanupPending: false});
+    }
     try {
       const response = parseIsolatedBackupResult(await this.adapter(request), request);
       if (this.waiting !== attempt) {
-        if (response.operation) void this.cancelOperation(response.operation);
+        if (!download && response.operation) void this.cancelOperation(response.operation);
         return;
       }
       attempt.operation = response.operation;
       this.accept(attempt, response);
     } catch {
-      if (this.waiting === attempt) this.clear(lostReply);
+      if (this.waiting === attempt) this.clear(lostReply, download);
     }
   }
 
@@ -133,17 +182,32 @@ export class IsolatedBackupController {
       const response = parseIsolatedBackupResult(await this.adapter(request), request);
       if (this.waiting === attempt) this.accept(attempt, response);
     } catch {
-      if (this.waiting === attempt) this.clear(lostReply);
+      if (this.waiting === attempt) this.clear(lostReply, attempt.request.action === 'download');
     }
   }
 
   private accept(attempt: Pending, response: IsolatedBackupResult) {
-    const {status, operation} = response;
+    const {operation} = response;
     const scan = attempt.request.action === 'scan';
+    const download = attempt.request.action === 'download';
     if (performance.now() >= attempt.deadline) {
-      this.clear(labels.incomplete);
+      this.clear(download ? downloadLabels.incomplete : labels.incomplete, download);
       return;
     }
+    if (download) {
+      if (!('inspection' in response)) {
+        if (response.status === 'invalidated') this.clear(downloadLabels.invalidated);
+        else this.clear(downloadLabels.invalid, true);
+        return;
+      }
+      this.acceptDownload(attempt, response);
+      return;
+    }
+    if ('inspection' in response) {
+      this.clear(labels.invalid);
+      return;
+    }
+    const {status} = response;
     if (scan ? ['selecting', 'selected'].includes(status) : ['scanning', 'observed', 'empty'].includes(status)) {
       this.clear(labels.invalid);
       return;
@@ -172,13 +236,36 @@ export class IsolatedBackupController {
       this.publish({busy: false, message: labels.selected, selected, selectedChoice: attempt.request.choice});
       // The host can create the handle before our status response arrives.
       // Start our expiry at submission so the UI never extends host custody.
-      this.expiry = setTimeout(() => this.clear('The backup selection expired. Run a new scan.'),
-        Math.max(0, attempt.startedAt + selectionMs - performance.now()));
+      this.selectionDeadline = attempt.startedAt + selectionMs;
+      this.expiry = setTimeout(() => this.clear('The backup selection expired. Run a new scan.', this.state.downloadAttempted),
+        Math.max(0, this.selectionDeadline - performance.now()));
     } else if (status === 'busy' && !scan) {
       this.publish({busy: false, message: labels.busy});
     } else {
       this.inspection = null;
       this.publish({busy: false, message: labels[status], backups: []});
     }
+  }
+
+  private acceptDownload(attempt: Pending, response: IsolatedBackupDownloadResult) {
+    const {status, inspection, cleanupPending} = response;
+    if (status === 'downloading') {
+      this.timer = setTimeout(() => { void this.poll(attempt, response.operation); }, this.pollMs);
+      return;
+    }
+    if (inspection && inspection.markerSha256 !== this.state.selected?.sha256) {
+      this.clear(downloadLabels.invalid, true);
+      return;
+    }
+    this.waiting = null;
+    clearTimeout(this.watchdog);
+    if (status === 'invalidated') {
+      clearTimeout(this.expiry);
+      this.selectionDeadline = 0;
+      this.owner = null;
+    }
+    this.publish({busy: false, downloading: false, cleanupPending, inspection,
+      ...(status === 'invalidated' ? {selected: null, selectedChoice: null} : {}),
+      message: inspection?.completeMedia === false ? 'Backup verified. Some media was omitted.' : downloadLabels[status]});
   }
 }

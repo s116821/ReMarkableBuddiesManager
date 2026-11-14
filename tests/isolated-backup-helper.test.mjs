@@ -26,7 +26,7 @@ const scan = {version: 1, action: 'scan'};
 const status = operation => ({version: 1, action: 'status', operation});
 const cancel = operation => ({version: 1, action: 'cancel', operation});
 
-async function open(t, {qualified = false, delayed = false, downloads, backupDrain} = {}) {
+async function open(t, {qualified = false, delayed = false, downloads, backupDrain, backupOperations} = {}) {
   const parent = await realpath(os.tmpdir());
   const directory = await mkdtemp(path.join(parent, 'manager-backup-helper-'));
   await writeFile(path.join(directory, 'index.html'), '<main>fixture</main>');
@@ -53,8 +53,8 @@ async function open(t, {qualified = false, delayed = false, downloads, backupDra
   };
   const observer = {generation: 0, cancel() {}, observe() { tabletCalls++; throw Error('Unexpected tablet access'); }};
   const options = {root: directory, observer, downloads};
-  if (backupDrain) {
-    const isolatedBackup = new IsolatedBackupHost({driveAuth});
+  if (backupDrain || backupOperations) {
+    const isolatedBackup = new IsolatedBackupHost({driveAuth, ...backupOperations});
     options.backupComposition = {driveAuth, isolatedBackup, async dispose() {
       const joined = isolatedBackup.dispose();
       driveAuth.dispose();
@@ -121,6 +121,34 @@ test('actual backup bridge enforces origin/session/closed bytes before admission
   assert.equal(begun.status, 'scanning');
   assert.equal((await h.settle(begun.operation)).status, 'unqualified');
   assert.equal(h.captures.length, 1);
+});
+
+test('loopback download is session-bound and old cancellation cannot cross navigation', {timeout: 5000}, async t => {
+  const entered = Promise.withResolvers(), retired = Promise.withResolvers();
+  t.after(() => retired.resolve());
+  let released;
+  const h = await open(t, {qualified: true, backupOperations: {
+    downloadSelection(operation, reference) { return new Promise(resolve => entered.resolve({operation, reference, resolve})); },
+    releaseSelection(operation, reference) { released = [operation, reference]; return retired.promise; },
+  }});
+  const inspected = await h.settle((await h.result(scan)).operation);
+  const selected = await h.settle((await h.result({version: 1, action: 'select', inspection: inspected.operation,
+    choice: inspected.backups[0].revisions[0].reference})).operation);
+  const request = {version: 1, action: 'download', operation: selected.operation, reference: selected.selection.reference};
+  assert.equal((await h.send(request, undefined, {Cookie: 'wrong'})).status, 403);
+  assert.equal((await h.send({...request, path: 'private'})).status, 400);
+  assert.equal((await h.result(request)).status, 'downloading');
+  const pending = await entered.promise;
+  const cancelled = h.send(cancel(request.operation));
+  try {
+    await navigate(h);
+    assert.deepEqual(released, [pending.operation, pending.reference]);
+    const successor = await h.result(scan);
+    pending.resolve({status: 'unavailable', inspection: null, cleanupPending: false});
+    retired.resolve();
+    assert.equal((await cancelled).status, 409);
+    assert.equal((await h.settle(successor.operation)).status, 'observed');
+  } finally { pending.resolve(); retired.resolve(); }
 });
 
 test('actual backup bridge retains the exact inspection and selection; stale cancel cannot revoke a newer operation', async t => {

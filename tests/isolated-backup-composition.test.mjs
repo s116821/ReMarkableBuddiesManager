@@ -62,7 +62,13 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
     assert.deepEqual(Buffer.concat(files.get('isolated-backup.json')), markerBytes);
     assert.deepEqual(Buffer.concat(files.get('data/backup.json')), data);
     assert.deepEqual(Buffer.concat(files.get('portable-configuration.json')), preferences);
-    await holdUntilJoined(signal);
+    if (hold === 'verifier') await holdUntilJoined(signal);
+    return Buffer.concat([json({report_version: 1, operation: 'inspect-isolated', status: 'ok', incomplete: false,
+      activation_performed: false, data: {isolated_package: {
+        marker_sha256: hash(markerBytes), data_backup: ref(data), portable_configuration: ref(preferences),
+        declared_settings: 0, data: {format: 1, manifests: 1, objects: 0, selected_scopes: 0, selection_receipts: 0,
+          complete_media: true, configuration_included: false},
+      }}}), Buffer.from('\n')]);
   });
   t.mock.method(IsolatedBackupStaging.prototype, 'available', async () => true);
   t.mock.method(IsolatedBackupStaging.prototype, 'freeBytes', async () => 1024 ** 3);
@@ -153,6 +159,42 @@ test('default composition is unbound and missing stage or verifier refuses befor
       }
     });
   }
+});
+
+test('the public phase retains one verified stage and cancel waits for its exact cleanup', {timeout: 5000}, async t => {
+  const f = setup(t), {composition} = f, host = composition.isolatedBackup;
+  const [operation, reference] = await selection(composition);
+  const request = {version: 1, action: 'download', operation, reference};
+  assert.equal(host.request({...request, reference: 'f'.repeat(64)}).status, 'invalidated');
+  assert.equal(host.request(request).status, 'downloading');
+  assert.equal(host.request(request).status, 'invalidated');
+  let result;
+  for (let i = 0; i < 200; i++) {
+    result = await host.request({version: 1, action: 'status', operation});
+    if (result.status !== 'downloading') break;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(result.status, 'verified');
+  assert.equal(result.inspection.markerSha256, hash(markerBytes));
+  assert.equal(result.inspection.completeMedia, true);
+  assert.equal(f.files.size, 3);
+  assert.equal(f.captures.length, 1);
+  assert.equal(f.events.filter(event => event === 'marker').length, 1);
+  assert.equal(host.request(request).status, 'invalidated');
+  const cancelling = host.request({version: 1, action: 'cancel', operation});
+  await f.releaseEntered.promise;
+  const successor = host.request(scan);
+  let settled = false;
+  void cancelling.then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false);
+  f.releaseDone.reject(Error('Stage identity changed'));
+  assert.deepEqual(await cancelling, {version: 1, operation, status: 'invalidated', inspection: null, cleanupPending: true});
+  assert.equal((await status(host, successor.operation)).status, 'observed');
+  await host.request({version: 1, action: 'cancel', operation});
+  assert.equal((await status(host, successor.operation)).status, 'observed');
+  assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+  await composition.dispose();
 });
 
 test('composition uses the original capture and joins active work before checked stage release', {timeout: 5000}, async t => {
