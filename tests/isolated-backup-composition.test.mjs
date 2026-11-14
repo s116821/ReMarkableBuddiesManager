@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {once} from 'node:events';
+import {createServer} from 'node:http';
 import path from 'node:path';
+import {performance} from 'node:perf_hooks';
 import test from 'node:test';
+import {setTimeout as delay} from 'node:timers/promises';
 import {DRIVE_SCOPE} from '../host/drive-auth.mjs';
-import {createIsolatedBackupComposition} from '../host/isolated-backup-composition.mjs';
+import {createIsolatedBackupComposition, createQualifiedBackupReadFactory} from '../host/isolated-backup-composition.mjs';
+import {createIsolatedBackupDrive} from '../host/isolated-backup-drive.mjs';
 import {IsolatedBackupStaging} from '../host/isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-restore.mjs';
@@ -29,7 +34,8 @@ const marker = file('Marker', markerBytes.length, {kind: 'marker', predecessor: 
 const objects = [data, preferences].map((bytes, index) =>
   file('Object' + index, bytes.length, {kind: 'object', sha256: hash(bytes)}));
 
-function setup(t, {stageConfigured = true, hold = null, unavailable = false, unbound = false, beforeRelease} = {}) {
+function setup(t, {stageConfigured = true, hold = null, unavailable = false, unbound = false, beforeRelease,
+  readFactory} = {}) {
   const registration = {schema: 1, type: 'google-desktop', clientId: '123456789012-fixture.apps.googleusercontent.com',
     clientSecret: null};
   let grant = {schema: 1, clientId: registration.clientId, account: {permissionId: 'fixture', label: 'fixture@example.invalid'},
@@ -104,7 +110,7 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
 
   const composition = createIsolatedBackupComposition({hostRoot: path.resolve('synthetic-host'), store,
     stagingParent: stageConfigured ? path.dirname(stageRoot) : null,
-    backupReadFactory: unbound ? null : capture => {
+    backupReadFactory: unbound ? null : (readFactory ?? (capture => {
       captures.push(capture);
       return {
         list: ({kind}) => json({files: [kind === 'root' ? root : marker], incompleteSearch: false}),
@@ -122,25 +128,28 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
           else yield id === objects[0].id ? data : preferences;
         },
       };
-    },
+    })),
   });
   composition.driveAuth.oauth = () => ({setCredentials() {}, refreshAccessToken() { assert.fail('Unexpected refresh'); }});
   composition.driveAuth.account = async () => ({account: grant.account, tokens: grant.tokens});
-  return {composition, events, captures, files, entered, drained, releaseEntered, releaseDone};
+  return {composition, events, captures, files, entered, drained, releaseEntered, releaseDone, store};
 }
 
 async function status(host, operation) {
-  for (let attempt = 0; attempt < 200; attempt++) {
+  const deadline = performance.now() + 3000;
+  while (performance.now() < deadline) {
     const value = host.request({version: 1, action: 'status', operation});
     if (!['scanning', 'selecting'].includes(value.status)) return value;
-    await new Promise(resolve => setImmediate(resolve));
+    // Pace polling so loopback I/O can progress, then read fresh status.
+    await delay(5);
   }
   assert.fail('Backup operation did not settle');
 }
 
-async function selection(composition) {
+async function selection(composition, afterCheck = () => {}) {
   const {isolatedBackup: host, driveAuth} = composition;
   assert.equal((await driveAuth.check()).status, 'connected');
+  afterCheck();
   const inspected = await status(host, host.request(scan).operation);
   assert.equal(inspected.status, 'observed');
   const selected = host.request({version: 1, action: 'select', inspection: inspected.operation,
@@ -149,6 +158,123 @@ async function selection(composition) {
   assert.equal(result.status, 'selected');
   return [result.operation, result.selection.reference];
 }
+
+async function loopbackDrive(t) {
+  const requests = [];
+  const prefix = '/drive/v3/files';
+  const records = new Map([[root.id, root], [marker.id, marker], ...objects.map(file => [file.id, file])]);
+  const mediaBytes = new Map([[marker.id, markerBytes], [objects[0].id, data], [objects[1].id, preferences]]);
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    const query = url.searchParams.get('q') ?? '';
+    const media = url.searchParams.get('alt') === 'media';
+    requests.push({method: req.method, authorization: req.headers.authorization, path: url.pathname, media});
+    if (url.pathname === prefix) {
+      const properties = [...query.matchAll(/appProperties has \{ key='([^']+)' and value='([^']+)' \}/g)];
+      const candidates = [...records.values()].filter(candidate =>
+        properties.every(([, key, value]) => candidate.appProperties[key] === value));
+      res.end(json({files: candidates, incompleteSearch: false}));
+      return;
+    }
+    const id = url.pathname.slice(prefix.length + 1);
+    const candidate = records.get(id);
+    const body = media ? mediaBytes.get(id) : candidate && json(candidate);
+    if (!url.pathname.startsWith(prefix + '/') || !body) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.end(body);
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(async () => {
+    const closed = new Promise(resolve => server.close(resolve));
+    server.closeAllConnections();
+    await closed;
+  });
+  return {origin: 'http://127.0.0.1:' + server.address().port, requests};
+}
+
+function capturedIdentity(store) {
+  const client = store.client(), grant = store.grant();
+  return {clientId: client.value.clientId, permissionId: grant.value.account.permissionId,
+    clientDigest: client.digest, grantDigest: grant.digest};
+}
+
+test('qualified fixed Drive binding uses only the original protected capture', {timeout: 30000}, async t => {
+  const {origin, requests} = await loopbackDrive(t);
+  for (const options of [{}, {stageConfigured: false}, {unavailable: true}]) {
+    await t.test(JSON.stringify(options), async t => {
+      let identity;
+      const accepted = [], drives = [];
+      const readFactory = createQualifiedBackupReadFactory(snapshot => {
+        accepted.push(snapshot);
+        return Object.keys(identity).every(key => snapshot[key] === identity[key]);
+      }, capture => {
+        drives.push(capture);
+        return createIsolatedBackupDrive(capture, {origin});
+      });
+      const {composition, store, releaseDone} = setup(t, {...options, readFactory});
+      releaseDone.resolve();
+      t.after(() => composition.dispose());
+      const start = requests.length;
+      const original = await selection(composition, () => { identity = capturedIdentity(store); });
+      const selectionReads = requests.slice(start);
+      assert.equal(selectionReads.filter(request => request.media).length, 1);
+      assert.equal(selectionReads.find(request => request.media).path, '/drive/v3/files/Marker');
+      const beforeDownload = requests.length;
+      const result = await composition.downloadSelection(...original);
+      const objectReads = requests.slice(beforeDownload);
+      if (options.stageConfigured === false || options.unavailable) {
+        assert.equal(result.status, 'unavailable');
+        assert.deepEqual(objectReads, []);
+      } else {
+        assert.equal(result.status, 'verified');
+        assert.equal(result.inspection.markerSha256, hash(markerBytes));
+        assert.deepEqual(objectReads.map(request => request.path), [
+          '/drive/v3/files', '/drive/v3/files/Object0', '/drive/v3/files/Object0',
+          '/drive/v3/files', '/drive/v3/files/Object1', '/drive/v3/files/Object1',
+        ]);
+        assert.deepEqual(objectReads.filter(request => request.media).map(request => request.path),
+          ['/drive/v3/files/Object0', '/drive/v3/files/Object1']);
+      }
+      assert.deepEqual(accepted, [identity]);
+      assert.equal(drives.length, 1);
+      assert.equal(drives[0].grantDigest, identity.grantDigest);
+      assert.equal(drives[0].clientDigest, identity.clientDigest);
+      assert.equal(drives[0].signal.aborted, false);
+      assert.ok(requests.slice(start).every(request =>
+        request.method === 'GET' && request.authorization === 'Bearer ' + drives[0].grant.tokens.access_token));
+    });
+  }
+});
+
+test('missing or non-exact namespace acceptance opens no Drive transport', async t => {
+  for (const [name, predicate] of [
+    ['missing', null],
+    ['wrong registration', (snapshot, identity) => snapshot.clientId === identity.clientId + '-other'],
+    ['wrong account', (snapshot, identity) => snapshot.permissionId === identity.permissionId + '-other'],
+    ['wrong client digest', (snapshot, identity) => snapshot.clientDigest === hash(identity.clientDigest)],
+    ['wrong grant digest', (snapshot, identity) => snapshot.grantDigest === hash(identity.grantDigest)],
+    ['throws', () => { throw new Error('Qualification unavailable'); }],
+    ['truthy', () => 1],
+    ['async true', async () => true],
+    ['async rejection', async () => { throw new Error('Qualification unavailable'); }],
+  ]) {
+    await t.test(name, async t => {
+      let identity, constructed = 0;
+      const accept = predicate && (snapshot => predicate(snapshot, identity));
+      const readFactory = createQualifiedBackupReadFactory(accept, () => { constructed++; });
+      const {composition, store} = setup(t, {readFactory});
+      t.after(() => composition.dispose());
+      assert.equal((await composition.driveAuth.check()).status, 'connected');
+      identity = capturedIdentity(store);
+      const host = composition.isolatedBackup;
+      assert.equal((await status(host, host.request(scan).operation)).status, 'unqualified');
+      assert.equal(constructed, 0);
+    });
+  }
+});
 
 test('default composition is unbound and missing stage or verifier refuses before object reads', async t => {
   for (const options of [{unbound: true}, {stageConfigured: false}, {unavailable: true}]) {

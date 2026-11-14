@@ -2,9 +2,32 @@ import path from 'node:path';
 import {DriveAuth} from './drive-auth.mjs';
 import {DriveStore} from './drive-store.mjs';
 import {IsolatedBackupDownload} from './isolated-backup-download.mjs';
+import {createIsolatedBackupDrive} from './isolated-backup-drive.mjs';
 import {IsolatedBackupHost} from './isolated-backup-host.mjs';
 import {IsolatedBackupStaging} from './isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from './isolated-backup-verifier.mjs';
+
+// The trusted host predicate owns evidence of publisher namespace visibility.
+// It receives the identity of this exact capture without the credentials.
+export function createQualifiedBackupReadFactory(acceptNamespace, createDrive = createIsolatedBackupDrive) {
+  return capture => {
+    if (typeof acceptNamespace !== 'function') return null;
+    let accepted;
+    try {
+      accepted = acceptNamespace(Object.freeze({
+        clientId: capture.registration.clientId,
+        permissionId: capture.grant.account.permissionId,
+        clientDigest: capture.clientDigest,
+        grantDigest: capture.grantDigest,
+      }));
+      // Refusal is synchronous even if a misconfigured predicate returns a promise.
+      if (accepted instanceof Promise) void accepted.catch(() => {});
+    } catch {
+      return null;
+    }
+    return accepted === true ? createDrive(capture) : null;
+  };
+}
 
 // Trusted host composition. Product entry points leave the read and stage
 // inputs absent until the applicable installed and namespace qualification.
