@@ -4,7 +4,9 @@ import {mkdir, mkdtemp, lstat, readdir, readFile, realpath, rename, rmdir, symli
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import {spawnSync} from 'node:child_process';
+import childProcess, {spawnSync} from 'node:child_process';
+import {EventEmitter} from 'node:events';
+import {syncBuiltinESMExports} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {IsolatedBackupStaging} from '../host/isolated-backup-staging.mjs';
 
@@ -76,6 +78,69 @@ async function write(stage, name, bytes) {
 }
 
 const member = (name, payload) => ({name, bytes: payload.length, sha256: createHash('sha256').update(payload).digest('hex')});
+
+test('refused or ambiguous reader close holds stage admission until the original broker joins', async t => {
+  for (const reply of [{ok: false}, {ok: true, value: 1}]) {
+    await t.test(JSON.stringify(reply), async t => {
+      const parent = path.resolve('fixture-staging-parent');
+      const root = path.join(parent, 'isolated-backup-' + '1'.repeat(32));
+      const file = member('data/backup.json', Buffer.from('original'));
+      const frames = {
+        create: {ok: true, value: root},
+        'open-read': {ok: true, value: true},
+        read: {ok: false},
+        'close-read': reply,
+      };
+      const requests = [];
+      let eof = 0;
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.stdin = Object.assign(new EventEmitter(), {
+        write(input) {
+          const {action} = JSON.parse(input);
+          requests.push(action);
+          queueMicrotask(() => child.stdout.emit('data', Buffer.from(JSON.stringify(frames[action]) + '\n')));
+        },
+        end() { eof++; },
+      });
+      child.kill = () => assert.fail('Broker should receive EOF first');
+      const spawn = t.mock.method(childProcess, 'spawn', () => child);
+      syncBuiltinESMExports();
+      const staging = new IsolatedBackupStaging({parent, python: path.resolve('fixture-python'),
+        excludedRoots: [path.resolve('fixture-exclusions')]});
+      let reading;
+      try {
+        const stage = await staging.create(options());
+        let settled = false;
+        reading = stage.readVerified(file, [file.name], options, () => assert.fail())
+          .then(() => { settled = true; }, error => { settled = true; return error; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(eof, 1);
+        assert.equal(settled, false);
+        assert.equal(await stage.assertOwned([file.name], options()), false);
+        await assert.rejects(stage.openExclusive(file.name, options(1)), /staging unavailable/);
+        await assert.rejects(stage.readVerified(file, [file.name], options, () => assert.fail()), /staging unavailable/);
+        await assert.rejects(stage.release(), /staging unavailable/);
+        await assert.rejects(staging.create(options()), /staging unavailable/);
+        assert.deepEqual(requests, ['create', 'open-read', 'read', 'close-read']);
+        assert.equal(spawn.mock.callCount(), 1);
+        child.emit('close', 1, null);
+        const error = await reading;
+        assert.match(error.message, /staging unavailable/);
+        assert.equal(error.cleanupPending, true);
+        await assert.rejects(stage.release(), /staging unavailable/);
+        assert.equal(eof, 1);
+        assert.deepEqual(requests, ['create', 'open-read', 'read', 'close-read']);
+      } finally {
+        child.emit('close', 1, null);
+        await reading;
+        spawn.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  }
+});
 
 test('native broker reads exact sealed bytes through EOF and serializes file access', {skip: !native}, async t => {
   const f = await fixture(t);

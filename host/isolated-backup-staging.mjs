@@ -10,7 +10,7 @@ const STAGE_NAME = /^isolated-backup-[a-f0-9]{32}$/;
 const TIMEOUT = 5000;
 const READ_CHUNK = 64 * 1024;
 const READ_RESPONSE = Math.ceil(READ_CHUNK / 3) * 4 + 64;
-const createUncertain = () => Object.assign(unavailable(), {cleanupPending: true});
+const cleanupUncertain = () => Object.assign(unavailable(), {cleanupPending: true});
 
 function trustedPath(value) {
   return typeof value === 'string' && path.isAbsolute(value) && path.resolve(value) === value;
@@ -22,6 +22,7 @@ class StagingProcess {
   #stdout = Buffer.alloc(0);
   #closed = false;
   #exited;
+  #stopping;
 
   constructor(python, parent, exclusions) {
     this.#child = spawn(python, ['-I', '-B', helper, parent, JSON.stringify(exclusions)], {
@@ -100,10 +101,14 @@ class StagingProcess {
   }
 
   async stop() {
-    this.#child.stdin.end();
-    const timer = setTimeout(() => this.#child.kill(), TIMEOUT);
-    try { return await this.#exited; }
-    finally { clearTimeout(timer); }
+    this.#stopping ??= Promise.resolve().then(async () => {
+      this.#closed = true;
+      this.#child.stdin.end();
+      const timer = setTimeout(() => this.#child.kill(), TIMEOUT);
+      try { return await this.#exited; }
+      finally { clearTimeout(timer); }
+    });
+    return this.#stopping;
   }
 
   async joinClosed() {
@@ -179,7 +184,7 @@ export class IsolatedBackupStaging {
         clean = exit.code === 0 && exit.signal === null;
       } finally {
         if (this.#active === active) this.#active = null;
-        if (!clean) throw createUncertain();
+        if (!clean) throw cleanupUncertain();
       }
       throw unavailable();
     }
@@ -251,7 +256,11 @@ export class IsolatedBackupStaging {
       if (bytes !== member.bytes || hash.digest('hex') !== member.sha256) throw unavailable();
     } finally {
       try {
-        if (opened) await active.process.call({action: 'close-read'});
+        if (opened && await active.process.call({action: 'close-read'}) !== true) throw unavailable();
+      } catch {
+        // An unacknowledged close leaves the original file handle in doubt.
+        await active.process.stop();
+        throw cleanupUncertain();
       } finally {
         await active.process.joinClosed();
         active.reader = false;
