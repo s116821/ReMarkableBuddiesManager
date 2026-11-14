@@ -8,9 +8,16 @@ const browserHelperMode = app.isPackaged && process.argv.slice(1).includes('--br
 async function runBrowserHelper(hostRoot, backupComposition) {
   let helper, quitting = false, stopped = false, stopping;
   const stop = (code = 0) => stopping ??= Promise.resolve().then(async () => {
-    try { if (helper) await helper.close(); else await backupComposition.dispose(); }
-    catch { code = 1; }
+    let cleanupPending;
+    try {
+      const result = await (helper ? helper.close() : backupComposition.dispose());
+      cleanupPending = result?.cleanupPending;
+    } catch (error) {
+      cleanupPending = error?.cleanupPending;
+      code = 1;
+    }
     finally {
+      if (cleanupPending) console.error('Manager could not confirm backup staging cleanup');
       if (code) console.error('Manager browser helper unavailable');
       stopped = true;
       if (code) app.exit(code);
@@ -149,9 +156,9 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true },
   });
   const ui = path.join(__dirname, '../dist/manager/browser/index.html');
-  let quitting = false, drained = false;
+  let quitting = false, drained = false, closing;
   let backupDocument = Symbol();
-  const authorized = (event, args) => !quitting && args.length === 0 && event.sender === window.webContents &&
+  const authorized = (event, args) => !closing && args.length === 0 && event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(ui).href;
   for (const action of ['observe', 'cancel', 'inspectOwned', 'inspectRuntime']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
@@ -323,17 +330,43 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
+  const close = () => closing ??= Promise.resolve().then(async () => {
+    const download = downloads.active?.promise;
+    const results = await Promise.allSettled([
+      () => restore.dispose(),
+      () => notebookRestore.dispose(),
+      () => backupComposition.dispose(),
+      () => downloads.dispose(),
+      () => sharedPreferences.dispose(),
+      () => portable.dispose(),
+      () => observer.cancel(),
+      () => localMode.dispose(),
+      () => isolatedRoot.dispose(),
+      () => download,
+    ].map(stop => Promise.resolve().then(stop)));
+    const [ordinary, notebook, backup] = results;
+    if (ordinary.value === true || notebook.value === true || backup.value?.cleanupPending === true ||
+        [ordinary, notebook, backup].some(result => result.reason?.cleanupPending === true)) {
+      console.error('Manager could not confirm backup staging cleanup');
+    }
+    if (results.some(result => result.status === 'rejected')) {
+      throw Error('Manager shutdown failed');
+    }
+  });
   app.on('before-quit', event => {
     if (drained) return;
     event.preventDefault();
     if (quitting) return;
     quitting = true;
-    void backupComposition.dispose().then(() => {
+    void close().then(() => {
       drained = true;
       app.quit();
-    }, () => app.exit(1));
+    }, () => {
+      console.error('Manager shutdown failed');
+      app.exit(1);
+    });
   });
-  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); void backupComposition.dispose().catch(() => {}); downloads.dispose(); });
+  window.on('closed', () => { void close().catch(() => {}); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

@@ -163,6 +163,47 @@ async function installSyntheticDrive(app) {
   };
 }
 
+async function verifyQuitWaitsForRestore(app) {
+  await app.evaluate(({app}) => {
+    const require = process.mainModule.require.bind(process.mainModule);
+    const path = require('node:path');
+    const host = path.join(process.resourcesPath, 'host');
+    const {OrdinaryRestoreHost} = require(path.join(host, 'ordinary-restore.mjs'));
+    const dispose = OrdinaryRestoreHost.prototype.dispose;
+    const owners = new Set();
+    let release;
+    const retirement = new Promise(resolve => { release = resolve; });
+    const state = {calls: 0, retired: 0, willQuit: false};
+    OrdinaryRestoreHost.prototype.dispose = function () {
+      state.calls++;
+      owners.add(this);
+      return dispose.call(this).then(result => {
+        state.retired++;
+        return retirement.then(() => result);
+      });
+    };
+    app.once('will-quit', () => { state.willQuit = true; });
+    globalThis.isolatedBackupQuitFixture = {
+      snapshot: () => ({...state, owners: owners.size}),
+      release,
+    };
+  });
+  try {
+    await app.evaluate(({app}) => {
+      app.quit();
+      app.quit();
+    });
+    await expect.poll(() => app.evaluate(() => globalThis.isolatedBackupQuitFixture.snapshot()))
+      .toEqual({calls: 2, retired: 2, willQuit: false, owners: 2});
+  } finally {
+    await Promise.all([
+      app.waitForEvent('close', {timeout: 10000}),
+      app.evaluate(() => { setImmediate(globalThis.isolatedBackupQuitFixture.release); }),
+    ]);
+  }
+  assert.equal(app.process().exitCode, 0);
+}
+
 function helperStatus(url, headers) {
   return new Promise((resolve, reject) => {
     const request = httpRequest(url, {method: 'POST', headers, timeout: 3000}, response => {
@@ -222,6 +263,7 @@ async function verifyPackagedBrowser(executablePath, env) {
       await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).click();
       await expect.poll(() => control.get('readCount')).toBe(2);
     } finally { await browser.close(); }
+    await verifyQuitWaitsForRestore(app);
   } finally { await app.close(); }
   await assert.rejects(helperStatus(origin + '/manager-isolated-backup', {}), {code: 'ECONNREFUSED'});
   console.log('Packaged browser helper served the ASAR UI over loopback and stopped on quit');
@@ -282,6 +324,7 @@ try {
     });
     await verify(page, control);
     await verifyElectronReload(page, control);
+    if (packaged) await verifyQuitWaitsForRestore(app);
   } finally { await app.close(); }
 } finally {
   const canonicalProfile = await realpath(profile);

@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {startHelper} from '../host/browser-helper.mjs';
 import {IsolatedBackupHost} from '../host/isolated-backup-host.mjs';
+import {OrdinaryRestoreHost} from '../host/ordinary-restore.mjs';
 import {parseIsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
 
 // Source-derived synthetic frames. This exercises the actual loopback bridge;
@@ -26,7 +27,8 @@ const scan = {version: 1, action: 'scan'};
 const status = operation => ({version: 1, action: 'status', operation});
 const cancel = operation => ({version: 1, action: 'cancel', operation});
 
-async function open(t, {qualified = false, delayed = false, downloads, backupDrain, backupOperations} = {}) {
+async function open(t, {qualified = false, delayed = false, downloads, backupDrain, backupOperations,
+  shutdownFails = false} = {}) {
   const parent = await realpath(os.tmpdir());
   const directory = await mkdtemp(path.join(parent, 'manager-backup-helper-'));
   await writeFile(path.join(directory, 'index.html'), '<main>fixture</main>');
@@ -58,13 +60,15 @@ async function open(t, {qualified = false, delayed = false, downloads, backupDra
     options.backupComposition = {driveAuth, isolatedBackup, async dispose() {
       const joined = isolatedBackup.dispose();
       driveAuth.dispose();
-      await Promise.all([joined, backupDrain]);
+      const [, result] = await Promise.all([joined, backupDrain]);
+      return result;
     }};
   } else options.driveAuth = driveAuth;
   const helper = await startHelper(options);
   const {close} = helper;
   t.after(async () => {
-    await close();
+    if (shutdownFails) await assert.rejects(close(), /shutdown failed/);
+    else await close();
     assert.equal(tabletCalls, 0);
     assert.equal(await realpath(directory), directory);
     assert.equal(path.dirname(directory), parent);
@@ -121,6 +125,58 @@ test('actual backup bridge enforces origin/session/closed bytes before admission
   assert.equal(begun.status, 'scanning');
   assert.equal((await h.settle(begun.operation)).status, 'unqualified');
   assert.equal(h.captures.length, 1);
+});
+
+test('helper close waits for both original restore owners and preserves reduced uncertainty', {timeout: 5000}, async t => {
+  for (const outcome of ['clean', 'destination', 'source', 'owner-fails', 'uncertain-owner-fails']) {
+    await t.test(outcome, async t => {
+      const backup = Promise.withResolvers(), download = Promise.withResolvers();
+      const ordinary = Promise.withResolvers(), notebook = Promise.withResolvers();
+      const calls = [];
+      const shutdownFails = outcome.endsWith('owner-fails');
+      t.mock.method(OrdinaryRestoreHost.prototype, 'dispose', function () {
+        assert.ok(!calls.includes(this));
+        calls.push(this);
+        if (calls.length === 1 && outcome === 'uncertain-owner-fails') {
+          throw Object.assign(Error('PRIVATE remote path'), {cleanupPending: true});
+        }
+        return calls.length === 1 ? ordinary.promise : notebook.promise;
+      });
+      const h = await open(t, {backupDrain: backup.promise, shutdownFails, downloads: {
+        active: {promise: download.promise}, dispose() {},
+      }});
+      let settled = false;
+      const first = h.close();
+      const completed = first.then(
+        result => { settled = true; return {result}; },
+        error => { settled = true; return {error}; },
+      );
+      try {
+        assert.equal(h.close(), first);
+        await assert.rejects(h.send(scan), TypeError);
+        assert.equal(calls.length, 2);
+        backup.resolve({cleanupPending: outcome === 'source'});
+        download.resolve();
+        if (outcome === 'owner-fails') ordinary.reject(Error('PRIVATE remote path'));
+        else ordinary.resolve(outcome === 'destination');
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(settled, false);
+        notebook.resolve(outcome === 'owner-fails');
+        const {result, error} = await completed;
+        if (shutdownFails) {
+          assert.equal(error.message, 'Manager browser helper shutdown failed');
+          assert.equal(error.cleanupPending, true);
+        } else assert.deepEqual(result, {cleanupPending: outcome !== 'clean'});
+        assert.equal(h.close(), first);
+        assert.equal(calls.length, 2);
+      } finally {
+        backup.resolve();
+        download.resolve();
+        ordinary.resolve();
+        notebook.resolve();
+      }
+    });
+  }
 });
 
 test('loopback download is session-bound and old cancellation cannot cross navigation', {timeout: 5000}, async t => {

@@ -114,6 +114,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       let body = '', bytes = 0;
       try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 192) return refuse(413); body += chunk; } } catch { return refuse(400); }
       let q; try { q = JSON.parse(body); if (body !== JSON.stringify(q)) throw new Error('Input'); parseDownloadRequest(q); } catch { return refuse(400); }
+      if (closing) return refuse(503);
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
       return;
     }
@@ -193,6 +194,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
       const chunks=[];let bytes=0,request;
       try{for await(const chunk of req){bytes+=chunk.length;if(bytes>16384){chunk.fill(0);return refuse(413);}chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}if(raw.charCodeAt(0)===0xfeff)throw Error('Input');request=strictJson(new TextEncoder().encode(raw));parseRestoreRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
+      if (closing) return refuse(503);
       try{const context=restoreResponseContext(request),pending=host.request(request);request=null;const value=parseResult(await pending,context,validateResult);host.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
     }
     if(url.pathname==='/manager-conversation-management'){
@@ -422,23 +424,30 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') reject(error);
       else resolve();
     }));
-    server.closeAllConnections();
-    try {
-      sharedPreferences.dispose();
-      portable.dispose();
-      observer.cancel();
-      restore.dispose();
-      notebookRestore.dispose();
-      localMode.dispose();
-      isolatedRoot.dispose();
-      const backup = backupComposition ? backupComposition.dispose() :
-        Promise.all([isolatedBackup.dispose(), driveAuth.dispose()]);
-      const download = downloads.active?.promise;
-      downloads.dispose();
-      const results = await Promise.allSettled([backup, download]);
-      const failed = results.find(result => result.status === 'rejected');
-      if (failed) throw failed.reason;
-    } finally { await stopped; }
+    const download = downloads.active?.promise;
+    const stopBackup = backupComposition ? [() => backupComposition.dispose()] :
+      [() => isolatedBackup.dispose(), () => driveAuth.dispose()];
+    const results = await Promise.allSettled([
+      () => restore.dispose(),
+      () => notebookRestore.dispose(),
+      ...stopBackup,
+      () => downloads.dispose(),
+      () => server.closeAllConnections(),
+      () => sharedPreferences.dispose(),
+      () => portable.dispose(),
+      () => observer.cancel(),
+      () => localMode.dispose(),
+      () => isolatedRoot.dispose(),
+      () => download,
+      () => stopped,
+    ].map(stop => Promise.resolve().then(stop)));
+    const [ordinary, notebook, backup] = results;
+    const cleanupPending = ordinary.value === true || notebook.value === true || backup.value?.cleanupPending === true ||
+      [ordinary, notebook, backup].some(result => result.reason?.cleanupPending === true);
+    if (results.some(result => result.status === 'rejected')) {
+      throw Object.assign(Error('Manager browser helper shutdown failed'), {cleanupPending});
+    }
+    return {cleanupPending};
   });
   try {
     await new Promise((resolve, reject) => {
