@@ -196,7 +196,7 @@ export class IsolatedBackupController {
     }
     if (download) {
       if (!('inspection' in response)) {
-        if (response.status === 'invalidated') this.clear(downloadLabels.invalidated);
+        if (response.status === 'invalidated') this.clear(downloadLabels.invalidated, true);
         else this.clear(downloadLabels.invalid, true);
         return;
       }

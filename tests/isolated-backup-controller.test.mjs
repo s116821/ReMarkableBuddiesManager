@@ -173,6 +173,42 @@ test('an unconfirmed download cancel warns only in the original visible view', {
   }
 });
 
+test('legacy invalidated download status still requires exact cleanup confirmation', async t => {
+  for (const mode of ['rejected', 'pending', 'successor', 'navigation', 'disposed', 'clean']) {
+    await t.test(mode, async t => {
+      const cancellation = deferred(), requests = [];
+      const operation = reference(5);
+      const c = open(t, async request => {
+        requests.push(request);
+        if (request.action === 'scan') return respond('observed', reference(4), summaries);
+        if (request.action === 'select') return respond('selected', operation, [],
+          {backup, device, sha256: digest, reference: reference(6)});
+        if (request.action === 'download') return {version: 1, operation, status: 'downloading',
+          inspection: null, cleanupPending: false};
+        if (request.action === 'status') return respond('invalidated', operation);
+        return cancellation.promise;
+      });
+      await choose(c);
+      await c.download();
+      await waitFor(() => requests.some(request => request.action === 'cancel'));
+      assert.equal(c.state.selected, null);
+      assert.match(c.state.message, /cancelled or expired/);
+      assert.deepEqual(requests.at(-1), controls('cancel', operation));
+      if (mode === 'successor') await c.scan();
+      else if (mode === 'navigation') c.clear();
+      else if (mode === 'disposed') c.dispose();
+      const currentMessage = c.state.message;
+      if (['pending', 'clean'].includes(mode)) cancellation.resolve({version: 1, operation,
+        status: 'invalidated', inspection: null, cleanupPending: mode === 'pending'});
+      else cancellation.reject(new DOMException('Synthetic lost cancellation reply', 'TimeoutError'));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(c.state.cleanupPending, ['rejected', 'pending'].includes(mode));
+      assert.equal(c.state.message, currentMessage);
+      assert.equal(requests.filter(request => request.action === 'cancel').length, 1);
+    });
+  }
+});
+
 test('real host returns one scan and exact marker selection; keeps scan context while selecting', async t => {
   const {host, reads} = syntheticHost(t);
   const requests = [];
