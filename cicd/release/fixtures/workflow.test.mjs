@@ -228,6 +228,7 @@ function repeatsCommonChecks(jobName, step) {
   const selectedWindowsControls = new Set([
     'python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v',
     'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v',
+    'python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v',
   ]);
   if (jobName !== 'integration' || step.if !== "runner.os == 'Windows'" || step.shell !== 'bash')
     return common.test(step.run ?? '');
@@ -241,6 +242,8 @@ test('Windows native selections preserve platform coverage without admitting rep
   };
   assert.equal(repeatsCommonChecks('integration', selected), false);
   assert.equal(repeatsCommonChecks('integration', {...selected, run: 'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v'}), false);
+  assert.equal(repeatsCommonChecks('integration', {...selected, run: 'python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v'}), false);
+  assert.equal(repeatsCommonChecks('integration', {...selected, run: 'python -m unittest discover -s tests/drive -p test_store.py -k test_isolated -v'}), true);
   assert.equal(repeatsCommonChecks('build', selected), true);
   assert.equal(repeatsCommonChecks('integration', {...selected, if: undefined}), true);
   assert.equal(repeatsCommonChecks('integration', {...selected, if: "runner.os == 'Linux'"}), true);
