@@ -147,6 +147,15 @@ jobs:
               for name in ('MANAGER_WIRED_PYTHON', 'MANAGER_DRIVE_PYTHON'):
                   output.write(f'{name}={sys.executable}\n')
           PYTHON
+      - name: Preserve Windows native API and NTFS custody controls
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          python -m pip install -r host/requirements.txt
+          python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
+          python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
+          python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v
+          node --test tests/isolated-backup-staging.test.mjs tests/drive-read-guard.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: node tests/hosts.mjs --development
       - if: runner.os == 'Linux'
@@ -307,15 +316,6 @@ jobs:
       - name: Confirm integration preserved upload bytes
         shell: bash
         run: python cicd/release/build.py verify --tag "$TAG" --sha "$SHA" --output "$RUNNER_TEMP/packages"
-      - name: Preserve Windows native API and NTFS custody controls
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          python -m pip install -r host/requirements.txt
-          python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
-          python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
-          python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v
-          node --test tests/isolated-backup-staging.test.mjs tests/drive-read-guard.test.mjs
       - name: Configure native host qualification paths
         if: ${{ !inputs.release }}
         run: |

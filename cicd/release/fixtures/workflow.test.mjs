@@ -210,6 +210,12 @@ if (manager) test('Windows integration stops at each failed native command', () 
   const integration = workflow('pipeline').jobs.integration;
   const step = integration.steps.find(s => s.if === "runner.os == 'Windows'" && /npm run test:hosts/.test(s.run ?? ''));
   assert.ok(step);
+  const native = integration.steps.filter(s => s.name === 'Preserve Windows native API and NTFS custody controls');
+  assert.equal(native.length, 1, 'Run selected native controls exactly once');
+  const nativeIndex = integration.steps.indexOf(native[0]);
+  assert.ok(nativeIndex > integration.steps.findIndex(s => s.name === 'Set trusted host interpreter for retained-package controls'));
+  assert.ok(nativeIndex < integration.steps.findIndex(s => /npx playwright install/.test(s.run ?? '')));
+  assert.ok(nativeIndex < integration.steps.indexOf(step), 'Fail before long UI suites if native custody is broken');
   const commands = step.run.trim().split('\n').map(s => s.trim());
   assert.deepEqual(commands.slice(0, 4), ['npm run test:hosts','npm run test:package','npm run test:wired-hosts','npm run test:wired-hosts -- --packaged']);
   assert.ok(commands.every(command => /^npm run test:[a-z-]+(?: -- --packaged)?$/.test(command)));
