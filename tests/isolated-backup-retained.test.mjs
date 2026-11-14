@@ -79,7 +79,11 @@ test('retained host oracle verifies actual producer packages through the Manager
       // The verifier reports the truthful omission. Complete-handoff policy is
       // owned by the download coordinator; this test does not enable a restore.
     }
-    await assert.rejects(verifier.verify({...bounds(), root: await realpath(path.join(corpus, 'complete')),
-      markerSha256: '0'.repeat(64), maxBytes: 16384}), /verifier unavailable/i);
+    const wrongMarker = await verifier.verify({...bounds(), root: await realpath(path.join(corpus, 'complete')),
+      markerSha256: '0'.repeat(64), maxBytes: 16384});
+    assert.deepEqual(JSON.parse(wrongMarker.toString('utf8')), {
+      report_version: 1, operation: 'inspect-isolated', status: 'unsupported', incomplete: false,
+      activation_performed: false, data: null,
+    });
     await checkCorpus(); // No config, Store, cache, credential or other output appeared.
   });
