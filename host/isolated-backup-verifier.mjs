@@ -7,6 +7,7 @@ import {performance} from 'node:perf_hooks';
 import {isDeepStrictEqual} from 'node:util';
 import expectedSource from './buddy-oracle-source.json' with {type: 'json'};
 import {strictJson} from './strict-json.mjs';
+import {lockWindowsResources} from './isolated-backup-resource-lock.mjs';
 
 const REPORT_BYTES = 16384;
 const EXECUTABLE_BYTES = 512 * 1024 * 1024;
@@ -193,18 +194,40 @@ function run(executable, cwd, input, maximum, scope, spawnChild) {
 export class IsolatedBackupVerifier {
   #resourceRoot;
   #spawn;
+  #lockResources;
 
-  // spawnChild is a host-only process seam for focused test fixtures.
-  constructor({resourceRoot = null, spawnChild = spawn} = {}) {
+  // Process injection is host-only, for focused fixtures.
+  constructor({resourceRoot = null, python = null, spawnChild = spawn, spawnLock = spawn} = {}) {
     this.#resourceRoot = resourceRoot;
     this.#spawn = spawnChild;
+    this.#lockResources = process.platform === 'win32' || spawnLock !== spawn
+      ? signal => lockWindowsResources(this.#resourceRoot, python, signal, spawnLock)
+      : null;
+  }
+
+  async #withResources(scope, operation) {
+    safeAbsolute(this.#resourceRoot);
+    scope.check();
+    const lock = await this.#lockResources?.(scope.signal);
+    const signal = lock ? AbortSignal.any([scope.signal, lock.signal]) : scope.signal;
+    const guarded = {signal, check() { if (signal.aborted) refuse(); scope.check(); }};
+    let result;
+    try {
+      guarded.check();
+      result = await operation(guarded);
+      await lock?.confirm(signal);
+      guarded.check();
+    } finally {
+      await lock?.release();
+    }
+    guarded.check();
+    return result;
   }
 
   async available(bounds) {
     try {
       const scope = limitOperation(bounds);
-      await capture(this.#resourceRoot, scope);
-      scope.check();
+      await this.#withResources(scope, guarded => capture(this.#resourceRoot, guarded));
       return true;
     } catch { return false; }
   }
@@ -217,18 +240,19 @@ export class IsolatedBackupVerifier {
       const input = Buffer.from(JSON.stringify({path: root, marker_sha256: markerSha256}));
       if (input.length > REPORT_BYTES) refuse();
       const staged = await directories(root, scope);
-      const original = await capture(this.#resourceRoot, scope);
-      await confirmProvenance(this.#resourceRoot, original, scope);
-      await confirmDirectories(original.ancestors, scope);
-      await confirmDirectories(staged, scope);
-      if (!same(await fileIdentity(original.executable, scope), original.info)) refuse();
-      const output = await run(original.executable, root, input, maxBytes, scope, this.#spawn);
-      await verifyExecutable(original.executable, original.info, original.reference, scope);
-      await confirmProvenance(this.#resourceRoot, original, scope);
-      await confirmDirectories(original.ancestors, scope);
-      await confirmDirectories(staged, scope);
-      scope.check();
-      return output;
+      return await this.#withResources(scope, async guarded => {
+        const original = await capture(this.#resourceRoot, guarded);
+        await confirmProvenance(this.#resourceRoot, original, guarded);
+        await confirmDirectories(original.ancestors, guarded);
+        await confirmDirectories(staged, guarded);
+        if (!same(await fileIdentity(original.executable, guarded), original.info)) refuse();
+        const output = await run(original.executable, root, input, maxBytes, guarded, this.#spawn);
+        await verifyExecutable(original.executable, original.info, original.reference, guarded);
+        await confirmProvenance(this.#resourceRoot, original, guarded);
+        await confirmDirectories(original.ancestors, guarded);
+        await confirmDirectories(staged, guarded);
+        return output;
+      });
     } catch { refuse(); }
   }
 }

@@ -13,6 +13,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).parent))
 from drive_store import checked_root, exclusive, require, windows_check_handle
+from windows_resource_handle import checked_handle
 
 MIB = 1024 * 1024
 DIRECTORIES = ('', 'data', 'data/objects')
@@ -74,21 +75,12 @@ def lexical_root(value):
 @contextmanager
 def win_handle(path, directory, private, delete=False):
     import win32con
-    import win32file
     access = win32con.READ_CONTROL | (win32con.DELETE if delete else 0)
     share = 0 if delete else win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE
-    flags = win32file.FILE_FLAG_OPEN_REPARSE_POINT | win32file.FILE_FLAG_BACKUP_SEMANTICS
-    handle = win32file.CreateFile(str(path), access, share, None, win32con.OPEN_EXISTING, flags, None)
-    try:
-        info = win32file.GetFileInformationByHandle(handle)
-        require(not info[0] & win32con.FILE_ATTRIBUTE_REPARSE_POINT
-                and bool(info[0] & win32con.FILE_ATTRIBUTE_DIRECTORY) == directory
-                and (directory or info[7] == 1))
+    with checked_handle(path, directory=directory, access=access, share=share) as handle:
         if private:
             windows_check_handle(handle)
         yield handle
-    finally:
-        handle.Close()
 
 
 def win_delete(handle):
