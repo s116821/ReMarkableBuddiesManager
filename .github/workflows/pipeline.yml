@@ -96,6 +96,12 @@ jobs:
     env:
       TAG: ${{ needs.build.outputs.tag }}
       SHA: ${{ needs.build.outputs.sha }}
+      CARGO_TARGET_DIR: ${{ runner.temp }}/buddy-oracle-target
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      RUSTFLAGS: ""
+      ORACLE_TARGET: ${{ runner.os == 'Windows' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
+      ORACLE_FILENAME: ${{ runner.os == 'Windows' && 'reader-buddy.exe' || 'reader-buddy' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -313,6 +319,129 @@ jobs:
           python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
           python -m unittest discover -s tests/drive -p test_store.py -k test_isolated_writer_process_exit_releases_lock_without_touching_oauth -v
           node --test tests/isolated-backup-staging.test.mjs tests/drive-read-guard.test.mjs
+      - name: Read the exact host dependency pin
+        if: ${{ !inputs.release }}
+        id: pin
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          pin = json.loads(Path("host/buddy-oracle-source.json").read_text())
+          assert set(pin) == {"schema", "repository", "sourceSha", "sourceTree", "cargoLockSha256", "sdkRevision"}
+          assert pin["schema"] == 1 and pin["repository"] == "s116821/ReMarkableBuddies"
+          for field in ("sourceSha", "sourceTree", "sdkRevision"):
+              assert re.fullmatch("[0-9a-f]{40}", pin[field])
+          assert re.fullmatch("[0-9a-f]{64}", pin["cargoLockSha256"])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("source_sha=" + pin["sourceSha"] + "\n")
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ !inputs.release }}
+        with:
+          repository: s116821/ReMarkableBuddies
+          ref: ${{ steps.pin.outputs.source_sha }}
+          path: buddy-oracle-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        if: ${{ !inputs.release }}
+        with:
+          toolchain: stable
+          targets: ${{ env.ORACLE_TARGET }}
+      - name: Admit source and build the ordinary host command
+        if: ${{ !inputs.release }}
+        working-directory: buddy-oracle-source
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, shutil, subprocess, tomllib
+          from pathlib import Path
+          pin = json.loads(Path("../host/buddy-oracle-source.json").read_text())
+          def git(*args):
+              return subprocess.check_output(["git", *args])
+          assert git("rev-parse", "HEAD").decode().strip() == pin["sourceSha"]
+          assert git("rev-parse", "HEAD^{tree}").decode().strip() == pin["sourceTree"]
+          assert not git("status", "--porcelain", "--untracked-files=normal").strip()
+          lock = git("show", "HEAD:Cargo.lock")
+          assert hashlib.sha256(lock).hexdigest() == pin["cargoLockSha256"]
+          sdk = [p for p in tomllib.loads(lock.decode())["package"] if p["name"] == "remarkable-open-sdk"]
+          assert len(sdk) == 1 and sdk[0]["source"].endswith("#" + pin["sdkRevision"])
+          # One native release/test target. Estimate from the existing ~4.1 GiB
+          # source target plus shipping/test outputs; no persistent CI cache.
+          for volume in (Path.cwd(), Path(os.environ["RUNNER_TEMP"])):
+              free = shutil.disk_usage(volume).free
+              print("Build volume free bytes:", free)
+              assert free >= 8 * 1024**3, "Insufficient room for this host build"
+          PY
+          cargo build --locked --release --target "$ORACLE_TARGET" --bin reader-buddy
+      - name: Retain the exact ordinary executable and its provenance
+        if: ${{ !inputs.release }}
+        working-directory: buddy-oracle-source
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, platform, shutil, subprocess
+          from pathlib import Path
+          pin = json.loads(Path("../host/buddy-oracle-source.json").read_text())
+          output = Path(os.environ["RUNNER_TEMP"]) / "buddy-host-oracle"
+          resource = output / "buddy-oracle"
+          resource.mkdir(parents=True, exist_ok=False)
+          binary = resource / os.environ["ORACLE_FILENAME"]
+          shutil.copy2(Path(os.environ["CARGO_TARGET_DIR"]) / os.environ["ORACLE_TARGET"] / "release" / binary.name, binary)
+          def sha(path):
+              with path.open("rb") as stream:
+                  return hashlib.file_digest(stream, "sha256").hexdigest()
+          clean_env = {k: os.environ[k] for k in ("PATH", "SystemRoot", "WINDIR") if k in os.environ}
+          version = subprocess.run([str(binary), "--version"], capture_output=True, check=True, timeout=10, env=clean_env)
+          assert not version.stderr and len(version.stdout) <= 256
+          version = version.stdout.decode().strip().split()
+          assert len(version) == 2 and version[-1].startswith("dev."), "Do not fabricate published-tag identity"
+          version = version[-1]
+          rustc = subprocess.check_output(["rustc", "--version"], timeout=10).decode().strip()
+          assert len(rustc) <= 256 and "\n" not in rustc
+          metadata = dict(schema=1, source=pin, target=os.environ["ORACLE_TARGET"],
+              profile="release", features=[], rustc=rustc, version=version,
+              executable=dict(name=binary.name, bytes=binary.stat().st_size, sha256=sha(binary)))
+          (resource / "provenance.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+          # Source/license inputs accompany qualification, outside the command's
+          # closed runtime directory. Dependency notices remain a packaging gate.
+          shutil.copyfile("LICENSE", output / "LICENSE")
+          (output / "Cargo.lock").write_bytes(subprocess.check_output(["git", "show", "HEAD:Cargo.lock"]))
+          (output / "host-platform.json").write_text(json.dumps(dict(platform=platform.platform(),
+              libc=platform.libc_ver(), image=os.environ.get("ImageOS"),
+              imageVersion=os.environ.get("ImageVersion")), indent=2) + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              for key, value in {"COMMAND": str(binary.resolve()), "SHA256": metadata["executable"]["sha256"],
+                                 "BYTES": str(metadata["executable"]["bytes"])}.items():
+                  env.write("READER_BUDDY_ARCHIVE_TEST_" + key + "=" + value + "\n")
+          print(json.dumps(metadata, indent=2))
+          PY
+      - name: Exercise the retained command through the normal archive tests
+        if: ${{ !inputs.release }}
+        working-directory: buddy-oracle-source
+        run: cargo test --locked --release --target "$ORACLE_TARGET" --test archive_cli -- --nocapture
+      - name: Confirm qualification did not replace the retained bytes
+        if: ${{ !inputs.release }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, tarfile
+          from pathlib import Path
+          binary = Path(os.environ["READER_BUDDY_ARCHIVE_TEST_COMMAND"])
+          assert binary.stat().st_size == int(os.environ["READER_BUDDY_ARCHIVE_TEST_BYTES"])
+          with binary.open("rb") as source:
+              assert hashlib.file_digest(source, "sha256").hexdigest() == os.environ["READER_BUDDY_ARCHIVE_TEST_SHA256"]
+          # Artifact services do not preserve executable permissions. Keep them
+          # inside a normal tar, with the source receipt and license inputs.
+          output = binary.parent.parent
+          with tarfile.open(output.with_suffix(".tar"), "w") as archive:
+              for name in ("buddy-oracle", "LICENSE", "Cargo.lock", "host-platform.json"):
+                  archive.add(output / name, arcname=name)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !inputs.release }}
+        with:
+          name: buddy-host-oracle-${{ env.ORACLE_TARGET }}-${{ steps.pin.outputs.source_sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/buddy-host-oracle.tar
+          if-no-files-found: error
+          retention-days: 7
     defaults:
       run:
         shell: bash

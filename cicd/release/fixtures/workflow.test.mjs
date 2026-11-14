@@ -188,7 +188,8 @@ test('only release may publish and it consumes the exact build artifacts without
   assert.ok(freeze >= 0 && compile > freeze);
   assert.match(build.steps[freeze].run, /version --print-tag/);
   assert.ok(!build.steps.some(s => /--push|PATCH |POST /.test(s.run ?? '')));
-  assert.ok(!integration.steps.some(s => /cicd\/release\/build.py build|cargo build|npm run build/.test(s.run ?? '')));
+  assert.ok(!integration.steps.some(s => /cicd\/release\/build.py build|cargo build|npm run build/.test(s.run ?? '') &&
+    !isOracleQualificationBuild(s)));
   for (const job of [integration, release]) {
     const downloads = job.steps.filter(s => s.uses?.startsWith('actions/download-artifact'));
     assert.ok(downloads.some(s => s.with['artifact-ids'] === expr('needs.build.outputs.artifact_id')));
@@ -225,6 +226,9 @@ if (manager) test('Windows integration stops at each failed native command', () 
 
 function repeatsCommonChecks(jobName, step) {
   const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test cicd\/release\/fixtures\/workflow/;
+  if (jobName === 'integration' && step.name === 'Exercise the retained command through the normal archive tests' &&
+      step.if === expr('!inputs.release') && step['working-directory'] === 'buddy-oracle-source' &&
+      step.run === 'cargo test --locked --release --target "$ORACLE_TARGET" --test archive_cli -- --nocapture') return false;
   const selectedWindowsControls = new Set([
     'python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v',
     'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v',
@@ -234,6 +238,42 @@ function repeatsCommonChecks(jobName, step) {
     return common.test(step.run ?? '');
   return (step.run ?? '').split('\n').some(line => common.test(line) && !selectedWindowsControls.has(line.trim()));
 }
+
+function isOracleQualificationBuild(step) {
+  return step.name === 'Admit source and build the ordinary host command' &&
+    step.if === expr('!inputs.release') && step['working-directory'] === 'buddy-oracle-source' &&
+    step.run.trim().endsWith('cargo build --locked --release --target "$ORACLE_TARGET" --bin reader-buddy') &&
+    !/npm run build|cicd\/release\/build.py build/.test(step.run);
+}
+
+test('offline oracle qualification stays within native integration and retains exact executable custody', () => {
+  const pipeline = workflow('pipeline'), integration = pipeline.jobs.integration;
+  assert.deepEqual(Object.keys(pipeline.jobs), ['build', 'integration', 'release']);
+  const build = integration.steps.find(isOracleQualificationBuild);
+  assert.ok(build);
+  const pin = integration.steps.find(s => s.id === 'pin');
+  const checkout = integration.steps.find(s => s.with?.repository === 's116821/ReMarkableBuddies');
+  assert.equal(checkout.with.ref, expr('steps.pin.outputs.source_sha'));
+  assert.equal(checkout.with['persist-credentials'], false);
+  assert.equal(checkout.with['fetch-depth'], 0);
+  const retained = integration.steps.find(s => s.name === 'Retain the exact ordinary executable and its provenance');
+  const tests = integration.steps.find(s => s.name === 'Exercise the retained command through the normal archive tests');
+  const after = integration.steps.find(s => s.name === 'Confirm qualification did not replace the retained bytes');
+  assert.ok(integration.steps.indexOf(pin) < integration.steps.indexOf(checkout));
+  assert.ok(integration.steps.indexOf(build) < integration.steps.indexOf(retained));
+  assert.ok(integration.steps.indexOf(retained) < integration.steps.indexOf(tests));
+  assert.ok(integration.steps.indexOf(tests) < integration.steps.indexOf(after));
+  for (const step of [pin, checkout, build, retained, tests, after]) assert.equal(step.if, expr('!inputs.release'));
+  for (const field of ['sourceSha', 'sourceTree', 'cargoLockSha256', 'sdkRevision']) assert.ok(build.run.includes(field));
+  assert.match(retained.run, /READER_BUDDY_ARCHIVE_TEST_/);
+  assert.match(after.run, /READER_BUDDY_ARCHIVE_TEST_SHA256/);
+  assert.match(after.run, /tarfile.open/);
+  assert.equal(repeatsCommonChecks('integration', tests), false);
+  assert.equal(repeatsCommonChecks('build', tests), true);
+  assert.equal(repeatsCommonChecks('integration', {...tests, run: tests.run + '\n cargo test --all-features'}), true);
+  assert.equal(isOracleQualificationBuild({...build, if: undefined}), false);
+  assert.equal(isOracleQualificationBuild({...build, run: build.run + '\n npm run build'}), false);
+});
 
 test('Windows native selections preserve platform coverage without admitting repeated common suites', () => {
   const selected = {
