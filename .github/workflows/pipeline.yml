@@ -303,6 +303,7 @@ jobs:
           python -m pip install -r host/requirements.txt
           python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v
           python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v
+          python -m unittest discover -s tests/drive -p test_store.py -k test_isolated -v
     defaults:
       run:
         shell: bash
