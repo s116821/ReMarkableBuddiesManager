@@ -68,6 +68,7 @@ import {parseManagementRequest,parseManagementResult} from './conversation-manag
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads(), isolatedRootStore }) {
   const isolatedBackup = new IsolatedBackupHost({driveAuth});
+  let backupDocument = Symbol();
   const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
   const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
@@ -112,7 +113,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
       return;
     }
-    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) { observer.cancel(); isolatedBackup.invalidate(); }
+    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) { backupDocument = Symbol(); observer.cancel(); isolatedBackup.invalidate(); }
     if (url.pathname === '/manager-shared-preferences') {
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin ||
           req.headers['content-type'] !== 'application/json' ||
@@ -304,6 +305,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
     if (url.pathname === '/manager-isolated-backup') {
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin ||
           req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const admittedDocument = backupDocument;
       const chunks = []; let bytes = 0, request;
       try {
         for await (const chunk of req) {
@@ -313,6 +315,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
         }
         request = parseIsolatedBackupRequest(parseIsolatedBackupJson(Buffer.concat(chunks), ISOLATED_BACKUP_REQUEST_BYTES));
       } catch { return refuse(400); }
+      if (admittedDocument !== backupDocument) return refuse(409);
       try {
         const result = parseIsolatedBackupResult(isolatedBackup.request(request), request);
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result));
@@ -409,5 +412,5 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   server.headersTimeout = 5000;
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); isolatedBackup.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
+  return { origin, server, close: async () => { backupDocument = Symbol(); sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); isolatedBackup.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }

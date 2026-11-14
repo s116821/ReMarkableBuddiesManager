@@ -114,6 +114,32 @@ async function verify(page, control) {
   await expect(selection).toHaveCount(0);
 }
 
+async function verifyElectronReload(page, control) {
+  const request = value => page.evaluate(value => globalThis.managerHost.isolatedBackup(value), value);
+  const status = operation => request({version: 1, action: 'status', operation});
+  const reload = async () => {
+    await page.reload();
+    await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
+  };
+  const priorReads = await control.get('readCount'), priorAborts = await control.get('abortedReads');
+  await control.set('hold', true);
+  const pending = await request({version: 1, action: 'scan'});
+  await expect.poll(() => control.get('readCount')).toBe(priorReads + 1);
+  await reload();
+  await expect.poll(() => control.get('abortedReads')).toBe(priorAborts + 1);
+  assert.equal((await status(pending.operation)).status, 'invalidated');
+
+  await control.set('hold', false);
+  const scan = await request({version: 1, action: 'scan'});
+  await expect.poll(async () => (await status(scan.operation)).status).toBe('observed');
+  const observed = await status(scan.operation);
+  const selection = await request({version: 1, action: 'select', inspection: scan.operation,
+    choice: observed.backups[0].revisions[0].reference});
+  await expect.poll(async () => (await status(selection.operation)).status).toBe('selected');
+  await reload();
+  assert.equal((await status(selection.operation)).status, 'invalidated');
+}
+
 const drive = makeDriveFixture(fixture);
 let tabletObservations = 0;
 const observer = {
@@ -170,10 +196,12 @@ try {
       await main.loadFile(app.getAppPath() + '/dist/manager/browser/index.html');
       main.show();
     });
-    await verify(page, {
+    const control = {
       get: key => app.evaluate((_electron, key) => globalThis.isolatedBackupUiFixture[key], key),
       set: (key, value) => app.evaluate((_electron, {key, value}) => { globalThis.isolatedBackupUiFixture[key] = value; }, {key, value}),
-    });
+    };
+    await verify(page, control);
+    await verifyElectronReload(page, control);
   } finally { await app.close(); }
 } finally {
   const canonicalProfile = await realpath(profile);

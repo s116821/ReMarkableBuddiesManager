@@ -115,7 +115,9 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
   });
-  window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  window.webContents.on('did-start-navigation', event => {
+    if (event.isMainFrame && !event.isSameDocument) { observer.cancel(); isolatedBackup.invalidate(); }
+  });
   registerSharedPreferenceHandler(ipcMain, authorized, sharedPreferences);
   ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Portable preferences caller refused');

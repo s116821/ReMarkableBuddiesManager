@@ -79,7 +79,16 @@ async function open(t, {qualified = false, delayed = false} = {}) {
     }
     assert.fail('Original operation did not settle');
   };
-  return {origin: helper.origin, send, result, settle, reads, captures, authority, close};
+  return {origin: helper.origin, server: helper.server, headers, send, result, settle, reads, captures, authority, close};
+}
+
+async function navigate(h) {
+  await new Promise((resolve, reject) => {
+    const request = httpRequest(h.origin + '/preview/', {headers: {'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}}, response => {
+      response.resume(); response.on('end', resolve);
+    });
+    request.on('error', reject); request.end();
+  });
 }
 
 test('actual backup bridge enforces origin/session/closed bytes before admission and stays unqualified by default', async t => {
@@ -124,12 +133,7 @@ test('actual browser navigation and helper disposal abort original reads without
   const h = await open(t, {qualified: true, delayed: true});
   const first = await h.result(scan);
   assert.equal(h.reads.length, 1);
-  await new Promise((resolve, reject) => {
-    const request = httpRequest(h.origin + '/preview/', {headers: {'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}}, response => {
-      response.resume(); response.on('end', resolve);
-    });
-    request.on('error', reject); request.end();
-  });
+  await navigate(h);
   assert.equal(h.reads[0].signal.aborted, true);
   assert.equal((await h.result(status(first.operation))).status, 'invalidated');
   const next = await h.result(scan);
@@ -139,4 +143,30 @@ test('actual browser navigation and helper disposal abort original reads without
   assert.equal(h.reads[1].signal.aborted, false);
   await h.close();
   assert.equal(h.reads[1].signal.aborted, true);
+});
+
+test('a partially received backup request cannot start work after document navigation', async t => {
+  const h = await open(t, {qualified: true});
+  const admitted = Promise.withResolvers();
+  h.server.prependOnceListener('request', request => {
+    assert.equal(request.url, '/manager-isolated-backup');
+    admitted.resolve();
+  });
+  let pending;
+  const completed = new Promise((resolve, reject) => {
+    pending = httpRequest(h.origin + '/manager-isolated-backup', {method: 'POST', headers: h.headers}, response => {
+      response.resume(); response.on('end', () => resolve(response.statusCode));
+    });
+    pending.on('error', reject);
+    pending.write('{"version":1,');
+  });
+  t.after(() => pending.destroy());
+  await admitted.promise;
+  await navigate(h);
+  pending.end('"action":"scan"}');
+  assert.equal(await completed, 409);
+  assert.equal(h.captures.length, 0);
+  const next = await h.result(scan);
+  assert.equal((await h.settle(next.operation)).status, 'observed');
+  assert.equal(h.captures.length, 1);
 });
