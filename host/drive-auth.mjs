@@ -92,9 +92,12 @@ export class DriveAuth {
       original.controller.abort();
     }
   }
+  #readCurrent(original) {
+    return !!original && this.#freshRead === original && !this.#disposed && !this.flow && !this.work &&
+      this.generation === original.generation && this.state.status === 'connected' && original.expiry > Date.now();
+  }
   #readSnapshot(original) {
-    if (!original || this.#freshRead !== original || this.#disposed || this.flow || this.work ||
-        this.generation !== original.generation || this.state.status !== 'connected') return null;
+    if (!this.#readCurrent(original)) return null;
     try {
       const snapshot = this.snapshot();
       require(snapshot.config && snapshot.saved && snapshot.clientRecord.digest === original.clientDigest &&
@@ -114,7 +117,27 @@ export class DriveAuth {
     const original = this.#freshRead, snapshot = this.#readSnapshot(original);
     if (!snapshot) return { status: 'unavailable' };
     const authority = AbortSignal.any([signal, original.controller.signal]);
-    const current = () => !authority.aborted && !!this.#readSnapshot(original);
+    const persistent = typeof this.store.openReadGuard === 'function';
+    let guardPromise = null;
+    const memoryCurrent = () => !authority.aborted && this.#readCurrent(original);
+    const current = () => memoryCurrent() && (persistent || !!this.#readSnapshot(original));
+    const invalidate = () => { if (this.#freshRead === original) this.#invalidateRead(); };
+    const closeGuard = async () => { await (await guardPromise)?.close(); };
+    const validate = async (query, active) => {
+      require(!active.aborted && current());
+      if (guardPromise) {
+        try {
+          const guard = await guardPromise;
+          require(guard && !guard.signal.aborted);
+          await guard.check({signal: active, timeoutMs: query.timeoutMs});
+        } catch {
+          invalidate();
+          await closeGuard();
+          throw new Error('authorization-failed');
+        }
+      }
+      require(!active.aborted && current());
+    };
     try {
       const binding = this.#readFactory({
         registration: structuredClone(snapshot.config), grant: structuredClone(snapshot.saved),
@@ -125,19 +148,31 @@ export class DriveAuth {
       if (!['list', 'readMetadata', 'readMarker'].every(method => typeof binding?.[method] === 'function')) {
         return { status: 'unavailable' };
       }
+      if (persistent) {
+        guardPromise = Promise.resolve(this.store.openReadGuard({clientDigest: original.clientDigest,
+          grantDigest: original.grantDigest, signal: authority})).then(guard => {
+          guard.signal.addEventListener('abort', invalidate, {once: true});
+          if (guard.signal.aborted) invalidate();
+          return guard;
+        }).catch(() => { invalidate(); return null; });
+        authority.addEventListener('abort', () => { void closeGuard(); }, {once: true});
+        if (authority.aborted) void closeGuard();
+      }
       const bind = method => async query => {
         // The reader handles its own request deadline. The protected grant
         // signal also cancels a transport that is still waiting on the provider.
         const active = AbortSignal.any([authority, query.signal]);
         try {
-          require(!active.aborted && current());
+          await validate(query, active);
           return await binding[method]({ ...query, signal: active });
         } finally {
-          require(!active.aborted && current());
+          try { await validate(query, active); }
+          finally { if (authority.aborted) await closeGuard(); }
         }
       };
       const guarded = {
         isCurrent: current, list: bind('list'), readMetadata: bind('readMetadata'), readMarker: bind('readMarker'),
+        checkCurrent: query => validate(query, AbortSignal.any([authority, query.signal])),
       };
       // Optional private download capabilities use this exact capture. A
       // metadata-only adapter cannot silently acquire a replacement grant.
@@ -149,16 +184,16 @@ export class DriveAuth {
           const active = AbortSignal.any([authority, query.signal, controller.signal]);
           let iterator, completed = false;
           try {
-            require(!active.aborted && current());
+            await validate(query, active);
             const source = await binding.streamObject({...query, signal: active});
             // Take custody before checking a late factory result, so an abort
             // while opening the response still closes and joins that response.
             iterator = source?.[Symbol.asyncIterator]?.();
             require(iterator && typeof iterator.next === 'function' && typeof iterator.return === 'function');
             for (;;) {
-              require(!active.aborted && current());
+              await validate(query, active);
               const item = await iterator.next();
-              require(!active.aborted && current());
+              await validate(query, active);
               if (item.done) { completed = true; return; }
               yield item.value;
             }
@@ -166,8 +201,12 @@ export class DriveAuth {
             // Abort before return(): a producer can be waiting for its abort
             // while its return promise joins the outstanding request.
             controller.abort();
-            if (typeof iterator?.return === 'function') await iterator.return();
-            if (completed) require(!query.signal.aborted && current());
+            try {
+              if (typeof iterator?.return === 'function') await iterator.return();
+              if (completed) await validate(query, AbortSignal.any([authority, query.signal]));
+            } finally {
+              if (authority.aborted || query.signal.aborted) await closeGuard();
+            }
           }
         };
       }

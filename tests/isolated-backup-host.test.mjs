@@ -75,7 +75,7 @@ function fixture(t, {qualified = true, bindingPresent = true, tokenLifetime = 90
   const host = new IsolatedBackupHost({driveAuth: auth});
   t.after(() => { host.dispose(); auth.dispose(); });
   return {
-    auth, host, writes, provider, factories, reads,
+    auth, host, writes, provider, factories, reads, store,
     replaceClient() { config = {...config, clientSecret: 'replacement'}; },
     replaceGrant() { grant = {...grant, account: {...grant.account, permissionId: 'replacement'}}; },
   };
@@ -398,5 +398,72 @@ test('early consumer return aborts before joining; ordinary EOF rechecks authori
     joined.resolve();
     await result;
     assert.equal(closed, true);
+  }
+});
+
+test('persistent authority capture checks every chunk without repeated synchronous store operations', {timeout: 5000}, async t => {
+  const f = fixture(t), guardController = new AbortController();
+  const readClient = f.store.client, readGrant = f.store.grant;
+  let snapshots = 0, opened = 0, checks = 0, closed = 0;
+  f.store.client = () => { snapshots++; return readClient(); };
+  f.store.grant = () => { snapshots++; return readGrant(); };
+  f.store.openReadGuard = async capture => {
+    opened++;
+    return {signal: guardController.signal, async check({signal}) {
+      checks++;
+      assert.equal(signal.aborted, false);
+      assert.equal(capture.clientDigest, readClient().digest);
+      assert.equal(capture.grantDigest, readGrant().digest);
+      return true;
+    }, async close() { if (!guardController.signal.aborted) { closed++; guardController.abort(); } }};
+  };
+  downloadReads(f, async function* () {
+    // Represent one 256MiB object with one reused 64KiB buffer; no file/cache.
+    const chunk = Buffer.alloc(65536);
+    for (let n = 0; n < 4096; n++) yield chunk;
+  });
+  await f.auth.check();
+  const lifetime = new AbortController();
+  const captured = f.auth.openBackupRead(lifetime.signal);
+  const admittedReads = snapshots;
+  let bytes = 0;
+  for await (const chunk of captured.binding.streamObject(bounds(new AbortController().signal))) {
+    assert.equal(captured.binding.isCurrent(), true);
+    bytes += chunk.length;
+  }
+  assert.equal(bytes, 256 * 1024 * 1024);
+  assert.equal(opened, 1);
+  assert.equal(snapshots, admittedReads);
+  assert.ok(checks >= 8192 && checks <= 8200);
+  lifetime.abort();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(closed, 1);
+  assert.equal(captured.binding.isCurrent(), false);
+});
+
+test('failed persistent guard admission or mid-read check cannot release provider data or recapture', async t => {
+  for (const failAtOpen of [true, false]) {
+    const f = fixture(t), guardController = new AbortController();
+    const entered = deferred(), finish = deferred();
+    let opened = 0, failed = false, closed = 0, providerReads = 0;
+    f.store.openReadGuard = async () => {
+      opened++;
+      if (failAtOpen) throw Error('fixture admission failure');
+      return {signal: guardController.signal,
+        async check() { if (failed) throw Error('fixture original record changed'); return true; },
+        async close() { if (!guardController.signal.aborted) { closed++; guardController.abort(); } },
+      };
+    };
+    downloadReads(f, async function* () {});
+    f.reads.readObjectMetadata = async () => { providerReads++; entered.resolve(); return finish.promise; };
+    await f.auth.check();
+    const captured = f.auth.openBackupRead(new AbortController().signal);
+    const refused = assert.rejects(captured.binding.readObjectMetadata(bounds(new AbortController().signal)), /authorization-failed/);
+    if (!failAtOpen) { await entered.promise; failed = true; finish.resolve(json({id: 'must-not-escape'})); }
+    await refused;
+    assert.equal(opened, 1);
+    assert.equal(providerReads, failAtOpen ? 0 : 1);
+    assert.equal(closed, failAtOpen ? 0 : 1);
+    assert.equal(captured.binding.isCurrent(), false);
   }
 });

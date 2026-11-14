@@ -149,9 +149,8 @@ export class IsolatedBackupHost {
     if (!selection) return null;
     const session = this.#session, selected = this.#selection;
     return Object.freeze({operation, reference, selection, binding: session.binding, current: () => {
-      this.#validateSession();
-      return this.#session === session && this.#selection === selected &&
-        selected.status === 'selected' && !!session.reader.readSelection(reference);
+      return !this.#disposed && this.#session === session && this.#selection === selected &&
+        selected.status === 'selected' && !selection.signal.aborted && !session.authority.aborted;
     }});
   }
 

@@ -275,8 +275,10 @@ export class IsolatedBackupDownload {
     try {
       const {selection} = job;
       this.#check(job);
-      require(['listObject', 'readObjectMetadata', 'streamObject'].every(method => typeof job.binding[method] === 'function'),
+      require(['checkCurrent', 'listObject', 'readObjectMetadata', 'streamObject'].every(method => typeof job.binding[method] === 'function'),
         'unavailable');
+      await job.binding.checkCurrent(this.#options(job, 0));
+      this.#check(job);
       require(await this.#verifier.available(this.#options(job, 0)) === true, 'unavailable');
       require(await this.#staging.available(this.#options(job, 0)) === true, 'unavailable');
       const {data, preferences} = selection.components;
@@ -309,6 +311,9 @@ export class IsolatedBackupDownload {
       job.inspection = inspection;
       return reply('verified', {...inspection});
     } catch (error) {
+      // A stage factory may lose its child after directory creation but before
+      // transferring custody. No stage object then exists to prove rollback.
+      job.cleanupPending = error?.cleanupPending === true;
       if (!job.controller.signal.aborted && !job.selection.signal.aborted) {
         try { this.#check(job); } catch (changed) { error = changed; }
       }
@@ -333,7 +338,7 @@ export class IsolatedBackupDownload {
       job.selection.signal.removeEventListener('abort', job.onAbort);
       job.controller.abort();
       job.selection.markerBytes.fill(0);
-      let residue = false;
+      let residue = job.cleanupPending === true;
       try { if (job.stage) await job.stage.release(); }
       catch { residue = true; }
       // Keep only a reduced residue warning. No retry or recursive cleanup is

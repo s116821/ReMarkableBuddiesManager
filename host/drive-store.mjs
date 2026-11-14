@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DriveReadGuard } from './drive-read-guard.mjs';
 
 export class DriveStore {
   constructor({ root = process.env.MANAGER_DRIVE_AUTH_ROOT ?? path.join(process.platform === 'win32' ? process.env.LOCALAPPDATA ?? homedir() : process.env.XDG_CONFIG_HOME ?? path.join(homedir(), '.config'), 'ReMarkableBuddiesManager', 'drive-auth'),
@@ -22,6 +23,9 @@ export class DriveStore {
   }
   client() { return this.operation({ operation: 'read-client' }); }
   grant() { return this.operation({ operation: 'read-grant' }); }
+  openReadGuard({clientDigest, grantDigest, signal}) {
+    return DriveReadGuard.open({python: this.python, root: this.root, clientDigest, grantDigest, signal});
+  }
   isolatedRootOperations() { return this.operation({ operation: 'read-isolated-root-operations' }); }
   appendIsolatedRootOperation(record, expectedDigest) {
     return this.operation({ operation: 'append-isolated-root-operation', record, expected_digest: expectedDigest });

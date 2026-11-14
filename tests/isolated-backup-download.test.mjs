@@ -39,6 +39,7 @@ function fixture({
   const calls = [], events = [], staged = new Map();
   const binding = {
     isCurrent: () => current,
+    async checkCurrent() { if (!current) throw new Error('Original authority changed'); },
     async listObject(q) {
       calls.push(['list', q]);
       return json({files: metadata.filter(item => item.appProperties.sha256 === q.sha256), incompleteSearch: false});
@@ -141,6 +142,32 @@ test('unavailable stage, verifier, or disk refuses before any binding call', asy
     assert.equal(f.events.includes('create'), false);
     assert.deepEqual(f.calls, []);
   }
+});
+
+test('unknown create rollback remains a cleanup warning without a stage or cleanup retry', async () => {
+  const f = fixture();
+  let attempts = 0;
+  f.staging.create = async () => {
+    attempts++;
+    throw Object.assign(new Error('Private staging unavailable'), {cleanupPending: true});
+  };
+  const result = await f.run();
+  assert.equal(result.status, 'unavailable');
+  assert.equal(result.cleanupPending, true);
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.events.includes('release'), false);
+  assert.equal((await f.worker.release(operation, reference)).cleanupPending, true);
+  assert.equal((await f.worker.dispose()).cleanupPending, true);
+  assert.equal(attempts, 1);
+});
+
+test('asynchronous original authority refusal occurs before staging or provider admission', async () => {
+  const f = fixture();
+  f.args.binding.checkCurrent = async () => { throw new Error('Original authority unavailable'); };
+  assert.equal((await f.run()).status, 'unavailable');
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.events.includes('create'), false);
+  assert.equal(f.events.includes('verify'), false);
 });
 
 test('closed ordinary inventory and aggregate/disk refusal precede content downloads', async () => {
