@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {chromium, _electron as electron, expect} from '@playwright/test';
 import {startHelper} from '../host/browser-helper.mjs';
+import {backupPreferencesFixture, identity} from './fixtures/isolated-backup-preferences.mjs';
 
 // Source-derived synthetic provider frames. The real host, transport and UI
 // consume them, but they are not live Drive or producer-emitted evidence.
@@ -106,6 +107,7 @@ async function verify(page, control) {
   await expect(selection).toContainText(digest);
   await expect(download).toHaveCount(0);
   await expect(page.getByTestId('cloud-backup-verification')).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Review backup preferences', exact: true})).toHaveCount(0);
   assert.doesNotMatch(await list.textContent(), /PrivateRoot|PrivateRevision|authorizationId|appProperties/);
 
   await page.getByRole('button', {name: 'Check connection', exact: true}).click();
@@ -219,6 +221,107 @@ function helperStatus(url, headers) {
   });
 }
 
+async function packagedPreviewRefusal(page, app) {
+  await app.evaluate(() => {
+    const require = process.mainModule.require.bind(process.mainModule);
+    const path = require('node:path');
+    const {WiredObserver} = require(path.join(process.resourcesPath, 'host', 'observer.mjs'));
+    globalThis.fixturePortableCalls = 0;
+    WiredObserver.prototype.run = async function (action) {
+      if (action === 'portable-configuration') globalThis.fixturePortableCalls++;
+      throw Error('Unexpected wired command in packaged refusal fixture');
+    };
+  });
+  const result = await page.evaluate(async target => {
+    const request = {version: 1, action: 'preview-preferences',
+      operation: 'a'.repeat(64), reference: 'b'.repeat(64), ...target};
+    if (globalThis.managerHost) return globalThis.managerHost.isolatedBackup(request);
+    const response = await fetch('/manager-isolated-backup', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)});
+    if (!response.ok) throw Error('Packaged preview refusal returned no frame');
+    return response.json();
+  }, identity);
+  assert.deepEqual(result, {version: 1, operation: 'a'.repeat(64), reference: 'b'.repeat(64),
+    status: 'unavailable', retryable: false, preview: null, cleanupPending: false});
+  assert.equal(await app.evaluate(() => globalThis.fixturePortableCalls), 0);
+}
+
+async function verifyPreferences(page, control) {
+  const button = name => page.getByRole('button', {name, exact: true});
+  const confirm = button('Confirm preferences import');
+  const review = button('Review backup preferences');
+  await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
+  async function selectDownloaded() {
+    await button('Read tablet state').click();
+    await expect(page.getByTestId('tablet-model')).toBeVisible();
+    await button('Scan for cloud backups').click();
+    await expect(review).toHaveCount(0);
+    await button('Select revision').click();
+    await expect(review).toHaveCount(0);
+    await button('Download and verify').click();
+    await expect(page.getByTestId('cloud-backup-verification')).toBeVisible();
+    await expect(review).toBeEnabled();
+    await review.click();
+  }
+
+  await selectDownloaded();
+  await expect(page.getByTestId('portable-preview')).toBeVisible();
+  await expect(page.getByText('Source is the selected cloud backup.', {exact: true})).toBeVisible();
+  assert.deepEqual((await control.snapshot()).selectors, ['inspect', 'prepare']);
+  assert.equal((await control.snapshot()).releases, 1);
+  await confirm.click();
+  await expect(page.getByTestId('portable-status')).toContainText('Saved file verified');
+  const applied = await control.snapshot();
+  assert.deepEqual(applied.selectors, ['inspect', 'prepare', 'apply']);
+  assert.equal(JSON.parse(Buffer.from(applied.lastApply, 'base64')).intent.operation, applied.prepareOperation);
+
+  await control.setNoChange(true);
+  await selectDownloaded();
+  await expect(page.getByTestId('portable-status')).toContainText('no saved changes');
+  await expect(confirm).toHaveCount(0);
+  await expect(review).toHaveCount(0);
+  assert.deepEqual((await control.snapshot()).selectors, ['inspect', 'prepare', 'apply', 'inspect', 'prepare']);
+  assert.equal((await control.snapshot()).releases, 2);
+}
+
+async function verifySourcePreferences(profile, env) {
+  const fixture = await backupPreferencesFixture(profile);
+  try {
+    const helper = await startHelper({root: path.resolve('dist/manager/browser'),
+      backupComposition: fixture.composition, observer: fixture.observer});
+    try {
+      const browser = await chromium.launch();
+      try {
+        const context = await browser.newContext();
+        await isolate(context, helper.origin);
+        const page = await context.newPage();
+        await page.goto(helper.origin + '/preview/');
+        await verifyPreferences(page, {snapshot: fixture.snapshot,
+          setNoChange: value => { fixture.target.f.portableState.noop = value; }});
+      } finally { await browser.close(); }
+    } finally { await helper.close(); }
+  } finally { await fixture.close(); }
+
+  const app = await electron.launch({
+    args: [path.resolve('tests/fixtures/isolated-backup-preferences-electron.cjs'),
+      ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env,
+  });
+  try {
+    const page = await app.firstWindow();
+    await isolate(app.context());
+    assert.equal(await page.evaluate(async target => {
+      try {
+        await globalThis.managerHost.isolatedBackup({version: 1, action: 'preview-preferences',
+          operation: 'a'.repeat(64), reference: 'b'.repeat(64), ...target});
+        return false;
+      } catch { return true; }
+    }, identity), true);
+    await app.evaluate(() => globalThis.backupPreferencesFixture.load());
+    await verifyPreferences(page, {snapshot: () => app.evaluate(() => globalThis.backupPreferencesFixture.snapshot()),
+      setNoChange: value => app.evaluate((_electron, value) => globalThis.backupPreferencesFixture.setNoChange(value), value)});
+  } finally { await app.close(); }
+}
+
 async function verifyPackagedBrowser(executablePath, env) {
   const app = await electron.launch({
     executablePath, args: ['--browser-helper', ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env,
@@ -260,6 +363,7 @@ async function verifyPackagedBrowser(executablePath, env) {
       const control = await installSyntheticDrive(app);
       await page.reload();
       await verify(page, control);
+      await packagedPreviewRefusal(page, app);
       assert.equal(await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().length), 0);
       await control.set('hold', true);
       await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).click();
@@ -309,6 +413,7 @@ const executablePath = packaged ? path.resolve('out/packages', 'ReMarkableBuddie
   process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager') : undefined;
 try {
   if (packaged) await verifyPackagedBrowser(executablePath, env);
+  else await verifySourcePreferences(profile, env);
   const app = await electron.launch({
     executablePath,
     args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])],
@@ -326,7 +431,10 @@ try {
     });
     await verify(page, control);
     await verifyElectronReload(page, control);
-    if (packaged) await verifyQuitWaitsForRestore(app);
+    if (packaged) {
+      await packagedPreviewRefusal(page, app);
+      await verifyQuitWaitsForRestore(app);
+    }
   } finally { await app.close(); }
 } finally {
   const canonicalProfile = await realpath(profile);

@@ -223,6 +223,10 @@ export class IsolatedBackupHost {
       this.#selection.selection.reference === reference;
   }
 
+  selectionSignal(operation, reference) {
+    return this.isSelectionCurrent(operation, reference) ? this.#session.reader.selectionSignal(reference) : null;
+  }
+
   readSelection(operation, reference) {
     if (!this.isSelectionCurrent(operation, reference)) return null;
     return this.#session.reader.readSelection(reference);

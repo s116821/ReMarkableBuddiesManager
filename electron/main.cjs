@@ -114,7 +114,6 @@ app.whenReady().then(async () => {
   const {ConversationManagementHost}=await import(pathToFileURL(path.join(hostRoot,'conversation-management.mjs')).href);
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
-  const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
   const {SharedPreferencesHost, registerSharedPreferenceHandler} = await import(pathToFileURL(path.join(hostRoot, 'shared-preferences.mjs')).href);
   const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
   const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
@@ -144,8 +143,10 @@ app.whenReady().then(async () => {
   localMode=new LocalModeChoiceHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(localMode)});
   isolatedRoot=new IsolatedRootHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
   const {driveAuth, isolatedBackup} = backupComposition;
-  const {ISOLATED_BACKUP_REQUEST_BYTES, parseIsolatedBackupRequest, parseIsolatedBackupResult} =
-    await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-protocol.mjs')).href);
+  const {IsolatedBackupPreferences, isManagerMainFrame, watchBackupDocument,
+    registerIsolatedBackupHandler, registerPortableConfigurationHandler} =
+    await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-preferences.mjs')).href);
+  const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer: rawObserver});
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
   const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -157,9 +158,13 @@ app.whenReady().then(async () => {
   });
   const ui = path.join(__dirname, '../dist/manager/browser/index.html');
   let quitting = false, drained = false, closing;
-  let backupDocument = Symbol();
-  const authorized = (event, args) => !closing && args.length === 0 && event.sender === window.webContents &&
-    event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(ui).href;
+  const uiUrl = pathToFileURL(ui).href;
+  const authorized = (event, args) => args.length === 0 && isManagerMainFrame(event, window, uiUrl, closing);
+  const backupDocument = watchBackupDocument(window, original => {
+    void backupPreferences.invalidate(original);
+    observer.cancel();
+    isolatedBackup.invalidate();
+  });
   for (const action of ['observe', 'cancel', 'inspectOwned', 'inspectRuntime']) ipcMain.handle(`manager:${action}`, (event, ...args) => {
     if (!authorized(event, args)) throw new Error('Observation caller refused');
     return observer[action]();
@@ -172,18 +177,8 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
   });
-  window.webContents.on('did-start-navigation', event => {
-    if (event.isMainFrame && !event.isSameDocument) {
-      backupDocument = Symbol();
-      observer.cancel();
-      isolatedBackup.invalidate();
-    }
-  });
   registerSharedPreferenceHandler(ipcMain, authorized, sharedPreferences);
-  ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
-    if(!authorized(event,[])||args.length!==1)throw Error('Portable preferences caller refused');
-    let q=parsePortableRequest(args[0]);const context=portableContext(q),pending=portable.request(q);q=null;const value=parsePortableResult(await pending,context,validateResult);return portable.assertCurrent(value);
-  });
+  registerPortableConfigurationHandler(ipcMain, authorized, portable);
   ipcMain.handle('manager:ordinaryExport',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Ordinary export caller refused');
     let request=parseExportRequest(args[0]);args.length=0;
@@ -264,15 +259,7 @@ app.whenReady().then(async () => {
     let request=parseModelSettingsRequest(args[0]);args.length=0;
     try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
   });
-  ipcMain.handle('manager:isolated-backup', async (event, ...args) => {
-    if (!authorized(event, []) || args.length !== 1) throw Error('Backup inspection caller refused');
-    const request = parseIsolatedBackupRequest(args[0]);
-    if (Buffer.byteLength(JSON.stringify(request)) > ISOLATED_BACKUP_REQUEST_BYTES) throw Error('Backup inspection input refused');
-    const admittedDocument = backupDocument;
-    const result = await isolatedBackup.request(request);
-    if (admittedDocument !== backupDocument || !authorized(event, [])) throw Error('Backup inspection caller refused');
-    return parseIsolatedBackupResult(result, request);
-  });
+  registerIsolatedBackupHandler(ipcMain, authorized, backupDocument, backupPreferences);
   ipcMain.handle('manager:isolatedRoot',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Isolated backup caller refused');
     const request=parseIsolatedRootRequest(args[0]);const value=parseIsolatedRootResult(await isolatedRoot.request(request),request,validateResult);return isolatedRoot.assertCurrent(value);
@@ -343,10 +330,12 @@ app.whenReady().then(async () => {
       () => localMode.dispose(),
       () => isolatedRoot.dispose(),
       () => download,
+      () => backupPreferences.dispose(),
     ].map(stop => Promise.resolve().then(stop)));
     const [ordinary, notebook, backup] = results;
+    const preferences = results.at(-1);
     if (ordinary.value === true || notebook.value === true || backup.value?.cleanupPending === true ||
-        [ordinary, notebook, backup].some(result => result.reason?.cleanupPending === true)) {
+        preferences.value?.cleanupPending === true || [ordinary, notebook, backup, preferences].some(result => result.reason?.cleanupPending === true)) {
       console.error('Manager could not confirm backup staging cleanup');
     }
     if (results.some(result => result.status === 'rejected')) {

@@ -309,6 +309,10 @@ export class IsolatedBackupReader {
     return this.#selected !== null && this.#selected.handle === reference;
   }
 
+  selectionSignal(reference) {
+    return this.isSelectionCurrent(reference) ? this.#selected.controller.signal : null;
+  }
+
   readSelection(reference) {
     if (!this.isSelectionCurrent(reference)) return null;
     const selected = this.#selected;

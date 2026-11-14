@@ -53,6 +53,7 @@ export class PortableConfigurationHost {
     s.original?.fill(0);
    }
    if (active?.context !== s) this.#dropArtifact(s);
+   if (s.handoff) this.#releaseHandoff(s);
   }
  }
 
@@ -77,6 +78,31 @@ export class PortableConfigurationHost {
  #value(state,s=null,{summary=null,report=null,observed=false,file=null,reference=['none','exported','no-change','invalidated','capacity'].includes(state)?null:s?.reference??null}={}){const v={contract_version:1,status:observed?'observed':'unconfigured',observation:observed?structuredClone(s.sample):null,portable_configuration:{state,reference,summary:summary?structuredClone(summary):null,report,retained:this.#retained(),export_file:file?{name:PORTABLE_FILE,bytes_base64:file.toString('base64')}:null}};this.#issued.set(v,{epoch:this.#epoch,s});return v;}
  // Reserve a verified original until the adapter's final publication guard.
  assertCurrent(v,final=true){if(this.#disposed)throw Error('Preferences host disposed');this.#expire();const issued=this.#issued.get(v);if(v.status==='observed'&&issued?.epoch!==this.#epoch)throw Error('Preferences invalidated');if(v.portable_configuration.state==='ready'&&(!this.#editor||v.portable_configuration.reference!==this.#editor.reference||this.#editor.state!=='ready'))throw Error('Preferences invalidated');if(final&&issued?.s?.pendingTerminal){issued.s.pendingTerminal=false;issued.s.possible=false;this.#records.delete(issued.s.reference);}return v;}
+
+ discardHandoffPreview(issued) {
+  const record = this.#issued.get(issued);
+  const s = record?.s;
+  if (!s?.handoff || s.handoffIssued !== issued || record.epoch !== this.#epoch || this.#editor !== s ||
+      s.state !== 'ready' || s.possible || this.#active?.context === s) return false;
+  this.#editor = null;
+  this.#dropHandoffEditor(s);
+  return true;
+ }
+
+ #dropHandoffEditor(s) {
+  clearTimeout(s.timer);
+  s.state = 'invalidated';
+  s.original?.fill(0);
+  this.#dropArtifact(s);
+  this.#releaseHandoff(s);
+ }
+
+ #releaseHandoff(s) {
+  s.releaseAttempt?.();
+  s.releaseAttempt = null;
+  s.handoffCurrent = null;
+  s.handoffIssued = null;
+ }
 
  #stale(token,epoch){return epoch!==this.#epoch||!this.io.owns(token);}
  #unknown(s){s.pendingTerminal=false;s.state='unknown';return this.#value('unknown',s);}
@@ -234,10 +260,10 @@ export class PortableConfigurationHost {
 
  // Trusted host entry. The handoff owns the exact verified selection and its
  // reader. This owner holds the maintenance token until actual drain.
- async prepareHandoff(target, handoff) {
+ async prepareHandoff(target, handoff, {signal: attemptSignal, current: attemptCurrent, releaseAttempt} = {}) {
   this.#expire();
   const sample = this.observer.lastObservation;
-  if (this.#disposed || !same(sample, target)) return handoffReply('invalidated');
+  if (this.#disposed || attemptSignal?.aborted || !same(sample, target)) return handoffReply('invalidated');
   if (typeof handoff !== 'function') return handoffReply('unavailable');
   if (this.#records.size >= 8) return handoffReply('capacity');
   const s = {reference: this.reference(), sample: structuredClone(sample),
@@ -255,11 +281,14 @@ export class PortableConfigurationHost {
    active = {token, context: s, operation: 'prepare', epoch: this.#epoch,
     controller: new AbortController(), joined: Promise.withResolvers()};
    this.#active = active;
+   active.abortAttempt = () => active.controller.abort();
+   attemptSignal?.addEventListener('abort', active.abortAttempt, {once: true});
+   if (attemptSignal?.aborted) active.abortAttempt();
    this.beforeIO();
    const {signal} = active.controller;
    const current = () => !this.#disposed && this.#active === active && !signal.aborted &&
     !this.#stale(token, active.epoch) && this.now() < deadline &&
-    same(s.sample, this.observer.lastObservation);
+    same(s.sample, this.observer.lastObservation) && (attemptCurrent?.() ?? true);
    const arm = () => {
     clearTimeout(timer);
     timer = setTimeout(() => active.controller.abort(), Math.max(1, deadline - this.now()));
@@ -300,16 +329,21 @@ export class PortableConfigurationHost {
    }
    const {state} = candidate;
    if (state !== 'ready' && state !== 'no-change') return handoffReply(state);
+   s.handoff = true;
+   s.handoffCurrent = attemptCurrent;
+   s.releaseAttempt = releaseAttempt;
    const preview = this.#adopt(s, candidate);
    parsePortableResult(preview, {action: 'prepare', ...s.identity}, validateResult);
    this.assertCurrent(preview);
    adopted = state === 'ready';
+   if (adopted) s.handoffIssued = preview;
    return handoffReply(state, preview);
   } catch {
    const invalidated = active?.controller.signal.aborted || this.#disposed;
    return handoffReply(invalidated ? 'invalidated' : 'unavailable', null, cleanupPending);
   } finally {
    clearTimeout(timer);
+   if (active?.abortAttempt) attemptSignal?.removeEventListener('abort', active.abortAttempt);
    if (!adopted) {
     if (this.#editor === s) {
      clearTimeout(s.timer);
@@ -327,15 +361,30 @@ export class PortableConfigurationHost {
  #original(s){if(!s.original||portableHash(s.original)!==s.originalHash)throw Error('Original refused');return s;}
  async #confirm(q){
   const s=this.#editor;if(!s||s.state!=='ready'||s.reference!==q.reference||!same(s.sample,q)||!same(s.sample,this.observer.lastObservation))return this.#value('unavailable',null,{reference:q.reference});
+  if (s.handoffCurrent && !s.handoffCurrent()) {
+   if (this.#editor === s) this.discardHandoffPreview(s.handoffIssued);
+   return this.#value('not-dispatched', s);
+  }
   return this.#owned(s,'confirm',async(token,epoch,deadline)=>{let raw;try{
    this.#original(s);if(!s.applyBytes||portableHash(s.applyBytes)!==s.applyHash)throw Error('Original refused');
-   if(this.#stale(token,epoch)||this.now()>=deadline||this.now()>=s.deadline){this.#editor=null;s.state='invalidated';return this.#value('not-dispatched',s);}
+   if(this.#stale(token,epoch)||this.now()>=deadline||this.now()>=s.deadline||
+       (s.handoffCurrent && !s.handoffCurrent())){
+     if(this.#editor===s)this.#editor=null;
+     if (s.handoff) this.#dropHandoffEditor(s);
+     else s.state='invalidated';
+     return this.#value('not-dispatched',s);
+    }
    clearTimeout(s.timer);s.possible=true;s.state='unknown';this.#records.set(s.reference,s);
+    if (s.handoff) this.#releaseHandoff(s);
    raw=await this.#raw('apply',s.applyBytes,s.sample,deadline);if(this.#stale(token,epoch))return this.#unknown(s);const parsed=parsePortableReport(raw,'apply',s);if(this.#stale(token,epoch)||this.now()>=deadline)return this.#unknown(s);
    if(parsed.report.status==='ok'){s.pendingTerminal=true;s.state='verified';return this.#value('verified',s,{summary:s.summary,report:parsed.report,observed:true});}
    if(parsed.report.outcome==='not-dispatched'){s.possible=false;s.state='not-dispatched';this.#records.delete(s.reference);return this.#value('not-dispatched',s,{report:parsed.report});}
    return this.#value('unknown',s,{report:parsed.report});
-  }catch{return s.possible?this.#unknown(s):this.#value('not-dispatched',s);}finally{if(this.#editor===s)this.#editor=null;raw?.fill(0);}});
+  }catch{return s.possible?this.#unknown(s):this.#value('not-dispatched',s);}finally{
+    if(this.#editor===s)this.#editor=null;
+    if (s.handoff && !s.possible && s.state === 'ready') this.#dropHandoffEditor(s);
+    raw?.fill(0);
+   }});
  }
  async #status(q){
   const s=this.#records.get(q.reference);if(!s||!same(s.sample,q)||!same(s.sample,this.observer.lastObservation))return this.#value('unavailable',null,{reference:q.reference});

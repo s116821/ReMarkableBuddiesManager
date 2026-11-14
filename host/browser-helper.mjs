@@ -1,6 +1,7 @@
 import {SharedPreferencesHost} from './shared-preferences.mjs';
 import {IsolatedBackupHost} from './isolated-backup-host.mjs';
-import {ISOLATED_BACKUP_REQUEST_BYTES, parseIsolatedBackupJson, parseIsolatedBackupRequest, parseIsolatedBackupResult} from './isolated-backup-protocol.mjs';
+import {ISOLATED_BACKUP_REQUEST_BYTES, parseIsolatedBackupJson, parseIsolatedBackupBridgeRequest} from './isolated-backup-protocol.mjs';
+import {IsolatedBackupPreferences} from './isolated-backup-preferences.mjs';
 import {parseSharedPreferenceRequest, sharedPreferenceContext, parseSharedPreferenceResult, FRAME_LIMIT} from './shared-preferences-protocol.mjs';
 import {PortableConfigurationHost} from './portable-configuration.mjs';
 import {parsePortableRequest,portableContext,parsePortableResult,portableJson} from './portable-configuration-protocol.mjs';
@@ -97,6 +98,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   localMode=new LocalModeChoiceHost({observer:observer,io,beforeIO:()=>invalidatePeers(localMode)});
   isolatedRoot=new IsolatedRootHost({observer,store:isolatedRootStore,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
   sharedPreferences = new SharedPreferencesHost({observer, io, beforeIO: () => invalidatePeers(sharedPreferences)});
+  const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -118,7 +120,14 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
       return;
     }
-    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) { backupDocument = Symbol(); observer.cancel(); isolatedBackup.invalidate(); }
+    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' &&
+        ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) {
+      const original = backupDocument;
+      backupDocument = Symbol();
+      void backupPreferences.invalidate(original);
+      observer.cancel();
+      isolatedBackup.invalidate();
+    }
     if (url.pathname === '/manager-shared-preferences') {
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin ||
           req.headers['content-type'] !== 'application/json' ||
@@ -319,14 +328,31 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
           if (bytes > ISOLATED_BACKUP_REQUEST_BYTES) return refuse(413);
           chunks.push(chunk);
         }
-        request = parseIsolatedBackupRequest(parseIsolatedBackupJson(Buffer.concat(chunks), ISOLATED_BACKUP_REQUEST_BYTES));
+        request = parseIsolatedBackupBridgeRequest(parseIsolatedBackupJson(Buffer.concat(chunks), ISOLATED_BACKUP_REQUEST_BYTES));
       } catch { return refuse(400); }
-      if (closing || admittedDocument !== backupDocument) return refuse(409);
+      const callerCurrent = () => !closing && admittedDocument === backupDocument;
+      if (!callerCurrent() || res.destroyed) return refuse(409);
+      let abandon;
+      const onAbandon = cancel => {
+        abandon = cancel;
+        const abandoned = () => { if (!res.writableFinished) cancel(); };
+        res.once('close', abandoned);
+        res.once('finish', () => res.removeListener('close', abandoned));
+      };
       try {
-        const result = parseIsolatedBackupResult(await isolatedBackup.request(request), request);
-        if (closing || admittedDocument !== backupDocument) return refuse(409);
-        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result));
-      } catch { refuse(503); }
+        const value = await backupPreferences.request(request, {document: admittedDocument, callerCurrent, onAbandon});
+        if (res.destroyed) { abandon?.(); return; }
+        if (!callerCurrent()) {
+          abandon?.();
+          return refuse(409);
+        }
+        const result = backupPreferences.deliver(value, request, callerCurrent);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(result));
+      } catch {
+        abandon?.();
+        if (!res.destroyed) refuse(503);
+      }
       return;
     }
     if(url.pathname==='/manager-isolated-root'){
@@ -443,10 +469,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       () => isolatedRoot.dispose(),
       () => download,
       () => stopped,
+      () => backupPreferences.dispose(),
     ].map(stop => Promise.resolve().then(stop)));
     const [ordinary, notebook, backup] = results;
+    const preferences = results.at(-1);
     const cleanupPending = ordinary.value === true || notebook.value === true || backup.value?.cleanupPending === true ||
-      [ordinary, notebook, backup].some(result => result.reason?.cleanupPending === true);
+      preferences.value?.cleanupPending === true || [ordinary, notebook, backup, preferences].some(result => result.reason?.cleanupPending === true);
     if (results.some(result => result.status === 'rejected')) {
       throw Object.assign(Error('Manager browser helper shutdown failed'), {cleanupPending});
     }

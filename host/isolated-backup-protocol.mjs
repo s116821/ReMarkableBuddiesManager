@@ -1,7 +1,11 @@
 import {strictJson} from './strict-json.mjs';
+import {basicUuid} from './basic-settings-protocol.mjs';
+import {validateResult} from './observation-protocol.mjs';
+import {parsePortableResult} from './portable-configuration-protocol.mjs';
 
 export const ISOLATED_BACKUP_REQUEST_BYTES = 512;
 export const ISOLATED_BACKUP_RESPONSE_BYTES = 2 * 1024 * 1024;
+export const BACKUP_PREFERENCES_RESPONSE_BYTES = 9 * 1024;
 const MAX_ENTRIES = 4096;
 const reference = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const uuid = value => typeof value === 'string' &&
@@ -40,6 +44,39 @@ export function parseIsolatedBackupRequest(value) {
       refuse();
   }
   return value;
+}
+
+export function parseIsolatedBackupBridgeRequest(value) {
+  if (value?.action !== 'preview-preferences') return parseIsolatedBackupRequest(value);
+  if (!exact(value, 'action', 'boot_id', 'connection_id', 'operation', 'reference', 'version') ||
+      value.version !== 1 || !reference(value.operation) || !reference(value.reference) ||
+      !reference(value.connection_id) || !basicUuid(value.boot_id)) refuse();
+  return value;
+}
+
+const preferencesStatuses = new Set([
+  'ready', 'no-change', 'busy', 'invalidated', 'capacity', 'unsupported', 'not-dispatched', 'unavailable',
+]);
+
+export function parseBackupPreferencesResult(value, request) {
+  if (!exact(value, 'cleanupPending', 'operation', 'preview', 'reference', 'retryable', 'status', 'version') ||
+      value.version !== 1 || value.operation !== request.operation || value.reference !== request.reference ||
+      !preferencesStatuses.has(value.status) || typeof value.retryable !== 'boolean' ||
+      typeof value.cleanupPending !== 'boolean' || bytes(value) > BACKUP_PREFERENCES_RESPONSE_BYTES ||
+      (value.retryable && (value.status !== 'busy' || value.cleanupPending))) refuse();
+  if (value.status === 'ready' || value.status === 'no-change') {
+    if (value.cleanupPending) refuse();
+    const {connection_id, boot_id} = request;
+    const preview = parsePortableResult(value.preview, {action: 'prepare', connection_id, boot_id}, validateResult);
+    if (preview.portable_configuration.state !== value.status) refuse();
+  } else if (value.preview !== null) refuse();
+  return value;
+}
+
+export function parseIsolatedBackupBridgeResult(value, request) {
+  return request.action === 'preview-preferences'
+    ? parseBackupPreferencesResult(value, request)
+    : parseIsolatedBackupResult(value, request);
 }
 
 const statuses = new Set([

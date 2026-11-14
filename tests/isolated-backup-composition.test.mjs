@@ -12,7 +12,8 @@ import {createIsolatedBackupDrive} from '../host/isolated-backup-drive.mjs';
 import {IsolatedBackupStaging} from '../host/isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-restore.mjs';
-import {portableFixture, artifact as portableArtifact} from './fixtures/portable-configuration.mjs';
+import {portableFixture, artifact as portableArtifact, selected as manualArtifact} from './fixtures/portable-configuration.mjs';
+import {IsolatedBackupPreferences} from '../host/isolated-backup-preferences.mjs';
 
 const json = value => Buffer.from(JSON.stringify(value));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -113,7 +114,7 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
     async release() {
       events.push('stage-release');
       releaseEntered.resolve();
-      beforeRelease?.();
+      await beforeRelease?.();
       await releaseDone.promise;
       files.clear();
     },
@@ -535,6 +536,83 @@ test('cancelled or expired handoff joins the original transfer and Prepare befor
   }
 });
 
+
+test('backup bridge cancellation remains effective through the joined retirement and preserves its warning', {timeout: 6000}, async t => {
+  const releaseEntered = Promise.withResolvers(), releaseDone = Promise.withResolvers();
+  t.after(() => releaseDone.resolve());
+  const f = await stagedPreferences(t, {beforeRelease: async () => {
+    releaseEntered.resolve();
+    await releaseDone.promise;
+    throw Error('Synthetic stage release failure');
+  }});
+  f.releaseDone.resolve();
+  const owner = new IsolatedBackupPreferences({composition: f.composition, isolatedBackup: f.composition.isolatedBackup,
+    portable: f.portable, observer: f.observer});
+  const document = Symbol();
+  const callerCurrent = () => true;
+  const [operation, reference] = f.original;
+  const request = {version: 1, action: 'preview-preferences', operation, reference, ...identity};
+  const pending = owner.request(request, {document, callerCurrent});
+  await releaseEntered.promise;
+  const cancel = owner.request({version: 1, action: 'cancel', operation}, {document, callerCurrent});
+  let settled = false;
+  void cancel.then(() => { settled = true; });
+  assert.equal((await f.portable.request({action: 'export', ...identity})).portable_configuration.state, 'busy');
+  assert.equal(settled, false);
+  releaseDone.resolve();
+  const result = owner.deliver(await pending, request, callerCurrent);
+  assert.equal(result.status, 'invalidated');
+  assert.equal(result.preview, null);
+  assert.equal(result.cleanupPending, true);
+  assert.equal((await cancel).cleanupPending, true);
+  assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+  assert.equal(f.calls.some(call => call.selector === 'apply'), false);
+});
+
+test('discard is scoped to an issued still-ready backup and leaves original Status after possible Apply', {timeout: 6000}, async t => {
+  for (const mode of ['discard', 'manual-successor', 'possible-apply', 'backup-cancel-after-dispatch']) {
+    await t.test(mode, async t => {
+      const f = await stagedPreferences(t);
+      f.releaseDone.resolve();
+      const owner = new IsolatedBackupPreferences({composition: f.composition, isolatedBackup: f.composition.isolatedBackup,
+        portable: f.portable, observer: f.observer});
+      const context = {document: Symbol(), callerCurrent: () => true};
+      const [operation, selectedReference] = f.original;
+      const request = {version: 1, action: 'preview-preferences', operation, reference: selectedReference, ...identity};
+      const ready = owner.deliver(await owner.request(request, context), request, context.callerCurrent);
+      assert.equal(ready.status, 'ready');
+      const {reference} = ready.preview.portable_configuration;
+      if (mode === 'discard') {
+        assert.equal(f.portable.discardHandoffPreview(structuredClone(ready.preview)), false);
+        assert.equal(f.portable.discardHandoffPreview(ready.preview), true);
+        assert.equal((await f.portable.request({action: 'confirm', ...identity, reference})).portable_configuration.state, 'unavailable');
+      } else if (mode === 'manual-successor') {
+        const manual = await f.portable.request({action: 'prepare', ...identity, artifact_base64: manualArtifact});
+        assert.equal(manual.portable_configuration.state, 'ready');
+        assert.equal(f.portable.discardHandoffPreview(ready.preview), false);
+        assert.equal(f.portable.assertCurrent(manual), manual);
+      } else {
+        const entered = Promise.withResolvers(), release = Promise.withResolvers();
+        t.after(() => release.resolve());
+        f.portableState.onApply = async report => { entered.resolve(); await release.promise; return report; };
+        f.portableState.mode = 'lost';
+        const pending = f.portable.request({action: 'confirm', ...identity, reference});
+        await entered.promise;
+        assert.equal(f.portable.discardHandoffPreview(ready.preview), false);
+        if (mode === 'backup-cancel-after-dispatch') {
+          const cancelled = await owner.request({version: 1, action: 'cancel', operation}, context);
+          assert.equal(cancelled.status, 'invalidated');
+        }
+        release.resolve();
+        assert.equal((await pending).portable_configuration.state, 'unknown');
+        f.portableState.mode = 'normal';
+        assert.equal((await f.portable.request({action: 'status', ...identity, reference})).portable_configuration.state,
+          'desired-file-observed');
+      }
+      assert.equal(f.calls.filter(call => call.selector === 'apply').length, Number(mode === 'possible-apply' || mode === 'backup-cancel-after-dispatch'));
+    });
+  }
+});
 
 async function stagedPreferences(t, options = {}) {
   const f = setup(t, {portableBytes: json(portableArtifact), ...options});

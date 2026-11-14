@@ -70,7 +70,8 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
         return coordinator.handoff(operation, reference, consume);
       }, stageDestination);
     },
-    async preparePreferences(operation, reference, {portable, target} = {}) {
+    get preferencesPreviewAvailable() { return !closing && !!coordinator; },
+    async preparePreferences(operation, reference, {portable, target, signal, current, releaseAttempt} = {}) {
       if (closing || !coordinator || typeof portable?.prepareHandoff !== 'function') {
         return {status: 'unavailable', preview: null, cleanupPending: false};
       }
@@ -98,7 +99,7 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
           retired = await release;
         }
         return retired?.cleanupPending ? {...result, cleanupPending: true} : result;
-      });
+      }, {signal, current, releaseAttempt});
     },
     dispose() {
       if (!closing) {

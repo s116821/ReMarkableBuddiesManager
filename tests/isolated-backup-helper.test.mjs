@@ -6,9 +6,11 @@ import {mkdtemp, realpath, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {startHelper} from '../host/browser-helper.mjs';
+import {IsolatedBackupPreferences} from '../host/isolated-backup-preferences.mjs';
 import {IsolatedBackupHost} from '../host/isolated-backup-host.mjs';
 import {OrdinaryRestoreHost} from '../host/ordinary-restore.mjs';
-import {parseIsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
+import {parseBackupPreferencesResult, parseIsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
+import {backupPreferencesFixture, identity} from './fixtures/isolated-backup-preferences.mjs';
 
 // Source-derived synthetic frames. This exercises the actual loopback bridge;
 // it is neither a live Drive account nor a Rust-produced package fixture.
@@ -26,6 +28,129 @@ const marker = file('PrivateMarker', raw.length, {kind: 'marker', predecessor: r
 const scan = {version: 1, action: 'scan'};
 const status = operation => ({version: 1, action: 'status', operation});
 const cancel = operation => ({version: 1, action: 'cancel', operation});
+
+test('loopback preferences pins the caller and target and retires an abandoned preview', {timeout: 10000}, async t => {
+  const parent = await realpath(os.tmpdir());
+  const directory = await mkdtemp(path.join(parent, 'manager-backup-preferences-'));
+  const retirement = Promise.withResolvers(), released = Promise.withResolvers();
+  const f = await backupPreferencesFixture(directory, {beforeRelease: async () => {
+    retirement.resolve();
+    await released.promise;
+  }});
+  let helper;
+  t.after(async () => {
+    released.resolve();
+    try { await helper?.close(); }
+    finally { await f.close(); await removeFixtureDirectory(parent, directory); }
+  });
+  await writeFile(path.join(directory, 'index.html'), '<main>fixture</main>');
+  helper = await startHelper({root: directory, backupComposition: f.composition, observer: f.observer});
+  const endpoint = helper.origin + '/manager-isolated-backup';
+  const page = await fetch(helper.origin + '/preview/');
+  const headers = {Origin: helper.origin, Cookie: page.headers.get('set-cookie').split(';')[0], 'Content-Type': 'application/json'};
+  await page.text();
+  const send = (body, options = {}) => fetch(endpoint, {method: 'POST', headers, body: JSON.stringify(body), ...options});
+  const invoke = async body => {
+    const response = await send(body);
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  async function completed(operation, expected) {
+    const deadline = performance.now() + 2000;
+    do {
+      const value = await invoke(status(operation));
+      if (value.status === expected) return value;
+      assert.ok(['scanning', 'selecting', 'downloading'].includes(value.status));
+      await new Promise(resolve => setTimeout(resolve, 5));
+    } while (performance.now() < deadline);
+    assert.fail('Original backup did not settle');
+  }
+  const started = await invoke(scan);
+  const list = await completed(started.operation, 'observed');
+  const selected = await invoke({version: 1, action: 'select', inspection: started.operation,
+    choice: list.backups[0].revisions[0].reference});
+  const {operation, selection} = await completed(selected.operation, 'selected');
+  const {reference} = selection;
+  await invoke({version: 1, action: 'download', operation, reference});
+  await completed(operation, 'verified');
+
+  const request = {version: 1, action: 'preview-preferences', operation, reference, ...identity};
+  assert.equal((await send({...request, path: 'refused'})).status, 400);
+  assert.equal((await send(request, {headers: {...headers, Origin: 'http://127.0.0.1:1'}})).status, 403);
+  const wrongTarget = {...request, connection_id: 'f'.repeat(64)};
+  assert.equal(parseBackupPreferencesResult(await invoke(wrongTarget), wrongTarget).status, 'invalidated');
+  assert.equal(f.composition.isolatedBackup.canHandoff(operation, reference), true);
+  assert.deepEqual(f.snapshot().selectors, []);
+
+  const aborted = new AbortController();
+  const selectionSignal = f.composition.isolatedBackup.selectionSignal(operation, reference);
+  assert.ok(selectionSignal);
+  const invalidated = Promise.withResolvers();
+  selectionSignal.addEventListener('abort', invalidated.resolve, {once: true});
+  const preview = send(request, {signal: aborted.signal});
+  void preview.catch(() => {});
+  await retirement.promise;
+  aborted.abort();
+  await assert.rejects(preview, {name: 'AbortError'});
+  await invalidated.promise;
+  released.resolve();
+  const retired = await invoke(status(operation));
+  assert.equal(retired.status, 'invalidated');
+  assert.equal(retired.cleanupPending, false);
+  assert.deepEqual(f.snapshot().selectors, ['inspect', 'prepare']);
+  assert.equal(f.snapshot().releases, 1);
+  assert.equal((await invoke(request)).preview, null);
+});
+
+test('non-retryable Capacity retires the original verified stage without a renderer cancel', {timeout: 10000}, async t => {
+  const parent = await realpath(os.tmpdir());
+  const directory = await mkdtemp(path.join(parent, 'manager-preferences-capacity-'));
+  const f = await backupPreferencesFixture(directory);
+  t.after(async () => { await f.close(); await removeFixtureDirectory(parent, directory); });
+  const {isolatedBackup} = f.composition;
+  const callerCurrent = () => true, document = Symbol();
+  const owner = new IsolatedBackupPreferences({composition: f.composition, isolatedBackup, observer: f.observer,
+    portable: {prepareHandoff: async () => ({status: 'capacity', preview: null, cleanupPending: false})}});
+  const [operation, reference] = await fixtureSelection(isolatedBackup);
+  const request = {version: 1, action: 'preview-preferences', operation, reference, ...identity};
+  assert.equal(isolatedBackup.canHandoff(operation, reference), true);
+  const reply = owner.deliver(await owner.request(request, {document, callerCurrent}), request, callerCurrent);
+  assert.throws(() => parseBackupPreferencesResult({...reply, retryable: true}, request), /frame refused/);
+  assert.throws(() => parseBackupPreferencesResult({...reply, operation: '0'.repeat(64)}, request), /frame refused/);
+  assert.throws(() => parseBackupPreferencesResult({...reply, preview: {}}, request), /frame refused/);
+  assert.equal(reply.status, 'capacity');
+  assert.equal(reply.retryable, false);
+  assert.equal(isolatedBackup.canHandoff(operation, reference), false);
+  assert.equal(f.snapshot().releases, 1);
+  assert.deepEqual(f.snapshot().selectors, []);
+});
+
+async function removeFixtureDirectory(parent, directory) {
+  assert.equal(await realpath(directory), directory);
+  assert.equal(path.dirname(directory), parent);
+  await rm(directory, {recursive: true});
+}
+
+async function fixtureSelection(host) {
+  async function wait(operation, expected) {
+    const deadline = performance.now() + 2000;
+    do {
+      const value = await host.request(status(operation));
+      if (value.status === expected) return value;
+      assert.ok(['scanning', 'selecting', 'downloading'].includes(value.status));
+      await new Promise(resolve => setTimeout(resolve, 5));
+    } while (performance.now() < deadline);
+    assert.fail('Original backup did not settle');
+  }
+  const started = host.request(scan);
+  const list = await wait(started.operation, 'observed');
+  const selected = host.request({version: 1, action: 'select', inspection: started.operation,
+    choice: list.backups[0].revisions[0].reference});
+  const {operation, selection} = await wait(selected.operation, 'selected');
+  host.request({version: 1, action: 'download', operation, reference: selection.reference});
+  await wait(operation, 'verified');
+  return [operation, selection.reference];
+}
 
 async function open(t, {qualified = false, delayed = false, downloads, backupDrain, backupOperations,
   shutdownFails = false} = {}) {

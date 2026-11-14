@@ -738,6 +738,22 @@ export class App implements OnDestroy {
   downloadCloudBackup() {
     if (this.canBrowseCloudBackups()) void this.cloudBackupController.download();
   }
+  canReviewCloudBackupPreferences() {
+    return this.canBrowseCloudBackups() && this.cloudBackup().previewAvailable && this.portableAvailable();
+  }
+
+  async reviewCloudBackupPreferences() {
+    const target = this.connection().observation;
+    if (!target || !this.canReviewCloudBackupPreferences()) return;
+    this.clearPortablePeers();
+    await this.cloudBackupController.previewPreferences(target, async () => {
+      await this.connectionController.pauseObservation();
+      return this.connection().observation === target;
+    }, () => this.connection().observation === target && this.profile().savedConfigurationProbe &&
+      this.drive().status === 'connected',
+    deadline => this.portableController.beginBackupPreview(target, deadline, () => this.clearCloudBackups()));
+  }
+
   clearCloudBackups() { this.cloudBackupController.cancel(); }
   signInDrive() { this.clearCloudBackups(); void this.driveController.begin(); }
   checkDrive() { this.clearCloudBackups(); void this.driveController.action('check'); }

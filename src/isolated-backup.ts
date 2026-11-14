@@ -1,10 +1,23 @@
 import {
-  parseIsolatedBackupResult, type IsolatedBackupRequest, type IsolatedBackupResult,
+  parseIsolatedBackupResult, parseBackupPreferencesResult, type BackupPreferencesRequest, type BackupPreferencesResult,
+  type IsolatedBackupBridgeRequest, type IsolatedBackupBridgeResult, type IsolatedBackupResult, type IsolatedBackupRequest,
   type IsolatedBackupDownloadResult, type IsolatedBackupInspection, type IsolatedBackupSelection,
   type IsolatedBackupStatus, type IsolatedBackupSummary,
 } from '../host/isolated-backup-protocol.mjs';
 
-export type IsolatedBackupAdapter = (request: IsolatedBackupRequest) => Promise<IsolatedBackupResult>;
+export type IsolatedBackupAdapter = (request: IsolatedBackupBridgeRequest) => Promise<IsolatedBackupBridgeResult>;
+type Target = Pick<BackupPreferencesRequest, 'connection_id' | 'boot_id'>;
+
+const previewLabels: Record<BackupPreferencesResult['status'], string> = {
+  ready: 'Review the changes in the Preferences panel.',
+  'no-change': 'This backup would make no saved preference changes.',
+  busy: 'Another maintenance operation is active.',
+  invalidated: 'Backup preferences preview expired or was cancelled.',
+  capacity: 'Check an unconfirmed import in the Preferences panel first.',
+  unsupported: 'Installed Buddy does not support this preferences operation.',
+  'not-dispatched': 'Could not prepare preferences from this backup.',
+  unavailable: 'Backup preferences preview is unavailable.',
+};
 
 const labels: Record<IsolatedBackupStatus, string> = {
   scanning: 'Checking for cloud backups…',
@@ -40,6 +53,8 @@ interface BackupView {
   selectedChoice: string | null;
   downloading: boolean;
   downloadAttempted: boolean;
+  previewing: boolean;
+  previewAvailable: boolean;
   inspection: IsolatedBackupInspection | null;
   cleanupPending: boolean;
 }
@@ -59,7 +74,7 @@ const selectionMs = 120000;
 
 export class IsolatedBackupController {
   state: BackupView = {busy: false, message: idle, backups: [], selected: null, selectedChoice: null,
-    downloading: false, downloadAttempted: false, inspection: null, cleanupPending: false};
+    downloading: false, downloadAttempted: false, previewing: false, previewAvailable: false, inspection: null, cleanupPending: false};
   private inspection: string | null = null;
   private owner: string | null = null;
   private waiting: Pending | null = null;
@@ -69,6 +84,7 @@ export class IsolatedBackupController {
   private selectionDeadline = 0;
   private viewGeneration = 0;
   private disposed = false;
+  private discardPreview: (() => void) | null = null;
   private readonly adapter: IsolatedBackupAdapter;
   private readonly changed: (state: BackupView) => void;
   private readonly pollMs: number;
@@ -104,13 +120,14 @@ export class IsolatedBackupController {
     clearTimeout(this.expiry);
     clearTimeout(this.watchdog);
     const operation = this.waiting?.operation ?? this.owner;
+    this.clearPreview();
     this.waiting = null;
     this.owner = null;
     this.inspection = null;
     this.selectionDeadline = 0;
     const generation = ++this.viewGeneration;
     this.publish({busy: false, message, backups: [], selected: null, selectedChoice: null,
-      downloading: false, downloadAttempted: false, inspection: null, cleanupPending: false});
+      downloading: false, downloadAttempted: false, previewing: false, previewAvailable: false, inspection: null, cleanupPending: false});
     if (operation) void this.cancelOperation(operation, reportCleanup ? generation : undefined);
   }
 
@@ -133,7 +150,9 @@ export class IsolatedBackupController {
     if (this.disposed || this.state.busy || !this.inspection) return;
     for (const backup of this.state.backups) {
       const revision = backup.revisions.find(row => row.reference === choice);
-      if (revision) return this.start({version: 1, action: 'select', inspection: this.inspection, choice},
+      if (!revision) continue;
+      this.clearPreview();
+      return this.start({version: 1, action: 'select', inspection: this.inspection, choice},
         {backup: backup.backup, device: backup.device, sha256: revision.sha256});
     }
   }
@@ -143,6 +162,50 @@ export class IsolatedBackupController {
     if (this.disposed || busy || downloadAttempted || !this.owner || !selected ||
         performance.now() >= this.selectionDeadline) return;
     return this.start({version: 1, action: 'download', operation: this.owner, reference: selected.reference});
+  }
+
+  private clearPreview() {
+    const discard = this.discardPreview;
+    this.discardPreview = null;
+    discard?.();
+  }
+
+  async previewPreferences(target: Target, pause: () => Promise<boolean>, current: () => boolean,
+    begin: (deadline: number) => {current: () => boolean; settle: (result: BackupPreferencesResult) => void; discard: () => void} | null) {
+    const {selected, busy, previewAvailable} = this.state;
+    const operation = this.owner;
+    if (this.disposed || busy || !previewAvailable || !operation || !selected ||
+        performance.now() >= this.selectionDeadline) return;
+    const generation = ++this.viewGeneration;
+    const preview = begin(this.selectionDeadline);
+    if (!preview) return;
+    this.discardPreview = preview.discard;
+    this.publish({busy: true, previewing: true, previewAvailable: false, message: 'Preparing backup preferences…'});
+    const request = {version: 1, action: 'preview-preferences', operation, reference: selected.reference,
+      connection_id: target.connection_id, boot_id: target.boot_id} as const;
+    try {
+      if (!await pause() || !current() || !preview.current()) {
+        if (generation === this.viewGeneration) this.clear(previewLabels.invalidated, true);
+        return;
+      }
+      if (generation !== this.viewGeneration) return;
+      if (performance.now() >= this.selectionDeadline) {
+        this.clear(previewLabels.invalidated, true);
+        return;
+      }
+      const result = parseBackupPreferencesResult(await this.adapter(request), request);
+      if (generation !== this.viewGeneration) return;
+      if (!current() || !preview.current() || performance.now() >= this.selectionDeadline) {
+        this.clear(previewLabels.invalidated, true);
+        return;
+      }
+      if (result.status !== 'ready') this.discardPreview = null;
+      preview.settle(result);
+      this.publish({busy: false, previewing: false, previewAvailable: result.retryable,
+        cleanupPending: result.cleanupPending, message: previewLabels[result.status]});
+    } catch {
+      if (generation === this.viewGeneration) this.clear(lostReply, true);
+    }
   }
 
   private async start(request: Pending['request'], expected?: Pending['expected']) {
@@ -160,7 +223,7 @@ export class IsolatedBackupController {
       this.publish({busy: true, downloading: true, downloadAttempted: true, message: downloadLabels.downloading});
     } else {
       this.publish({busy: true, message: labels[request.action === 'scan' ? 'scanning' : 'selecting'],
-        selected: null, selectedChoice: null, downloadAttempted: false, inspection: null, cleanupPending: false});
+        selected: null, selectedChoice: null, downloadAttempted: false, previewAvailable: false, inspection: null, cleanupPending: false});
     }
     try {
       const response = parseIsolatedBackupResult(await this.adapter(request), request);
@@ -264,7 +327,7 @@ export class IsolatedBackupController {
       this.selectionDeadline = 0;
       this.owner = null;
     }
-    this.publish({busy: false, downloading: false, cleanupPending, inspection,
+    this.publish({busy: false, downloading: false, cleanupPending, inspection, previewAvailable: status === 'verified',
       ...(status === 'invalidated' ? {selected: null, selectedChoice: null} : {}),
       message: inspection?.completeMedia === false ? 'Backup verified. Some media was omitted.' : downloadLabels[status]});
   }

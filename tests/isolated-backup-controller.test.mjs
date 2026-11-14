@@ -63,6 +63,68 @@ async function choose(c) {
   await waitFor(() => !c.state.busy);
 }
 
+test('preferences waits for local quiescence and accepts retry only from the exact verified backup', async t => {
+  const pause = deferred(), requests = [], settled = [];
+  let retryable = true;
+  const {host} = syntheticHost(t, {downloadSelection: async () => ({status: 'verified', cleanupPending: false,
+    inspection: {markerSha256: digest, manifests: 1, objects: 0, completeMedia: true, declaredSettings: 1}})});
+  const c = open(t, async request => {
+    requests.push(request);
+    if (request.action === 'preview-preferences') return {version: 1, operation: request.operation,
+      reference: request.reference, status: 'busy', retryable, preview: null, cleanupPending: false};
+    return host.request(request);
+  });
+  const target = {connection_id: reference(8), boot_id: device};
+  const begin = () => ({current: () => true, settle: value => settled.push(value), discard() {}});
+  await choose(c);
+  await c.previewPreferences(target, () => pause.promise, () => true, begin);
+  assert.equal(requests.some(request => request.action === 'preview-preferences'), false);
+  await c.download();
+  await waitFor(() => !c.state.busy);
+  const pending = c.previewPreferences(target, () => pause.promise, () => true, begin);
+  assert.equal(c.state.previewing, true);
+  assert.equal(requests.some(request => request.action === 'preview-preferences'), false);
+  pause.resolve(true);
+  await pending;
+  const original = requests.find(request => request.action === 'download');
+  assert.deepEqual(requests.at(-1), {...original, action: 'preview-preferences', ...target});
+  assert.equal(c.state.previewAvailable, true);
+  retryable = false;
+  await c.previewPreferences(target, async () => true, () => true, begin);
+  assert.equal(c.state.previewAvailable, false);
+  assert.equal(settled.length, 2);
+  assert.equal(requests.at(-1).operation, original.operation);
+  assert.equal(requests.at(-1).action, 'preview-preferences');
+});
+
+test('lost or superseded preview replies clear only the original controller attempt', async t => {
+  const {host} = syntheticHost(t, {downloadSelection: async () => ({status: 'verified', cleanupPending: false,
+    inspection: {markerSha256: digest, manifests: 1, objects: 0, completeMedia: true, declaredSettings: 1}})});
+  const entered = deferred(), reply = deferred(), requests = [];
+  let discarded = 0;
+  const c = open(t, async request => {
+    requests.push(request);
+    if (request.action === 'preview-preferences') { entered.resolve(); return reply.promise; }
+    return host.request(request);
+  });
+  await choose(c);
+  await c.download();
+  await waitFor(() => !c.state.busy);
+  const pending = c.previewPreferences({connection_id: reference(8), boot_id: device}, async () => true, () => true,
+    () => ({current: () => true, settle() { assert.fail('Late preview published'); }, discard() { discarded++; }}));
+  await entered.promise;
+  c.cancel();
+  assert.equal(discarded, 1);
+  const original = requests.find(request => request.action === 'preview-preferences');
+  assert.deepEqual(requests.at(-1), controls('cancel', original.operation));
+  await c.scan();
+  await waitFor(() => !c.state.busy);
+  const successor = c.state;
+  reply.reject(Error('Original reply lost'));
+  await pending;
+  assert.equal(c.state, successor);
+});
+
 test('download preserves the revision and distinguishes verified omitted media from interrupted work', async t => {
   for (const outcome of ['omitted', 'incomplete', 'forged']) {
     const entered = deferred(), finished = deferred();
