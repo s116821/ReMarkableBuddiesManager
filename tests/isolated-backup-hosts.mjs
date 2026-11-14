@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {lstat, mkdtemp, realpath, rm} from 'node:fs/promises';
+import {request as httpRequest} from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import {chromium, _electron as electron, expect} from '@playwright/test';
@@ -140,29 +141,114 @@ async function verifyElectronReload(page, control) {
   assert.equal((await status(selection.operation)).status, 'invalidated');
 }
 
-const drive = makeDriveFixture(fixture);
-let tabletObservations = 0;
-const observer = {
-  generation: 0,
-  cancel() {},
-  observe() {
-    tabletObservations++;
-    throw Error('Unexpected tablet observation in cloud backup fixture');
-  },
-};
-const helper = await startHelper({root: path.resolve('dist/manager/browser'), driveAuth: drive, observer});
-try {
-  const browser = await chromium.launch();
+async function installSyntheticDrive(app) {
+  await app.evaluate(({app}, {source, fixture}) => {
+    const require = process.mainModule.require.bind(process.mainModule);
+    const path = require('node:path');
+    const root = path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'host');
+    const {DriveAuth} = require(path.join(root, 'drive-auth.mjs'));
+    // Fixture code runs only in the Playwright-controlled main process.
+    const drive = Function('fixture', 'return (' + source + ')(fixture);')(fixture);
+    for (const method of ['status', 'check', 'openBackupRead', 'dispose']) DriveAuth.prototype[method] = drive[method];
+    globalThis.isolatedBackupUiFixture = drive.control;
+  }, {source: makeDriveFixture.toString(), fixture});
+  return {
+    get: key => app.evaluate((_electron, key) => globalThis.isolatedBackupUiFixture[key], key),
+    set: (key, value) => app.evaluate((_electron, {key, value}) => { globalThis.isolatedBackupUiFixture[key] = value; }, {key, value}),
+  };
+}
+
+function helperStatus(url, headers) {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(url, {method: 'POST', headers, timeout: 3000}, response => {
+      response.resume();
+      response.once('end', () => resolve(response.statusCode));
+      response.once('error', reject);
+    });
+    request.once('error', reject);
+    request.once('timeout', () => request.destroy(Error('Helper probe timed out')));
+    request.end(JSON.stringify({version: 1, action: 'scan'}));
+  });
+}
+
+async function verifyPackagedBrowser(executablePath, env) {
+  const app = await electron.launch({
+    executablePath, args: ['--browser-helper', ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env,
+  });
+  let origin;
   try {
-    const context = await browser.newContext({viewport: {width: 390, height: 980}});
-    await isolate(context, helper.origin);
-    const page = await context.newPage();
-    await page.goto(helper.origin + '/preview/');
-    await verify(page, {get: key => drive.control[key], set: (key, value) => { drive.control[key] = value; }});
-  } finally { await browser.close(); }
-} finally { await helper.close(); }
-assert.equal(tabletObservations, 0);
-console.log('Browser disconnected backup scan, cancel, selection and lifecycle passed with synthetic provider frames');
+    await expect.poll(() => app.evaluate(() => globalThis.managerBrowserHelperOrigin ?? '')).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    origin = await app.evaluate(() => globalThis.managerBrowserHelperOrigin);
+    assert.equal(await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().length), 0);
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext({viewport: {width: 390, height: 980}});
+      await isolate(context, origin);
+      const page = await context.newPage();
+      const response = await page.goto(origin + '/preview/');
+      assert.equal(response.status(), 200);
+      // Angular rendered from the packaged ASAR, with no protected host configuration.
+      await expect(page.getByTestId('drive-status')).toContainText('Google Drive');
+      await expect(page.getByTestId('tablet-model')).toHaveCount(0);
+      assert.equal(await page.evaluate(() => typeof globalThis.managerHost), 'undefined');
+      const cookie = (await context.cookies(origin)).find(item => item.name === 'manager_session');
+      assert.ok(cookie?.httpOnly && cookie.sameSite === 'Strict');
+      const endpoint = origin + '/manager-isolated-backup';
+      const headers = {Origin: origin, Cookie: 'manager_session=' + cookie.value, 'Content-Type': 'application/json'};
+      assert.equal(await helperStatus(endpoint, {...headers, Host: 'invalid.example'}), 403);
+      assert.equal(await helperStatus(endpoint, {...headers, Origin: 'http://127.0.0.1:1'}), 403);
+      assert.equal(await helperStatus(endpoint, {...headers, Cookie: 'manager_session=invalid'}), 403);
+      const pending = await page.evaluate(async () => {
+        const response = await fetch('/manager-isolated-backup', {method: 'POST',
+          headers: {'Content-Type': 'application/json'}, body: JSON.stringify({version: 1, action: 'scan'})});
+        return response.json();
+      });
+      assert.equal(pending.status, 'scanning');
+      await expect.poll(() => page.evaluate(async operation => {
+        const response = await fetch('/manager-isolated-backup', {method: 'POST',
+          headers: {'Content-Type': 'application/json'}, body: JSON.stringify({version: 1, action: 'status', operation})});
+        return (await response.json()).status;
+      }, pending.operation)).toBe('unqualified');
+      const control = await installSyntheticDrive(app);
+      await page.reload();
+      await verify(page, control);
+      assert.equal(await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().length), 0);
+      await control.set('hold', true);
+      await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).click();
+      await expect.poll(() => control.get('readCount')).toBe(2);
+    } finally { await browser.close(); }
+  } finally { await app.close(); }
+  await assert.rejects(helperStatus(origin + '/manager-isolated-backup', {}), {code: 'ECONNREFUSED'});
+  console.log('Packaged browser helper served the ASAR UI over loopback and stopped on quit');
+}
+
+async function verifySourceBrowser() {
+  const drive = makeDriveFixture(fixture);
+  let tabletObservations = 0;
+  const observer = {
+    generation: 0,
+    cancel() {},
+    observe() {
+      tabletObservations++;
+      throw Error('Unexpected tablet observation in cloud backup fixture');
+    },
+  };
+  const helper = await startHelper({root: path.resolve('dist/manager/browser'), driveAuth: drive, observer});
+  try {
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext({viewport: {width: 390, height: 980}});
+      await isolate(context, helper.origin);
+      const page = await context.newPage();
+      await page.goto(helper.origin + '/preview/');
+      await verify(page, {get: key => drive.control[key], set: (key, value) => { drive.control[key] = value; }});
+    } finally { await browser.close(); }
+  } finally { await helper.close(); }
+  assert.equal(tabletObservations, 0);
+  console.log('Browser disconnected backup scan, cancel, selection and lifecycle passed with synthetic provider frames');
+}
+
+if (!packaged) await verifySourceBrowser();
 
 const profileParent = await realpath(os.tmpdir());
 const profile = await mkdtemp(path.join(profileParent, 'manager-isolated-backup-ui-'));
@@ -170,10 +256,12 @@ const originalProfile = await lstat(profile, {bigint: true});
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('MANAGER_')));
 Object.assign(env, {MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: profile,
   MANAGER_DRIVE_AUTH_ROOT: path.join(profile, 'unused')});
+const executablePath = packaged ? path.resolve('out/packages', 'ReMarkableBuddiesManager-' + process.platform + '-x64',
+  process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager') : undefined;
 try {
+  if (packaged) await verifyPackagedBrowser(executablePath, env);
   const app = await electron.launch({
-    executablePath: packaged ? path.resolve('out/packages', 'ReMarkableBuddiesManager-' + process.platform + '-x64',
-      process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager') : undefined,
+    executablePath,
     args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])],
     env,
   });
@@ -181,25 +269,12 @@ try {
     const page = await app.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     await isolate(app.context());
-    await app.evaluate(({app}, {source, fixture}) => {
-      const require = process.mainModule.require.bind(process.mainModule);
-      const path = require('node:path');
-      const root = path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'host');
-      const {DriveAuth} = require(path.join(root, 'drive-auth.mjs'));
-      // Fixture code runs only in the Playwright-controlled main process.
-      const drive = Function('fixture', 'return (' + source + ')(fixture);')(fixture);
-      for (const method of ['status', 'check', 'openBackupRead', 'dispose']) DriveAuth.prototype[method] = drive[method];
-      globalThis.isolatedBackupUiFixture = drive.control;
-    }, {source: makeDriveFixture.toString(), fixture});
+    const control = await installSyntheticDrive(app);
     await app.evaluate(async ({app, BrowserWindow}) => {
       const main = BrowserWindow.getAllWindows()[0];
       await main.loadFile(app.getAppPath() + '/dist/manager/browser/index.html');
       main.show();
     });
-    const control = {
-      get: key => app.evaluate((_electron, key) => globalThis.isolatedBackupUiFixture[key], key),
-      set: (key, value) => app.evaluate((_electron, {key, value}) => { globalThis.isolatedBackupUiFixture[key] = value; }, {key, value}),
-    };
     await verify(page, control);
     await verifyElectronReload(page, control);
   } finally { await app.close(); }

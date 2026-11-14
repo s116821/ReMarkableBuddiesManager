@@ -25,12 +25,12 @@ const scan = {version: 1, action: 'scan'};
 const status = operation => ({version: 1, action: 'status', operation});
 const cancel = operation => ({version: 1, action: 'cancel', operation});
 
-async function open(t, {qualified = false, delayed = false} = {}) {
+async function open(t, {qualified = false, delayed = false, downloads} = {}) {
   const parent = await realpath(os.tmpdir());
   const directory = await mkdtemp(path.join(parent, 'manager-backup-helper-'));
   await writeFile(path.join(directory, 'index.html'), '<main>fixture</main>');
   const authority = new AbortController(), reads = [], captures = [];
-  let tabletCalls = 0, closed = false;
+  let tabletCalls = 0, driveDisposals = 0;
   const driveAuth = {
     openBackupRead(signal) {
       captures.push(signal);
@@ -48,11 +48,11 @@ async function open(t, {qualified = false, delayed = false} = {}) {
       };
       return {status: 'qualified', binding, signal: combined};
     },
-    dispose() { authority.abort(); },
+    dispose() { driveDisposals++; authority.abort(); },
   };
   const observer = {generation: 0, cancel() {}, observe() { tabletCalls++; throw Error('Unexpected tablet access'); }};
-  const helper = await startHelper({root: directory, observer, driveAuth});
-  const close = async () => { if (!closed) { closed = true; await helper.close(); } };
+  const helper = await startHelper({root: directory, observer, driveAuth, downloads});
+  const {close} = helper;
   t.after(async () => {
     await close();
     assert.equal(tabletCalls, 0);
@@ -79,7 +79,10 @@ async function open(t, {qualified = false, delayed = false} = {}) {
     }
     assert.fail('Original operation did not settle');
   };
-  return {origin: helper.origin, server: helper.server, headers, send, result, settle, reads, captures, authority, close};
+  return {
+    origin: helper.origin, server: helper.server, headers, send, result, settle, reads, captures, authority, close,
+    get driveDisposals() { return driveDisposals; },
+  };
 }
 
 async function navigate(h) {
@@ -143,6 +146,37 @@ test('actual browser navigation and helper disposal abort original reads without
   assert.equal(h.reads[1].signal.aborted, false);
   await h.close();
   assert.equal(h.reads[1].signal.aborted, true);
+});
+
+test('concurrent helper closes stop admission and join an active release download once', async t => {
+  const download = Promise.withResolvers();
+  let disposed = 0, settled = false;
+  const h = await open(t, {qualified: true, delayed: true, downloads: {
+    active: {promise: download.promise},
+    dispose() { disposed++; },
+  }});
+  try {
+    assert.equal((await h.result(scan)).status, 'scanning');
+    assert.equal(h.reads.length, 1);
+    const first = h.close(), second = h.close();
+    assert.equal(second, first);
+    const completion = first.then(() => { settled = true; });
+    await assert.rejects(h.send(scan), TypeError);
+    assert.equal(h.server.listening, false);
+    assert.equal(h.captures.length, 1);
+    assert.equal(h.reads[0].signal.aborted, true);
+    assert.equal(h.driveDisposals, 1);
+    assert.equal(disposed, 1);
+    assert.equal(settled, false);
+    download.resolve();
+    await completion;
+    assert.equal(settled, true);
+    assert.equal(h.close(), first);
+    assert.equal(h.driveDisposals, 1);
+    assert.equal(disposed, 1);
+  } finally {
+    download.resolve();
+  }
 });
 
 test('a partially received backup request cannot start work after document navigation', async t => {

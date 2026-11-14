@@ -1,12 +1,60 @@
 const { app, BrowserWindow, session, shell, ipcMain } = require('electron');
+const { stat } = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const GUIDE = 'https://github.com/s116821/RemarkableBuddiesDocs';
+const browserHelperMode = app.isPackaged && process.argv.slice(1).includes('--browser-helper');
+
+async function runBrowserHelper(hostRoot) {
+  let helper, quitting = false, stopped = false, stopping;
+  const stop = (code = 0) => stopping ??= Promise.resolve().then(async () => {
+    try { if (helper) await helper.close(); }
+    catch { code = 1; }
+    finally {
+      if (code) console.error('Manager browser helper unavailable');
+      stopped = true;
+      if (code) app.exit(code);
+      else app.quit();
+    }
+  });
+  // Wait for startup to settle before allowing quit to complete.
+  const startup = (async () => {
+    const { startHelper } = await import(pathToFileURL(path.join(hostRoot, 'browser-helper.mjs')).href);
+    const root = path.join(app.getAppPath(), 'dist', 'manager', 'browser');
+    if (!(await stat(path.join(root, 'index.html'))).isFile()) throw Error('Missing browser UI');
+    helper = await startHelper({ root });
+  })();
+  const quit = () => { void startup.then(() => stop(), () => stop(1)); };
+  app.on('before-quit', event => {
+    if (stopped) return;
+    event.preventDefault();
+    quitting = true;
+    quit();
+  });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
+    quitting = true;
+    quit();
+  });
+  try {
+    await startup;
+    if (quitting) return;
+    const origin = new URL(helper.origin);
+    if (origin.protocol !== 'http:' || origin.hostname !== '127.0.0.1' || !origin.port || origin.origin !== helper.origin) {
+      throw Error('Invalid helper origin');
+    }
+    const url = new URL('/preview/', origin).href;
+    if (process.env.MANAGER_TEST !== '1') await shell.openExternal(url);
+    if (quitting) return;
+    if (process.env.MANAGER_TEST === '1') globalThis.managerBrowserHelperOrigin = origin.origin;
+    console.log('Open the local Manager: ' + url);
+  } catch { await stop(1); }
+}
 
 app.setName('ReMarkableBuddies Manager');
 if (process.env.MANAGER_TEST === '1' && process.env.MANAGER_TEST_PROFILE) app.setPath('userData', process.env.MANAGER_TEST_PROFILE);
 app.whenReady().then(async () => {
   const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(__dirname, '../host');
+  if (browserHelperMode) return runBrowserHelper(hostRoot);
   const { WiredObserver, validateResult } = await import(pathToFileURL(path.join(hostRoot, 'observer.mjs')).href);
   const { parseMemoryInspectionRequest, parseMemoryInspectionResult } = await import(pathToFileURL(path.join(hostRoot, 'memory-inspection.mjs')).href);
   const { parseSavedConfigurationRequest, parseSavedConfigurationResult } = await import(pathToFileURL(path.join(hostRoot, 'saved-configuration.mjs')).href);
@@ -279,4 +327,4 @@ app.whenReady().then(async () => {
     void window.loadFile(ui);
   }
 });
-app.on('window-all-closed', () => app.quit());
+if (!browserHelperMode) app.on('window-all-closed', () => app.quit());

@@ -98,11 +98,13 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
+  let closing;
   const server = createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     const refuse = code => { res.writeHead(code).end(); };
+    if (!origin || closing) return refuse(503);
     if (req.headers.host !== new URL(origin).host) return refuse(403);
     const url = new URL(req.url, origin);
     if (url.pathname === '/manager-download') {
@@ -410,7 +412,40 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   });
   server.requestTimeout = 5000;
   server.headersTimeout = 5000;
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { backupDocument = Symbol(); sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); isolatedBackup.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
+  const close = () => closing ??= Promise.resolve().then(async () => {
+    backupDocument = Symbol();
+    const stopped = new Promise((resolve, reject) => server.close(error => {
+      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') reject(error);
+      else resolve();
+    }));
+    server.closeAllConnections();
+    try {
+      sharedPreferences.dispose();
+      portable.dispose();
+      observer.cancel();
+      restore.dispose();
+      notebookRestore.dispose();
+      localMode.dispose();
+      isolatedRoot.dispose();
+      isolatedBackup.dispose();
+      driveAuth.dispose();
+      const download = downloads.active?.promise;
+      downloads.dispose();
+      await download;
+    } finally { await stopped; }
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        server.removeListener('error', reject);
+        resolve();
+      });
+    });
+    origin = `http://127.0.0.1:${server.address().port}`;
+  } catch (error) {
+    await close();
+    throw error;
+  }
+  return { origin, server, close };
 }
