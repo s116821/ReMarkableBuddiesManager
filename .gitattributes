@@ -12,3 +12,6 @@ tests/fixtures/portable-configuration-e5bf3b8/json-digest-check.log -diff
 
 # Original isolated provisioning stdin/report bytes from the command harness.
 tests/fixtures/isolated-root-provisioning/** -text
+
+# Preserve exact actual-exporter package bytes and their source receipt.
+tests/fixtures/isolated-backup-actual/** -text

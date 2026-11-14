@@ -433,6 +433,14 @@ jobs:
         if: ${{ !inputs.release }}
         working-directory: buddy-oracle-source
         run: cargo test --locked --release --target "$ORACLE_TARGET" --test archive_cli -- --nocapture
+      - name: Verify native Windows resource locking with the retained command
+        if: ${{ !inputs.release && runner.os == 'Windows' }}
+        run: node --test --test-name-pattern '^native Windows' tests/isolated-backup-verifier.test.mjs
+      - name: Verify actual producer packages through the retained Manager oracle
+        if: ${{ !inputs.release }}
+        env:
+          MANAGER_REQUIRE_RETAINED_ORACLE: "1"
+        run: node --test --test-name-pattern '^retained host oracle' tests/isolated-backup-retained.test.mjs
       - name: Confirm qualification did not replace the retained bytes
         if: ${{ !inputs.release }}
         run: |
