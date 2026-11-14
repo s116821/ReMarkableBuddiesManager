@@ -170,6 +170,57 @@ test('asynchronous original authority refusal occurs before staging or provider 
   assert.equal(f.events.includes('verify'), false);
 });
 
+test('external authority changes during local readiness or verification cannot yield a verified stage', async () => {
+  for (const phase of ['readiness', 'create', 'before-verifier', 'verifier', 'membership']) {
+    const f = fixture();
+    let original = true, membership = 0;
+    f.args.binding.checkCurrent = async () => { if (!original) throw Error('Protected records changed'); };
+    if (phase === 'readiness') f.verifier.available = async () => { original = false; return true; };
+    if (phase === 'create') {
+      const create = f.staging.create;
+      f.staging.create = async (...args) => { const stage = await create(...args); original = false; return stage; };
+    }
+    if (phase === 'verifier') {
+      const verify = f.verifier.verify;
+      f.verifier.verify = async (...args) => { const result = await verify(...args); original = false; return result; };
+    }
+    if (phase === 'before-verifier' || phase === 'membership') {
+      const assertOwned = f.stage.assertOwned;
+      f.stage.assertOwned = async (...args) => {
+        const owned = await assertOwned(...args);
+        if (++membership === (phase === 'before-verifier' ? 1 : 2)) original = false;
+        return owned;
+      };
+    }
+    const result = await f.run();
+    assert.notEqual(result.status, 'verified', phase);
+    assert.equal(result.inspection, null, phase);
+    assert.equal((await f.worker.handoff(operation, reference, () => assert.fail())).status, 'invalidated');
+    if (phase === 'readiness') assert.equal(f.events.includes('create'), false);
+    else assert.equal(f.events.at(-1), 'release');
+    if (phase === 'before-verifier') assert.equal(f.events.includes('verify'), false);
+  }
+});
+
+test('handoff checks protected authority before and after the joined recipient', async () => {
+  for (const phase of ['before', 'membership', 'during']) {
+    const f = fixture();
+    let original = true, consumed = 0;
+    f.args.binding.checkCurrent = async () => { if (!original) throw Error('Protected records changed'); };
+    assert.equal((await f.run()).status, 'verified');
+    if (phase === 'before') original = false;
+    if (phase === 'membership') f.stage.assertOwned = async () => { original = false; return true; };
+    const result = await f.worker.handoff(operation, reference, async () => {
+      consumed++;
+      original = false;
+    });
+    assert.notEqual(result.status, 'handed-off', phase);
+    assert.equal(consumed, phase === 'during' ? 1 : 0, phase);
+    assert.equal(f.events.at(-1), 'release');
+    assert.equal((await f.worker.handoff(operation, reference, () => assert.fail())).status, 'invalidated');
+  }
+});
+
 test('closed ordinary inventory and aggregate/disk refusal precede content downloads', async () => {
   for (const manifestChange of [
     value => { value.format = 2; },

@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {DriveReadGuard} from '../host/drive-read-guard.mjs';
+import {DriveAuth, DRIVE_SCOPE} from '../host/drive-auth.mjs';
+import {DriveStore} from '../host/drive-store.mjs';
 
 const python = process.env.MANAGER_DRIVE_PYTHON ?? process.env.MANAGER_WIRED_PYTHON ??
   (process.platform === 'linux' ? '/usr/bin/python3' : null);
@@ -45,7 +47,7 @@ async function removeOwned(target, original, directory) {
   else await unlink(target);
 }
 
-async function fixture(t) {
+async function fixture(t, {clientBytes = client, grantBytes = grant} = {}) {
   const temporary = await realpath(os.tmpdir());
   const namespace = await mkdtemp(path.join(temporary, 'manager-read-guard-test-'));
   const outer = await stat(namespace);
@@ -64,8 +66,8 @@ async function fixture(t) {
     files.set(target, id);
     return target;
   };
-  const clientPath = await create('client.json', client);
-  const grantPath = await create('grant.json', grant);
+  const clientPath = await create('client.json', clientBytes);
+  const grantPath = await create('grant.json', grantBytes);
   const authority = new AbortController();
   t.after(async () => {
     authority.abort();
@@ -73,9 +75,15 @@ async function fixture(t) {
     await removeOwned(root, original, true);
     await removeOwned(namespace, outer, true);
   });
-  const args = {root, python, clientDigest: sha(client), grantDigest: sha(grant), signal: authority.signal};
+  const args = {root, python, clientDigest: sha(clientBytes), grantDigest: sha(grantBytes), signal: authority.signal};
   return {
     args, root, clientPath, grantPath, authority,
+    async recordGrantReplacement() {
+      assert.equal(await realpath(grantPath), grantPath);
+      const replaced = await stat(grantPath);
+      assert.ok(replaced.isFile() && !replaced.isSymbolicLink());
+      files.set(grantPath, replaced);
+    },
     async replaceGrant() {
       const replacement = await create('next.json', changed);
       const replacementId = files.get(replacement);
@@ -171,4 +179,84 @@ test('native protected reader rejects permission changes instead of trusting an 
   await chmod(f.grantPath, 0o644);
   await assert.rejects(guard.check(), /authority unavailable/);
   assert.equal(guard.signal.aborted, true);
+});
+
+test('composed native authority streams 4096 reused chunks and rejects changed or cancelled grants', {
+  skip: !native, timeout: 90000,
+}, async t => {
+  const config = {schema: 1, type: 'google-desktop', clientId: '123456789012-fixture.apps.googleusercontent.com', clientSecret: null};
+  const saved = {schema: 1, clientId: config.clientId, checkedAt: Date.now(),
+    account: {label: 'fixture@example.invalid', permissionId: 'synthetic-permission-id'},
+    tokens: {access_token: 'synthetic-access', refresh_token: 'synthetic-refresh',
+      expiry_date: Date.now() + 300000, scope: DRIVE_SCOPE, token_type: 'Bearer'}};
+  for (const outcome of ['healthy', 'mutation', 'cancel']) {
+    const f = await fixture(t, {clientBytes: Buffer.from(JSON.stringify(config)), grantBytes: Buffer.from(JSON.stringify(saved))});
+    const store = new DriveStore({root: f.root, python});
+    const operations = [], children = [];
+    const originalOperation = store.operation.bind(store), openGuard = store.openReadGuard.bind(store);
+    store.operation = request => { operations.push(request.operation); return originalOperation(request); };
+    store.openReadGuard = async request => {
+      const guard = await openGuard(request);
+      children.push(guard);
+      return guard;
+    };
+    const chunk = Buffer.alloc(65536);
+    let joined = 0, sawAbort = false;
+    const auth = new DriveAuth({store, backupReadFactory: () => ({
+      list: () => assert.fail('unexpected list'),
+      readMetadata: () => assert.fail('unexpected metadata'),
+      readMarker: () => assert.fail('unexpected marker'),
+      listObject: () => assert.fail('unexpected object lookup'),
+      readObjectMetadata: () => assert.fail('unexpected object metadata'),
+      async *streamObject({signal}) {
+        try {
+          for (let i = 0; i < 4096; i++) yield chunk;
+        } finally { joined++; sawAbort = signal.aborted; }
+      },
+    })});
+    try {
+      auth.oauth = () => ({setCredentials() {}, refreshAccessToken: () => assert.fail('unexpected refresh')});
+      auth.account = async () => ({account: saved.account, tokens: saved.tokens});
+      assert.equal((await auth.check()).status, 'connected');
+      // DriveStore.check performed a normal synthetic atomic grant CAS.
+      await f.recordGrantReplacement();
+      const beforeCapture = operations.length;
+      const capture = auth.openBackupRead(f.authority.signal);
+      assert.equal(capture.status, 'qualified');
+      assert.deepEqual(operations.slice(beforeCapture), ['read-client', 'read-grant']);
+      const beforeStream = operations.length, started = performance.now();
+      let accepted = 0, responsive = false;
+      setImmediate(() => { responsive = true; });
+      const stream = async () => {
+        for await (const bytes of capture.binding.streamObject({
+          id: 'SyntheticObject', sha256: 'a'.repeat(64), maxBytes: 256 * 1024 * 1024,
+          timeoutMs: 5000, signal: f.authority.signal,
+        })) {
+          assert.equal(bytes, chunk);
+          accepted++;
+          if (accepted === 2 && outcome === 'mutation') await f.replaceGrant();
+          if (accepted === 2 && outcome === 'cancel') setImmediate(() => auth.cancel());
+        }
+      };
+      if (outcome === 'healthy') {
+        await stream();
+        assert.equal(accepted, 4096);
+        t.diagnostic('4096 chunks through DriveStore and DriveAuth, one child, zero synchronous store calls after admission, ' +
+          Math.round(performance.now() - started) + ' ms');
+      } else {
+        await assert.rejects(stream(), /authorization-failed/);
+        assert.equal(accepted, 2);
+        assert.equal(capture.signal.aborted, true);
+        assert.equal(sawAbort, true);
+      }
+      assert.equal(joined, 1);
+      assert.equal(responsive, true);
+      assert.equal(operations.length, beforeStream);
+      assert.equal(children.length, 1);
+      assert.ok(Number.isInteger(children[0].pid));
+    } finally {
+      auth.dispose();
+      await Promise.all(children.map(guard => guard.close()));
+    }
+  }
 });

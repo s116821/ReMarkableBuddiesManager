@@ -156,6 +156,11 @@ export class IsolatedBackupDownload {
     return {signal: job.controller.signal, maxBytes, timeoutMs: Math.max(1, Math.ceil(job.deadline - this.#now()))};
   }
 
+  async #authority(job) {
+    await job.binding.checkCurrent(this.#options(job, 0));
+    this.#check(job);
+  }
+
   async #call(job, method, args, maxBytes) {
     const options = this.#options(job, maxBytes);
     require(job.calls < MAX_CALLS, 'incomplete');
@@ -277,15 +282,15 @@ export class IsolatedBackupDownload {
       this.#check(job);
       require(['checkCurrent', 'listObject', 'readObjectMetadata', 'streamObject'].every(method => typeof job.binding[method] === 'function'),
         'unavailable');
-      await job.binding.checkCurrent(this.#options(job, 0));
-      this.#check(job);
+      await this.#authority(job);
       require(await this.#verifier.available(this.#options(job, 0)) === true, 'unavailable');
       require(await this.#staging.available(this.#options(job, 0)) === true, 'unavailable');
       const {data, preferences} = selection.components;
       const selectedBytes = data.bytes + preferences.bytes + selection.markerBytes.length;
       await this.#space(job, selectedBytes);
+      await this.#authority(job);
       job.stage = await this.#staging.create(this.#options(job, 0));
-      this.#check(job);
+      await this.#authority(job);
       require(typeof job.stage?.root === 'string' && path.isAbsolute(job.stage.root) &&
         path.resolve(job.stage.root) === job.stage.root, 'unavailable');
 
@@ -302,11 +307,13 @@ export class IsolatedBackupDownload {
       await this.#write(job, 'isolated-backup.json', selection.marker, () => [selection.markerBytes]);
 
       require(await job.stage.assertOwned([...job.files], this.#options(job, 0)) === true);
+      await this.#authority(job);
       const result = await this.#verifier.verify({root: job.stage.root, markerSha256: selection.marker.sha256,
         ...this.#options(job, MAX_MARKER)});
-      this.#check(job);
+      await this.#authority(job);
       const inspection = inspectReport(result, selection, manifest);
       require(await job.stage.assertOwned([...job.files], this.#options(job, 0)) === true);
+      await this.#authority(job);
       this.#check(job);
       job.inspection = inspection;
       return reply('verified', {...inspection});
@@ -363,10 +370,10 @@ export class IsolatedBackupDownload {
       let status = 'handed-off';
       try {
         this.#check(job);
-        const options = this.#options(job, 0);
-        require(await job.stage.assertOwned([...job.files], options) === true);
-        this.#check(job);
-        await consume({root: job.stage.root, inspection: {...job.inspection}, ...options});
+        require(await job.stage.assertOwned([...job.files], this.#options(job, 0)) === true);
+        await this.#authority(job);
+        await consume({root: job.stage.root, inspection: {...job.inspection}, ...this.#options(job, 0)});
+        await this.#authority(job);
         this.#check(job);
       } catch {
         status = job.controller.signal.aborted ? 'invalidated' : 'unavailable';
