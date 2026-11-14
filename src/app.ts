@@ -49,6 +49,7 @@ import { validMemoryText } from '../host/memory-query.mjs';
 import { Component, ChangeDetectionStrategy, OnDestroy, signal, computed } from '@angular/core';
 import { currentHost, unsupportedDrive } from './host';
 import { DriveController } from './drive-auth';
+import { IsolatedBackupController } from './isolated-backup';
 import { unavailableDrive as unsupportedDriveState } from '../host/drive-protocol.mjs';
 import { ConnectionController, CONNECTION_LABELS, type TabletObservation } from './observation';
 import { PersonalizationController, validText, editText, rawOffset } from './personalization';
@@ -68,7 +69,18 @@ export class App implements OnDestroy {
   readonly host = currentHost();
   readonly drive = signal(unsupportedDriveState());
   readonly driveConsent = signal<string | null>(null);
-  private readonly driveController = new DriveController(this.host.driveAuth ?? unsupportedDrive, (state, url) => { this.drive.set(state); this.driveConsent.set(url); });
+  private readonly cloudBackupController = new IsolatedBackupController(
+    request => this.host.isolatedBackup!(request), state => this.cloudBackup.set(state));
+  readonly cloudBackup = signal(this.cloudBackupController.state);
+  private readonly driveController = new DriveController(this.host.driveAuth ?? unsupportedDrive, (state, url) => {
+    const previous = this.drive();
+    if (previous.status === 'connected' && (state.status !== 'connected' ||
+        state.checkedAt !== previous.checkedAt || state.account?.label !== previous.account?.label)) {
+      this.cloudBackupController.clear();
+    }
+    this.drive.set(state);
+    this.driveConsent.set(url);
+  });
   readonly driveLabels: Record<string, string> = {
     unconfigured: 'Google Drive setup required', disconnected: 'Not signed in', connecting: 'Waiting for Google sign-in…', cached: 'Saved account — connection not checked',
     connected: 'Google Drive connected', checking: 'Checking Google Drive…', cancelled: 'Sign-in or check cancelled', expired: 'Sign-in expired', denied: 'Sign-in declined',
@@ -232,8 +244,8 @@ export class App implements OnDestroy {
   readonly release = signal(this.releases.state);
   private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
   readonly managerRelease = signal(this.managerReleases.state);
-  private readonly clearFileOnHidden=()=>{if(document.visibilityState==='hidden'){this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.clearSharedArchivePeers2();this.fileCredentialController.clear();}};
-  private readonly clearModelOnPageHide=()=>{this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();};
+  private readonly clearFileOnHidden=()=>{if(document.visibilityState==='hidden'){this.cloudBackupController.clear();this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.clearSharedArchivePeers2();this.fileCredentialController.clear();}};
+  private readonly clearModelOnPageHide=()=>{this.cloudBackupController.clear();this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();};
   constructor() { this.refreshIsolatedRootOriginals(); if (this.host.sharedPreferences) void this.sharedPreferenceController.run(this.host.sharedPreferences, {action: 'retained'}); if(this.host.portableConfiguration)void this.portableController.retained({portableConfiguration:q=>this.host.portableConfiguration!(q)}); if(this.host.notebookRestore)void this.notebookRestoreController.retained(this.host); if(this.host.notebookArchive)void this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)}); if(this.host.storageInitialization)void this.storageInitializationController.retained(this.storageInitializationAdapter()); if(this.host.localModeChoice)void this.localModeController.retained({localModeChoice:q=>this.host.localModeChoice!(q)}); if(this.host.handwritingRecords)void this.handwritingController.retained({handwritingRecords:q=>this.host.handwritingRecords!(q)}); if(this.host.selectedArchive)void this.selectedController.retained({selectedArchive:q=>this.host.selectedArchive!(q)}); if(this.host.ordinaryRestore)void this.restoreController.retained({ordinaryRestore:q=>this.host.ordinaryRestore!(q)}); if(this.host.modelCredential)void this.fileCredentialController.retained({modelCredential:q=>this.host.modelCredential!(q)}); if(this.host.credentialReference)void this.credentialController.retained({credentialReference:q=>this.host.credentialReference!(q)}); if(this.host.memorySettings)void this.memorySettingsController.retained({memorySettings:q=>this.host.memorySettings!(q)}); if(this.host.researchSettings)void this.researchController.retained({researchSettings:q=>this.host.researchSettings!(q)}); window.addEventListener('pagehide',this.clearModelOnPageHide); document.addEventListener('visibilitychange',this.clearFileOnHidden); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.productSettings)void this.productController.retained({productSettings:q=>this.host.productSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
   connectTablet() { void this.connectionController.connect(); }
@@ -714,13 +726,26 @@ export class App implements OnDestroy {
     event.preventDefault(); this.personalizationText.set(next); field.value = next.replace(/\r\n?/g, '\n');
   }
   togglePersonalization(event: Event) { this.personalizationEnabled.set((event.target as HTMLInputElement).checked); }
-  signInDrive() { void this.driveController.begin(); }
-  checkDrive() { void this.driveController.action('check'); }
-  cancelDrive() { void this.driveController.action('cancel'); }
-  disconnectDrive() { void this.driveController.action('disconnect'); }
+  canBrowseCloudBackups() {
+    return !!this.host.isolatedBackup && this.drive().status === 'connected' && !this.cloudBackup().busy;
+  }
+  scanCloudBackups() {
+    if (this.canBrowseCloudBackups()) void this.cloudBackupController.scan();
+  }
+  selectCloudBackup(choice: string) {
+    if (this.canBrowseCloudBackups()) void this.cloudBackupController.select(choice);
+  }
+  clearCloudBackups() { this.cloudBackupController.clear(); }
+  signInDrive() { this.clearCloudBackups(); void this.driveController.begin(); }
+  checkDrive() { this.clearCloudBackups(); void this.driveController.action('check'); }
+  cancelDrive() { this.clearCloudBackups(); void this.driveController.action('cancel'); }
+  disconnectDrive() { this.clearCloudBackups(); void this.driveController.action('disconnect'); }
   revokeDrive() {
     const account = this.drive().account?.label;
-    if (account && window.confirm(`Remove Google access for ${account}? This may stop Drive access in other copies of this Google app. Your backups will not be deleted.`)) void this.driveController.action('revoke');
+    if (account && window.confirm(`Remove Google access for ${account}? This may stop Drive access in other copies of this Google app. Your backups will not be deleted.`)) {
+      this.clearCloudBackups();
+      void this.driveController.action('revoke');
+    }
   }
   refresh() { void this.releases.refresh(); }
   downloadManager() { const state = this.managerRelease(); if (state.status === 'ready' && !state.stale && state.candidate?.assetsPublished) void this.downloadController.request({action:'start',tag:state.candidate.tag}); }
@@ -728,5 +753,5 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.clearPortable(); this.stopLocalModeOnLifecycle(); document.removeEventListener('visibilitychange',this.clearFileOnHidden); window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.cleanupController.dispose();this.handwritingController.dispose();this.notebookController.dispose();this.selectedController.dispose();this.restoreController.dispose();this.notebookRestoreController.dispose();this.managementController.dispose();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.clearSharedArchivePeers1(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.cloudBackupController.dispose(); this.clearPortable(); this.stopLocalModeOnLifecycle(); document.removeEventListener('visibilitychange',this.clearFileOnHidden); window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.cleanupController.dispose();this.handwritingController.dispose();this.notebookController.dispose();this.selectedController.dispose();this.restoreController.dispose();this.notebookRestoreController.dispose();this.managementController.dispose();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.clearSharedArchivePeers1(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }

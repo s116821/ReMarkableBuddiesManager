@@ -714,7 +714,48 @@
       <button class="ui-button ui-button-secondary" type="button" (click)="revokeDrive()" [disabled]="!drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(drive().status)">Remove Google access…</button>
     </div>
     @if (driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
-    <p class="mt-4 text-sm text-muted">Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.</p>
+    @if (host.isolatedBackup) {
+      <div class="mt-5">
+        <h3 class="font-semibold">Cloud backups</h3>
+        <div class="my-3 flex flex-wrap gap-3">
+          <button class="ui-button ui-button-secondary" type="button" (click)="scanCloudBackups()" [disabled]="!canBrowseCloudBackups()">Scan for cloud backups</button>
+          @if (cloudBackup().busy || cloudBackup().backups.length) {
+            <button class="ui-button ui-button-secondary" type="button" (click)="clearCloudBackups()">{{ cloudBackup().busy ? 'Cancel backup check' : 'Clear backup results' }}</button>
+          }
+        </div>
+        <p role="status" data-testid="cloud-backup-status">{{ cloudBackup().message }}</p>
+        @if (cloudBackup().backups.length) {
+          <ul class="my-3 space-y-4" data-testid="cloud-backup-list">
+            @for (backup of cloudBackup().backups; track backup.backup) {
+              <li class="wrap-anywhere">
+                <p class="font-semibold">Backup {{ backup.backup }}</p>
+                <p class="text-sm text-muted">Device {{ backup.device }}</p>
+                @if (backup.revisions.length) {
+                  <ul class="mt-2 space-y-2">
+                    @for (revision of backup.revisions; track revision.reference) {
+                      <li class="flex flex-wrap items-center gap-2">
+                        <code>{{ revision.sha256.slice(0, 12) }}</code>
+                        @if (revision.newestObserved) { <span>Newest in this scan</span> }
+                        <button class="ui-button ui-button-secondary" type="button" (click)="selectCloudBackup(revision.reference)" [disabled]="!canBrowseCloudBackups() || cloudBackup().selectedChoice === revision.reference">
+                          {{ cloudBackup().selectedChoice === revision.reference ? 'Selected revision' : 'Select revision' }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p>No revisions found for this backup.</p>
+                }
+              </li>
+            }
+          </ul>
+        }
+        @if (cloudBackup().selected; as selected) {
+          <p class="my-3 wrap-anywhere" data-testid="cloud-backup-selection">Verified revision marker <code>{{ selected.sha256 }}</code>. Package and media verification require a download.</p>
+        }
+      </div>
+    } @else {
+      <p class="mt-4 text-sm text-muted">This Manager host does not support cloud backup browsing.</p>
+    }
   </section>
   <section class="ui-panel mt-6" aria-labelledby="selected-archive-title">
     <h2 id="selected-archive-title" class="ui-heading">Check an archive or export Buddy history</h2>
