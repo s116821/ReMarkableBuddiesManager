@@ -515,6 +515,55 @@ test('handoff refuses wrong target, corrupt destination and a different Prepare 
   }
 });
 
+test('pre-receipt stage uncertainty survives handoff failure and repeated disposal', async t => {
+  for (const warning of [true, false, 'true']) {
+    await t.test(JSON.stringify(warning), async t => {
+      const f = await stagedRestore(t);
+      f.releaseDone.resolve();
+      let transfers = 0;
+      const result = await f.prepare(async () => {
+        transfers++;
+        throw Object.assign(new Error('Stage reply unavailable'), {cleanupPending: warning});
+      });
+      assert.deepEqual(result, {status: 'unavailable', preview: null, cleanupPending: warning === true});
+      assert.equal(transfers, 1);
+      assert.deepEqual(f.restore.calls, []);
+      assert.equal(f.events.includes('stage-release'), true);
+      assert.equal(f.restoreEvents.includes('destination-release'), false);
+      const disposal = f.restore.host.dispose();
+      assert.equal(f.restore.host.dispose(), disposal);
+      assert.equal(await disposal, warning === true);
+      assert.equal(transfers, 1);
+    });
+  }
+});
+
+test('disposal joins a failed receive before retaining its pre-receipt cleanup warning', {timeout: 5000}, async t => {
+  const entered = Promise.withResolvers(), drained = Promise.withResolvers();
+  t.after(() => drained.resolve());
+  const f = await stagedRestore(t);
+  f.releaseDone.resolve();
+  const pending = f.prepare(async () => {
+    entered.resolve();
+    await drained.promise;
+    throw Object.assign(new Error('Original receive result lost'), {cleanupPending: true});
+  });
+  await entered.promise;
+  const disposal = f.restore.host.dispose();
+  assert.equal(f.restore.host.dispose(), disposal);
+  let settled = false;
+  void disposal.then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.equal(f.events.includes('stage-release'), false);
+  drained.resolve();
+  assert.deepEqual(await pending, {status: 'invalidated', preview: null, cleanupPending: true});
+  assert.equal(await disposal, true);
+  assert.deepEqual(f.restore.calls, []);
+  assert.equal(f.events.includes('stage-release'), true);
+  assert.equal(f.restoreEvents.includes('destination-release'), false);
+});
+
 test('cancelled or expired handoff joins local work without assuming remote Prepare ended', {timeout: 5000}, async t => {
   for (const mode of ['cancel-transfer', 'timeout-transfer', 'cancel-prepare']) {
     await t.test(mode, async t => {

@@ -185,7 +185,11 @@ export class OrdinaryRestoreHost{
        connection_id:sample.connection_id,boot_id:sample.boot_id});
       if(!this.#current(a))throw Error('Ordinary restore invalidated');
       try{s.destination=await stageDestination({...source,...bounds()});}
-      catch(error){cleanupPending ||= error?.cleanupPending===true;throw error;}
+      catch(error){
+       cleanupPending ||= error?.cleanupPending===true;
+       this.#cleanupPending ||= error?.cleanupPending===true;
+       throw error;
+      }
       const root=s.destination?.root;
       if(!restorePath(root)||posix.normalize(root)!==root||typeof s.destination.assertOwned!=='function'||
           typeof s.destination.release!=='function')throw Error('Restore destination refused');
