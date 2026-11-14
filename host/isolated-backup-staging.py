@@ -12,7 +12,7 @@ import sys
 import uuid
 
 sys.path.insert(0, str(Path(__file__).parent))
-from drive_store import checked_root, exclusive, require, windows_check_handle
+from drive_store import checked_root, exclusive, require, windows_check_handle, windows_private_attributes
 from windows_resource_handle import checked_handle
 
 MIB = 1024 * 1024
@@ -95,12 +95,6 @@ def win_delete(handle):
     require(set_info(int(handle), 4, ctypes.byref(info), ctypes.sizeof(info)))
 
 
-def native_windows_directory(path):
-    # Inherit only inside a previously verified private parent. Admission
-    # checks the actual owner/DACL before this directory is used.
-    os.mkdir(path, 0o700)
-
-
 class Broker:
     def __init__(self, parent, exclusions, stack):
         require(sys.platform in ('linux', 'win32'))
@@ -158,9 +152,12 @@ class Broker:
             self.create_dir('data/objects', 'objects', self.fd('data'))
             self.check_dirs()
             return str(self.root)
-        except Exception:
+        except Exception as error:
             # Never remove an entry we did not successfully identify and record.
-            self.release()
+            try:
+                self.release()
+            except Exception as cleanup:
+                raise error from cleanup
             raise
 
     def fd(self, relative):
@@ -170,7 +167,9 @@ class Broker:
         target = self.root / relative
         with self.pin_dirs():
             if self.windows:
-                native_windows_directory(target)
+                import win32file
+                # Create with the token user's protected ACL before admitting the handle.
+                win32file.CreateDirectory(str(target), windows_private_attributes())
                 with win_handle(target, True, True) as handle:
                     require(checked_root(target) is not None)
                     self.dirs[relative] = (win_key(handle), None)

@@ -1,4 +1,5 @@
 """Exact helper wire bytes and Windows API selection; no native custody claim."""
+from contextlib import contextmanager, nullcontext
 import importlib.util
 import io
 import json
@@ -59,6 +60,53 @@ class GuardProtocolControls(unittest.TestCase):
             for unsafe in ('relative', 'C:\\synthetic\\private:stream', '\\\\server\\share\\private'):
                 with self.assertRaises(ValueError):
                     module.lexical_root(unsafe)
+
+    def test_staging_creates_each_directory_with_protected_attributes_before_admission(self):
+        module = helper('isolated-backup-staging')
+        broker = module.Broker.__new__(module.Broker)
+        broker.windows, broker.root, broker.dirs = True, Path.cwd(), {}
+        broker.pin_dirs = nullcontext
+        attributes = object()
+        events = []
+        create = Mock(side_effect=lambda path, sd: events.append(('create', path, sd)))
+
+        @contextmanager
+        def admit(path, directory, private):
+            self.assertTrue(directory and private)
+            events.append(('admit', str(path)))
+            yield path
+
+        with patch.dict(sys.modules, {'win32file': SimpleNamespace(CreateDirectory=create)}), \
+                patch.object(module, 'windows_private_attributes', return_value=attributes), \
+                patch.object(module, 'win_handle', admit), \
+                patch.object(module, 'checked_root', return_value=(1, 2)), \
+                patch.object(module, 'win_key', side_effect=lambda handle: handle), \
+                patch.object(module.os, 'mkdir', side_effect=AssertionError('requires a native descriptor')):
+            for relative in module.DIRECTORIES:
+                broker.create_dir(relative, '', None)
+        self.assertEqual(events, [
+            entry for relative in module.DIRECTORIES
+            for entry in (
+                ('create', str(broker.root / relative), attributes),
+                ('admit', str(broker.root / relative)),
+            )
+        ])
+        self.assertEqual(broker.dirs, {name: (broker.root / name, None) for name in module.DIRECTORIES})
+
+    def test_staging_preserves_original_create_failure_when_checked_cleanup_fails(self):
+        module = helper('isolated-backup-staging')
+        broker = module.Broker.__new__(module.Broker)
+        broker.parent, broker.root, broker.windows = Path.cwd(), None, True
+        create = ValueError('create refused')
+        cleanup = OSError('checked cleanup refused')
+        broker.check_parent = Mock()
+        broker.create_dir = Mock(side_effect=create)
+        broker.release = Mock(side_effect=cleanup)
+        with self.assertRaises(ValueError) as raised:
+            broker.create()
+        self.assertIs(raised.exception, create)
+        self.assertIs(raised.exception.__cause__, cleanup)
+        broker.release.assert_called_once_with()
 
 
 if __name__ == '__main__':

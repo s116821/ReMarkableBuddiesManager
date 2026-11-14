@@ -130,12 +130,11 @@ def exclusive(path):
     return os.fdopen(msvcrt.open_osfhandle(handle.Detach(), os.O_WRONLY | os.O_BINARY), 'wb')
 
 
-def windows_private_writer(path, disposition, access):
+def windows_private_attributes():
     import ntsecuritycon
     import pywintypes
     import win32api
     import win32con
-    import win32file
     import win32security as security
     token = security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
     try:
@@ -150,7 +149,12 @@ def windows_private_writer(path, disposition, access):
     sd.SetSecurityDescriptorControl(security.SE_DACL_PROTECTED, security.SE_DACL_PROTECTED)
     attributes = pywintypes.SECURITY_ATTRIBUTES()
     attributes.SECURITY_DESCRIPTOR = sd
-    return win32file.CreateFile(str(path), access, 0, attributes, disposition,
+    return attributes
+
+
+def windows_private_writer(path, disposition, access):
+    import win32file
+    return win32file.CreateFile(str(path), access, 0, windows_private_attributes(), disposition,
                                 win32file.FILE_FLAG_OPEN_REPARSE_POINT, None)
 
 

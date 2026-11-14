@@ -26,6 +26,15 @@ async function removeOwned(name, original, directory) {
   else await unlink(name);
 }
 
+async function checkedTeardown(t, label, cleanup) {
+  try {
+    await cleanup();
+  } catch (error) {
+    t.diagnostic(label + ' failed and left the fixture in place: ' + error.message);
+    throw error;
+  }
+}
+
 const privateDirectory = [
   'import sys, win32api, win32con, win32security as security, ntsecuritycon',
   'token = security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)',
@@ -43,15 +52,17 @@ async function fixture(t) {
   const namespace = await mkdtemp(path.join(temporary, 'manager-backup-staging-test-'));
   const namespaceId = await inspect(namespace);
   const parent = path.join(namespace, 'private'), excluded = path.join(namespace, 'unrelated');
-  t.after(() => removeOwned(namespace, namespaceId, true));
   await mkdir(parent, {mode: 0o700});
   const original = await inspect(parent);
+  t.after(() => checkedTeardown(t, 'Checked fixture cleanup', async () => {
+    await removeOwned(parent, original, true);
+    await removeOwned(namespace, namespaceId, true);
+  }));
   if (process.platform === 'win32') {
     const adjusted = spawnSync(python, ['-I', '-B', '-c', privateDirectory, parent], {windowsHide: true});
     assert.equal(adjusted.status, 0, adjusted.stderr?.toString());
   }
-  return {parent, excluded, async close() { await removeOwned(parent, original, true); },
-    adapter: new IsolatedBackupStaging({parent, python, excludedRoots: [excluded]})};
+  return {parent, excluded, adapter: new IsolatedBackupStaging({parent, python, excludedRoots: [excluded]})};
 }
 
 async function write(stage, name, bytes) {
@@ -73,51 +84,52 @@ test('default and relative-path staging stay unavailable', async () => {
 test('native stage uses fixed exclusive entries, exact writes, marker-last membership and checked release',
   {skip: !native}, async t => {
     const f = await fixture(t);
+    assert.equal(await f.adapter.available(options()), true);
+    assert.ok(await f.adapter.freeBytes(null, options()) > 0);
+    const stage = await f.adapter.create(options());
     try {
-      assert.equal(await f.adapter.available(options()), true);
-      assert.ok(await f.adapter.freeBytes(null, options()) > 0);
-      const stage = await f.adapter.create(options());
-      try {
-        assert.equal(path.dirname(stage.root), f.parent);
-        assert.ok(await f.adapter.freeBytes(stage.root, options()) > 0);
-        await assert.rejects(f.adapter.freeBytes(path.dirname(stage.root), options()), /staging unavailable/);
-        await assert.rejects(stage.openExclusive('../out', options(1)), /staging unavailable/);
-        await assert.rejects(stage.openExclusive('data/objects/' + '1'.repeat(64), options(0)), /staging unavailable/);
-        const data = 'data/backup.json', zero = 'data/objects/' + '1'.repeat(64);
-        await write(stage, data, 'manifest');
-        await assert.rejects(stage.openExclusive(data, options(1)), /staging unavailable/);
-        await write(stage, zero, '');
-        await assert.rejects(stage.openExclusive('isolated-backup.json', options(1)), /staging unavailable/);
-        await write(stage, 'portable-configuration.json', 'settings');
-        await write(stage, 'isolated-backup.json', 'marker');
-        assert.equal((await readFile(path.join(stage.root, data))).toString(), 'manifest');
-        assert.equal((await inspect(path.join(stage.root, zero))).size, 0n);
-        const members = [data, zero, 'portable-configuration.json', 'isolated-backup.json'];
-        assert.equal(await stage.assertOwned(members, options()), true);
-        assert.equal(await stage.assertOwned(members.slice(1), options()), false);
-        if (process.platform === 'linux') {
-          assert.equal(Number((await inspect(stage.root)).mode & 0o777n), 0o700);
-          assert.equal(Number((await inspect(path.join(stage.root, data))).mode & 0o777n), 0o600);
-        }
-      } finally { await stage.release(); }
-      assert.deepEqual(await readdir(f.parent), []);
-    } finally { await f.close(); }
+      assert.equal(path.dirname(stage.root), f.parent);
+      assert.ok(await f.adapter.freeBytes(stage.root, options()) > 0);
+      await assert.rejects(f.adapter.freeBytes(path.dirname(stage.root), options()), /staging unavailable/);
+      await assert.rejects(stage.openExclusive('../out', options(1)), /staging unavailable/);
+      await assert.rejects(stage.openExclusive('data/objects/' + '1'.repeat(64), options(0)), /staging unavailable/);
+      const data = 'data/backup.json', zero = 'data/objects/' + '1'.repeat(64);
+      await write(stage, data, 'manifest');
+      await assert.rejects(stage.openExclusive(data, options(1)), /staging unavailable/);
+      await write(stage, zero, '');
+      await assert.rejects(stage.openExclusive('isolated-backup.json', options(1)), /staging unavailable/);
+      await write(stage, 'portable-configuration.json', 'settings');
+      await write(stage, 'isolated-backup.json', 'marker');
+      assert.equal((await readFile(path.join(stage.root, data))).toString(), 'manifest');
+      assert.equal((await inspect(path.join(stage.root, zero))).size, 0n);
+      const members = [data, zero, 'portable-configuration.json', 'isolated-backup.json'];
+      assert.equal(await stage.assertOwned(members, options()), true);
+      assert.equal(await stage.assertOwned(members.slice(1), options()), false);
+      if (process.platform === 'linux') {
+        assert.equal(Number((await inspect(stage.root)).mode & 0o777n), 0o700);
+        assert.equal(Number((await inspect(path.join(stage.root, data))).mode & 0o777n), 0o600);
+      }
+    } catch (error) {
+      try { await stage.release(); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], 'Stage operation and checked release failed'); }
+      throw error;
+    }
+    await stage.release();
+    assert.deepEqual(await readdir(f.parent), []);
   });
 
 test('native release refuses an open file, then removes the exact partial transfer after close',
   {skip: !native}, async t => {
     const f = await fixture(t);
-    try {
-      const stage = await f.adapter.create(options());
-      const file = await stage.openExclusive('data/backup.json', options(3));
-      await file.write(Buffer.from('ab'));
-      await assert.rejects(file.write(Buffer.from('cd')), /staging unavailable/);
-      await assert.rejects(file.sync(), /staging unavailable/);
-      await assert.rejects(stage.release(), /staging unavailable/);
-      await file.close();
-      await stage.release();
-      assert.deepEqual(await readdir(f.parent), []);
-    } finally { await f.close(); }
+    const stage = await f.adapter.create(options());
+    const file = await stage.openExclusive('data/backup.json', options(3));
+    await file.write(Buffer.from('ab'));
+    await assert.rejects(file.write(Buffer.from('cd')), /staging unavailable/);
+    await assert.rejects(file.sync(), /staging unavailable/);
+    await assert.rejects(stage.release(), /staging unavailable/);
+    await file.close();
+    await stage.release();
+    assert.deepEqual(await readdir(f.parent), []);
   });
 
 test('native cleanup preserves unexpected files and refuses replacement identity',
@@ -142,32 +154,29 @@ test('native cleanup preserves unexpected files and refuses replacement identity
       await removeOwned(unexpected, extraId, false);
       await removeOwned(replace ? moved : data, dataId, false);
       for (let i = dirs.length - 1; i >= 0; i--) await removeOwned(dirs[i], dirIds[i], true);
-      await f.close();
     }
   });
 
 test('Linux refuses unsafe parent mode, symlink parent and overlap with an excluded root',
   {skip: !native || process.platform !== 'linux'}, async t => {
     const f = await fixture(t);
+    const link = f.excluded;
+    await symlink(f.parent, link, 'dir');
+    const linkId = await inspect(link);
     try {
-      const link = f.excluded;
-      await symlink(f.parent, link, 'dir');
-      const linkId = await inspect(link);
-      try {
-        const linked = new IsolatedBackupStaging({parent: link, python, excludedRoots: [path.join(f.parent, '..', 'separate')]});
-        assert.equal(await linked.available(options()), false);
-        const overlapping = new IsolatedBackupStaging({parent: f.parent, python, excludedRoots: [link]});
-        assert.equal(await overlapping.available(options()), false);
-        await chmod(f.parent, 0o755);
-        assert.equal(await f.adapter.available(options()), false);
-        await chmod(f.parent, 0o700);
-      } finally {
-        const current = await inspect(link);
-        assert.ok(current.isSymbolicLink() && current.dev === linkId.dev && current.ino === linkId.ino);
-        assert.equal(await realpath(path.dirname(link)), path.dirname(link));
-        await unlink(link);
-      }
-    } finally { await f.close(); }
+      const linked = new IsolatedBackupStaging({parent: link, python, excludedRoots: [path.join(f.parent, '..', 'separate')]});
+      assert.equal(await linked.available(options()), false);
+      const overlapping = new IsolatedBackupStaging({parent: f.parent, python, excludedRoots: [link]});
+      assert.equal(await overlapping.available(options()), false);
+      await chmod(f.parent, 0o755);
+      assert.equal(await f.adapter.available(options()), false);
+      await chmod(f.parent, 0o700);
+    } finally {
+      const current = await inspect(link);
+      assert.ok(current.isSymbolicLink() && current.dev === linkId.dev && current.ino === linkId.ino);
+      assert.equal(await realpath(path.dirname(link)), path.dirname(link));
+      await unlink(link);
+    }
   });
 
 test('configured broker refuses unavailable platform custody without a stage',
@@ -215,6 +224,5 @@ test('interrupted create preserves residue and reports uncertain cleanup',
       await removeOwned(residue, await inspect(residue), true);
     } finally {
       await removeOwned(executable, executableId, false);
-      await f.close();
     }
   });
