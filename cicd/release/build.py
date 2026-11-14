@@ -23,12 +23,14 @@ def verify_packages(directory, release):
 
 def archive_package(source, destination, *, linux=False):
     executables = {"ReMarkableBuddiesManager", "chrome-sandbox", "chrome_crashpad_handler"}
+    oracle = "resources/host/buddy-oracle/reader-buddy"
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(source.rglob("*")):
             if path.is_file():
-                item = zipfile.ZipInfo(path.relative_to(source).as_posix())
+                member = path.relative_to(source).as_posix()
+                item = zipfile.ZipInfo(member)
                 item.create_system = 3
-                mode = 0o755 if linux and path.name in executables else 0o644
+                mode = 0o755 if linux and (path.name in executables or member == oracle) else 0o644
                 item.external_attr = (stat.S_IFREG | mode) << 16
                 item.compress_type = zipfile.ZIP_DEFLATED
                 archive.writestr(item, path.read_bytes())

@@ -19,21 +19,41 @@ class PackageControls(unittest.TestCase):
             info = dict(version="0.4.1", sha=candidate.sha, tag=candidate.tag, official=True)
             (root / "electron").mkdir()
             (root / "electron/build-info.json").write_text(json.dumps(info))
+            oracle = "resources/host/buddy-oracle/reader-buddy"
+            existing_executables = {"ReMarkableBuddiesManager", "chrome-sandbox", "chrome_crashpad_handler"}
+            members = {
+                "index.html": b"synthetic only",
+                **{name: b"synthetic executable marker" for name in existing_executables},
+                oracle: b"\x00synthetic oracle\r\n\xff",
+                "reader-buddy": b"unrelated root entry",
+                "resources/host/other/reader-buddy": b"unrelated resource entry",
+                "resources/host/buddy-oracle/provenance.json": b"{}",
+            }
             for directory in ("dist/manager/browser", "out/packages/ReMarkableBuddiesManager-win32-x64",
                               "out/packages/ReMarkableBuddiesManager-linux-x64"):
-                dest = root / directory; dest.mkdir(parents=True)
-                (dest / "index.html").write_text("synthetic only")
-                (dest / "ReMarkableBuddiesManager").write_text("synthetic executable marker")
+                for member, content in members.items():
+                    file = root / directory / member
+                    file.parent.mkdir(parents=True, exist_ok=True)
+                    file.write_bytes(content)
             packages = root / "packages"
             with patch("build.source_identity") as source:
                 assemble(root, candidate, packages)
                 source.assert_called_once_with(root, candidate)
             verified = verify_packages(packages, candidate)
             self.assertEqual(set(packages.iterdir()), {packages / name for name in verified["packages"]} | {packages / "provenance.json"})
-            for filename, executable in (("manager-linux-x64.zip", True), ("manager-win32-x64.zip", False)):
+            self.assertEqual(set(verified["packages"]), {
+                "manager-browser.zip", "manager-linux-x64.zip", "manager-win32-x64.zip",
+            })
+            member_bytes = {**members, "build-info.json": (root / "electron/build-info.json").read_bytes()}
+            for filename in verified["packages"]:
+                executable_paths = existing_executables | {oracle} if filename == "manager-linux-x64.zip" else set()
                 with zipfile.ZipFile(packages / filename) as archive:
-                    mode = archive.getinfo("ReMarkableBuddiesManager").external_attr >> 16
-                    self.assertEqual(stat.S_IMODE(mode), 0o755 if executable else 0o644)
+                    self.assertCountEqual(archive.namelist(), member_bytes)
+                    for member, content in member_bytes.items():
+                        with self.subTest(archive=filename, member=member):
+                            self.assertEqual(archive.read(member), content)
+                            mode = archive.getinfo(member).external_attr >> 16
+                            self.assertEqual(mode, stat.S_IFREG | (0o755 if member in executable_paths else 0o644))
             # Execute the actual standard Linux extractor on the generated CI ZIP.
             import os
             if os.name != "nt":
@@ -48,7 +68,9 @@ class PackageControls(unittest.TestCase):
                 subprocess.run(["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", commands],
                                cwd=checkout, env=dict(os.environ, RUNNER_TEMP=str(root)), check=True)
                 dest = checkout / "out/packages/ReMarkableBuddiesManager-linux-x64"
-                self.assertEqual(stat.S_IMODE((dest / "ReMarkableBuddiesManager").stat().st_mode), 0o755)
+                for member in existing_executables | {oracle}:
+                    self.assertEqual(stat.S_IMODE((dest / member).stat().st_mode), 0o755)
+                self.assertEqual((dest / oracle).read_bytes(), members[oracle])
                 for file in ("dist/manager/browser/build-info.json", "electron/build-info.json"):
                     self.assertEqual(json.loads((checkout / file).read_text()), info)
             # A self-consistent manifest cannot authorize a different embedded identity.
