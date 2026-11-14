@@ -9,7 +9,7 @@ import test from 'node:test';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import source from '../host/buddy-oracle-source.json' with {type: 'json'};
 
-const corpus = fileURLToPath(new URL('./fixtures/isolated-backup-actual/', import.meta.url));
+const corpus = await realpath(fileURLToPath(new URL('./fixtures/isolated-backup-actual/', import.meta.url)));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const receiptBytes = await readFile(path.join(corpus, 'receipt.json'));
 const receipt = JSON.parse(receiptBytes);
