@@ -41,6 +41,8 @@ class PackageControls(unittest.TestCase):
             pin_path.write_text(json.dumps(pin))
             retained = root / "retained"
             payload = b"\x00synthetic oracle\r\n\xff"
+            notice_root = "resources/host/third-party/buddy-oracle/"
+            license_bytes = b"Synthetic Buddy license fixture.\n"
             for platform, target, filename in (
                 ("win32", "x86_64-pc-windows-msvc", "reader-buddy.exe"),
                 ("linux", "x86_64-unknown-linux-gnu", "reader-buddy"),
@@ -56,7 +58,8 @@ class PackageControls(unittest.TestCase):
                 (resource / "provenance.json").write_text(json.dumps(provenance))
                 notices = resource.parent / "notices"
                 notices.mkdir()
-                (notices / "NOTICE").write_text("Synthetic fixture only; not redistribution evidence.")
+                (notices / "BUDDY-LICENSE").write_bytes(license_bytes)
+                (notices / "BUDDY-THIRD-PARTY-NOTICES.md").write_bytes(b"Synthetic Buddy notices.\n")
             packages = root / "packages"
             with patch("build.source_identity") as source:
                 hosts = [root / f"out/packages/ReMarkableBuddiesManager-{platform}-x64/resources/host"
@@ -67,15 +70,17 @@ class PackageControls(unittest.TestCase):
                 self.assertTrue(all(not (host / "buddy-oracle").exists() for host in hosts))
                 self.assertTrue(all(not (host / "third-party/buddy-oracle").exists() for host in hosts))
                 packages.rmdir()
-                second_notice = retained / "x86_64-unknown-linux-gnu/notices/NOTICE"
-                notice_bytes = second_notice.read_bytes()
-                second_notice.unlink()
+                second_notices = retained / "x86_64-unknown-linux-gnu/notices"
+                saved_notices = {path.name: path.read_bytes() for path in second_notices.iterdir()}
+                for name in saved_notices:
+                    (second_notices / name).unlink()
                 with self.assertRaisesRegex(ValueError, "notices"):
                     assemble(root, candidate, packages, oracle_root=retained)
                 self.assertFalse(packages.exists())
                 self.assertTrue(all(not (host / "buddy-oracle").exists() for host in hosts))
                 self.assertTrue(all(not (host / "third-party/buddy-oracle").exists() for host in hosts))
-                second_notice.write_bytes(notice_bytes)
+                for name, content in saved_notices.items():
+                    (second_notices / name).write_bytes(content)
                 blocked_parent = hosts[1] / "third-party"
                 blocked_parent.write_bytes(b"existing unrelated file")
                 with self.assertRaisesRegex(ValueError, "destination parent"):
@@ -111,7 +116,7 @@ class PackageControls(unittest.TestCase):
                     else:
                         command = oracle if "linux" in filename else oracle + ".exe"
                         self.assertEqual(archive.read(command), payload)
-                        self.assertIn("resources/host/third-party/buddy-oracle/NOTICE", archive.namelist())
+                        self.assertEqual(archive.read(notice_root + "BUDDY-LICENSE"), license_bytes)
             # Trusted original inputs are independent of the candidate ZIP metadata.
             pin_path.write_text(json.dumps(dict(pin, sourceSha="9" * 40)))
             with self.assertRaisesRegex(ValueError, "bundle-refused"):
@@ -143,6 +148,36 @@ class PackageControls(unittest.TestCase):
                 self.assertEqual((dest / oracle).read_bytes(), payload)
                 for file in ("dist/manager/browser/build-info.json", "electron/build-info.json"):
                     self.assertEqual(json.loads((checkout / file).read_text()), info)
+            manifest_path = packages / "provenance.json"
+            license_path = notice_root + "BUDDY-LICENSE"
+            modified = b"!" + license_bytes[1:]
+            for filename in ("manager-linux-x64.zip", "manager-win32-x64.zip"):
+                target = packages / filename
+                original_zip = target.read_bytes()
+                with zipfile.ZipFile(target) as archive:
+                    entries = [(entry, archive.read(entry)) for entry in archive.infolist()]
+                for mutation in ("changed", "missing", "extra"):
+                    with self.subTest(archive=filename, notice=mutation):
+                        with zipfile.ZipFile(target, "w") as archive:
+                            for entry, content in entries:
+                                if entry.filename == license_path:
+                                    if mutation == "missing":
+                                        continue
+                                    if mutation == "changed":
+                                        content = modified
+                                archive.writestr(entry, content)
+                            if mutation == "extra":
+                                entry = zipfile.ZipInfo(notice_root + "EXTRA-NOTICE")
+                                entry.create_system = 3
+                                entry.external_attr = (stat.S_IFREG | 0o644) << 16
+                                archive.writestr(entry, b"Added notice")
+                        candidate_manifest = dict(verified, packages={**verified["packages"], filename: sha256(target)})
+                        manifest_path.write_text(json.dumps(candidate_manifest))
+                        self.assertEqual(verify_packages(packages, candidate), candidate_manifest)
+                        with self.assertRaisesRegex(ValueError, "bundle-refused"):
+                            verify_packages(packages, candidate, oracle_root=retained, repo=root)
+                target.write_bytes(original_zip)
+                manifest_path.write_text(json.dumps(verified))
             # A self-consistent manifest cannot authorize a different embedded identity.
             target = packages / "manager-browser.zip"
             with zipfile.ZipFile(target, "w") as archive:

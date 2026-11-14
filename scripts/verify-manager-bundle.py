@@ -18,6 +18,9 @@ ORACLE_REQUIRED_FROM = (1, 0, 0)
 ORACLE_PATH = "resources/host/buddy-oracle"
 ORACLE_PIN = ORACLE_PATH + "-source.json"
 ORACLE_PROVENANCE = ORACLE_PATH + "/provenance.json"
+ORACLE_NOTICES = "resources/host/third-party/buddy-oracle"
+MAX_NOTICE = 16 * 1024 * 1024
+MAX_NOTICES = 32 * 1024 * 1024
 ORACLE_PLATFORMS = {
     "manager-win32-x64.zip": ("reader-buddy.exe", "x86_64-pc-windows-msvc", 0o644),
     "manager-linux-x64.zip": ("reader-buddy", "x86_64-unknown-linux-gnu", 0o755),
@@ -64,6 +67,31 @@ def bounded_read(path, limit):
     if identity(before) != identity(path.lstat()):
         refuse()
     return data
+
+
+def stream_digest(source, size):
+    digest = hashlib.sha256()
+    count = 0
+    while data := source.read(64 * 1024):
+        count += len(data)
+        if count > size:
+            refuse()
+        digest.update(data)
+    if count != size:
+        refuse()
+    return digest.hexdigest()
+
+
+def file_receipt(path, limit):
+    before = regular(path, limit)
+    with path.open("rb") as source:
+        handle = opened(before, source)
+        digest = stream_digest(source, before.st_size)
+        if identity(handle) != identity(os.fstat(source.fileno())):
+            refuse()
+    if identity(before) != identity(path.lstat()):
+        refuse()
+    return {"bytes": before.st_size, "sha256": digest}
 
 
 def pairs(items):
@@ -140,7 +168,44 @@ def oracle_members(names, windows):
     return subtree
 
 
-def observe_oracle(archive, names, package, expected_source, provenance_digest):
+def verify_member(archive, name, size, digest, mode, limit):
+    entry = archive.getinfo(name)
+    if (type(size) is not int or not 0 < size <= limit or not hexadecimal(digest, 64)
+            or entry.file_size != size or not 0 < entry.compress_size <= MAX_PACKAGE
+            or entry.external_attr >> 16 != (stat.S_IFREG | mode)
+            or (entry.compress_type == zipfile.ZIP_STORED and entry.compress_size != size)):
+        refuse()
+    # ZipFile checks the member CRC at EOF.
+    with archive.open(entry) as member:
+        if stream_digest(member, size) != digest:
+            refuse()
+
+
+def observe_notices(archive, names, expected, windows):
+    root = ORACLE_NOTICES.split("/")
+    members = set()
+    for name in names:
+        parts = name.split("/")
+        key = [part.rstrip(" .").upper().casefold() for part in parts] if windows else parts
+        if key == root[:len(key)]:
+            refuse()
+        if key[:len(root)] == root:
+            members.add(name)
+        if windows and key[:2] == root[:2] and len(key) >= 3:
+            if short_name(key[2], "th") or (
+                    len(key) >= 4 and key[:3] == root[:3] and short_name(key[3], "bu")):
+                refuse()
+    if members != set(expected):
+        refuse()
+    remaining = MAX_NOTICES
+    for name, receipt in expected.items():
+        exact(receipt, ("bytes", "sha256"))
+        size = receipt["bytes"]
+        verify_member(archive, name, size, receipt["sha256"], 0o644, min(MAX_NOTICE, remaining))
+        remaining -= size
+
+
+def observe_oracle(archive, names, package, expected_source, provenance_digest, expected_notices):
     subtree = oracle_members(names, package != "manager-linux-x64.zip")
     platform = ORACLE_PLATFORMS.get(package)
     if not subtree:
@@ -169,24 +234,11 @@ def observe_oracle(archive, names, package, expected_source, provenance_digest):
         refuse()
     executable = provenance["executable"]
     exact(executable, ("name", "bytes", "sha256"))
-    entry = archive.getinfo(executable_path)
-    size = executable["bytes"]
-    if (executable["name"] != filename or type(size) is not int or not 0 < size <= MAX_PACKAGE
-            or not hexadecimal(executable["sha256"], 64) or entry.file_size != size
-            or not 0 < entry.compress_size <= MAX_PACKAGE or entry.external_attr >> 16 != (stat.S_IFREG | mode)
-            or (entry.compress_type == zipfile.ZIP_STORED and entry.compress_size != size)):
+    if executable["name"] != filename:
         refuse()
-    digest = hashlib.sha256()
-    count = 0
-    # ZipFile checks the member CRC at EOF. Bound individual reads and count exactly.
-    with archive.open(entry) as member:
-        while data := member.read(64 * 1024):
-            count += len(data)
-            if count > size:
-                refuse()
-            digest.update(data)
-    if count != size or digest.hexdigest() != executable["sha256"]:
-        refuse()
+    verify_member(archive, executable_path, executable["bytes"], executable["sha256"], mode, MAX_PACKAGE)
+    if expected_notices is not None:
+        observe_notices(archive, names, expected_notices, package == "manager-win32-x64.zip")
     return pin
 
 
@@ -208,20 +260,13 @@ def qualified_producer():
     return modules["artifacts.py"]
 
 
-def observe_zip(path, expected, expected_digest, expected_source, provenance_digest):
+def observe_zip(path, expected, expected_digest, expected_source, provenance_digest, expected_notices):
     before = regular(path, MAX_PACKAGE)
     with path.open("rb") as source:
         handle = opened(before, source)
         if before.st_size < 68:
             refuse()
-        digest = hashlib.sha256()
-        count = 0
-        while data := source.read(64 * 1024):
-            count += len(data)
-            if count > before.st_size or count > MAX_PACKAGE:
-                refuse()
-            digest.update(data)
-        if count != before.st_size or digest.hexdigest() != expected_digest:
+        if stream_digest(source, before.st_size) != expected_digest:
             refuse()
         source.seek(-22, os.SEEK_END)
         end = struct.unpack("<4s4H2LH", source.read(22))
@@ -270,7 +315,7 @@ def observe_zip(path, expected, expected_digest, expected_source, provenance_dig
             exact(value, ("version", "sha", "tag", "official"))
             if value != expected or value["official"] is not True:
                 refuse()
-            pin = observe_oracle(archive, names, path.name, expected_source, provenance_digest)
+            pin = observe_oracle(archive, names, path.name, expected_source, provenance_digest, expected_notices)
         if identity(handle) != identity(os.fstat(source.fileno())):
             refuse()
     if identity(before) != identity(path.lstat()):
@@ -278,7 +323,8 @@ def observe_zip(path, expected, expected_digest, expected_source, provenance_dig
     return pin
 
 
-def inspect_bundle(directory, tag, sha, *, expected_source=None, retained_provenance_sha256=None):
+def inspect_bundle(directory, tag, sha, *, expected_source=None, retained_provenance_sha256=None,
+                   retained_notices=None):
     """Observe candidate ZIPs; optional expectations belong to trusted shipping CI."""
     if (len(tag) > 64 or not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag)
             or not hexadecimal(sha, 40)):
@@ -289,6 +335,10 @@ def inspect_bundle(directory, tag, sha, *, expected_source=None, retained_proven
     if retained_provenance_sha256 is not None:
         exact(retained_provenance_sha256, ORACLE_PLATFORMS)
         if not all(hexadecimal(digest, 64) for digest in retained_provenance_sha256.values()):
+            refuse()
+    if retained_notices is not None:
+        exact(retained_notices, ORACLE_PLATFORMS)
+        if not all(isinstance(notices, dict) and notices for notices in retained_notices.values()):
             refuse()
     root = Path(directory)
     if not root.is_absolute() or root.resolve() != root or root.is_symlink() or not root.is_dir():
@@ -310,10 +360,12 @@ def inspect_bundle(directory, tag, sha, *, expected_source=None, retained_proven
     pins = []
     for name in PACKAGES:
         retained_digest = retained_provenance_sha256.get(name) if retained_provenance_sha256 is not None else None
-        pin = observe_zip(root / name, expected, provenance["packages"][name], expected_source, retained_digest)
+        notices = retained_notices.get(name) if retained_notices is not None else None
+        pin = observe_zip(root / name, expected, provenance["packages"][name], expected_source, retained_digest, notices)
         if name in ORACLE_PLATFORMS:
             pins.append(pin)
-    required = version >= ORACLE_REQUIRED_FROM or expected_source is not None or retained_provenance_sha256 is not None
+    required = (version >= ORACLE_REQUIRED_FROM or expected_source is not None
+                or retained_provenance_sha256 is not None or retained_notices is not None)
     if pins[0] != pins[1] or (required and pins[0] is None):
         refuse()
     # Reuse the unchanged pure identity validator. Do not call the producer's

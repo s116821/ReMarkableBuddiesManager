@@ -20,24 +20,45 @@ def observer():
     # Trusted checkout code, shared with runtime quarantine; never package code.
     return runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts/verify-manager-bundle.py"))
 
+def notice_expectations(directory, core):
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError("Missing or oversized retained oracle notices")
+    receipts = {}
+    remaining = core["MAX_NOTICES"]
+    for count, path in enumerate(directory.rglob("*"), 1):
+        if count > 4096:
+            raise ValueError("Missing or oversized retained oracle notices")
+        if path.is_symlink():
+            raise ValueError("Retained notices must not contain links")
+        if path.is_dir():
+            continue
+        receipt = core["file_receipt"](path, min(core["MAX_NOTICE"], remaining))
+        name = core["ORACLE_NOTICES"] + "/" + path.relative_to(directory).as_posix()
+        receipts[name] = receipt
+        remaining -= receipt["bytes"]
+    if not receipts:
+        raise ValueError("Missing or oversized retained oracle notices")
+    return receipts
+
 def oracle_expectations(repo, oracle_root):
     core = observer()
     pin = core["decode"](core["bounded_read"](repo / "host/buddy-oracle-source.json", 16 * 1024), 16 * 1024)
     core["verify_source"](pin)
     digests = {}
+    notices = {}
     for name, (_, target, _) in core["ORACLE_PLATFORMS"].items():
         raw = core["bounded_read"](oracle_root / target / "buddy-oracle/provenance.json", 16 * 1024)
         digests[name] = hashlib.sha256(raw).hexdigest()
-    return dict(expected_source=pin, retained_provenance_sha256=digests)
+        notices[name] = notice_expectations(oracle_root / target / "notices", core)
+    return dict(expected_source=pin, retained_provenance_sha256=digests, retained_notices=notices)
 
 def verify_packages(directory, release, *, oracle_root=None, repo=None):
     repo = Path(repo) if repo is not None else Path(__file__).resolve().parents[2]
     expected = oracle_expectations(repo, Path(oracle_root)) if oracle_root is not None else {}
     return observer()["inspect_bundle"](directory.resolve(), release.tag, release.sha, **expected)
 
-def oracle_input_copies(repo, oracle_root):
+def oracle_input_copies(repo, oracle_root, expected_source):
     """Preflight both original Build inputs before mutating either package."""
-    expected = oracle_expectations(repo, oracle_root)
     core = observer()
     copies = []
     for name, (filename, target, _) in core["ORACLE_PLATFORMS"].items():
@@ -47,30 +68,14 @@ def oracle_input_copies(repo, oracle_root):
             if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
                 raise ValueError("Oracle destination parent is not a package directory")
         packaged_pin = core["decode"](core["bounded_read"](host / "buddy-oracle-source.json", 16 * 1024), 16 * 1024)
-        if packaged_pin != expected["expected_source"]:
+        if packaged_pin != expected_source:
             raise ValueError("Packaged oracle source differs from candidate checkout")
         source = oracle_root / target / "buddy-oracle"
         if source.is_symlink() or {file.name for file in source.iterdir()} != {filename, "provenance.json"}:
             raise ValueError("Unexpected retained oracle resource inventory")
         for file in source.iterdir():
             core["regular"](file, core["MAX_PACKAGE"] if file.name == filename else 16 * 1024)
-        # Notices are produced by the reviewed workflow and maintained generator.
-        # This validates transport shape, not a new license-expression engine.
         notices = oracle_root / target / "notices"
-        members = list(notices.rglob("*"))
-        if notices.is_symlink() or not notices.is_dir() or not 0 < len(members) <= 4096:
-            raise ValueError("Missing or oversized retained oracle notices")
-        total = 0
-        files = 0
-        for file in members:
-            if file.is_symlink():
-                raise ValueError("Retained notices must not contain links")
-            if file.is_dir():
-                continue
-            total += core["regular"](file, 16 * 1024 * 1024).st_size
-            files += 1
-        if not files or total > 32 * 1024 * 1024:
-            raise ValueError("Missing or oversized retained oracle notices")
         for original, destination in ((source, host / "buddy-oracle"), (notices, host / "third-party/buddy-oracle")):
             if destination.exists() or destination.is_symlink():
                 raise ValueError("Oracle destination already exists; use fresh build staging")
@@ -93,7 +98,12 @@ def archive_package(source, destination, *, linux=False):
 
 def assemble(repo, release, directory, *, oracle_root=None):
     source_identity(repo, release)
-    copies = oracle_input_copies(repo, Path(oracle_root)) if oracle_root is not None else []
+    expected = {}
+    copies = []
+    if oracle_root is not None:
+        oracle_root = Path(oracle_root)
+        expected = oracle_expectations(repo, oracle_root)
+        copies = oracle_input_copies(repo, oracle_root, expected["expected_source"])
     directory.mkdir(parents=True, exist_ok=False)
     for original, destination in copies:
         # An interrupted copy is unpublished; never overwrite it on retry.
@@ -108,7 +118,7 @@ def assemble(repo, release, directory, *, oracle_root=None):
     manifest = dict(tag=release.tag, sha=release.sha, version=release.tag[1:],
                     packages={name: sha256(directory / name) for name in NAMES})
     (directory / "provenance.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    verify_packages(directory, release, oracle_root=oracle_root, repo=repo)
+    observer()["inspect_bundle"](directory.resolve(), release.tag, release.sha, **expected)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
