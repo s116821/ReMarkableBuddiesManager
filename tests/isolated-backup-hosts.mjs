@@ -100,7 +100,12 @@ async function verify(page, control) {
   await expect(list).toContainText('Newest in this scan');
   await page.getByRole('button', {name: 'Select revision', exact: true}).click();
   await expect(selection).toContainText(digest);
-  await expect(selection).toContainText('Package and media verification require a download');
+  const download = page.getByRole('button', {name: 'Download and verify', exact: true});
+  await download.click();
+  await expect(status).toContainText('Backup download is unavailable on this Manager host');
+  await expect(selection).toContainText(digest);
+  await expect(download).toHaveCount(0);
+  await expect(page.getByTestId('cloud-backup-verification')).toHaveCount(0);
   assert.doesNotMatch(await list.textContent(), /PrivateRoot|PrivateRevision|authorizationId|appProperties/);
 
   await page.getByRole('button', {name: 'Check connection', exact: true}).click();
