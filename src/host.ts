@@ -1,4 +1,6 @@
 import type {SharedPreferenceAdapter} from './shared-preferences';
+import {ISOLATED_BACKUP_RESPONSE_BYTES, parseIsolatedBackupJson, parseIsolatedBackupRequest, parseIsolatedBackupResult,
+  type IsolatedBackupRequest, type IsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
 import {FRAME_LIMIT, type SharedPreferenceRequest, type SharedPreferenceResult} from '../host/shared-preferences-protocol.mjs';
 import {portableJson} from '../host/portable-configuration-protocol.mjs';
 import type {PortableAdapter} from './portable-configuration';
@@ -66,6 +68,7 @@ const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restor
 
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly isolatedRoot?:(request:IsolatedRootRequest)=>Promise<IsolatedRootResult>;
+  readonly isolatedBackup?:(request:IsolatedBackupRequest)=>Promise<IsolatedBackupResult>;
   readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
   readonly sharedPreferences?: SharedPreferenceAdapter;
   readonly portableConfiguration?:PortableAdapter['portableConfiguration'];
@@ -276,6 +279,29 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Model settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelSettingsResult;
+    },
+    isolatedBackup: async (input:IsolatedBackupRequest) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('Backup inspection helper unavailable');
+      const request = parseIsolatedBackupRequest(input);
+      const response = await fetch('/manager-isolated-backup', {method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request), signal: AbortSignal.timeout(14000)});
+      if (!response.ok || !response.body) throw Error('Backup inspection helper unavailable');
+      const reader = response.body.getReader(), chunks:Uint8Array[] = []; let bytes = 0, complete = false;
+      try {
+        for (;;) {
+          const part = await reader.read();
+          if (part.done) { complete = true; break; }
+          bytes += part.value.byteLength;
+          if (bytes > ISOLATED_BACKUP_RESPONSE_BYTES) throw Error('Backup inspection response refused');
+          chunks.push(part.value);
+        }
+      } finally {
+        if (!complete) await reader.cancel().catch(() => {});
+        reader.releaseLock();
+      }
+      const raw = new Uint8Array(bytes); let offset = 0;
+      for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
+      return parseIsolatedBackupResult(parseIsolatedBackupJson(raw, ISOLATED_BACKUP_RESPONSE_BYTES), request);
     },
     isolatedRoot: async (request:IsolatedRootRequest) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Isolated backup helper unavailable');

@@ -87,6 +87,10 @@ app.whenReady().then(async () => {
   isolatedRoot=new IsolatedRootHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
+  const {IsolatedBackupHost} = await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-host.mjs')).href);
+  const {ISOLATED_BACKUP_REQUEST_BYTES, parseIsolatedBackupRequest, parseIsolatedBackupResult} =
+    await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-protocol.mjs')).href);
+  const isolatedBackup = new IsolatedBackupHost({driveAuth});
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
   const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -197,6 +201,12 @@ app.whenReady().then(async () => {
     let request=parseModelSettingsRequest(args[0]);args.length=0;
     try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
   });
+  ipcMain.handle('manager:isolated-backup', (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw Error('Backup inspection caller refused');
+    const request = parseIsolatedBackupRequest(args[0]);
+    if (Buffer.byteLength(JSON.stringify(request)) > ISOLATED_BACKUP_REQUEST_BYTES) throw Error('Backup inspection input refused');
+    return parseIsolatedBackupResult(isolatedBackup.request(request), request);
+  });
   ipcMain.handle('manager:isolatedRoot',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Isolated backup caller refused');
     const request=parseIsolatedRootRequest(args[0]);const value=parseIsolatedRootResult(await isolatedRoot.request(request),request,validateResult);return isolatedRoot.assertCurrent(value);
@@ -254,7 +264,7 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  window.on('closed', () => { sharedPreferences.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); isolatedRoot.dispose(); isolatedBackup.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

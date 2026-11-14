@@ -142,6 +142,11 @@ export class IsolatedBackupHost {
     return this.#session.reader.readSelection(reference);
   }
 
+  // A new browser document drops the old view without replacing the auth owner.
+  invalidate() {
+    this.#clear();
+  }
+
   dispose() {
     this.#disposed = true;
     this.#clear();
