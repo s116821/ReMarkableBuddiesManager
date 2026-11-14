@@ -25,14 +25,16 @@ def main():
         root_identity = checked_root(root)
         require(root_identity is not None)
         check(root, root_identity, expected)
-        print('ok', flush=True)
+        sys.stdout.buffer.write(b'ok\n')
+        sys.stdout.buffer.flush()
         while True:
             request = sys.stdin.buffer.readline(7)
             if not request:
                 return
             require(request == b'check\n')
             check(root, root_identity, expected)
-            print('ok', flush=True)
+            sys.stdout.buffer.write(b'ok\n')
+            sys.stdout.buffer.flush()
     except Exception:
         # The caller can distinguish a valid check from refusal or lost
         # transport without any path, digest, record or exception detail.

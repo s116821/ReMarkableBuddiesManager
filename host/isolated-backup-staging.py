@@ -64,10 +64,10 @@ def lexical_root(value):
     require(root.is_absolute() and len(root.parts) >= 3 and str(root) == value
             and '..' not in root.parts)
     if sys.platform == 'win32':
-        import win32api
+        import win32file
         drive_fixed = 3
         require(not root.drive.startswith('\\') and ':' not in str(root)[2:]
-                and win32api.GetDriveType(root.anchor) == drive_fixed)
+                and win32file.GetDriveType(root.anchor) == drive_fixed)
     return root
 
 
