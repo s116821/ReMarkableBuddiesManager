@@ -35,7 +35,12 @@
     "msiSha256": "54448641eef058318b540188245a62982f97ccc462c0c1c1cf3c6d771e26f214",
     "sdkFamilySource": "https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads-archive",
     "redist": "https://learn.microsoft.com/en-us/legal/windows-sdk/redist",
-    "noticeAttribution": "The publisher identifies SDK 10.0.10240 by setup version 10.0.26624 and includes that SDK family in its UCRT static-library redistribution list. The exact MSI has no notice/EULA file. The raw historical accompanying license/notice identity is still unresolved; the Win11 SDK and BuildTools texts below are not asserted to replace it."
+    "noticeAttribution": "The publisher identifies SDK 10.0.10240 by setup version 10.0.26624 and includes that SDK family in its UCRT static-library redistribution list. The UCRT MSI has no notice/EULA file. The original SDK archive's setup layout supplies EULA MSI 10.0.26624; its read-only File/Media tables map the two historical RTF members below to the matching cabinet. Retain these original files separately from the Win11 SDK and BuildTools notices.",
+    "originalSdkInstallerLink": "https://go.microsoft.com/fwlink/p/?LinkId=619296",
+    "licenseMsi": "https://download.microsoft.com/download/E/1/F/E1F1E61E-F3C6-4420-A916-FB7C47FBC89E/standalonesdk/Installers/Windows%20SDK%20EULA-x86_en-us.msi",
+    "licenseMsiBytes": 282624,
+    "licenseMsiSha256": "353c372ac5763c696bdbc562c2c7ca39f978f29cb9ca078c01f768c71bb42e07",
+    "licenseMsiVersion": "10.0.26624"
   },
   "buildTools": {
     "product": "Microsoft.VisualStudio.Product.BuildTools",
@@ -64,6 +69,27 @@
           "name": "WINDOWS-SDK-THIRD-PARTY-NOTICES.rtf",
           "bytes": 22279,
           "sha256": "ebb6640a8246b39b70322c5cec9aad7a71e86ea7b86c9c604d3a7f3ff1b30e89"
+        }
+      ]
+    },
+    {
+      "file": "windows-ucrt-sdk-10240-notices.cab",
+      "format": "cab",
+      "url": "https://download.microsoft.com/download/E/1/F/E1F1E61E-F3C6-4420-A916-FB7C47FBC89E/standalonesdk/Installers/598442d9f84639d200d4f3af477da95c.cab",
+      "bytes": 50709,
+      "sha256": "b73bcc39ac581f842680f912c0ca683135ec2d7cc5e4c278b083ed03ed02959c",
+      "notices": [
+        {
+          "member": "fil68b9d27f2a09ae761a747880ac1d9f7a",
+          "name": "WINDOWS-UCRT-SDK-10240-LICENSE.rtf",
+          "bytes": 249756,
+          "sha256": "f38b92a9d35f75aaa4ead18440dc5f92e65a21fa6191272b0d4606b6126d3c1d"
+        },
+        {
+          "member": "fil360c77109f163cd51b39442238fb451a",
+          "name": "WINDOWS-UCRT-SDK-10240-THIRD-PARTY-NOTICES.rtf",
+          "bytes": 7213,
+          "sha256": "1fbf154e43fd3efacd637f7e8cab7150175b54c4cd9db6d346c21eee9b0fd301"
         }
       ]
     },
