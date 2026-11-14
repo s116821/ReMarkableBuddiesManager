@@ -1,0 +1,100 @@
+{
+  "description": "Original Microsoft notice inputs for the pinned Windows SDK/CRT build. Preserve raw member bytes; never concatenate RTF or DOCX into text. Package versions are observed inputs to recheck on an SDK update, not the public installed SDK directory name.",
+  "selectedPackages": [
+    {
+      "id": "Microsoft.VC.14.44.17.14.CRT.Headers.base",
+      "version": "14.44.35220"
+    },
+    {
+      "id": "Microsoft.VC.14.44.17.14.CRT.x64.Desktop.base",
+      "version": "14.44.35226"
+    },
+    {
+      "id": "Microsoft.VC.14.44.17.14.CRT.x64.Store.base",
+      "version": "14.44.35226"
+    },
+    {
+      "id": "Win11SDK_10.0.26100",
+      "version": "10.0.26100.18"
+    },
+    {
+      "id": "Microsoft.Windows.UniversalCRT.HeadersLibsSources.Msi",
+      "version": "10.0.26624.1"
+    }
+  ],
+  "sdkMapping": {
+    "installer": "Windows SDK EULA-x86_en-us.msi",
+    "sha256": "1adeb647e19d3e3bc72ffaa99726c574858eda0d0868f727975d2f813d234f05",
+    "method": "Read-only MSI File and Media tables map the two raw RTF members to this cabinet.",
+    "redist": "https://learn.microsoft.com/en-us/legal/windows-sdk/redist"
+  },
+  "universalCrt": {
+    "package": "Microsoft.Windows.UniversalCRT.HeadersLibsSources.Msi",
+    "version": "10.0.26624.1",
+    "providerKey": "Microsoft.Windows.UniversalCRTHeadersLibrariesandSources.x86.10.10240",
+    "msiSha256": "54448641eef058318b540188245a62982f97ccc462c0c1c1cf3c6d771e26f214",
+    "sdkFamilySource": "https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads-archive",
+    "redist": "https://learn.microsoft.com/en-us/legal/windows-sdk/redist",
+    "noticeAttribution": "The publisher identifies SDK 10.0.10240 by setup version 10.0.26624 and includes that SDK family in its UCRT static-library redistribution list. The exact MSI has no notice/EULA file. The raw historical accompanying license/notice identity is still unresolved; the Win11 SDK and BuildTools texts below are not asserted to replace it."
+  },
+  "buildTools": {
+    "product": "Microsoft.VisualStudio.Product.BuildTools",
+    "version": "17.14.37906.3",
+    "resources": "Microsoft.VisualStudio.BuildTools.Resources",
+    "resourcesVersion": "17.14.36015.10",
+    "terms": "https://visualstudio.microsoft.com/license-terms/vs2022-ga-diagnosticbuildtools/",
+    "redist": "https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution"
+  },
+  "inputs": [
+    {
+      "file": "windows-sdk-notices.cab",
+      "format": "cab",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/8d9439fc-b60d-44e9-88b6-bae33b111f88/Win11Sdk/Sept2026Servicing26100/WindowsSDK261009457/Installers/598442d9f84639d200d4f3af477da95c.cab",
+      "bytes": 59388,
+      "sha256": "54730c3758781d2ccf5762ed4a7f3d15254a67675aa93b4a50631c164eccfbc4",
+      "notices": [
+        {
+          "member": "fil68b9d27f2a09ae761a747880ac1d9f7a",
+          "name": "WINDOWS-SDK-LICENSE.rtf",
+          "bytes": 248573,
+          "sha256": "0f4a26ac9dc50066f8a1bfeaaf3f092d1b9e4791df5487b9f3c31e7c3dc4d7f5"
+        },
+        {
+          "member": "fil360c77109f163cd51b39442238fb451a",
+          "name": "WINDOWS-SDK-THIRD-PARTY-NOTICES.rtf",
+          "bytes": 22279,
+          "sha256": "ebb6640a8246b39b70322c5cec9aad7a71e86ea7b86c9c604d3a7f3ff1b30e89"
+        }
+      ]
+    },
+    {
+      "file": "buildtools-notices.vsix",
+      "format": "zip",
+      "url": "https://download.visualstudio.microsoft.com/download/pr/58af20f6-56e8-48a0-86d3-115fb110097b/2df53059c217817a6babce6be4fbe102ec67c5f9ad9d77e776b8963d7a05ce0e/payload.vsix",
+      "bytes": 736229,
+      "sha256": "2df53059c217817a6babce6be4fbe102ec67c5f9ad9d77e776b8963d7a05ce0e",
+      "notices": [
+        {
+          "member": "Contents/Licenses/BuildTools/1033/ThirdPartyNotices.txt",
+          "name": "WINDOWS-BUILDTOOLS-THIRD-PARTY-NOTICES.txt",
+          "bytes": 7043986,
+          "sha256": "782815bd1256f9ad798211eee4b0e574ddd113bd07700c6921ab25c591fbcda7"
+        }
+      ]
+    },
+    {
+      "file": "buildtools-terms.docx",
+      "format": "raw",
+      "url": "https://visualstudio.microsoft.com/wp-content/uploads/2024/03/Visual-Studio-2022-Diagnostic-Build-Tools-Agent-License_Update-March-2024_EN.docx",
+      "bytes": 34395,
+      "sha256": "2f66b86a00e8d9833789897ce23d05a4a2dbea370cf39c8c1098dbc17d0e7bdc",
+      "notices": [
+        {
+          "name": "WINDOWS-BUILDTOOLS-TERMS.docx",
+          "bytes": 34395,
+          "sha256": "2f66b86a00e8d9833789897ce23d05a4a2dbea370cf39c8c1098dbc17d0e7bdc"
+        }
+      ]
+    }
+  ]
+}

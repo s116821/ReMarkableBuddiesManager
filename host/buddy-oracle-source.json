@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "repository": "s116821/ReMarkableBuddies",
-  "sourceSha": "4192914db255ce9e0c61ed0a0de48b7d9c838302",
-  "sourceTree": "7a893016a7c92ac26bec69b57102433af2e519d5",
+  "sourceSha": "95b75443629ea455f9b92af7ce48dc0902a42994",
+  "sourceTree": "16e5a83296ceb70d0a3867098a149e04af03eae9",
   "cargoLockSha256": "dd6ddeeb756da0a93c8e3d7020d2f7e92ba68026a1492d2312da1ad94b2472d1",
   "sdkRevision": "a0c6480be6785480c2e0da76a3c06697a18efae4"
 }

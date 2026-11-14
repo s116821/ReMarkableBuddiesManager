@@ -56,7 +56,9 @@ test('four stages preserve platform coverage and block dependent jobs on failure
   assert.equal(ci.jobs.checks['runs-on'], 'ubuntu-latest');
   if (manager) {
     assert.deepEqual(pipeline.jobs.integration.strategy.matrix.os, ['ubuntu-latest','windows-latest']);
-    assert.equal(pipeline.jobs.build['runs-on'], 'ubuntu-latest');
+    assert.equal(pipeline.jobs.build['runs-on'], 'ubuntu-22.04');
+    assert.equal(pipeline.jobs.integration['runs-on'], expr("matrix.os == 'ubuntu-latest' && 'ubuntu-22.04' || matrix.os"));
+    assert.equal(pipeline.jobs.integration.name, 'Integration (' + expr('matrix.os') + ')');
   } else {
     assert.equal(pipeline.jobs.integration.strategy, undefined);
   }
@@ -188,8 +190,9 @@ test('only release may publish and it consumes the exact build artifacts without
   assert.ok(freeze >= 0 && compile > freeze);
   assert.match(build.steps[freeze].run, /version --print-tag/);
   assert.ok(!build.steps.some(s => /--push|PATCH |POST /.test(s.run ?? '')));
-  assert.ok(!integration.steps.some(s => /cicd\/release\/build.py build|cargo build|npm run build/.test(s.run ?? '') &&
-    !isOracleQualificationBuild(s)));
+  assert.ok(!integration.steps.some(s => /cicd\/release\/build.py build|cargo (?:build|test)|npm run build/.test(s.run ?? '')));
+  assert.ok(!integration.steps.some(s => /rust-toolchain|cargo-xwin/.test(s.uses ?? '') ||
+    s.with?.repository === 's116821/ReMarkableBuddies'));
   for (const job of [integration, release]) {
     const downloads = job.steps.filter(s => s.uses?.startsWith('actions/download-artifact'));
     assert.ok(downloads.some(s => s.with['artifact-ids'] === expr('needs.build.outputs.artifact_id')));
@@ -232,9 +235,6 @@ if (manager) test('Windows integration stops at each failed native command', () 
 
 function repeatsCommonChecks(jobName, step) {
   const common = /cargo (?:fmt|clippy|test)|npm (?:run lint|test|run test:release|audit)|unittest discover|node --test cicd\/release\/fixtures\/workflow/;
-  if (jobName === 'integration' && step.name === 'Exercise the retained command through the normal archive tests' &&
-      step.if === expr('!inputs.release') && step['working-directory'] === 'buddy-oracle-source' &&
-      step.run === 'cargo test --locked --release --target "$ORACLE_TARGET" --test archive_cli -- --nocapture') return false;
   const selectedWindowsControls = new Set([
     'python -m unittest discover -s tests/wired -p test_windows.py -k WindowsNative -v',
     'python -m unittest discover -s tests/drive -p test_store.py -k test_actual_broad_ntfs_grant_refuses -v',
@@ -245,56 +245,227 @@ function repeatsCommonChecks(jobName, step) {
   return (step.run ?? '').split('\n').some(line => common.test(line) && !selectedWindowsControls.has(line.trim()));
 }
 
-function isOracleQualificationBuild(step) {
-  return step.name === 'Admit source and build the ordinary host command' &&
-    step.if === expr('!inputs.release') && step['working-directory'] === 'buddy-oracle-source' &&
-    step.run.trim().endsWith('cargo build --locked --release --target "$ORACLE_TARGET" --bin reader-buddy') &&
-    !/npm run build|cicd\/release\/build.py build/.test(step.run);
-}
-
-test('offline oracle qualification stays within native integration and retains exact executable custody', () => {
-  const pipeline = workflow('pipeline'), integration = pipeline.jobs.integration;
-  assert.deepEqual(Object.keys(pipeline.jobs), ['build', 'integration', 'release']);
-  for (const value of Object.values(integration.env)) assert.doesNotMatch(String(value), /\brunner\./);
-  const configure = integration.steps.find(s => s.name === 'Configure native host qualification paths');
-  assert.equal(configure.if, expr('!inputs.release'));
-  for (const key of ['CARGO_TARGET_DIR', 'ORACLE_TARGET', 'ORACLE_FILENAME', 'RUNNER_TEMP', 'RUNNER_OS', 'GITHUB_ENV'])
-    assert.ok(configure.run.includes(key));
-  const build = integration.steps.find(isOracleQualificationBuild);
-  assert.ok(build);
-  const pin = integration.steps.find(s => s.id === 'pin');
-  const checkout = integration.steps.find(s => s.with?.repository === 's116821/ReMarkableBuddies');
-  assert.ok(integration.steps.indexOf(configure) < integration.steps.indexOf(pin));
-  assert.equal(checkout.with.ref, expr('steps.pin.outputs.source_sha'));
-  assert.equal(checkout.with['persist-credentials'], false);
+test('Build retains ordinary commands before compiling target-specific test harnesses', () => {
+  const pipeline = workflow('pipeline'), build = pipeline.jobs.build;
+  const admission = build.steps.find(s => s.id === 'oracle_pin');
+  const checkout = build.steps.find(s => s.with?.repository === 's116821/ReMarkableBuddies');
+  assert.ok(admission && checkout);
+  assert.match(admission.run, /check-ignore/);
+  assert.match(admission.run, /Missing reviewed notice input/);
+  assert.equal(checkout.with.path, 'out/buddy-oracle-source');
+  assert.equal(checkout.with.ref, expr('steps.oracle_pin.outputs.source_sha'));
   assert.equal(checkout.with['fetch-depth'], 0);
-  const retained = integration.steps.find(s => s.name === 'Retain the exact ordinary executable and its provenance');
-  const tests = integration.steps.find(s => s.name === 'Exercise the retained command through the normal archive tests');
+  assert.equal(checkout.with['persist-credentials'], false);
+  const rust = build.steps.find(s => s.uses?.startsWith('dtolnay/rust-toolchain@'));
+  assert.equal(String(rust.with.toolchain), '1.98.1');
+  assert.equal(rust.with.targets, 'x86_64-unknown-linux-gnu,x86_64-pc-windows-msvc');
+  const install = build.steps.find(s => s.uses?.startsWith('taiki-e/install-action@'));
+  assert.equal(install.uses, 'taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39');
+  assert.equal(install.with.tool, 'cargo-xwin@0.23.1,cargo-about@0.9.3,cargo-binstall@1.26.2');
+  assert.equal(install.with.fallback, 'none');
+  assert.equal(install.with.checksum, true);
+  const llvm = build.steps.find(s => s.uses?.startsWith('KyleMayes/install-llvm-action@'));
+  assert.equal(llvm.uses, 'KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0');
+  assert.equal(llvm.with.version, '22.1.8');
+  assert.match(llvm.with['force-url'], /llvmorg-22\.1\.8\/LLVM-22\.1\.8-Linux-X64\.tar\.xz$/);
+  const compile = build.steps.find(s => s.name === 'Build and retain both ordinary host commands before their test harnesses');
+  const pack = build.steps.find(s => s.name === 'Assemble fixed release inventory');
+  assert.ok(build.steps.indexOf(checkout) < build.steps.indexOf(compile));
+  assert.ok(build.steps.indexOf(compile) < build.steps.indexOf(pack));
+  for (const field of ['sourceSha', 'sourceTree', 'cargoLockSha256', 'sdkRevision', 'READER_BUDDY_VERSION',
+    'build-script-executed', 'compiler-artifact', 'package_id', 'COPYRIGHT-library.html', 'Apache-2.0.txt', 'MIT.txt'])
+    assert.ok(compile.run.includes(field), field);
+  const copied = compile.run.indexOf('shutil.copy2(ordinary, binary)');
+  const testCompile = compile.run.indexOf("test_args = prefix + ['test'");
+  assert.ok(copied > 0 && testCompile > copied);
+  assert.match(compile.run.slice(testCompile), /'--no-run'/);
+  assert.match(compile.run, /'--bin', 'reader-buddy'/);
+  assert.match(compile.run, /'--test', 'archive_cli'/);
+  assert.match(compile.run, /CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS/);
+  assert.match(compile.run, /'target-feature=\+crt-static'/);
+  assert.match(compile.run, /'PREBUILT_NASM': '0', 'NO_ASM': '0'/);
+  assert.doesNotMatch(compile.run, /--include-local|Wine|\['.*reader-buddy.*', '--version'\]/);
+  assert.match(compile.run, /Foreign Git SDK notices missing/);
+  assert.match(compile.run, /'llvm-readobj', '--coff-imports'/);
+  assert.match(compile.run, /Unexpected dynamic Microsoft CRT dependency/);
+  assert.match(compile.run, /not policy.get\('private', \{\}\).get\('ignore', False\)/);
+  assert.match(pack.run, /--oracle-root "\$ORACLE_ROOT"/);
+  const development = build.steps.find(s => s.id === 'development');
+  assert.equal(development.with.path, 'test-results/development/browser/\ntest-results/development/host-oracle/buddy-host-tests.tar\n');
+  const tar = build.steps.find(s => s.name === 'Retain the CI-only host tests without duplicating shipping commands');
+  assert.ok(build.steps.indexOf(tar) > build.steps.indexOf(pack));
+  assert.match(tar.run, /path.name not in \('reader-buddy', 'reader-buddy.exe'\)/);
+});
+
+test('Integration and Release use original Build provenance and never rebuild the shipping command', () => {
+  const pipeline = workflow('pipeline'), integration = pipeline.jobs.integration, release = pipeline.jobs.release;
+  for (const job of [integration, release]) {
+    const download = job.steps.find(s => s.with?.['artifact-ids'] === expr('needs.build.outputs.development_artifact_id'));
+    const extract = job.steps.find(s => s.name === 'Validate and extract the original Build host test receipt');
+    const verify = job.steps.find(s => /cicd\/release\/build.py verify/.test(s.run ?? ''));
+    assert.ok(download && extract && verify);
+    assert.equal(download.with.path, 'test-results/development');
+    assert.ok(job.steps.indexOf(download) < job.steps.indexOf(extract));
+    assert.ok(job.steps.indexOf(extract) < job.steps.indexOf(verify));
+    assert.equal(extract.if, undefined);
+    assert.match(extract.run, /Unexpected CI tar membership/);
+    assert.match(extract.run, /provenance_sha256/);
+    for (const step of job.steps.filter(s => /cicd\/release\/(?:build.py verify|verify_release.py retained)/.test(s.run ?? '')))
+      assert.match(step.run, /--oracle-root "\$ORACLE_ROOT"/);
+  }
+  const bound = integration.steps.find(s => s.name === 'Bind the native retained test to the unpacked shipping oracle');
+  const tests = integration.steps.find(s => s.name === 'Exercise the retained command through the precompiled archive tests');
   const native = integration.steps.find(s => s.name === 'Verify native Windows resource locking with the retained command');
   const producer = integration.steps.find(s => s.name === 'Verify actual producer packages through the retained Manager oracle');
-  const after = integration.steps.find(s => s.name === 'Confirm qualification did not replace the retained bytes');
-  assert.ok(integration.steps.indexOf(pin) < integration.steps.indexOf(checkout));
-  assert.ok(integration.steps.indexOf(build) < integration.steps.indexOf(retained));
-  assert.ok(integration.steps.indexOf(retained) < integration.steps.indexOf(tests));
-  assert.ok(integration.steps.indexOf(tests) < integration.steps.indexOf(native));
-  assert.ok(integration.steps.indexOf(native) < integration.steps.indexOf(producer));
-  assert.ok(integration.steps.indexOf(producer) < integration.steps.indexOf(after));
-  assert.equal(native.if, expr("!inputs.release && runner.os == 'Windows'"));
+  const after = integration.steps.find(s => s.name === 'Confirm native tests preserved command, harness and original provenance bytes');
+  const zip = integration.steps.find(s => s.name === 'Confirm native qualification preserved every original ZIP');
+  for (const step of [bound, tests, producer, after, zip]) { assert.ok(step); assert.equal(step.if, undefined); }
+  for (const [left, right] of [[bound,tests],[tests,native],[native,producer],[producer,after],[after,zip]])
+    assert.ok(integration.steps.indexOf(left) < integration.steps.indexOf(right));
+  assert.equal(native.if, "runner.os == 'Windows'");
   assert.equal(native.run, "node --test --test-name-pattern '^native Windows' tests/isolated-backup-verifier.test.mjs");
   assert.equal(producer.env.MANAGER_REQUIRE_RETAINED_ORACLE, '1');
   assert.equal(producer.run, "node --test --test-name-pattern '^retained host oracle' tests/isolated-backup-retained.test.mjs");
-  for (const step of [pin, checkout, build, retained, tests, producer, after]) assert.equal(step.if, expr('!inputs.release'));
-  for (const field of ['sourceSha', 'sourceTree', 'cargoLockSha256', 'sdkRevision']) assert.ok(build.run.includes(field));
-  assert.match(retained.run, /READER_BUDDY_ARCHIVE_TEST_/);
-  assert.ok(retained.run.includes('command = os.path.realpath('));
-  assert.ok(retained.run.includes('"COMMAND": command'));
-  assert.match(after.run, /READER_BUDDY_ARCHIVE_TEST_SHA256/);
-  assert.match(after.run, /tarfile.open/);
+  for (const key of ['COMMAND', 'BYTES', 'SHA256']) assert.ok(bound.run.includes('READER_BUDDY_ARCHIVE_TEST_' + key));
+  assert.match(bound.run, /out\/packages\/ReMarkableBuddiesManager-/);
+  assert.match(bound.run, /original == manager \/ 'out\/buddy-oracle-source'/);
+  assert.match(bound.run, /source-fixtures/);
+  assert.match(bound.run, /command = os.path.realpath\(/);
+  assert.match(tests.run, /os.environ\['ORACLE_TEST_EXECUTABLE'\], '--nocapture'/);
+  assert.doesNotMatch(tests.run, /cargo|--skip|--exact/);
+  assert.match(after.run, /provenance_sha256/);
+  assert.match(zip.run, /--oracle-root "\$ORACLE_ROOT"/);
   assert.equal(repeatsCommonChecks('integration', tests), false);
-  assert.equal(repeatsCommonChecks('build', tests), true);
-  assert.equal(repeatsCommonChecks('integration', {...tests, run: tests.run + '\n cargo test --all-features'}), true);
-  assert.equal(isOracleQualificationBuild({...build, if: undefined}), false);
-  assert.equal(isOracleQualificationBuild({...build, run: build.run + '\n npm run build'}), false);
+  assert.equal(repeatsCommonChecks('integration', {...tests, run: tests.run + '\ncargo test'}), true);
+});
+
+test('Cargo JSON selection refuses foreign, duplicated, feature-unified and wrong-target artifacts', () => {
+  const build = workflow('pipeline').jobs.build.steps.find(s => s.name === 'Build and retain both ordinary host commands before their test harnesses');
+  const source = build.run.match(/^python - <<'PY'\n([\s\S]*)\nPY\s*$/)?.[1];
+  assert.ok(source);
+  const fixture = String.raw`
+import ast, copy, json, pathlib, subprocess, sys, tempfile
+from types import SimpleNamespace
+source = ast.parse(sys.stdin.read())
+functions = ast.Module(body=[n for n in source.body if isinstance(n, ast.FunctionDef) and n.name in ('cargo_messages', 'executable')], type_ignores=[])
+with tempfile.TemporaryDirectory() as temporary:
+    target_dir = pathlib.Path(temporary) / 'target'
+    target = 'x86_64-unknown-linux-gnu'
+    ordinary = target_dir / target / 'release/reader-buddy'
+    ordinary.parent.mkdir(parents=True)
+    ordinary.write_text('synthetic source fixture; no compiler is invoked')
+    harness = ordinary.parent / 'deps/archive_cli-fixture'
+    harness.parent.mkdir()
+    harness.write_text('synthetic test fixture')
+    selected = dict(reason='compiler-artifact', package_id='root-id', target=dict(name='reader-buddy',kind=['bin']), executable=str(ordinary), features=[], profile=dict(test=False))
+    namespace = dict(json=json, Path=pathlib.Path, root_id='root-id', target_dir=target_dir, source=pathlib.Path(temporary))
+    exec(compile(functions, '<actual workflow parser>', 'exec'), namespace)
+    choose = namespace['executable']
+    assert choose([selected], 'reader-buddy', 'bin', target) == ordinary
+    test = copy.deepcopy(selected)
+    test.update(target=dict(name='archive_cli',kind=['test']), executable=str(harness), profile=dict(test=True))
+    assert choose([test], 'archive_cli', 'test', target) == harness
+    def refuse(records, name='reader-buddy', kind='bin', selected_target=target):
+        try: choose(records, name, kind, selected_target)
+        except (AssertionError, OSError): return
+        raise AssertionError('admitted invalid Cargo artifact')
+    refuse([]); refuse([selected, selected]); refuse([selected], selected_target='x86_64-pc-windows-msvc')
+    for field, value in [('package_id','foreign-id'),('features',['simulator']),('profile',dict(test=True)),('target',dict(name='other',kind=['bin']))]:
+        wrong = copy.deepcopy(selected); wrong[field] = value; refuse([wrong])
+    wrong = copy.deepcopy(test); wrong['executable'] = str(ordinary)
+    refuse([wrong], 'archive_cli', 'test')
+    # Exercise the real line parser with a fake subprocess that only writes the
+    # supplied transcript. No cargo process, toolchain or executable is run.
+    transcript = []
+    def run(arguments, **kwargs):
+        assert arguments == ['fixture-only']
+        kwargs['stdout'].write(('maintained xwin progress\n' + '\n'.join(json.dumps(r) for r in transcript) + '\n').encode())
+    namespace['subprocess'] = SimpleNamespace(run=run)
+    parse_messages = namespace['cargo_messages']
+    finished = dict(reason='build-finished', success=True)
+    for index, (messages, valid) in enumerate([([selected,finished],True),([selected],False),([selected,finished,finished],False),([selected,dict(reason='build-finished',success=False)],False)]):
+        transcript[:] = messages
+        try: result = parse_messages(['fixture-only'], pathlib.Path(temporary) / (str(index)+'.jsonl'), {})
+        except AssertionError:
+            assert not valid
+        else:
+            assert valid and result == messages
+print('Cargo JSON source fixtures passed')
+`;
+  const result = spawnSync(process.env.PYTHON || 'python', ['-c', fixture], {input: source, encoding:'utf8', windowsHide:true});
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Cargo JSON source fixtures passed/);
+});
+
+test('Windows input receipt preserves the maintained cache and rejects unattributed bytes', () => {
+  const build = workflow('pipeline').jobs.build.steps.find(s => s.name === 'Build and retain both ordinary host commands before their test harnesses');
+  const source = build.run.match(/^python - <<'PY'\n([\s\S]*)\nPY\s*$/)?.[1];
+  assert.ok(source);
+  const fixture = String.raw`
+import ast, hashlib, json, pathlib, shutil, sys, tempfile
+from types import SimpleNamespace
+source = ast.parse(sys.stdin.read())
+functions = ast.Module(body=[n for n in source.body if isinstance(n, ast.FunctionDef) and n.name in ('sha', 'write', 'prime_windows')], type_ignores=[])
+for scenario in ('valid', 'unattributed', 'changed-package', 'changed-ucrt', 'existing-cache'):
+    with tempfile.TemporaryDirectory() as temporary:
+        root = pathlib.Path(temporary)
+        receipt = root / 'retained'
+        receipt.mkdir()
+        base = root / 'managed'
+        cache = base / 'xwin'
+        payload = b'synthetic payload; no compiler or network operation'
+        payload_hash = hashlib.sha256(payload).hexdigest()
+        calls = []
+        if scenario == 'existing-cache':
+            cache.mkdir(parents=True)
+        def run(arguments, **kwargs):
+            calls.append(arguments)
+            assert '--cache-dir' in arguments and arguments[arguments.index('--cache-dir') + 1] == str(cache)
+            if arguments[-1] == 'list':
+                assert arguments[-3:-1] == ['--manifest-version', '17']
+                (cache / 'dl').mkdir(parents=True)
+                (cache / 'dl/manifest_17.json').write_text('{"channelItems":[]}')
+                packages = [dict(id='fixture-sdk', version='2' if scenario == 'changed-package' else '1',
+                    payloads=[dict(fileName='input.cab', sha256=payload_hash, size=len(payload), url='https://example.invalid')])]
+                packages.append(dict(id='fixture-ucrt', version='2' if scenario == 'changed-ucrt' else '1',
+                    payloads=packages[0]['payloads']))
+                (cache / 'dl/pkg_manifest_fixture.vsman').write_text(json.dumps(dict(packages=packages)))
+            else:
+                assert arguments[-1] == 'download'
+                assert arguments[-3:-1] == ['--manifest', str(cache / 'dl/manifest_17.json')]
+                assert '--manifest-version' not in arguments
+                cabinet = cache / 'dl/sdk-layout/Installers/input.cab'
+                cabinet.parent.mkdir(parents=True)
+                cabinet.write_bytes(payload)
+                if scenario == 'unattributed':
+                    (cache / 'dl/unexpected').write_bytes(b'not in publisher metadata')
+            kwargs['stdout'].write(b'synthetic maintained CLI output')
+        namespace = dict(hashlib=hashlib, json=json, Path=pathlib.Path, shutil=shutil,
+            subprocess=SimpleNamespace(run=run, STDOUT=-2),
+            vendor_inputs=dict(selectedPackages=[dict(id='fixture-sdk', version='1'), dict(id='fixture-ucrt', version='1')]))
+        exec(compile(functions, '<actual workflow receipt>', 'exec'), namespace)
+        try:
+            logs = namespace['prime_windows'](receipt, dict(XWIN_CACHE_DIR=str(base)))
+        except AssertionError:
+            assert scenario != 'valid'
+            if scenario == 'existing-cache':
+                assert not calls
+        else:
+            assert scenario == 'valid' and len(calls) == 2
+            assert not (cache / 'DONE').exists()
+            recorded = json.loads((receipt / 'xwin-inputs.json').read_text())
+            assert recorded['files']['sdk-layout/Installers/input.cab']['sha256'] == payload_hash
+            assert recorded['packages'][0]['id'] == 'fixture-sdk'
+            assert (receipt / 'xwin-channel.json').read_bytes() == (cache / 'dl/manifest_17.json').read_bytes()
+            assert (receipt / 'xwin-packages.vsman').read_bytes() == (cache / 'dl/pkg_manifest_fixture.vsman').read_bytes()
+            assert set(logs) == {p.name for p in receipt.iterdir()}
+print('Windows input receipt source fixtures passed')
+`;
+  const result = spawnSync(process.env.PYTHON || 'python', ['-c', fixture], {input: source, encoding:'utf8', windowsHide:true});
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Windows input receipt source fixtures passed/);
 });
 
 test('Windows native selections preserve platform coverage without admitting repeated common suites', () => {
