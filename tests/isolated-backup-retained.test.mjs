@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {lstat, readFile, readdir, realpath} from 'node:fs/promises';
+import {lstat, mkdtemp, readFile, readdir, realpath, rmdir} from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import test from 'node:test';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import source from '../host/buddy-oracle-source.json' with {type: 'json'};
@@ -53,6 +55,114 @@ async function checkCorpus() {
   }
 }
 
+async function verifyRetainedReader(resourceRoot, verifier, python) {
+  const hostRoot = path.dirname(resourceRoot);
+  assert.equal(path.basename(resourceRoot), 'buddy-oracle');
+  assert.equal(path.basename(hostRoot), 'host');
+  assert.equal(path.basename(path.dirname(hostRoot)), 'resources');
+  for (const name of ['isolated-backup-download.mjs', 'isolated-backup-staging.mjs', 'isolated-backup-staging.py']) {
+    const file = path.join(hostRoot, name);
+    assert.equal(await realpath(file), file);
+    assert.equal((await lstat(file)).isFile(), true);
+  }
+  const {IsolatedBackupDownload} = await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-download.mjs')));
+  const {IsolatedBackupStaging} = await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-staging.mjs')));
+  const complete = receipt.cases.complete;
+  const dataName = 'data/backup.json';
+  const markerName = 'isolated-backup.json';
+  const preferencesName = 'portable-configuration.json';
+  const original = new Map(await Promise.all(Object.keys(complete.files).map(async name =>
+    [name, await readFile(path.join(corpus, complete.directory, name))])));
+  const root = {id: 'RetainedReaderRoot', backup: 'db766c9e-d346-41fd-aad4-17d754fd50c7'};
+  const objects = [...original].filter(([name]) => name !== markerName).map(([name, contents], index) => ({
+    contents,
+    metadata: {
+      id: 'RetainedReaderObject' + index, size: String(contents.length), spaces: ['appDataFolder'],
+      trashed: false, mimeType: 'application/octet-stream',
+      appProperties: {buddy_isolated: '1', kind: 'object', root: root.id, backup: root.backup,
+        sha256: complete.files[name].sha256},
+    },
+  }));
+  const selectionController = new AbortController();
+  const signal = selectionController.signal;
+  const current = () => !signal.aborted;
+  const binding = {
+    isCurrent: current,
+    async checkCurrent(bounds) {
+      signal.throwIfAborted();
+      bounds.signal.throwIfAborted();
+    },
+    listObject({rootId, backup, sha256}) {
+      assert.deepEqual({id: rootId, backup}, root);
+      const files = objects.filter(object => object.metadata.appProperties.sha256 === sha256)
+        .map(object => object.metadata);
+      return Buffer.from(JSON.stringify({files, incompleteSearch: false}));
+    },
+    readObjectMetadata({id}) {
+      return Buffer.from(JSON.stringify(objects.find(object => object.metadata.id === id).metadata));
+    },
+    async *streamObject({id, sha256, signal}) {
+      signal.throwIfAborted();
+      const object = objects.find(object => object.metadata.id === id);
+      assert.equal(object.metadata.appProperties.sha256, sha256);
+      if (object.contents.length) yield object.contents;
+    },
+  };
+  const parent = await mkdtemp(path.join(await realpath(os.tmpdir()), 'manager-retained-reader-'));
+  const identity = await lstat(parent, {bigint: true});
+  const staging = new IsolatedBackupStaging({python, parent, excludedRoots: [hostRoot, corpus]});
+  const reader = new IsolatedBackupDownload({staging, verifier});
+  try {
+    if (process.platform === 'win32') {
+      // Match the native staging fixture's owner-only, protected DACL.
+      execFileSync(python, ['-I', '-B', '-c', [
+        'import sys, win32api, win32con, win32security as security, ntsecuritycon',
+        'token = security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)',
+        'try:',
+        '    owner = security.GetTokenInformation(token, security.TokenUser)[0]',
+        'finally:',
+        '    token.Close()',
+        'acl = security.ACL()',
+        'acl.AddAccessAllowedAceEx(security.ACL_REVISION, 3, ntsecuritycon.FILE_ALL_ACCESS, owner)',
+        'security.SetNamedSecurityInfo(sys.argv[1], security.SE_FILE_OBJECT, security.OWNER_SECURITY_INFORMATION | security.DACL_SECURITY_INFORMATION | security.PROTECTED_DACL_SECURITY_INFORMATION, owner, None, acl, None)',
+      ].join('\n'), parent], {windowsHide: true, timeout: 5000});
+    }
+    const operation = hash('retained reader operation'), reference = hash('retained reader selection');
+    const result = await reader.download({
+      operation, reference, current, binding,
+      selection: {
+        root, signal, marker: {id: 'RetainedReaderMarker', ...complete.files[markerName]},
+        markerBytes: original.get(markerName),
+        components: {data: complete.files[dataName], preferences: complete.files[preferencesName]},
+      },
+    });
+    assert.equal(result.status, 'verified');
+    assert.equal(result.inspection.markerSha256, complete.marker_sha256);
+    let readFile, member;
+    const chunks = [];
+    const handoff = await reader.handoff(operation, reference, async source => {
+      member = source.files.find(file => file.name === dataName);
+      readFile = source.readFile;
+      await readFile(dataName, chunk => { chunks.push(chunk); });
+    });
+    assert.deepEqual(handoff, {status: 'handed-off', inspection: null, cleanupPending: false});
+    assert.deepEqual(member, {name: dataName, ...complete.files[dataName]});
+    const observed = Buffer.concat(chunks);
+    assert.ok(observed.length > 0);
+    assert.deepEqual(observed, original.get(dataName));
+    assert.deepEqual({bytes: observed.length, sha256: hash(observed)}, complete.files[dataName]);
+    await assert.rejects(readFile(dataName, () => assert.fail('Retired reader delivered bytes')));
+    assert.deepEqual(await readdir(parent), []);
+  } finally {
+    selectionController.abort();
+    assert.equal((await reader.dispose()).cleanupPending, false);
+    const final = await lstat(parent, {bigint: true});
+    assert.equal(await realpath(parent), parent);
+    assert.ok(final.isDirectory() && !final.isSymbolicLink() && final.dev === identity.dev && final.ino === identity.ino);
+    await rmdir(parent);
+  }
+}
+
 test('actual isolated producer corpus retains its exact source receipt and file closure', checkCorpus);
 
 test('retained host oracle verifies actual producer packages through the Manager verifier',
@@ -68,7 +178,9 @@ test('retained host oracle verifies actual producer packages through the Manager
     assert.equal(metadata.executable.sha256, sha256);
     assert.equal(String(metadata.executable.bytes), bytes);
     assert.equal(String((await lstat(command)).size), bytes);
-    const verifier = new IsolatedBackupVerifier({resourceRoot, python: process.env.MANAGER_DRIVE_PYTHON});
+    const python = process.env.MANAGER_DRIVE_PYTHON;
+    assert.ok(python && path.isAbsolute(python), 'Trusted retained-host interpreter is required');
+    const verifier = new IsolatedBackupVerifier({resourceRoot, python});
     const bounds = () => ({signal: new AbortController().signal, timeoutMs: 30000});
     await checkCorpus();
     assert.equal(await verifier.available(bounds()), true);
@@ -85,5 +197,6 @@ test('retained host oracle verifies actual producer packages through the Manager
       report_version: 1, operation: 'inspect-isolated', status: 'unsupported', incomplete: false,
       activation_performed: false, data: null,
     });
+    await verifyRetainedReader(resourceRoot, verifier, python);
     await checkCorpus(); // No config, Store, cache, credential or other output appeared.
   });
