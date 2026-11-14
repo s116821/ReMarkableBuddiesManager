@@ -8,6 +8,8 @@ test('supervised child loss cannot authorize private destination deletion', {tim
  const root = source;
  prepared.data.intent.source_path_sha256 = restorePathHash('source', root + '/data');
  prepared.data.preview.source.configuration_included = false;
+ prepared.data.preview.target.configuration_included = false;
+ prepared.data.intent.staged_configuration_sha256 = null;
  const encode = report => Buffer.from(report).toString('base64');
  const preparedBytes = encode(JSON.stringify(prepared) + '\n');
  const malformedBytes = encode('{"report_version":1}\n');
