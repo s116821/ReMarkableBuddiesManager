@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -31,11 +32,12 @@ async function isolate(context, origin) {
   });
 }
 async function verify(page, setState, capture, release) {
+ await showPanel(page,'mode');
   const read = page.getByRole('button', { name: 'Read saved storage mode', exact: true });
   const status = page.getByTestId('saved-mode-status');
   const details = page.getByTestId('saved-mode-details');
   await expect(read).toBeDisabled();
-  await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
+  await readTabletFor(page,'mode');
   await read.click(); await expect(status).toHaveText('Shared group (saved)'); await expect(details).toContainText(group);
   for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
   await page.locator('#saved-mode-title').scrollIntoViewIfNeeded(); await capture();
@@ -55,11 +57,11 @@ async function verify(page, setState, capture, release) {
   await page.getByRole('button', { name: 'Cancel mode inspection', exact: true }).click(); await expect(status).toHaveText('Saved mode inspection cancelled');
   await release(); await page.waitForTimeout(100); await expect(details).toHaveCount(0);
   await setState('delayed'); await read.click();
-  await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
+  await readTabletFor(page,'mode');
   await expect(status).toHaveText('Not inspected'); await release(); await page.waitForTimeout(100);
   await expect(status).toHaveText('Not inspected'); await expect(details).toHaveCount(0);
   await setState('shared-group'); await read.click(); await expect(status).toHaveText('Shared group (saved)');
-  await page.getByRole('button', { name: 'Disconnect', exact: true }).click(); await expect(details).toHaveCount(0); await expect(read).toBeDisabled();
+  await disconnectFor(page,'mode');await expect(details).toHaveCount(0); await expect(read).toBeDisabled();
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
 }
 

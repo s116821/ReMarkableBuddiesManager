@@ -1,3 +1,4 @@
+import {showPanel} from './fixtures/navigation.mjs';
 /* global document, innerWidth, window */
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile, copyFile, readdir, realpath } from 'node:fs/promises';
@@ -14,6 +15,7 @@ const state=(status='complete')=>({...downloadState(status),operation_id:id,tag,
 const release={draft:false,prerelease:false,tag_name:tag,published_at:'2026-10-13T00:00:00Z',html_url:`https://github.com/s116821/ReMarkableBuddiesManager/releases/tag/${tag}`,assets:['manager-browser.zip','manager-win32-x64.zip','manager-linux-x64.zip','provenance.json'].map(name=>({name,state:'uploaded',size:10,browser_download_url:`https://github.com/s116821/ReMarkableBuddiesManager/releases/download/${tag}/${name}`}))};
 async function isolate(context){await context.route('**/*',route=>{const url=route.request().url();if(url==='https://api.github.com/repos/s116821/ReMarkableBuddiesManager/releases/latest')return route.fulfill({json:release});if(url.startsWith('https://'))return route.fulfill({status:404,body:''});return route.continue();});}
 async function verify(page,set,capture){
+ await showPanel(page,'manager');
  const button=page.getByRole('button',{name:'Download and verify Manager files',exact:true});
  await expect(button).toBeEnabled();await button.click();await expect(page.getByTestId('manager-download-status')).toHaveText('Download checked at completion');await expect(page.getByTestId('manager-download-result')).toContainText(tag);await expect(page.getByText(`Folder: manager-download-${id}`,{exact:true})).toBeVisible();
  for(const width of [390,1280]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}

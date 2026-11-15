@@ -1,3 +1,4 @@
+import {showPanel} from './navigation.mjs';
 import {expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 const stamp=page=>page.getByText(/^Observed at /);
@@ -6,7 +7,13 @@ async function waitForFreshObservation(page,previous){
  await expect.poll(async()=>{const current=await stamp(page).allTextContents();return current.length===1&&(previous.length!==1||current[0]!==previous[0]);}).toBe(true);
 }
 export async function readFreshTabletState(page){
- const previous=await stamp(page).allTextContents();await read(page).click();await waitForFreshObservation(page,previous);await page.getByTestId('tablet-model').waitFor();
+ const location=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('manager.navigation')??'null'));
+ const storage=await page.locator('#storage-task').count()?await page.locator('#storage-task').inputValue():null;
+ const task=await page.locator('#archive-task').count()?await page.locator('#archive-task').inputValue():null;
+ const family=await page.locator('#archive-family').count()?await page.locator('#archive-family').inputValue():null;
+ await showPanel(page,'tablet');const previous=await stamp(page).allTextContents();await read(page).click();await waitForFreshObservation(page,previous);await page.getByTestId('tablet-model').waitFor();
+ if(location?.destination && location.destination!=='tablet'){await page.getByTestId('nav-'+location.destination).click();if(location.item)await page.getByTestId('nav-'+location.destination+'-'+location.item).click();}
+ if(storage)await page.locator('#storage-task').selectOption(storage);if(task)await page.locator('#archive-task').selectOption(task);if(family)await page.locator('#archive-family').selectOption(family);
 }
 export async function verifyStorageInitializationReadRace(page,control){
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;

@@ -1,3 +1,4 @@
+import {showPanel} from './fixtures/navigation.mjs';
 import {verifyNotebookRestoreHosts,verifyNotebookRestoreUi} from './fixtures/notebook-restore-host-checks.mjs';
 import {verifyNotebookArchiveAppBoundaries} from './fixtures/notebook-archive-app-boundaries.mjs';
 import {readFreshTabletState} from './fixtures/storage-initialization-observation.mjs';
@@ -42,6 +43,7 @@ async function preserveUnknowns(request,c){
  console.log('Actual factory notebook and storage unknown histories survive reciprocal prepare/inspect/current refresh');
 }
 async function ui(page,c,capture){
+ await showPanel(page,'notebook');
  await readFreshTabletState(page);
  const status=page.getByTestId('notebook-archive-status'),field=page.locator('#notebook-archive-path'),preview=page.getByRole('button',{name:'Preview notebook export',exact:true}),confirm=page.getByRole('button',{name:'Confirm notebook export',exact:true}),inspect=page.getByRole('button',{name:'Check notebook archive',exact:true});
  await field.fill('/home/root/backups/private-notebook\r\n ');const before=await c.snapshot();await preview.focus();await page.keyboard.press('Enter');await expect(status).toContainText('Review what will be copied');await expect(field).toHaveValue('');assert.deepEqual(await c.snapshot(),before);

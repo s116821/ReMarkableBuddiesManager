@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
 import {mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
@@ -13,8 +14,9 @@ const unconfigured=JSON.parse(fixtures.find(r=>r.name==='inspect-unconfigured').
 const chosen=JSON.parse(fixtures.find(r=>r.name==='choose-local-current').report_utf8);
 async function isolate(context,origin){await context.route('**/*',route=>{const url=route.request().url();if(url.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(url.startsWith('file:')||origin&&new URL(url).origin===origin)return route.continue();return route.abort();});}
 async function verify(page,control,capture){
+ await showPanel(page,'local');
  const review=page.getByRole('button',{name:'Review change',exact:true}),confirm=page.getByRole('button',{name:'Save Local-only',exact:true}),status=page.getByTestId('local-mode-choice-status');
- const read=async()=>{await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();};
+ const read=async()=>{await readTabletFor(page,'local');};
  await expect(review).toBeDisabled();await read();await review.click();await expect(status).toContainText('Review complete');await expect(page.getByTestId('local-mode-choice-current')).toContainText('Not set');
  for(const width of [390,1280]){await page.setViewportSize({width,height:1100});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await capture(width);}
  for(const event of ['pagehide','hidden','same-ID-refresh']){

@@ -1,3 +1,4 @@
+import {showPanel} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,6 +19,7 @@ async function isolate(context, origin) {
   });
 }
 async function verify(page, publish, host, capture = () => page.screenshot({ path: `test-results/drive-${host}.png`, fullPage: true })) {
+ await showPanel(page,'drive');
   const status = page.getByTestId('drive-status');
   await status.filter({ hasText: 'Not signed in' }).waitFor();
   const sign = page.getByRole('button', { name: 'Sign in to Google Drive', exact: true });
