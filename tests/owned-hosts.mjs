@@ -107,8 +107,8 @@ try {
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
   if (process.platform === 'linux') await verify(page, v => writeFile(payload, JSON.stringify(v)), packaged ? 'desktop-packaged' : 'desktop');
   else {
-    await readTabletFor(page,'owned');
-    await page.getByRole('heading', { name: 'Not configured', exact: true }).waitFor();
+    await showPanel(page,'tablet');await page.getByRole('button',{name:'Read tablet state',exact:true}).click();
+    await page.getByRole('heading', { name: 'Not configured', exact: true }).waitFor();await showPanel(page,'owned');
     assert.equal(await page.getByRole('button', { name: 'Inspect owned data' }).isDisabled(), true);
     // Test-only substitution of main-process IPC responses exercises the actual
     // sandbox/preload/shared renderer; it is NOT native Windows USB evidence.
