@@ -210,7 +210,7 @@ if (manager) test('Windows integration stops at each failed native command', () 
   const step = integration.steps.find(s => s.if === "runner.os == 'Windows'" && /npm run test:hosts/.test(s.run ?? ''));
   assert.ok(step);
   const commands = step.run.trim().split('\n').map(s => s.trim());
-  assert.deepEqual(commands.slice(0, 4), ['npm run test:hosts','npm run test:package','npm run test:wired-hosts','npm run test:wired-hosts -- --packaged']);
+  assert.deepEqual(commands.slice(0, 5), ['npm run test:hosts','npm run test:navigation-hosts','npm run test:package','npm run test:wired-hosts','npm run test:wired-hosts -- --packaged']);
   assert.ok(commands.every(command => /^npm run test:[a-z-]+(?: -- --packaged)?$/.test(command)));
   assert.equal(step.shell ?? integration.defaults.run.shell, 'bash');
   for (let failAt=1; failAt<=commands.length; failAt++) {
