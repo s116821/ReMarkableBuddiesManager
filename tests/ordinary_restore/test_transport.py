@@ -281,10 +281,17 @@ class StageSSH(unittest.TestCase):
             payload = io.BytesIO(body if selector == s.RECEIVE else b'')
             dispatched = []
             unhold = threading.Event()
+            read_waiting = threading.Event()
+            body_reader = None
 
             def read(count):
+                nonlocal body_reader
                 if mode == 'early-cleaned':
-                    unhold.wait(2)
+                    body_reader = threading.current_thread()
+                    read_waiting.set()
+                    # Only test teardown may release this synthetic body read.
+                    unhold.wait()
+                    return b''
                 return payload.read(min(113, count))
 
             def observe():
@@ -324,9 +331,15 @@ class StageSSH(unittest.TestCase):
                 self.assertEqual(report['data']['receipt'], receipt if mode == 'complete' else None)
                 if mode == 'early-cleaned':
                     self.assertEqual(report['data']['settlement'], 'cleaned')
+                    self.assertTrue(read_waiting.wait(timeout=2), 'writer did not reach the held body read')
+                    self.assertTrue(peer.exit_status_sent.is_set())
+                    self.assertTrue(body_reader.is_alive(), 'body writer ended before settlement')
                     self.assertEqual(payload.tell(), 0)
             finally:
                 unhold.set()
+                if body_reader is not None:
+                    body_reader.join(timeout=2)
+                    self.assertFalse(body_reader.is_alive(), 'held body writer did not exit')
 
     def test_authenticated_stage_selectors_forward_exact_retained_frame_and_receipt(self):
         for selector in s.SELECTORS:
