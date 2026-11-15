@@ -348,7 +348,7 @@
     <p class="text-sm text-muted">Review the selected fact before confirming. Forgetting removes the fact from active use. History and original documents remain; no disk space is reclaimed and cloud propagation is not verified.</p>
     <div class="flex flex-wrap gap-2 my-3">
       <button class="ui-button ui-button-secondary" type="button" (click)="app.prepareForget()" [disabled]="!app.host.memoryForget || !app.forgetHead() || app.forget().busy || app.forget().uncertain">Review forgetting this fact</button>
-      
+
       @if (app.forget().busy || app.forget().view?.state === 'prepared') {
 <button class="ui-button ui-button-secondary" type="button" (click)="app.stopForget()" [disabled]="!app.forget().busy && app.forget().view?.state !== 'prepared'">Stop local wait</button>
 }
@@ -899,7 +899,7 @@
       <li>Prompt {{ view.effective.personalization_text_present ? 'present' : 'absent' }} ({{ view.effective.origins.personalization_text }})</li>
     </ul>
     @if (view.effective.personalization_text !== null) {
-      <pre class="whitespace-pre-wrap wrap-anywhere">{{ view.effective.personalization_text }}</pre>
+      <pre class="whitespace-pre-wrap wrap-anywhere" data-shared-prompt-revealed>{{ view.effective.personalization_text }}</pre>
     }
     <form class="my-3 grid gap-3" (submit)="app.editSharedPreferences($event)">
       <p>Choose only the declarations you want to change.</p>
@@ -910,7 +910,7 @@
       <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Explicit default</option></select></label>
       <label>Personalization <select class="ui-field" name="personalization"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
       <label><input type="checkbox" name="replace-text"> Replace the shared prompt with the text below</label>
-      <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4"></textarea></label>
+      <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4" data-shared-prompt-draft autocomplete="off" spellcheck="false"></textarea></label>
       <label><input type="checkbox" name="confirm" required> Apply these declarations to this shared group</label>
       <button class="ui-button ui-button-primary" type="submit" [disabled]="!app.canInspectSharedPreferences()">Save shared preferences</button>
     </form>
@@ -983,7 +983,7 @@
 @if (app.isView('backup','cloud')) {
 <section class="ui-panel" aria-labelledby="cloud-backups-title"><h2 id="cloud-backups-title">Cloud backups</h2><p>Find a backup in the connected Google account, then select a revision to download and verify. Signing in alone does not enable tablet backups.</p>    @if (app.host.isolatedBackup) {
       <div class="mt-5">
-        
+
         <div class="my-3 flex flex-wrap gap-3">
           <button class="ui-button ui-button-secondary" type="button" (click)="app.scanCloudBackups()" [disabled]="!app.canBrowseCloudBackups()">Scan for cloud backups</button>
           @if (app.cloudBackup().busy || app.cloudBackup().backups.length) {

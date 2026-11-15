@@ -159,7 +159,10 @@ export class App implements OnDestroy {
       if (!this.credential().busy) this.credentialController.clear();
       this.customEndpoint.set(false); this.referenceSetup.set(false);
     }
-    if (this.isView('settings', 'shared') && !this.sharedPreferences().busy) this.sharedPreferenceController.hide();
+    if (this.isView('settings', 'shared')) {
+      this.clearSharedPrivateView();
+      if (!this.sharedPreferences().busy) this.sharedPreferenceController.hide();
+    }
     if (this.isView('backup', 'setup') && !this.isolatedRoot().busy) this.clearIsolatedRoot();
     if (this.isView('backup', 'cloud') && !this.cloudBackup().busy) this.clearCloudBackups();
     if (this.isView('settings', 'memory') && !this.memorySettings().busy) this.memorySettingsController.clear();
@@ -184,7 +187,7 @@ export class App implements OnDestroy {
     }
     if (row.label === 'Cache cleanup' || row.label === 'Cache inspection') this.storageTask.set('cache');
     if (row.label === 'Storage inspection') this.storageTask.set('overview');
-    
+
     if (row.label === 'Credential reference') this.referenceSetup.set(true);
     this.navigate(row.destination, row.item);
   }
@@ -228,7 +231,16 @@ export class App implements OnDestroy {
   readonly memory = signal(this.memoryController.state);
   readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
-  private readonly sharedPreferenceController = new SharedPreferenceController(state => { this.sharedPreferences.set(state); if (!state.busy && state.view && !this.isView('settings','shared')) this.sharedPreferenceController.hide(); });
+  private clearSharedPrivateView() {
+    document.querySelectorAll<HTMLTextAreaElement>('[data-shared-prompt-draft]').forEach(field => { field.value = ''; });
+    document.querySelectorAll<HTMLElement>('[data-shared-prompt-revealed]').forEach(field => { field.textContent = ''; });
+  }
+  private readonly sharedPreferenceController = new SharedPreferenceController(state => {
+    // Scrub real nodes before Angular detaches a cleared, submitted or expired view.
+    if (!state.view) this.clearSharedPrivateView();
+    this.sharedPreferences.set(state);
+    if (!state.busy && state.view && !this.isView('settings','shared')) this.sharedPreferenceController.hide();
+  });
   readonly sharedPreferences = signal(this.sharedPreferenceController.state);
   readonly sharedLabels: Record<SharedPreferenceState['state'], string> = {
     idle: 'Shared preferences have not been inspected.', ready: 'Shared preference snapshot read.',
