@@ -16,6 +16,7 @@ export { statuses, result, validateResult } from './observation-protocol.mjs';
 
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
+  #stage = null;
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
     script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform,
     timeoutMs = 13000, provisioningTimeoutMs = 45000 } = {}) {
@@ -23,7 +24,120 @@ export class WiredObserver {
     this.active = null; this.generation = 0; this.timeoutMs = timeoutMs;
     this.provisioningTimeoutMs = provisioningTimeoutMs;
   }
-  cancel() { this.generation++; this.active?.kill('SIGKILL'); return result('cancelled'); }
+  cancel() {
+    this.generation++;
+    if (this.#stage) this.#stage.stop();
+    else this.active?.kill('SIGKILL');
+    return result('cancelled');
+  }
+
+  // A streamed stage is joined before this observer gives its slot to any successor.
+  async runIsolatedStage(request, {signal, current, remainingMs}, writeBody) {
+    const refusal = dispatch => ({dispatch, stdout: null, wrote: false});
+    const allowance = Math.min(this.timeoutMs, 12000, remainingMs());
+    if (this.active || !current() || signal.aborted || allowance < 1 ||
+        !['linux', 'win32'].includes(this.platform) || !this.config || !this.python ||
+        !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('not-dispatched');
+    const deadline = performance.now() + allowance;
+    const generation = ++this.generation;
+    const remaining = () => Math.floor(Math.min(remainingMs(), deadline - performance.now()));
+    const writer = new AbortController();
+    const ready = Promise.withResolvers(), joined = Promise.withResolvers();
+    const readiness = Buffer.from('READY\n');
+    const chunks = [];
+    let child, launched = false, stopped = false, wrote = false, size = 0;
+    try {
+      child = spawn(this.python, [path.join(path.dirname(this.script), 'isolated_stage_transport.py')], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config},
+      });
+    } catch { return refusal('not-dispatched'); }
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      writer.abort();
+      ready.resolve(false);
+      child.stdin.destroy();
+      child.kill('SIGKILL');
+    };
+    this.active = child;
+    const stage = this.#stage = {stop, joined: joined.promise};
+    const timer = setTimeout(stop, allowance);
+    const closed = new Promise(resolve => child.once('close', resolve));
+    child.once('spawn', () => { launched = true; });
+    child.on('error', stop);
+    child.stdin.on('error', () => {});
+    signal.addEventListener('abort', stop, {once: true});
+    if (signal.aborted) stop();
+    let prefix = Buffer.alloc(0), diagnostics = 0;
+    child.stdout.on('data', chunk => {
+      size += chunk.length;
+      if (stopped || size > 24576 + readiness.length) { chunk.fill(0); stop(); return; }
+      chunks.push(chunk);
+      if (prefix.length === readiness.length) return;
+      prefix = Buffer.concat([prefix, chunk.subarray(0, readiness.length - prefix.length)]);
+      if (!prefix.equals(readiness.subarray(0, prefix.length))) { stop(); return; }
+      if (prefix.length === readiness.length) ready.resolve(true);
+    });
+    child.stderr.on('data', chunk => {
+      diagnostics += chunk.length;
+      chunk.fill(0);
+      if (diagnostics > 8192) stop();
+    });
+    const requireLive = () => {
+      writer.signal.throwIfAborted();
+      if (generation !== this.generation || !current() || remaining() < 1) throw Error('Isolated stage expired');
+    };
+    const write = chunk => {
+      requireLive();
+      // Hold the only outstanding write until Node hands it to the OS pipe.
+      return new Promise((resolve, reject) => {
+        const aborted = () => finish(Error('Isolated stage writer stopped'));
+        const finish = error => {
+          writer.signal.removeEventListener('abort', aborted);
+          if (error) reject(error);
+          else resolve();
+        };
+        writer.signal.addEventListener('abort', aborted, {once: true});
+        child.stdin.write(chunk, finish);
+      });
+    };
+    const pump = (async () => {
+      if (!await ready.promise) return;
+      try {
+        requireLive();
+        const control = Buffer.from(JSON.stringify({...request, budget_ms: remaining()}) + '\n');
+        if (control.length > 24576) throw Error('Isolated stage control exceeds bound');
+        await write(control);
+        if (writeBody) await writeBody(write, writer.signal, remaining);
+        requireLive();
+        child.stdin.end();
+        wrote = true;
+      } catch {
+        // Closing the local pipe lets an authenticated early refusal finish.
+        // An independent cancellation or deadline still kills the captured child.
+        child.stdin.destroy();
+      }
+    })();
+    try {
+      const code = await closed;
+      ready.resolve(false);
+      writer.abort();
+      await pump;
+      if (!launched) return refusal('not-dispatched');
+      if (stopped || generation !== this.generation || !current() || remaining() < 1 ||
+          code !== 0 || prefix.length !== readiness.length) return refusal('possible');
+      const buffer = Buffer.concat(chunks);
+      return {dispatch: 'possible', stdout: buffer.subarray(readiness.length), wrote};
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', stop);
+      for (const chunk of chunks) chunk.fill(0);
+      if (this.active === child) this.active = null;
+      if (this.#stage === stage) this.#stage = null;
+      joined.resolve();
+    }
+  }
   async observe() {
     const value = await this.run('observe');
     this.lastObservation = value.status === 'observed' ? value.observation : null;
@@ -95,7 +209,9 @@ export class WiredObserver {
     return this.run('saved-mode', request);
   }
   async run(action, request) {
+    const stage = this.#stage;
     this.cancel();
+    const generation = this.generation;
     const sharedPreferences=action==='shared-preferences';
     const portable=action==='portable-configuration'||sharedPreferences;
     const research=action==='research-settings';
@@ -129,7 +245,8 @@ export class WiredObserver {
     const waitMs = budgeted ? Math.min(observerTimeout, request.budget_ms) : observerTimeout;
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
-    const generation = this.generation;
+    if (stage) await stage.joined;
+    if (generation !== this.generation) return refusal('cancelled');
     return new Promise(resolve => {
       const script = cachePrivate ? path.join(path.dirname(this.script),portable?(sharedPreferences?'shared_preferences_transport.py':'portable_configuration_transport.py'):storageInitialization?'storage_initialization_transport.py':ownedV3?'owned_data_v3_transport.py':handwriting?'handwriting_records_transport.py':notebook?'notebook_archive_transport.py':selected?'selected_archive_transport.py':restore?'ordinary_restore_transport.py':management?'conversation_management_transport.py':conversation?'conversation_inventory_transport.py':cacheCleanup?'source_cache_cleanup_transport.py':'source_cache_inventory_transport.py') : modelCredential ? path.join(path.dirname(this.script),'model_credential_transport.py') : credential ? path.join(path.dirname(this.script),'credential_reference_transport.py') : memorySettings ? path.join(path.dirname(this.script),'memory_settings_transport.py') : research ? path.join(path.dirname(this.script),'research_settings_transport.py') : archive ? path.join(path.dirname(this.script), 'ordinary_export_transport.py') : model ? path.join(path.dirname(this.script), 'model_settings_transport.py') : localMode ? path.join(path.dirname(this.script), 'local_mode_choice_transport.py') : product ? path.join(path.dirname(this.script), 'product_settings_transport.py') : basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
       const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 'pipe' : 'ignore', 'pipe', 'ignore'],

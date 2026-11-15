@@ -47,6 +47,7 @@ class StagingProcess {
     this.#pending = null;
     if (!pending) return;
     clearTimeout(pending.timer);
+    pending.signal?.removeEventListener('abort', pending.abort);
     if (error) pending.reject(error);
     else pending.resolve(value);
   }
@@ -55,10 +56,10 @@ class StagingProcess {
     this.#finish(unavailable());
   }
 
-  #terminate() {
+  #terminate(signal) {
     this.#closed = true;
     this.#fail();
-    this.#child.kill();
+    this.#child.kill(signal);
   }
 
   #receive(chunk) {
@@ -87,15 +88,15 @@ class StagingProcess {
     this.#finish(null, frame.value);
   }
 
-  call(request, timeoutMs = TIMEOUT, responseLimit = 8192) {
-    if (this.#closed || this.#pending) return Promise.reject(unavailable());
+  call(request, timeoutMs = TIMEOUT, responseLimit = 8192, signal) {
+    if (this.#closed || this.#pending || signal?.aborted) return Promise.reject(unavailable());
     const input = JSON.stringify(request) + '\n';
     if (Buffer.byteLength(input) > 400000) return Promise.reject(unavailable());
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#terminate();
-      }, Math.min(TIMEOUT, Math.max(1, timeoutMs)));
-      this.#pending = {resolve, reject, timer, responseLimit};
+      const abort = () => this.#terminate(signal ? 'SIGKILL' : undefined);
+      const timer = setTimeout(abort, Math.min(TIMEOUT, Math.max(1, timeoutMs)));
+      this.#pending = {resolve, reject, timer, responseLimit, signal, abort};
+      signal?.addEventListener('abort', abort, {once: true});
       this.#child.stdin.write(input);
     });
   }
@@ -109,6 +110,11 @@ class StagingProcess {
       finally { clearTimeout(timer); }
     });
     return this.#stopping;
+  }
+
+  async abortAndJoin() {
+    this.#terminate('SIGKILL');
+    await this.#exited;
   }
 
   async joinClosed() {
@@ -227,12 +233,13 @@ export class IsolatedBackupStaging {
   async #read(active, member, files, bounds, write) {
     if (this.#active !== active || active.file || active.reader || active.release) throw unavailable();
     let opened = false, bytes = 0;
+    const joined = bounds().joined === true;
     const hash = createHash('sha256');
     active.reader = true;
     const call = (request, limit) => {
       const {signal, timeoutMs} = bounds();
       signal.throwIfAborted();
-      return active.process.call(request, timeoutMs, limit);
+      return active.process.call(request, timeoutMs, limit, joined ? signal : undefined);
     };
     try {
       if (await call({action: 'open-read', name: member.name, files}) !== true) throw unavailable();
@@ -256,10 +263,14 @@ export class IsolatedBackupStaging {
       if (bytes !== member.bytes || hash.digest('hex') !== member.sha256) throw unavailable();
     } finally {
       try {
-        if (opened && await active.process.call({action: 'close-read'}) !== true) throw unavailable();
+        if (opened) {
+          const close = {action: 'close-read'};
+          if (await (joined ? call(close) : active.process.call(close)) !== true) throw unavailable();
+        }
       } catch {
-        // An unacknowledged close leaves the original file handle in doubt.
-        await active.process.stop();
+        // A bounded close cannot grant another allowance to an uncertain reader.
+        if (joined) await active.process.abortAndJoin();
+        else await active.process.stop();
         throw cleanupUncertain();
       } finally {
         await active.process.joinClosed();

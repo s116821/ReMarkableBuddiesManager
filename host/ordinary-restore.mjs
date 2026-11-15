@@ -1,6 +1,7 @@
 import {randomBytes,randomUUID} from 'node:crypto';
 import {posix} from 'node:path';
 import {MaintenanceIO} from './maintenance-io.mjs';
+import {originalStageAttempt} from './isolated-stage-transport.mjs';
 import {restoreFamily} from './restore-family.mjs';
 import {validateResult} from './observation-protocol.mjs';
 import {parseRestoreRequest,parseRestoreResult,parseNotebookRestoreResult,restorePath} from './ordinary-restore-protocol.mjs';
@@ -8,30 +9,57 @@ import {restoreHash,parseRestoreRaw,parseNotebookRestoreRaw,RestoreUnsupported} 
 const same=(a,b)=>a&&b&&a.connection_id===b.connection_id&&a.boot_id===b.boot_id;
 const keys=v=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().join():'';
 const handoffReply=(status,preview=null,cleanupPending=false)=>({status,preview,cleanupPending});
-const releaseDestination=async stage=>{
- if(!stage)return false;
- try{return await stage.release()!==true;}catch{return true;}
+const releaseDestination=async (stage,withLease)=>{
+ try{return await stage.release(withLease)!==true;}catch{return true;}
 };
 export class OrdinaryRestoreHost{
  #family;#parseRaw;#parseResult;#disposed=false;
  #editor=null;#records=new Map();#active=null;#epoch=0;#issued=new WeakMap();
- #destinationCleanups=new Set();#cleanupPending=false;#disposal;
+ #destinationCleanups=new Set();#cleanupPending=false;#destinationWarning=null;#disposal;
  constructor({family='legacy',observer,io=new MaintenanceIO(),beforeIO=()=>{},now=()=>performance.now(),uuid=randomUUID,reference=()=>randomBytes(32).toString('hex'),budgetMs=13000}={}){if(!Number.isSafeInteger(budgetMs)||budgetMs<1||budgetMs>13000)throw Error('Ordinary restore budget refused');this.#family=restoreFamily(family);this.#parseRaw=this.#family.version===2?parseNotebookRestoreRaw:parseRestoreRaw;this.#parseResult=this.#family.version===2?parseNotebookRestoreResult:parseRestoreResult;Object.assign(this,{observer,io,beforeIO,now,uuid,reference,budgetMs});}
  #wipe(s){if(!s)return;clearTimeout(s.timer);if(s.packet){s.packet.original.fill(0);s.packet.input.fill(0);s.packet=null;}s.source=null;s.operation=null;s.preview=null;}
  #retireDestination(s){
   if(!s.destination||s.destinationBusy)return s.destinationCleanup;
   const stage=s.destination;s.destination=null;
+  const attempt=this.#active?.s===s?this.#active:null;
   // Local cancellation joins the observer child, which may leave its remote reader running.
-  const release=s.destinationReader ? Promise.resolve(true) : releaseDestination(stage);
-  const pending=release.then(uncertain=>{this.#cleanupPending ||= uncertain;return uncertain;});
+  const release=s.destinationReader ? Promise.resolve(true) :
+   releaseDestination(stage,execute=>this.#releaseWithLease(s,attempt,execute));
+  const pending=release.then(uncertain=>{
+   this.#cleanupPending ||= uncertain;
+   if(uncertain)this.#destinationWarning=originalStageAttempt(stage)??this.#destinationWarning;
+   return uncertain;
+  });
   s.destinationCleanup=pending;this.#destinationCleanups.add(pending);
   void pending.then(()=>this.#destinationCleanups.delete(pending));
   return pending;
  }
- #checkDestination(a,signal=a.controller.signal){
+ #destinationBounds(a,signal=a.controller.signal){
   const {s}=a,{connection_id,boot_id}=s.sample;
-  return s.destination.assertOwned({signal,timeoutMs:Math.max(1,Math.floor(a.deadline-this.now())),
-   connection_id,boot_id,files:s.sourceInventory,markerSha256:s.markerSha256});
+  const remainingMs=()=>Math.floor(a.deadline-this.now());
+  return {signal,remainingMs,current:()=>this.#current(a)&&!signal.aborted,
+   timeoutMs:Math.max(1,remainingMs()),sample:s.sample,connection_id,boot_id};
+ }
+ #checkDestination(a,signal=a.controller.signal){
+  const {s}=a;
+  return s.destination.assertOwned({...this.#destinationBounds(a,signal),
+   files:s.sourceInventory,markerSha256:s.markerSha256});
+ }
+ async #releaseWithLease(s,attempt,execute){
+  if(attempt){
+   if(!attempt.controller||attempt.stageCancelled||!this.#current(attempt))return false;
+   const signal=attempt.sourceSignal?AbortSignal.any([attempt.controller.signal,attempt.sourceSignal]):attempt.controller.signal;
+   return execute(this.#destinationBounds(attempt,signal));
+  }
+  if(!same(s.sample,this.observer.lastObservation))return false;
+  const token=this.io.acquire(this.#family.lane,s.reference,'release-destination',{joined:true});
+  if(!token)return false;
+  const controller=new AbortController(),deadline=this.now()+Math.min(12000,this.budgetMs);
+  const timer=setTimeout(()=>controller.abort(),Math.max(1,deadline-this.now()));
+  try{
+   return await execute({signal:controller.signal,remainingMs:()=>Math.floor(deadline-this.now()),
+    current:()=>this.io.owns(token)&&this.now()<deadline&&same(s.sample,this.observer.lastObservation)});
+  }finally{clearTimeout(timer);this.io.release(token);}
  }
  #drop(s){this.#wipe(s);if(this.#editor===s)this.#editor=null;this.#records.delete(s.reference);s.ledger.clear();return this.#retireDestination(s);}
  #arm(s,deadline){clearTimeout(s.timer);s.deadline=deadline;s.timer=setTimeout(()=>{if(s.deadline!==deadline)return;if(this.#editor===s&&s.state==='ready'){this.#drop(s);this.#epoch++;}else if(this.#records.get(s.reference)===s)this.#wipe(s);},Math.max(1,deadline-this.now()));s.timer.unref?.();}
@@ -65,7 +93,7 @@ export class OrdinaryRestoreHost{
   this.#disposal=Promise.resolve(active?.joined?.promise).then(async()=>{
    for(const s of [...this.#records.values()])this.#drop(s);
    await Promise.all(this.#destinationCleanups);
-   return this.#cleanupPending;
+   return this.#cleanupPending||this.#destinationWarning!==null;
   });
   return this.#disposal;
  }
@@ -181,13 +209,12 @@ export class OrdinaryRestoreHost{
       a.sourceSignal=source.signal;
       a.shorten(this.now()+source.timeoutMs);
       const signal=AbortSignal.any([source.signal,a.controller.signal]);
-      const bounds=()=>({signal,timeoutMs:Math.max(1,Math.floor(a.deadline-this.now())),
-       connection_id:sample.connection_id,boot_id:sample.boot_id});
       if(!this.#current(a))throw Error('Ordinary restore invalidated');
-      try{s.destination=await stageDestination({...source,...bounds()});}
+      try{s.destination=await stageDestination({...source,...this.#destinationBounds(a,signal)});}
       catch(error){
        cleanupPending ||= error?.cleanupPending===true;
        this.#cleanupPending ||= error?.cleanupPending===true;
+       if(error?.cleanupPending===true)this.#destinationWarning=originalStageAttempt(error)??this.#destinationWarning;
        throw error;
       }
       const root=s.destination?.root;
@@ -204,6 +231,7 @@ export class OrdinaryRestoreHost{
      cleanupPending ||= received.cleanupPending===true;
      // The source handoff aborts its own signal during normal retirement.
      // Its returned status proves final source checks and joined release.
+     a.stageCancelled=received.status==='invalidated';
      a.sourceSignal=null;
      if(received.status==='handed-off'&&this.#current(a)&&s.packet){
       const preview=this.#ready(s,report);

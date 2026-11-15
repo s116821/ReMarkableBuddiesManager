@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {once} from 'node:events';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
 import {createServer} from 'node:http';
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
@@ -15,6 +17,8 @@ import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-resto
 import {portableFixture, artifact as portableArtifact, selected as manualArtifact} from './fixtures/portable-configuration.mjs';
 import {IsolatedBackupPreferences} from '../host/isolated-backup-preferences.mjs';
 import {MemoryForgetHost} from '../host/memory-forget.mjs';
+import {createIsolatedStageDestination} from '../host/isolated-stage-transport.mjs';
+import {WiredObserver} from '../host/observer.mjs';
 
 const json = value => Buffer.from(JSON.stringify(value));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -38,13 +42,16 @@ const objects = [data, preferences].map((bytes, index) =>
   file('Object' + index, bytes.length, {kind: 'object', sha256: hash(bytes)}));
 
 function setup(t, {stageConfigured = true, hold = null, unavailable = false, unbound = false, beforeRelease,
-  readFactory, portableBytes = preferences, holdMemberRead, onMemberRead, memberChunk} = {}) {
-  const packageMarker = portableBytes === preferences ? markerBytes :
-    json({isolated_backup_version: 1, data_backup: ref(data), portable_configuration: ref(portableBytes)});
-  const packageMarkerFile = portableBytes === preferences ? marker :
-    file(marker.id, packageMarker.length, {kind: 'marker', predecessor: root.id, sha256: hash(packageMarker)});
-  const packageObjects = portableBytes === preferences ? objects :
-    [objects[0], file(objects[1].id, portableBytes.length, {kind: 'object', sha256: hash(portableBytes)})];
+  readFactory, portableBytes = preferences, holdMemberRead, onMemberRead, memberChunk, retained} = {}) {
+  const dataBytes = retained?.members.get('data/backup.json') ?? data;
+  portableBytes = retained?.members.get('portable-configuration.json') ?? portableBytes;
+  const packageMarker = retained?.members.get('isolated-backup.json') ?? (portableBytes === preferences ? markerBytes :
+    json({isolated_backup_version: 1, data_backup: ref(dataBytes), portable_configuration: ref(portableBytes)}));
+  const packageMarkerFile = file(marker.id, packageMarker.length, {kind: 'marker', predecessor: root.id, sha256: hash(packageMarker)});
+  const bodies = [dataBytes, portableBytes, ...(retained ?
+    [...retained.members].filter(([name]) => name.startsWith('data/objects/')).map(([, bytes]) => bytes) : [])];
+  const packageObjects = bodies.map((bytes, index) =>
+    file('Object' + index, bytes.length, {kind: 'object', sha256: hash(bytes)}));
   const registration = {schema: 1, type: 'google-desktop', clientId: '123456789012-fixture.apps.googleusercontent.com',
     clientSecret: null};
   let grant = {schema: 1, clientId: registration.clientId, account: {permissionId: 'fixture', label: 'fixture@example.invalid'},
@@ -76,9 +83,10 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
     assert.equal(root, stageRoot);
     assert.equal(markerSha256, hash(packageMarker));
     assert.deepEqual(Buffer.concat(files.get('isolated-backup.json')), packageMarker);
-    assert.deepEqual(Buffer.concat(files.get('data/backup.json')), data);
+    assert.deepEqual(Buffer.concat(files.get('data/backup.json')), dataBytes);
     assert.deepEqual(Buffer.concat(files.get('portable-configuration.json')), portableBytes);
     if (hold === 'verifier') await holdUntilJoined(signal);
+    if (retained) return Buffer.concat([json(retained.expected_report), Buffer.from('\n')]);
     return Buffer.concat([json({report_version: 1, operation: 'inspect-isolated', status: 'ok', incomplete: true,
       activation_performed: false, data: {isolated_package: {
         marker_sha256: hash(packageMarker), data_backup: ref(data), portable_configuration: ref(portableBytes),
@@ -138,7 +146,10 @@ function setup(t, {stageConfigured = true, hold = null, unavailable = false, unb
         readObjectMetadata: ({id}) => json(packageObjects.find(item => item.id === id)),
         async *streamObject({id, signal}) {
           if (hold === 'stream') await holdUntilJoined(signal);
-          else yield id === packageObjects[0].id ? data : portableBytes;
+          else {
+            const bytes = bodies[packageObjects.findIndex(item => item.id === id)];
+            if (bytes.length) yield bytes;
+          }
         },
       };
     })),
@@ -313,20 +324,21 @@ test('default composition is unbound and missing stage or verifier refuses befor
   }
 });
 
-async function stagedRestore(t, {digest = hash(data), ...options} = {}) {
+async function stagedRestore(t, {digest = hash(data), completeMedia = false, ...options} = {}) {
   const f = setup(t, options);
   const restore = restoreFixture({report(selector, body, state) {
     const report = restoreReport(selector, body, state);
     if (selector === 'prepare') {
       report.data.intent.archive_sha256 = digest;
-      report.data.intent.complete_media = false;
+      report.data.intent.complete_media = completeMedia;
       report.data.intent.staged_configuration_sha256 = null;
-      report.data.preview.source.complete_media = false;
-      report.data.preview.target.complete_media = false;
+      report.data.preview.source.complete_media = completeMedia;
+      report.data.preview.target.complete_media = completeMedia;
       report.data.preview.source.configuration_included = false;
       report.data.preview.target.configuration_included = false;
     } else if (report.data?.inspection) {
       report.data.inspection.configuration_included = false;
+      if (completeMedia) report.data.inspection.complete_media = true;
     }
     return report;
   }});
@@ -1027,4 +1039,305 @@ test('composition uses the original capture and joins active work before checked
       assert.equal(closed, true);
     });
   }
+});
+
+async function retainedStagePackage() {
+  const root = new URL('./fixtures/isolated-backup-actual/', import.meta.url);
+  const bytes = await readFile(new URL('receipt.json', root));
+  assert.equal(hash(bytes), 'e90a495bb2e3a8c914a301b47b96d93b5946c9644bee4c3be8b06ede7c32f8b3');
+  const retained = JSON.parse(bytes).cases.complete;
+  const members = new Map();
+  for (const [name, expected] of Object.entries(retained.files)) {
+    const content = await readFile(new URL(retained.directory + '/' + name, root));
+    assert.deepEqual(ref(content), expected);
+    members.set(name, content);
+  }
+  return {...retained, members};
+}
+
+function assertRetainedStageFrame(retained, h, raw) {
+  const objectNames = [...retained.members.keys()].filter(name => name.startsWith('data/objects/')).sort();
+  assert.equal(h.object_count, objectNames.length);
+  const inventory = createHash('sha256').update('remarkable-buddies-restore-stage-inventory-v1\0');
+  const count = Buffer.alloc(4);
+  count.writeUInt32BE(objectNames.length);
+  inventory.update(count);
+  let offset = 0, payloadBytes = 0;
+  for (const name of ['data/backup.json', ...objectNames, 'portable-configuration.json', 'isolated-backup.json']) {
+    const expected = retained.members.get(name);
+    const descriptor = raw.subarray(offset, offset + 40);
+    inventory.update(descriptor);
+    assert.equal(descriptor.readBigUInt64BE(), BigInt(expected.length), name);
+    assert.equal(descriptor.subarray(8).toString('hex'), hash(expected), name);
+    offset += 40;
+    assert.deepEqual(raw.subarray(offset, offset + expected.length), expected);
+    offset += expected.length;
+    payloadBytes += expected.length;
+  }
+  assert.equal(raw.length, offset);
+  assert.equal(h.payload_bytes, payloadBytes);
+  assert.equal(h.inventory_sha256, inventory.digest('hex'));
+}
+
+function stagePeer(f, retained, outcome = 'sealed') {
+  const selectors = [];
+  let receipt;
+  f.restore.observer.runIsolatedStage = async function(request, bounds, body) {
+    assert.ok(bounds.current() && !bounds.signal.aborted && bounds.remainingMs() > 0);
+    assert.deepEqual({connection_id: request.connection_id, boot_id: request.boot_id}, identity);
+    selectors.push(request.selector);
+    let settlement, status, responseReceipt, wrote = true;
+    if (request.selector === 'receive-isolated-stage') {
+      const h = request.header;
+      assert.equal(h.marker_sha256, retained.marker_sha256);
+      assert.match(h.stage_id, /^[a-f0-9-]{14}4[a-f0-9-]{21}$/);
+      if (outcome === 'lost') return {dispatch: 'possible', stdout: null, wrote: false};
+      if (!['sealed', 'wrong-receipt'].includes(outcome)) {
+        settlement = outcome;
+        status = outcome === 'no-output' ? 'unavailable' : 'failed';
+        responseReceipt = null;
+        wrote = false;
+      } else {
+        const chunks = [];
+        const cutoff = performance.now() + Math.min(12000, bounds.remainingMs());
+        const remaining = () => Math.min(bounds.remainingMs(), Math.floor(cutoff - performance.now()));
+        await body(async chunk => { chunks.push(Buffer.from(chunk)); }, bounds.signal, remaining);
+        const raw = Buffer.concat(chunks);
+        assertRetainedStageFrame(retained, h, raw);
+        receipt = responseReceipt = {version: 1, stage_id: h.stage_id, boot_id: h.boot_id,
+          marker_sha256: h.marker_sha256, inventory_sha256: outcome === 'wrong-receipt' ? '0'.repeat(64) : h.inventory_sha256,
+          custody_sha256: 'c'.repeat(64),
+          root: '/home/root/.local/share/.remarkable-buddies-restore-stage-v1/restore-v1-' + h.stage_id};
+        settlement = 'sealed';
+        status = 'ok';
+      }
+    } else {
+      assert.equal(body, undefined);
+      assert.deepEqual(JSON.parse(Buffer.from(request.input_base64, 'base64')), receipt);
+      settlement = request.selector === 'check-isolated-stage' ? 'verified' : 'released';
+      status = 'ok';
+      responseReceipt = receipt;
+    }
+    const report = {report_version: 1, operation: request.selector, status, incomplete: status !== 'ok',
+      activation_performed: false, data: {settlement, receipt: responseReceipt}};
+    const envelope = {contract_version: 1, status: 'observed', observation: this.lastObservation, dispatch: 'possible',
+      stdout_base64: Buffer.from(JSON.stringify(report) + '\n').toString('base64')};
+    return {dispatch: 'possible', stdout: Buffer.from(JSON.stringify(envelope) + '\n'), wrote};
+  };
+  return selectors;
+}
+
+function stageHelperFixture(trace, sample) {
+  const fs = require('node:fs');
+  const chunks = [];
+  process.stdin.on('data', chunk => chunks.push(chunk));
+  process.stdin.on('end', () => {
+    const stdin = Buffer.concat(chunks);
+    const boundary = stdin.indexOf(10);
+    if (boundary === -1) throw Error('Fixture did not receive a control line');
+    const control = stdin.subarray(0, boundary + 1);
+    const body = stdin.subarray(boundary + 1);
+    const request = JSON.parse(control);
+    const settlement = {
+      'receive-isolated-stage': 'sealed',
+      'check-isolated-stage': 'verified',
+      'release-isolated-stage': 'released',
+    }[request.selector];
+    if (!settlement) throw Error('Unexpected fixture selector');
+    const h = request.header;
+    const receipt = h ? {version: 1, stage_id: h.stage_id, boot_id: h.boot_id, marker_sha256: h.marker_sha256,
+      inventory_sha256: h.inventory_sha256, custody_sha256: 'c'.repeat(64),
+      root: '/home/root/.local/share/.remarkable-buddies-restore-stage-v1/restore-v1-' + h.stage_id} :
+      JSON.parse(Buffer.from(request.input_base64, 'base64'));
+    fs.appendFileSync(trace, JSON.stringify({control: control.toString('base64'), body: body.toString('base64'), receipt}) + '\n');
+    const report = {report_version: 1, operation: request.selector, status: 'ok', incomplete: false,
+      activation_performed: false, data: {settlement, receipt}};
+    const envelope = {contract_version: 1, status: 'observed', observation: sample, dispatch: 'possible',
+      stdout_base64: Buffer.from(JSON.stringify(report) + '\n').toString('base64')};
+    process.stdout.write(JSON.stringify(envelope) + '\n');
+  });
+  process.stdout.write('RE');
+  setImmediate(() => process.stdout.write('ADY\n'));
+}
+
+test('wired stage adapter composes the real supervised pipe with Prepare, Confirm and release', {timeout: 12000}, async t => {
+  const retained = await retainedStagePackage();
+  const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true});
+  f.releaseDone.resolve();
+  const folder = await mkdtemp(path.join(tmpdir(), 'manager-composed-stage-'));
+  t.after(() => rm(folder, {recursive: true, force: true}));
+  const trace = path.join(folder, 'stage-wire');
+  const sample = f.restore.observer.lastObservation;
+  await writeFile(path.join(folder, 'isolated_stage_transport.py'),
+    '(' + stageHelperFixture.toString() + ')(' + JSON.stringify(trace) + ',' + JSON.stringify(sample) + ');');
+  const wired = new WiredObserver({config: path.join(folder, 'fixture'), python: process.execPath,
+    script: path.join(folder, 'wired_observer.py')});
+  wired.lastObservation = structuredClone(sample);
+  f.restore.host.observer = wired;
+
+  const sequence = [];
+  const start = wired.runIsolatedStage.bind(wired);
+  wired.runIsolatedStage = async (request, bounds, body) => {
+    assert.equal(wired.active, null);
+    let writerFinished = !body;
+    const pending = start(request, bounds, body && (async (...args) => {
+      await body(...args);
+      writerFinished = true;
+    }));
+    const child = wired.active;
+    assert.ok(child?.pid);
+    let closed = false;
+    child.once('close', () => { closed = true; });
+    const reply = await pending;
+    assert.ok(writerFinished && closed);
+    assert.ok(reply.wrote);
+    assert.equal(child.exitCode, 0);
+    assert.equal(wired.active, null);
+    sequence.push(request.selector);
+    return reply;
+  };
+  wired.run = (action, request) => {
+    assert.equal(wired.active, null);
+    sequence.push(request.selector);
+    return f.restore.observer.run(action, request);
+  };
+
+  const result = await f.prepare(createIsolatedStageDestination(wired));
+  assert.equal(result.status, 'ready');
+  assert.equal(result.cleanupPending, false);
+  assert.equal(result.preview.ordinary_restore.preview.source.complete_media, true);
+  assert.doesNotMatch(JSON.stringify(result), /restore-v1-|custody_sha256|inventory_sha256/);
+  assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+  f.restore.state.apply = 'restored';
+  assert.equal((await f.restore.use('confirm', result.preview.ordinary_restore.reference)).ordinary_restore.state, 'restored');
+  assert.deepEqual(sequence, ['receive-isolated-stage', 'check-isolated-stage', 'prepare', 'check-isolated-stage',
+    'check-isolated-stage', 'apply', 'release-isolated-stage']);
+  assert.equal(await f.restore.host.dispose(), false);
+  assert.equal(wired.active, null);
+
+  const calls = (await readFile(trace, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(calls.length, 5);
+  const decoded = calls.map(call => {
+    const control = Buffer.from(call.control, 'base64').toString('utf8');
+    const request = JSON.parse(control);
+    assert.equal(control, JSON.stringify(request) + '\n');
+    assert.ok(Number.isInteger(request.budget_ms) && request.budget_ms > 0 && request.budget_ms <= 12000);
+    assert.deepEqual({connection_id: request.connection_id, boot_id: request.boot_id}, identity);
+    return {request, body: Buffer.from(call.body, 'base64'), receipt: call.receipt};
+  });
+  const [received, ...subsequent] = decoded;
+  const {header, selector} = received.request;
+  assert.equal(selector, 'receive-isolated-stage');
+  assert.deepEqual(Object.keys(received.request).sort(), ['boot_id', 'budget_ms', 'connection_id', 'header', 'selector']);
+  assert.deepEqual(Object.keys(header).sort(),
+    ['boot_id', 'inventory_sha256', 'marker_sha256', 'object_count', 'payload_bytes', 'stage_id', 'version']);
+  assert.equal(header.version, 1);
+  assert.equal(header.boot_id, identity.boot_id);
+  assert.equal(header.marker_sha256, retained.marker_sha256);
+  assert.match(header.stage_id, /^[a-f0-9-]{14}4[a-f0-9-]{21}$/);
+  assertRetainedStageFrame(retained, header, received.body);
+  assert.deepEqual(received.receipt, {version: 1, stage_id: header.stage_id, boot_id: header.boot_id,
+    marker_sha256: header.marker_sha256, inventory_sha256: header.inventory_sha256, custody_sha256: 'c'.repeat(64),
+    root: '/home/root/.local/share/.remarkable-buddies-restore-stage-v1/restore-v1-' + header.stage_id});
+  assert.equal(f.restore.calls[0].body.source, received.receipt.root + '/data');
+  assert.equal(f.restore.calls[1].body.source, received.receipt.root + '/data');
+  assert.deepEqual(subsequent.map(call => call.request.selector),
+    ['check-isolated-stage', 'check-isolated-stage', 'check-isolated-stage', 'release-isolated-stage']);
+  for (const {request, body, receipt} of subsequent) {
+    assert.deepEqual(Object.keys(request).sort(), ['boot_id', 'budget_ms', 'connection_id', 'input_base64', 'selector']);
+    assert.equal(request.input_base64, Buffer.from(JSON.stringify(received.receipt)).toString('base64'));
+    assert.deepEqual(receipt, received.receipt);
+    assert.equal(body.length, 0);
+  }
+});
+
+
+test('wired stage adapter reduces failed receives and preserves possible creation through disposal', {timeout: 6000}, async t => {
+  const retained = await retainedStagePackage();
+  for (const outcome of ['no-output', 'cleaned', 'unconfirmed', 'lost', 'wrong-receipt']) {
+    await t.test(outcome, async t => {
+      const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true});
+      f.releaseDone.resolve();
+      const selectors = stagePeer(f, retained, outcome);
+      const result = await f.prepare(createIsolatedStageDestination(f.restore.observer));
+      const cleanupPending = ['lost', 'unconfirmed', 'wrong-receipt'].includes(outcome);
+      assert.deepEqual(result, {status: 'unavailable', preview: null, cleanupPending});
+      assert.deepEqual(selectors, ['receive-isolated-stage']);
+      assert.deepEqual(f.restore.calls, []);
+      assert.equal(await f.restore.host.dispose(), cleanupPending);
+      assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+    });
+  }
+});
+
+test('wired stage adapter retires a later preview only under an idle joined lease', {timeout: 6000}, async t => {
+  const retained = await retainedStagePackage();
+  for (const busy of [false, true]) {
+    await t.test(busy ? 'competing lease' : 'idle lease', async t => {
+      const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true});
+      f.releaseDone.resolve();
+      const selectors = stagePeer(f, retained);
+      assert.equal((await f.prepare(createIsolatedStageDestination(f.restore.observer))).status, 'ready');
+      const competing = busy && f.restore.io.acquire('competing', 'original', 'check', {joined: true});
+      if (busy) assert.ok(competing);
+      const disposal = f.restore.host.dispose();
+      assert.equal(await disposal, busy);
+      if (competing) f.restore.io.release(competing);
+      assert.equal(f.restore.host.dispose(), disposal);
+      assert.equal(selectors.filter(selector => selector === 'release-isolated-stage').length, busy ? 0 : 1);
+      assert.equal(f.restore.observer.cancels, 0);
+    });
+  }
+});
+
+
+test('wired stage disposal joins the cancelled sealed member read before retiring its source', {timeout: 6000}, async t => {
+  const retained = await retainedStagePackage();
+  const entered = Promise.withResolvers(), stopped = Promise.withResolvers(), finish = Promise.withResolvers();
+  t.after(() => finish.resolve());
+  const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true,
+    holdMemberRead: async bounds => {
+      const {signal, timeoutMs} = bounds();
+      assert.ok(timeoutMs <= 12000);
+      signal.addEventListener('abort', stopped.resolve, {once: true});
+      entered.resolve();
+      await finish.promise;
+      signal.throwIfAborted();
+    }});
+  f.releaseDone.resolve();
+  const selectors = stagePeer(f, retained);
+  const transfer = f.prepare(createIsolatedStageDestination(f.restore.observer));
+  await entered.promise;
+  const disposal = f.restore.host.dispose();
+  await stopped.promise;
+  assert.equal(f.events.includes('stage-release'), false);
+  assert.equal(f.restore.io.revoke(), false);
+  finish.resolve();
+  assert.deepEqual(await transfer, {status: 'invalidated', preview: null, cleanupPending: true});
+  assert.equal(await disposal, true);
+  assert.deepEqual(selectors, ['receive-isolated-stage']);
+  assert.deepEqual(f.restore.calls, []);
+  assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+});
+
+test('expired active stage check cannot turn its retirement into a new lease', {timeout: 6000}, async t => {
+  const retained = await retainedStagePackage();
+  const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true});
+  f.releaseDone.resolve();
+  let now = performance.now();
+  f.restore.host.now = () => now;
+  const selectors = stagePeer(f, retained);
+  const result = await f.prepare(createIsolatedStageDestination(f.restore.observer));
+  assert.equal(result.status, 'ready');
+  const original = f.restore.observer.runIsolatedStage;
+  f.restore.observer.runIsolatedStage = async function(...args) {
+    const reply = await original.apply(this, args);
+    if (args[0].selector === 'check-isolated-stage') now += 20000;
+    return reply;
+  };
+  const confirmed = await f.restore.use('confirm', result.preview.ordinary_restore.reference);
+  assert.equal(confirmed.ordinary_restore.state, 'not-dispatched');
+  assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+  assert.equal(await f.restore.host.dispose(), true);
+  assert.deepEqual(selectors, ['receive-isolated-stage', 'check-isolated-stage', 'check-isolated-stage', 'check-isolated-stage']);
 });

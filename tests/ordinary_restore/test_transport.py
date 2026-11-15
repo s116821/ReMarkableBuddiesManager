@@ -15,6 +15,7 @@ root=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(root/'host'))
 sys.path.insert(0,str(root/'tests/wired'))
 import ordinary_restore_transport as q
+import isolated_stage_transport as s
 import wired_observer as o
 from test_observer import Peer, Files
 import paramiko
@@ -163,3 +164,173 @@ class SSH(unittest.TestCase):
                 raw = self.execute_on_peer(selector)
                 self.assertEqual(raw['status'], 'reported')
                 self.assertEqual(base64.b64decode(raw['stdout_base64']), report(selector))
+
+
+STAGE_CORPUS = root / 'tests/fixtures/isolated-backup-actual'
+STAGE_ID = '34411111-2222-4333-8444-555555555555'
+
+
+def producer_stage():
+    receipt = (STAGE_CORPUS / 'receipt.json').read_bytes()
+    if hashlib.sha256(receipt).hexdigest() != 'e90a495bb2e3a8c914a301b47b96d93b5946c9644bee4c3be8b06ede7c32f8b3':
+        raise ValueError('fixture receipt changed')
+    complete = json.loads(receipt)['cases']['complete']
+    objects = sorted(name for name in complete['files'] if name.startswith('data/objects/'))
+    names = ['data/backup.json', *objects, 'portable-configuration.json', 'isolated-backup.json']
+    inventory = hashlib.sha256(b'remarkable-buddies-restore-stage-inventory-v1\0' + len(objects).to_bytes(4, 'big'))
+    body = bytearray()
+    count = 0
+    for name in names:
+        raw = (STAGE_CORPUS / complete['directory'] / name).read_bytes()
+        want = complete['files'][name]
+        if len(raw) != want['bytes'] or hashlib.sha256(raw).hexdigest() != want['sha256']:
+            raise ValueError('fixture member changed')
+        descriptor = len(raw).to_bytes(8, 'big') + bytes.fromhex(want['sha256'])
+        inventory.update(descriptor)
+        body.extend(descriptor + raw)
+        count += len(raw)
+    header = dict(version=1, stage_id=STAGE_ID, boot_id=BOOT, marker_sha256=complete['marker_sha256'],
+                  inventory_sha256=inventory.hexdigest(), object_count=len(objects), payload_bytes=count)
+    receipt = {key: value for key, value in header.items() if key not in ('object_count', 'payload_bytes')}
+    receipt.update(root='/home/root/.local/share/.remarkable-buddies-restore-stage-v1/restore-v1-' + STAGE_ID,
+                   custody_sha256='d' * 64)
+    return header, bytes(body), receipt
+
+
+class StagePeer(Peer):
+    def __init__(self, selector, receipt, mode):
+        super().__init__()
+        self.selector, self.receipt, self.mode = selector, receipt, mode
+        self.input = bytearray()
+        self.held = []
+        self.read_eof = False
+
+    def check_channel_exec_request(self, channel, command):
+        if command.decode() == o.COMMAND:
+            if self.mode != 'drift' or not self.commands:
+                return super().check_channel_exec_request(channel, command)
+            self.commands.append(command.decode())
+
+            def changed():
+                channel.send(b'armv7l\nLoadState=loaded\nActiveState=active\nSubState=running\n')
+                channel.send_exit_status(0)
+                channel.shutdown_write()
+
+            threading.Thread(target=changed, daemon=True).start()
+            return True
+        self.commands.append(command.decode())
+        if command.decode() != s.COMMANDS[self.selector]:
+            return False
+        self.held.append(channel)
+
+        def complete():
+            early = self.mode == 'early-cleaned'
+            while part := channel.recv(1 if early else 4096):
+                self.input.extend(part)
+                if early and self.input.endswith(b'\n'):
+                    break
+            self.read_eof = not early
+            settlement = {s.RECEIVE: 'sealed', s.CHECK: 'verified', s.RELEASE: 'released'}[self.selector]
+            data = dict(settlement='cleaned' if early else settlement, receipt=None if early else self.receipt)
+            report = dict(report_version=1, operation=self.selector, status='failed' if early else 'ok',
+                          incomplete=early, activation_performed=False, data=data)
+            channel.sendall(json.dumps(report).encode() + b'\n')
+            if self.mode == 'extra':
+                channel.sendall(b'{}\n')
+            channel.send_stderr(b'a' * (8193 if self.mode == 'oversize-diagnostics' else 4))
+            if self.mode == 'no-exit':
+                channel.shutdown_write()
+                channel.close()
+                return
+            channel.send_exit_status(7 if self.mode == 'nonzero' else 0)
+            if self.mode != 'no-eof':
+                channel.shutdown_write()
+
+        threading.Thread(target=complete, daemon=True).start()
+        return True
+
+
+@unittest.skipUnless(sys.platform == 'linux', 'Authenticated Linux loopback fixture only')
+class StageSSH(unittest.TestCase):
+    def execute_stage(self, selector, mode='complete'):
+        header, body, receipt = producer_stage()
+        with tempfile.TemporaryDirectory() as folder:
+            client_bytes, _ = key(bytes(range(32)))
+            _, hostkey = key(bytes([7]) * 32)
+            identity_file = Path(folder) / 'public-fixture'
+            identity_file.write_bytes(client_bytes)
+            identity_file.chmod(0o600)
+            client, server = socket.socketpair()
+            peer = StagePeer(selector, receipt, mode)
+            transport = paramiko.Transport(server)
+            transport.add_server_key(hostkey)
+            transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Files)
+            transport.start_server(event=threading.Event(), server=peer)
+            self.addCleanup(transport.close)
+            self.addCleanup(client.close)
+            self.addCleanup(server.close)
+            value = dict(selector=selector, connection_id=IDENTITY, boot_id=BOOT, budget_ms=12000)
+            original = json.dumps(receipt, separators=(',', ':')).encode()
+            if selector == s.RECEIVE:
+                value['header'] = header
+            else:
+                value['input_base64'] = base64.b64encode(original).decode()
+            value = s.request(json.dumps(value).encode())
+            payload = io.BytesIO(body if selector == s.RECEIVE else b'')
+            dispatched = []
+            unhold = threading.Event()
+
+            def read(count):
+                if mode == 'early-cleaned':
+                    unhold.wait(2)
+                return payload.read(min(113, count))
+
+            def observe():
+                return o.observe({'host_key_sha256': o.fingerprint(hostkey), 'identity_file': str(identity_file)},
+                                 snapshot=lambda _: BASELINE, dial=lambda _: client, notices=Notice(),
+                                 expected_connection=IDENTITY,
+                                 inspection=lambda t: s.execute(t, value,
+                                                                 s.time.monotonic() + (1 if mode == 'no-eof' else 8),
+                                                                 lambda: dispatched.append(selector), read))
+
+            try:
+                if mode not in ('complete', 'early-cleaned'):
+                    expected = o.Refusal if mode in ('drift', 'no-eof') else ValueError
+                    with self.assertRaises(expected):
+                        observe()
+                    self.assertEqual(dispatched, [selector])
+                    self.assertEqual(peer.commands[1], s.COMMANDS[selector])
+                    return
+                observed = observe()
+                self.assertEqual(dispatched, [selector])
+                self.assertEqual(peer.commands, [o.COMMAND, s.COMMANDS[selector], o.COMMAND])
+                report = json.loads(base64.b64decode(observed['_stage_stdout']))
+                self.assertEqual(report['operation'], selector)
+                if selector == s.RECEIVE:
+                    raw_header, rest = bytes(peer.input).split(b'\n', 1)
+                    forwarded = json.loads(raw_header)
+                    self.assertTrue(1 <= forwarded.pop('budget_ms') < value['budget_ms'])
+                    self.assertEqual(forwarded, header)
+                    self.assertEqual(rest, body if mode == 'complete' else b'')
+                else:
+                    self.assertEqual(bytes(peer.input), original)
+                self.assertIs(peer.read_eof, mode == 'complete')
+                self.assertEqual(report['data']['receipt'], receipt if mode == 'complete' else None)
+                if mode == 'early-cleaned':
+                    self.assertEqual(report['data']['settlement'], 'cleaned')
+                    self.assertEqual(payload.tell(), 0)
+            finally:
+                unhold.set()
+
+    def test_authenticated_stage_selectors_forward_exact_retained_frame_and_receipt(self):
+        for selector in s.SELECTORS:
+            with self.subTest(selector=selector):
+                self.execute_stage(selector)
+
+    def test_authenticated_early_cleaned_reply_can_settle_before_local_pipe_eof(self):
+        self.execute_stage(s.RECEIVE, 'early-cleaned')
+
+    def test_authenticated_stage_terminal_and_original_observation_are_required(self):
+        for mode in ('no-exit', 'no-eof', 'nonzero', 'extra', 'oversize-diagnostics', 'drift'):
+            with self.subTest(mode=mode):
+                self.execute_stage(s.RECEIVE, mode)

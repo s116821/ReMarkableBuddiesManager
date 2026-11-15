@@ -382,21 +382,28 @@ export class IsolatedBackupDownload {
         const reader = new AbortController();
         const signal = AbortSignal.any([job.controller.signal, reader.signal]);
         let reading, readFailed = false;
-        const readFile = (name, write) => {
+        const readFile = (name, write, limits) => {
           const member = files.find(file => file.name === name);
           if (signal.aborted || reading || readFailed || !member || typeof write !== 'function') {
             return Promise.reject(new DownloadFailure('invalid'));
           }
+          if (limits && (!(limits.signal instanceof AbortSignal) || typeof limits.remainingMs !== 'function')) {
+            return Promise.reject(new DownloadFailure('invalid'));
+          }
+          const readSignal = limits ? AbortSignal.any([signal, limits.signal]) : signal;
           const bounds = () => {
-            signal.throwIfAborted();
-            return {...this.#options(job, 0), signal};
+            readSignal.throwIfAborted();
+            const options = this.#options(job, 0);
+            const timeoutMs = limits ? Math.min(options.timeoutMs, Math.floor(limits.remainingMs())) : options.timeoutMs;
+            require(timeoutMs >= 1, 'incomplete');
+            return {...options, timeoutMs, signal: readSignal, joined: !!limits};
           };
           reading = (async () => {
             await this.#authority(job, bounds());
             bounds();
             await job.stage.readVerified(member, names, bounds, async chunk => {
               bounds();
-              await write(chunk, signal);
+              await write(chunk, readSignal);
             });
             await this.#authority(job, bounds());
             bounds();
@@ -409,7 +416,7 @@ export class IsolatedBackupDownload {
           return reading;
         };
         try {
-          await consume({inspection: {...job.inspection}, files, components, readFile, ...this.#options(job, 0)});
+          await consume({operation, reference, inspection: {...job.inspection}, files, components, readFile, ...this.#options(job, 0)});
         } finally {
           reader.abort();
           if (reading) {

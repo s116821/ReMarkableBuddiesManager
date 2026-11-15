@@ -76,3 +76,76 @@ test('actual supervised restore child exact24576/over/duplicate/identity/exit/ti
  }
  for(const line of (await readFile(record,'utf8')).trim().split('\n')){const q=JSON.parse(line);assert.deepEqual(Object.keys(q).sort(),['boot_id','budget_ms','connection_id','input_base64','selector']);assert.equal(q.selector,'prepare');assert.ok(q.budget_ms>=1&&q.budget_ms<=12000);assert.deepEqual(JSON.parse(Buffer.from(q.input_base64,'base64')),{restore_version:1,operation:vectors.context.operation,source});}
 });
+
+
+test('supervised stage joins a backpressured writer before the latest observer successor can spawn', {timeout: 9000}, async t => {
+ const folder = await mkdtemp(path.join(os.tmpdir(), 'manager-wired-stage-join-'));
+ t.after(() => rm(folder, {recursive: true, force: true}));
+ const trace = path.join(folder, 'successors');
+ await writeFile(path.join(folder, 'isolated_stage_transport.py'),
+  "process.stdout.write('RE' + 'ADY\\n'); process.stdin.pause(); setInterval(() => {}, 1000);");
+ await writeFile(path.join(folder, 'wired_observer.py'),
+  'require("node:fs").appendFileSync(' + JSON.stringify(trace) + ', "observe\\n");' +
+  'process.stdout.write(' + JSON.stringify(JSON.stringify({contract_version: 1, status: 'observed', observation: tablet})) + ');');
+ const observer = new WiredObserver({config: path.join(folder, 'fixture'), python: process.execPath,
+  script: path.join(folder, 'wired_observer.py')});
+ const issuing = Promise.withResolvers(), stopped = Promise.withResolvers(), drain = Promise.withResolvers();
+ t.after(() => { drain.resolve(); observer.cancel(); });
+ const controller = new AbortController(), deadline = performance.now() + 5000;
+ let accepted = 0, writing = true;
+ const transfer = observer.runIsolatedStage({selector: 'receive-isolated-stage', ...identity}, {
+  signal: controller.signal, current: () => true, remainingMs: () => deadline - performance.now(),
+ }, async (write, signal) => {
+  const block = Buffer.alloc(65536);
+  issuing.resolve();
+  try {
+   for (let i = 0; i < 64; i++) {
+    await write(block);
+    accepted++;
+   }
+   writing = false;
+  } finally {
+   stopped.resolve(signal.aborted);
+   await drain.promise;
+  }
+ });
+ await issuing.promise;
+ const original = observer.active;
+ const observeUntil = performance.now() + 1000;
+ while (!original.stdin.writableLength && performance.now() < observeUntil) {
+  await new Promise(resolve => setTimeout(resolve, 5));
+ }
+ assert.ok(original.stdin.writableLength > 0 && writing && accepted < 64);
+ const stale = observer.run('observe');
+ const latest = observer.run('observe');
+ assert.equal(await stopped.promise, true);
+ assert.equal(observer.active, original);
+ await assert.rejects(readFile(trace), {code: 'ENOENT'});
+ drain.resolve();
+ assert.deepEqual(await transfer, {dispatch: 'possible', stdout: null, wrote: false});
+ assert.equal((await stale).status, 'cancelled');
+ assert.equal((await latest).status, 'observed');
+ assert.equal(await readFile(trace, 'utf8'), 'observe\n');
+ assert.equal(observer.active, null);
+});
+
+test('supervised stage classifies a withheld child and oversized response without exposing diagnostics', {timeout: 8000}, async t => {
+ const folder = await mkdtemp(path.join(os.tmpdir(), 'manager-wired-stage-fault-'));
+ t.after(() => rm(folder, {recursive: true, force: true}));
+ const script = path.join(folder, 'wired_observer.py');
+ const helper = path.join(folder, 'isolated_stage_transport.py');
+ for (const mode of ['timeout', 'oversized', 'nonzero']) {
+  await t.test(mode, async () => {
+   const behavior = mode === 'timeout' ? 'setInterval(() => {}, 1000);' :
+    mode === 'oversized' ? "process.stdout.write('x'.repeat(24577));" : "process.stderr.write('PRIVATE'); process.exitCode = 9;";
+   await writeFile(helper, "process.stdout.write('READY\\n'); process.stdin.resume(); process.stdin.on('end', () => {" + behavior + '});');
+   const observer = new WiredObserver({config: path.join(folder, 'fixture'), python: process.execPath, script});
+   const deadline = performance.now() + (mode === 'timeout' ? 1000 : 3000);
+   const outcome = await observer.runIsolatedStage({selector: 'check-isolated-stage', ...identity, input_base64: 'e30='}, {
+    signal: new AbortController().signal, current: () => true, remainingMs: () => deadline - performance.now(),
+   });
+   assert.deepEqual(outcome, {dispatch: 'possible', stdout: null, wrote: false});
+   assert.equal(observer.active, null);
+  });
+ }
+});
