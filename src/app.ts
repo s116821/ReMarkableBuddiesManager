@@ -5,6 +5,7 @@ import type {PortableRetained,PortableOrigins} from '../host/portable-configurat
 import {NotebookArchiveController,archiveAttemptMessage as notebookAttemptMessage} from './notebook-archive';
 import type {ArchiveRetained as NotebookRetained} from '../host/notebook-archive-protocol.mjs';
 import {StorageInitializationController} from './storage-initialization';
+import {FirstConfigurationPanel} from './first-configuration-panel';
 import type {StorageInitializationRetained} from '../host/storage-initialization-protocol.mjs';
 import {OwnedV3Controller,ownedV3Rows,exactCount} from './owned-data-v3';
 import {LocalModeChoiceController} from './local-mode-choice';
@@ -62,7 +63,7 @@ import buildInfo from './build-info.json';
 import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 
 @Component({
-  selector: 'app-root', standalone: true, templateUrl: './app.html',
+  selector: 'app-root', standalone: true, templateUrl: './app.html', imports: [FirstConfigurationPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App implements OnDestroy {
@@ -137,6 +138,12 @@ export class App implements OnDestroy {
   readonly cacheCleanup=signal(this.cleanupController.state);
   private readonly storageInitializationController=new StorageInitializationController(state=>this.storageInitialization.set(state));
   readonly storageInitialization=signal(this.storageInitializationController.state);
+  readonly firstConfigurationBlocks = signal(false);
+  readonly pauseFirstConfiguration = async () => {
+    const tablet = this.connection().observation;
+    await this.connectionController.pauseObservation();
+    return !!tablet && this.connection().observation === tablet && this.profile().inspection;
+  };
   private readonly ownedV3Controller=new OwnedV3Controller(state=>this.ownedV3.set(state));
   readonly ownedV3=signal(this.ownedV3Controller.state);
   readonly ownedV3Rows=computed(()=>ownedV3Rows(this.ownedV3().view));
@@ -405,7 +412,7 @@ export class App implements OnDestroy {
   async inspectSourceCache(){const tablet=this.connection().observation;if(!tablet||!this.canInspectSourceCache())return;this.clearSourceCachePeers();await this.cacheController.inspect({inspectSourceCache:q=>this.host.inspectSourceCache!(q)},tablet,async()=>{await this.connectionController.pauseObservation();return this.connection().observation===tablet&&this.profile().inspection;});}
   private storageInitializationAdapter(){return {storageInitialization:(q:import('../host/storage-initialization-protocol.mjs').StorageInitializationRequest)=>this.host.storageInitialization!(q)};}
   storageInitializationPeerBusy(){return this.sourceCachePeerBusy()||this.cacheInventory().busy||this.ownedV3().busy;}
-  canBeginStorageInitialization(){const t=this.connection().observation;return !!this.host.storageInitialization&&this.profile().inspection&&!this.storageInitialization().busy&&!this.storageInitializationPeerBusy()&&!!t&&!this.storageInitialization().retained.some(r=>r.connection_id===t.connection_id&&r.outcome==='unknown');}
+  canBeginStorageInitialization(){const t=this.connection().observation;return !!this.host.storageInitialization&&this.profile().inspection&&!this.firstConfigurationBlocks()&&!this.storageInitialization().busy&&!this.storageInitializationPeerBusy()&&!!t&&!this.storageInitialization().retained.some(r=>r.connection_id===t.connection_id&&r.outcome==='unknown');}
   async beginStorageInitialization(){const t=this.connection().observation;if(!t||!this.canBeginStorageInitialization())return;this.clearSourceCachePeers();this.cacheController.clear();this.savedModeController.clear();this.memoryInspectionController.clear();this.memoryController.clear();this.ownedController.clear();this.runtimeController.clear();this.personalizationController.clear();await this.storageInitializationController.begin(this.storageInitializationAdapter(),t,async()=>{await this.connectionController.pauseObservation();return this.connection().observation===t&&this.profile().inspection;});}
   canConfirmStorageInitialization(){return this.canBeginStorageInitialization()&&this.storageInitialization().view?.state==='ready';}
   async confirmStorageInitialization(){const t=this.connection().observation;if(!t||!this.canConfirmStorageInitialization())return;this.notebookController.clear();await this.storageInitializationController.confirm(this.storageInitializationAdapter(),t,async()=>{await this.connectionController.pauseObservation();return this.connection().observation===t&&this.profile().inspection;});}
@@ -768,7 +775,7 @@ export class App implements OnDestroy {
   }
   canReviewCloudBackup(data = false) {
     return this.canBrowseCloudBackups() && this.cloudBackup().previewAvailable && (data
-      ? !!this.host.ordinaryRestore && this.profile().inspection && !this.restoreBusy('legacy') &&
+      ? !!this.host.ordinaryRestore && this.profile().inspection && !this.firstConfigurationBlocks() && !this.restoreBusy('legacy') &&
         this.restoreController.state.retained.length < 8
       : this.portableAvailable());
   }

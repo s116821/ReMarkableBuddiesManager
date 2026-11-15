@@ -957,7 +957,12 @@
   </section>
 
   <section class="ui-panel my-6" aria-labelledby="storage-initialization-title">
-    <h2 id="storage-initialization-title">Prepare Buddy storage</h2>
+    <h2 id="storage-initialization-title" #storageSetupTitle>Prepare Buddy storage</h2>
+    @defer (on viewport(storageSetupTitle)) {
+      <app-first-configuration [invoke]="host.firstConfiguration" [tablet]="profile().inspection ? connection().observation : null"
+        [pause]="pauseFirstConfiguration" [peerBusy]="storageInitializationPeerBusy()"
+        (blocked)="firstConfigurationBlocks.set($event)" />
+    }
     <p class="text-sm text-muted">Create or recover Buddy-owned storage at configured locations. Recovery may clean owned staging. This does not install Buddy, set paths, choose a mode, stop services or restore archives.</p>
     <button class="ui-button ui-button-primary mt-3" type="button" (click)="beginStorageInitialization()" [disabled]="!canBeginStorageInitialization()">Review storage setup</button>
     @if (storageInitialization().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="stopStorageInitialization()">Stop setup wait</button> }

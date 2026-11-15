@@ -7,6 +7,7 @@ import path from 'node:path';
 import {chromium, _electron as electron, expect} from '@playwright/test';
 import {startHelper} from '../host/browser-helper.mjs';
 import {backupPreferencesFixture, identity} from './fixtures/isolated-backup-preferences.mjs';
+import {firstConfigurationFixture} from './fixtures/first-configuration.mjs';
 
 // Source-derived synthetic provider frames. The real host, transport and UI
 // consume them, but they are not live Drive or producer-emitted evidence.
@@ -291,7 +292,7 @@ async function verifyPreferences(page, control) {
   assert.equal((await control.snapshot()).releases, 2);
 }
 
-async function verifyRestore(page, snapshot) {
+async function verifyRestore(page, snapshot, setup) {
   const button = name => page.getByRole('button', {name, exact: true});
   await button('Read tablet state').click();
   await expect(page.getByTestId('tablet-model')).toBeVisible();
@@ -299,6 +300,16 @@ async function verifyRestore(page, snapshot) {
   await button('Select revision').click();
   await button('Download and verify').click();
   const preview = button('Preview backup data restore');
+  if (setup) {
+    await page.getByRole('heading', {name: 'Prepare Buddy storage', exact: true}).scrollIntoViewIfNeeded();
+    await button('Review first configuration').click();
+    await expect(button('Create default configuration')).toBeEnabled();
+    await expect(preview).toBeDisabled();
+    assert.deepEqual((await snapshot()).staged, []);
+    await button('Create default configuration').click();
+    await expect(page.getByTestId('first-configuration-status')).toContainText('created and verified');
+    assert.deepEqual(setup.state.calls.map(call => call.request.selector), ['check-initial', 'create-initial']);
+  }
   await expect(preview).toBeEnabled();
   await preview.click();
   const confirm = button('Confirm restore');
@@ -323,6 +334,7 @@ async function verifyRestore(page, snapshot) {
 
 async function verifySourcePreferences(profile, env) {
   const fixture = await backupPreferencesFixture(profile);
+  const setup = firstConfigurationFixture(fixture.observer);
   try {
     const helper = await startHelper({root: path.resolve('dist/manager/browser'),
       backupComposition: fixture.composition, observer: fixture.observer, backupRestoreDestination: fixture.restoreDestination});
@@ -335,7 +347,7 @@ async function verifySourcePreferences(profile, env) {
         await page.goto(helper.origin + '/preview/');
         await verifyPreferences(page, {snapshot: fixture.snapshot,
           setNoChange: value => { fixture.target.f.portableState.noop = value; }});
-        await verifyRestore(page, fixture.snapshot);
+        await verifyRestore(page, fixture.snapshot, setup);
       } finally { await browser.close(); }
     } finally { await helper.close(); }
   } finally { await fixture.close(); }

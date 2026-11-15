@@ -9,6 +9,7 @@ import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
 import type {ArchiveRequest as NotebookRequest,ArchiveResult as NotebookResult} from '../host/notebook-archive-protocol.mjs';
 import {parseArchiveJson as parseNotebookJson} from '../host/notebook-archive-protocol.mjs';
 import type {StorageInitializationAdapter} from './storage-initialization';
+import type {FirstConfigRequest, FirstConfigResult} from '../host/first-configuration-protocol.mjs';
 import type {OwnedV3Adapter} from './owned-data-v3';
 import type {LocalModeAdapter} from './local-mode-choice';
 import type {LocalModeResult} from '../host/local-mode-choice-protocol.mjs';
@@ -19,7 +20,7 @@ import{parseHandwritingJson}from'../host/handwriting-records-protocol.mjs';
 import type {ArchiveRequest,ArchiveResult} from '../host/selected-archive-protocol.mjs';
 import {parseArchiveJson} from '../host/selected-archive-protocol.mjs';
 import type {RestoreAdapter} from './ordinary-restore';
-import type {RestoreResult} from '../host/ordinary-restore-protocol.mjs';
+import type {RestoreRequest, RestoreResult} from '../host/ordinary-restore-protocol.mjs';
 import {parseRestoreJson} from '../host/ordinary-restore-protocol.mjs';
 import type {ManagementAdapter} from './conversation-management';
 import type {ManagementResult} from '../host/conversation-management-protocol.mjs';
@@ -59,12 +60,12 @@ import type { DriveAdapter } from './drive-auth';
 import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/drive-protocol.mjs';
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
-const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restore')=>async (request: import('../host/ordinary-restore-protocol.mjs').RestoreRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Ordinary restore helper unavailable');
+const maintenanceBridge=<Q, R>(route:string)=>async (request: Q|null):Promise<R> => {
+      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Tablet maintenance helper unavailable');
       const pending=fetch(route,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Ordinary restore unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Ordinary restore response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseRestoreJson(raw) as RestoreResult;
+      if(!response.ok||!response.body)throw Error('Tablet maintenance unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
+      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Tablet maintenance response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
+      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseRestoreJson(raw) as R;
     };
 
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
@@ -84,6 +85,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly conversationManagement?:ManagementAdapter['conversationManagement'];
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
+  readonly firstConfiguration?:(request: FirstConfigRequest)=>Promise<FirstConfigResult>;
   readonly storageInitialization?:StorageInitializationAdapter['storageInitialization'];
   readonly inspectOwnedV3?:OwnedV3Adapter['inspectOwnedV3'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
@@ -216,8 +218,9 @@ export function currentHost(): ManagerHost {
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Archive operation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseNotebookJson(raw) as NotebookResult;
     },
-    ordinaryRestore: restoreBridge('/manager-ordinary-restore'),
-    notebookRestore: restoreBridge('/manager-notebook-restore'),
+    ordinaryRestore: maintenanceBridge<RestoreRequest, RestoreResult>('/manager-ordinary-restore'),
+    notebookRestore: maintenanceBridge<RestoreRequest, RestoreResult>('/manager-notebook-restore'),
+    firstConfiguration: maintenanceBridge<FirstConfigRequest, FirstConfigResult>('/manager-first-configuration'),
     conversationManagement: async (request: import('../host/conversation-management-protocol.mjs').ManagementRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Conversation management helper unavailable');
       const pending=fetch('/manager-conversation-management',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;

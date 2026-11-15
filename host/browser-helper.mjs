@@ -8,6 +8,8 @@ import {parsePortableRequest,portableContext,parsePortableResult,portableJson} f
 import {NotebookArchiveHost} from './notebook-archive.mjs';
 import {parseArchiveRequest as parseNotebookRequest,parseArchiveResult as parseNotebookResult} from './notebook-archive-protocol.mjs';
 import {StorageInitializationHost} from './storage-initialization.mjs';
+import {FirstConfigurationHost} from './first-configuration.mjs';
+import {FIRST_CONFIG_REQUEST_BYTES, parseFirstConfigRequest} from './first-configuration-protocol.mjs';
 import {parseStorageInitializationRequest,parseStorageInitializationResult} from './storage-initialization-protocol.mjs';
 import {OwnedDataV3Host} from './owned-data-v3.mjs';
 import {parseOwnedV3Request,parseOwnedV3Result} from './owned-data-v3-protocol.mjs';
@@ -72,8 +74,8 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   driveAuth = backupComposition?.driveAuth ?? driveAuth ?? new DriveAuth();
   const isolatedBackup = backupComposition?.isolatedBackup ?? new IsolatedBackupHost({driveAuth});
   let backupDocument = Symbol();
-  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer,io,beforeIO:()=>invalidatePeers(basic)});
@@ -87,6 +89,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   sourceCache=new SourceCacheInventoryHost({observer:observer,io,beforeIO:()=>invalidatePeers(sourceCache)});
   ownedV3=new OwnedDataV3Host({observer:observer,io,beforeIO:()=>invalidatePeers(ownedV3)});
   storageInitialization=new StorageInitializationHost({observer:observer,io,beforeIO:()=>invalidatePeers(storageInitialization)});
+  firstConfiguration = new FirstConfigurationHost({observer, io, beforeIO: () => invalidatePeers(firstConfiguration)});
   cacheCleanup=new SourceCacheCleanupHost({observer:observer,io,beforeIO:()=>invalidatePeers(cacheCleanup)});
   conversations=new ConversationInventoryHost({observer:observer,io,beforeIO:()=>invalidatePeers(conversations)});
   management=new ConversationManagementHost({observer:observer,io,beforeIO:()=>invalidatePeers(management)});
@@ -126,6 +129,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       const original = backupDocument;
       backupDocument = Symbol();
       void backupPreferences.invalidate(original);
+      void firstConfiguration.invalidate(original);
       observer.cancel();
       isolatedBackup.invalidate();
     }
@@ -318,7 +322,10 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       }catch{refuse(503);}
       return;
     }
-    if (url.pathname === '/manager-isolated-backup') {
+    if (url.pathname === '/manager-isolated-backup' || url.pathname === '/manager-first-configuration') {
+      const first = url.pathname === '/manager-first-configuration';
+      const flow = first ? firstConfiguration : backupPreferences;
+      const limit = first ? FIRST_CONFIG_REQUEST_BYTES : ISOLATED_BACKUP_REQUEST_BYTES;
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin ||
           req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
       const admittedDocument = backupDocument;
@@ -326,10 +333,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try {
         for await (const chunk of req) {
           bytes += chunk.length;
-          if (bytes > ISOLATED_BACKUP_REQUEST_BYTES) return refuse(413);
+          if (bytes > limit) return refuse(413);
           chunks.push(chunk);
         }
-        request = parseIsolatedBackupBridgeRequest(parseIsolatedBackupJson(Buffer.concat(chunks), ISOLATED_BACKUP_REQUEST_BYTES));
+        const raw = Buffer.concat(chunks);
+        request = first ? parseFirstConfigRequest(portableJson(raw, limit)) :
+          parseIsolatedBackupBridgeRequest(parseIsolatedBackupJson(raw, limit));
       } catch { return refuse(400); }
       const callerCurrent = () => !closing && admittedDocument === backupDocument;
       if (!callerCurrent() || res.destroyed) return refuse(409);
@@ -341,13 +350,13 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
         res.once('finish', () => res.removeListener('close', abandoned));
       };
       try {
-        const value = await backupPreferences.request(request, {document: admittedDocument, callerCurrent, onAbandon});
+        const value = await flow.request(request, {document: admittedDocument, callerCurrent, onAbandon});
         if (res.destroyed) { abandon?.(); return; }
         if (!callerCurrent()) {
           abandon?.();
           return refuse(409);
         }
-        const result = backupPreferences.deliver(value, request, callerCurrent);
+        const result = flow.deliver(value, request, callerCurrent);
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify(result));
       } catch {
@@ -470,6 +479,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       () => isolatedRoot.dispose(),
       () => download,
       () => stopped,
+      () => firstConfiguration.dispose(),
       () => backupPreferences.dispose(),
     ].map(stop => Promise.resolve().then(stop)));
     const [ordinary, notebook, backup] = results;

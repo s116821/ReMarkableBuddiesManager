@@ -94,6 +94,8 @@ app.whenReady().then(async () => {
   const {ModelCredentialHost}=await import(pathToFileURL(path.join(hostRoot,'model-credential.mjs')).href);
   const {parseModelCredentialRequest,parseModelCredentialResult,modelCredentialContext}=await import(pathToFileURL(path.join(hostRoot,'model-credential-protocol.mjs')).href);
   const {StorageInitializationHost}=await import(pathToFileURL(path.join(hostRoot,'storage-initialization.mjs')).href);
+  const {FirstConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'first-configuration.mjs')).href);
+  const {parseFirstConfigRequest}=await import(pathToFileURL(path.join(hostRoot,'first-configuration-protocol.mjs')).href);
   const {parseStorageInitializationRequest,parseStorageInitializationResult}=await import(pathToFileURL(path.join(hostRoot,'storage-initialization-protocol.mjs')).href);
   const {OwnedDataV3Host}=await import(pathToFileURL(path.join(hostRoot,'owned-data-v3.mjs')).href);
   const {parseOwnedV3Request,parseOwnedV3Result}=await import(pathToFileURL(path.join(hostRoot,'owned-data-v3-protocol.mjs')).href);
@@ -115,8 +117,8 @@ app.whenReady().then(async () => {
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {SharedPreferencesHost, registerSharedPreferenceHandler} = await import(pathToFileURL(path.join(hostRoot, 'shared-preferences.mjs')).href);
-  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -130,6 +132,7 @@ app.whenReady().then(async () => {
   sourceCache=new SourceCacheInventoryHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(sourceCache)});
   ownedV3=new OwnedDataV3Host({observer:rawObserver,io,beforeIO:()=>invalidatePeers(ownedV3)});
   storageInitialization=new StorageInitializationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(storageInitialization)});
+  firstConfiguration = new FirstConfigurationHost({observer: rawObserver, io, beforeIO: () => invalidatePeers(firstConfiguration)});
   cacheCleanup=new SourceCacheCleanupHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(cacheCleanup)});
   conversations=new ConversationInventoryHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(conversations)});
   management=new ConversationManagementHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(management)});
@@ -162,6 +165,7 @@ app.whenReady().then(async () => {
   const authorized = (event, args) => args.length === 0 && isManagerMainFrame(event, window, uiUrl, closing);
   const backupDocument = watchBackupDocument(window, original => {
     void backupPreferences.invalidate(original);
+    void firstConfiguration.invalidate(original);
     observer.cancel();
     isolatedBackup.invalidate();
   });
@@ -260,6 +264,14 @@ app.whenReady().then(async () => {
     try{const context=modelResponseContext(request),pending=model.request(request);request=null;const value=parseModelSettingsResult(await pending,context,validateResult);return model.assertCurrent(value);}finally{request=null;}
   });
   registerIsolatedBackupHandler(ipcMain, authorized, backupDocument, backupPreferences);
+  ipcMain.handle('manager:firstConfiguration', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw Error('Configuration caller refused');
+    const request = parseFirstConfigRequest(args[0]);
+    const document = backupDocument();
+    const callerCurrent = () => document === backupDocument() && authorized(event, []);
+    const value = await firstConfiguration.request(request, {document, callerCurrent});
+    return firstConfiguration.deliver(value, request, callerCurrent);
+  });
   ipcMain.handle('manager:isolatedRoot',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Isolated backup caller refused');
     const request=parseIsolatedRootRequest(args[0]);const value=parseIsolatedRootResult(await isolatedRoot.request(request),request,validateResult);return isolatedRoot.assertCurrent(value);
@@ -330,6 +342,7 @@ app.whenReady().then(async () => {
       () => localMode.dispose(),
       () => isolatedRoot.dispose(),
       () => download,
+      () => firstConfiguration.dispose(),
       () => backupPreferences.dispose(),
     ].map(stop => Promise.resolve().then(stop)));
     const [ordinary, notebook, backup] = results;

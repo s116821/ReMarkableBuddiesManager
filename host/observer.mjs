@@ -1,4 +1,5 @@
 import {portableJson} from './portable-configuration-protocol.mjs';
+import {parseFirstConfigProducerReport, sameTarget} from './first-configuration-protocol.mjs';
 import {strictJson} from './strict-json.mjs';
 import { parseSavedConfigurationRequest, reduceSavedConfigurationResult } from './saved-configuration.mjs';
 import { parseMemoryInspectionRequest, reduceMemoryInspectionResult } from './memory-inspection.mjs';
@@ -19,10 +20,11 @@ export class WiredObserver {
   #stage = null;
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
     script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform,
-    timeoutMs = 13000, provisioningTimeoutMs = 45000 } = {}) {
+    timeoutMs = 13000, provisioningTimeoutMs = 45000, firstConfigurationRegistry } = {}) {
     this.config = config; this.python = python; this.script = script; this.platform = platform;
     this.active = null; this.generation = 0; this.timeoutMs = timeoutMs;
     this.provisioningTimeoutMs = provisioningTimeoutMs;
+    this.firstConfigurationRegistry = firstConfigurationRegistry;
   }
   cancel() {
     this.generation++;
@@ -31,8 +33,36 @@ export class WiredObserver {
     return result('cancelled');
   }
 
-  // A streamed stage is joined before this observer gives its slot to any successor.
-  async runIsolatedStage(request, {signal, current, remainingMs}, writeBody) {
+  firstConfigurationAdmission(sample) {
+    return this.firstConfigurationRegistry?.(sample) ?? null;
+  }
+
+  async runFirstConfiguration(request, ownership) {
+    const child = await this.#runJoinedChild('first_configuration_transport.py', request, ownership);
+    const refusal = {dispatch: child.dispatch, observation: null, report: null};
+    const raw = child.stdout;
+    if (raw === null) return refusal;
+    try {
+      if (!raw.length || raw.length > 8192 || raw[0] !== 123 ||
+          raw.at(-1) !== 10 || raw.indexOf(10) !== raw.length - 1) return refusal;
+      const value = strictJson(raw);
+      if (Object.keys(value ?? {}).sort().join() !== 'dispatch,observation,report') return refusal;
+      if (value.dispatch === 'not-dispatched' && value.observation === null && value.report === null) return value;
+      if (value.dispatch !== 'possible' || !value.observation || !value.report ||
+          !sameTarget(value.observation, request)) return refusal;
+      validateResult(result('observed', value.observation));
+      parseFirstConfigProducerReport(value.report, request.selector);
+      return value;
+    } catch { return refusal; }
+    finally { raw.fill(0); }
+  }
+
+  runIsolatedStage(request, ownership, writeBody) {
+    return this.#runJoinedChild('isolated_stage_transport.py', request, ownership, writeBody);
+  }
+
+  // A joined operation keeps the observer slot until the captured child closes.
+  async #runJoinedChild(script, request, {signal, current, remainingMs}, writeBody) {
     const refusal = dispatch => ({dispatch, stdout: null, wrote: false});
     const allowance = Math.min(this.timeoutMs, 12000, remainingMs());
     if (this.active || !current() || signal.aborted || allowance < 1 ||
@@ -47,7 +77,7 @@ export class WiredObserver {
     const chunks = [];
     let child, launched = false, stopped = false, wrote = false, size = 0;
     try {
-      child = spawn(this.python, [path.join(path.dirname(this.script), 'isolated_stage_transport.py')], {
+      child = spawn(this.python, [path.join(path.dirname(this.script), script)], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config},
       });
