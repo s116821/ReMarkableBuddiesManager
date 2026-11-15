@@ -152,6 +152,7 @@ jobs:
           python -m pip install -r host/requirements.txt
           python tests/service_stop/check_native_package_lock.py
           xvfb-run -a npm run test:hosts
+          xvfb-run -a npm run test:navigation-hosts
           xvfb-run -a npm run test:package
           xvfb-run -a npm run test:wired-hosts
           xvfb-run -a npm run test:wired-hosts -- --packaged
@@ -227,6 +228,7 @@ jobs:
         shell: bash
         run: |
           npm run test:hosts
+          npm run test:navigation-hosts
           npm run test:package
           npm run test:wired-hosts
           npm run test:wired-hosts -- --packaged
