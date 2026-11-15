@@ -39,9 +39,14 @@ async function exercise(page, set, calls) {
   await expect(status).toContainText('does not support');
   await set('normal');
   await inspect.click();
-  await expect(status).toHaveText('Shared preference snapshot read.');
-  await expect(panel).toContainText('Writer enabled (local)');
+  await expect(status).toHaveText('Saved preferences read.');
+  await expect(panel).toContainText('Writer enabled (this tablet)');
   await expect(panel).not.toContainText(privateText.trim());
+  const replace = panel.getByLabel('Replace the shared prompt', {exact: true});
+  const draft = panel.getByLabel('New prompt');
+  await expect(replace).not.toBeChecked();
+  await expect(draft).toHaveCount(0);
+  await expect(panel.getByText('established-absent', {exact: true})).not.toBeVisible();
   const host = page.url().startsWith('file:') ? 'electron' : 'browser';
   const viewport = page.viewportSize() ?? {width: 1280, height: 1000};
   for (const width of [1280, 390]) {
@@ -54,7 +59,7 @@ async function exercise(page, set, calls) {
   await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
   await expect(panel.locator('pre')).toContainText(privateText.trim());
   const revealed = await panel.locator('pre').elementHandle();
-  const draft = panel.getByLabel('New prompt');
+  await replace.check();
   await draft.fill('Private unsaved navigation draft');
   const detachedDraft = await draft.elementHandle();
   await showPanel(page,'research');
@@ -65,30 +70,41 @@ async function exercise(page, set, calls) {
   await expect(panel.locator('pre')).toHaveCount(0);
   await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
   await expect(panel.locator('pre')).toContainText(privateText.trim());
+  await expect(replace).not.toBeChecked();
+  await replace.check();
   await draft.fill('Private draft before clear');
   const clearedDraft = await draft.elementHandle();
   await panel.getByRole('button', {name: 'Clear shared view or stop waiting'}).click();
   assert.equal(await clearedDraft.evaluate(field => field.value), '', 'clear scrubs the detached private draft');
   await expect(panel.locator('pre')).toHaveCount(0);
   await inspect.click();
-  await expect(status).toHaveText('Shared preference snapshot read.');
+  await expect(status).toHaveText('Saved preferences read.');
+  await replace.check();
   await draft.fill('Private draft before inspection');
   const inspectedDraft = await draft.elementHandle();
   const inspectionsBefore = (await calls()).filter(call => call.selector === 'inspect').length;
   await inspect.click();
   await expect.poll(async () => (await calls()).filter(call => call.selector === 'inspect').length).toBe(inspectionsBefore + 1);
-  await expect(status).toHaveText('Shared preference snapshot read.');
+  await expect(status).toHaveText('Saved preferences read.');
   assert.equal(await inspectedDraft.evaluate(field => field.value), '', 'inspection scrubs the prior private draft');
+  await expect(replace).not.toBeChecked();
+  await expect(draft).toHaveCount(0);
 
   await panel.locator('select[name=writer]').selectOption('on');
   await panel.locator('select[name=research]').selectOption('null');
-  await panel.getByLabel('Apply these declarations to this shared group').check();
+  await panel.getByLabel('Apply these changes to this shared group').check();
+  await replace.check();
   await draft.fill('Private unused draft before submit');
-  const submittedDraft = await draft.elementHandle();
+  const hiddenDraft = await draft.elementHandle();
+  await replace.uncheck();
+  await expect(draft).toHaveCount(0);
+  assert.equal(await hiddenDraft.evaluate(field => field.value), '', 'turning replacement off scrubs its actual private node');
+  await replace.check();
+  await expect(draft).toHaveValue('');
+  await replace.uncheck();
   await set('lost');
   await panel.getByRole('button', {name: 'Save shared preferences'}).click();
   await expect(status).toContainText('outcome is unknown');
-  assert.equal(await submittedDraft.evaluate(field => field.value), '', 'submission scrubs its detached private draft');
   await showPanel(page,'research');
   await showPanel(page,'shared');
   await expect(status).toContainText('outcome is unknown');
@@ -98,12 +114,27 @@ async function exercise(page, set, calls) {
     settings: {product_settings: {writer_enabled: true}, research_policy: null}});
   await set('normal');
   await panel.getByRole('button', {name: 'Check original shared edit 1', exact: true}).click();
-  await expect(status).toHaveText('The original edit was committed locally. Shared application is unverified.');
+  await expect(status).toHaveText('Changes were saved on this tablet. Use by the shared group is unverified.');
   const last = (await calls()).at(-1);
   assert.equal(last.selector, 'status');
   assert.equal(last.body.operation, edit[0].body.operation);
   assert.equal(Object.hasOwn(last.body, 'patch'), false);
   await expect(panel).not.toContainText('local_config_sha256');
+  // Explicit replacement still submits the exact private text; hiding it above
+  // submitted neither the stale text nor an unintended empty replacement.
+  await inspect.click();
+  await expect(status).toHaveText('Saved preferences read.');
+  await replace.check();
+  await draft.fill(privateText);
+  const submittedDraft = await draft.elementHandle();
+  await panel.getByLabel('Apply these changes to this shared group').check();
+  await panel.getByRole('button', {name: 'Save shared preferences'}).click();
+  await expect(status).toHaveText('Changes were saved on this tablet. Use by the shared group is unverified.');
+  assert.equal(await submittedDraft.evaluate(field => field.value), '', 'submission scrubs its actual private node');
+  const finalEdits = (await calls()).filter(call => call.selector === 'edit');
+  assert.equal(finalEdits.length, 2);
+  assert.deepEqual(finalEdits[1].body.patch, {portable_configuration_version: 1,
+    settings: {personalization: {text: privateText}}});
 }
 
 const f = fixture();

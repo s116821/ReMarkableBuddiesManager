@@ -231,8 +231,18 @@ export class App implements OnDestroy {
   readonly memory = signal(this.memoryController.state);
   readonly memoryTextValid = computed(() => validMemoryText(this.memoryText()));
   readonly memoryData = computed(() => { const data = this.memory().report?.data; return data && 'query_status' in data ? data : null; });
-  private clearSharedPrivateView() {
+  readonly sharedPromptReplacement = signal(false);
+  readonly sharedOriginLabels = {shared: 'shared group', local: 'this tablet', default: 'default'};
+  toggleSharedPrompt(checked: boolean) {
+    if (!checked) this.clearSharedPromptDraft();
+    this.sharedPromptReplacement.set(checked);
+  }
+  private clearSharedPromptDraft() {
     document.querySelectorAll<HTMLTextAreaElement>('[data-shared-prompt-draft]').forEach(field => { field.value = ''; });
+  }
+  private clearSharedPrivateView() {
+    this.clearSharedPromptDraft();
+    this.sharedPromptReplacement.set(false);
     document.querySelectorAll<HTMLElement>('[data-shared-prompt-revealed]').forEach(field => { field.textContent = ''; });
   }
   private readonly sharedPreferenceController = new SharedPreferenceController(state => {
@@ -243,12 +253,12 @@ export class App implements OnDestroy {
   });
   readonly sharedPreferences = signal(this.sharedPreferenceController.state);
   readonly sharedLabels: Record<SharedPreferenceState['state'], string> = {
-    idle: 'Shared preferences have not been inspected.', ready: 'Shared preference snapshot read.',
+    idle: 'Read the saved preferences to get started.', ready: 'Saved preferences read.',
     joining: 'The shared group is still joining.', unresolved: 'The shared preference selection is unresolved.',
     invalidated: 'The shared preference snapshot expired or changed. Inspect again.',
     capacity: 'Check unresolved original edits before starting another.',
-    'no-change': 'The shared declarations already match.',
-    'local-committed': 'The original edit was committed locally. Shared application is unverified.',
+    'no-change': 'These preferences already match.',
+    'local-committed': 'Changes were saved on this tablet. Use by the shared group is unverified.',
     unsupported: 'This Buddy build or storage mode does not support shared preferences.',
     unavailable: 'Shared preferences are unavailable.', busy: 'Buddy data is busy. Inspect again when ownership is available.',
     conflict: 'The shared preferences changed. Inspect again before editing.',
@@ -637,6 +647,9 @@ export class App implements OnDestroy {
     if (!adapter || !observation || !reference || !view || !this.canInspectSharedPreferences()) return;
     const values = new FormData(form);
     if (!values.has('confirm')) return;
+    // A hidden or invalidated prompt editor cannot authorize an empty replacement
+    // through an old checkbox node before Angular finishes rendering.
+    if (!this.sharedPromptReplacement()) values.delete('replace-text');
     const patch = sharedPatch(values);
     this.clearIsolatedRoot();
     const current = () => this.connection().observation === observation;

@@ -880,7 +880,7 @@
 @if (app.isView('settings','shared')) {
 <section class="ui-panel my-5 min-w-0" aria-labelledby="shared-preferences-title">
   <h2 id="shared-preferences-title">Shared group preferences</h2>
-  <p>Inspect the shared preferences available to Buddy’s next admitted request. A running request may be using an earlier snapshot.</p>
+  <p>Review the saved settings for this group and tablet. A running Buddy request may still use earlier settings.</p>
   <div class="my-3 flex flex-wrap gap-3">
     <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSharedPreferences(false)" [disabled]="!app.canInspectSharedPreferences()">Inspect shared preferences</button>
     <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSharedPreferences(true)" [disabled]="!app.canInspectSharedPreferences()">Inspect and reveal private prompt</button>
@@ -889,29 +889,33 @@
   </div>
   <p role="status" data-testid="shared-preference-status">{{ app.sharedPreferences().busy ? 'Waiting for Buddy…' : app.sharedLabels[app.sharedPreferences().state] }}</p>
   @if (app.sharedPreferences().view; as view) {
-    <p>Group {{ view.group }} · {{ view.disposition }}</p>
+    <h3 class="mt-4 font-semibold">Saved preferences</h3>
     <ul>
-      <li>Reader {{ view.effective.reader_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.reader_enabled }})</li>
-      <li>Writer {{ view.effective.writer_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.writer_enabled }})</li>
-      <li>Export {{ view.effective.export_destination }} ({{ view.effective.origins.export_destination }})</li>
-      <li>Research {{ view.effective.research_policy }} ({{ view.effective.origins.research_policy }})</li>
-      <li>Personalization {{ view.effective.personalization_enabled ? 'enabled' : 'disabled' }} ({{ view.effective.origins.personalization_enabled }})</li>
-      <li>Prompt {{ view.effective.personalization_text_present ? 'present' : 'absent' }} ({{ view.effective.origins.personalization_text }})</li>
+      <li>Reader {{ view.effective.reader_enabled ? 'enabled' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.reader_enabled] }})</li>
+      <li>Writer {{ view.effective.writer_enabled ? 'enabled' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.writer_enabled] }})</li>
+      <li>Export {{ view.effective.export_destination === 'mem' ? 'to Mem' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.export_destination] }})</li>
+      <li>Research {{ view.effective.research_policy }} ({{ app.sharedOriginLabels[view.effective.origins.research_policy] }})</li>
+      <li>Personalization {{ view.effective.personalization_enabled ? 'enabled' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.personalization_enabled] }})</li>
+      <li>Prompt {{ view.effective.personalization_text_present ? 'saved' : 'not set' }} ({{ app.sharedOriginLabels[view.effective.origins.personalization_text] }})</li>
     </ul>
+    <details class="my-3 text-sm"><summary>Group details</summary><dl class="mt-2"><dt>Group ID</dt><dd class="break-all">{{ view.group }}</dd><dt>Shared selection state</dt><dd>{{ view.disposition }}</dd></dl></details>
     @if (view.effective.personalization_text !== null) {
       <pre class="whitespace-pre-wrap wrap-anywhere" data-shared-prompt-revealed>{{ view.effective.personalization_text }}</pre>
     }
     <form class="my-3 grid gap-3" (submit)="app.editSharedPreferences($event)">
-      <p>Choose only the declarations you want to change.</p>
+      <p>Choose the settings you want to change.</p>
       <label>Reader <select class="ui-field" name="reader"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
       <label>Writer <select class="ui-field" name="writer"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
       <label>Export <select class="ui-field" name="export"><option value="">Leave unchanged</option><option value="mem">Mem</option><option value="disabled">Disable</option></select></label>
-      <label><input type="checkbox" name="product-null"> Explicitly set the shared Reader, Writer and export group to its defaults instead of the individual choices above</label>
-      <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Explicit default</option></select></label>
+      <label><input type="checkbox" name="product-null"> Use defaults for Reader, Writer and export (overrides the three choices above)</label>
+      <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Use default</option></select></label>
       <label>Personalization <select class="ui-field" name="personalization"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
-      <label><input type="checkbox" name="replace-text"> Replace the shared prompt with the text below</label>
-      <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4" data-shared-prompt-draft autocomplete="off" spellcheck="false"></textarea></label>
-      <label><input type="checkbox" name="confirm" required> Apply these declarations to this shared group</label>
+      <label><input type="checkbox" name="replace-text" [checked]="app.sharedPromptReplacement()" (change)="app.toggleSharedPrompt($any($event.target).checked)"> Replace the shared prompt</label>
+      @if (app.sharedPromptReplacement()) {
+        <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4" data-shared-prompt-draft autocomplete="off" spellcheck="false" aria-describedby="shared-prompt-help"></textarea></label>
+        <p id="shared-prompt-help" class="text-sm text-muted">An empty replacement clears the shared prompt.</p>
+      }
+      <label><input type="checkbox" name="confirm" required> Apply these changes to this shared group</label>
       <button class="ui-button ui-button-primary" type="submit" [disabled]="!app.canInspectSharedPreferences()">Save shared preferences</button>
     </form>
   }
@@ -1040,15 +1044,15 @@
 }
 
 @if (app.isView('tablet','setup')) {
-<section class="ui-panel" aria-labelledby="first-configuration-title"><h2 id="first-configuration-title">First configuration</h2><p>Check this tablet before preparing its storage. Opening Setup does not verify that a configuration exists.</p><app-first-configuration [app]="app" /></section>
+<section class="ui-panel" aria-labelledby="first-configuration-title"><h2 id="first-configuration-title">First configuration</h2><p>Check for saved settings, then review creating defaults if they are missing.</p><app-first-configuration [app]="app" /></section>
 <section class="ui-panel my-6" aria-labelledby="storage-initialization-title">
     <h2 id="storage-initialization-title">Prepare Buddy storage</h2>
-    <p class="text-sm text-muted">Create or recover Buddy-owned storage at configured locations. Recovery may clean owned staging. This does not install Buddy, set paths, choose a mode, stop services or restore archives.</p>
+    <p class="text-sm text-muted">Prepare Buddy’s storage at its configured locations. Recovery can clean up Buddy’s temporary staging files.</p>
     <button class="ui-button ui-button-primary mt-3" type="button" (click)="app.beginStorageInitialization()" [disabled]="!app.canBeginStorageInitialization()">Review storage setup</button>
     @if (app.storageInitialization().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.stopStorageInitialization()">Stop setup wait</button> }
     <p role="status" class="mt-3" data-testid="storage-initialization-status">{{ app.storageInitialization().status }}</p>
     @if (app.storageInitialization().view?.state === 'ready') {
-      <div class="mt-3" data-testid="storage-initialization-review"><p>Setup can change owned storage. Valid paths and disabled legacy sync are required. Review does not check for empty storage, freeze configuration, reserve changes or predict repairs.</p><p>Saved mode is kept. Runtime, cloud, native pages and replacement restore are not checked or enabled.</p>
+      <div class="mt-3" data-testid="storage-initialization-review"><p>Setup can change Buddy-owned storage. Valid paths and disabled legacy sync are required. Your saved data mode is kept.</p>
       <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.confirmStorageInitialization()" [disabled]="!app.canConfirmStorageInitialization()">Prepare storage</button></div>
     }
     @if (app.storageInitialization().view?.current; as current) { <p class="mt-3" data-testid="storage-initialization-current">Current saved mode: {{ app.storageModeKindLabels[current.kind] }}. This does not confirm earlier setup.</p> }
@@ -1056,6 +1060,6 @@
       <div class="mt-3" data-testid="storage-initialization-original"><p>{{ row.outcome === 'prepared' ? 'Earlier setup completed' : 'Storage setup not confirmed' }}. Later checks do not change this result.</p>
       <button class="ui-button ui-button-secondary" type="button" (click)="app.checkStorageInitialization(row)" [disabled]="!app.canCheckStorageInitialization(row)">Check current storage</button></div>
     }
-    <p class="text-sm text-muted mt-3">Restart does not confirm setup. No automatic retries. Read saved mode and Save Local-only are separate actions requiring valid storage.</p>
+    <details class="text-sm text-muted mt-3"><summary>Setup limits</summary><p>Review does not reserve storage or predict repairs. Setup uses the configuration in effect when confirmed. It does not install Buddy, change paths or data mode, stop services, restore archives, or enable cloud sync. No automatic retries are made; earlier unconfirmed results remain unconfirmed after a restart or later check.</p></details>
   </section>
 }
