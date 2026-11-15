@@ -29,7 +29,7 @@
   .ui-panel { @apply rounded-xl border border-divider bg-surface p-6; }
   .ui-button { @apply rounded-md px-4 py-2 font-semibold disabled:cursor-not-allowed; }
   .ui-button-primary { @apply bg-forest text-white enabled:hover:bg-ink disabled:cursor-wait disabled:opacity-60; }
-  .ui-button-secondary { @apply border border-boundary text-muted enabled:hover:bg-paper; }
+  .ui-button-secondary { @apply border border-boundary text-muted enabled:hover:bg-paper disabled:opacity-50; }
   .ui-field { @apply mt-2 w-full rounded-md border border-boundary bg-surface p-3 sm:w-auto; }
   .ui-eyebrow { @apply text-xs font-bold tracking-widest text-muted; }
   .ui-error { @apply border-l-4 border-danger pl-3 text-sm text-danger; }
@@ -96,5 +96,6 @@
     .ui-panel { @apply p-4; }
     .settings-sheet, .context-details { @apply px-4; }
     .subnav button { @apply px-2 py-3 text-xs; }
+    .workflow-choice > div { @apply basis-full; }
   }
 }
