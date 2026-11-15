@@ -42,6 +42,14 @@ async function exercise(page, set, calls) {
   await expect(status).toHaveText('Shared preference snapshot read.');
   await expect(panel).toContainText('Writer enabled (local)');
   await expect(panel).not.toContainText(privateText.trim());
+  const host = page.url().startsWith('file:') ? 'electron' : 'browser';
+  const viewport = page.viewportSize() ?? {width: 1280, height: 1000};
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({width, height: 1000});
+    assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth), true);
+    await page.screenshot({path: `test-results/shared-preferences-${host}-${width}.png`, fullPage: true});
+  }
+  await page.setViewportSize(viewport);
 
   await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
   await expect(panel.locator('pre')).toContainText(privateText.trim());
@@ -66,7 +74,9 @@ async function exercise(page, set, calls) {
   await expect(status).toHaveText('Shared preference snapshot read.');
   await draft.fill('Private draft before inspection');
   const inspectedDraft = await draft.elementHandle();
+  const inspectionsBefore = (await calls()).filter(call => call.selector === 'inspect').length;
   await inspect.click();
+  await expect.poll(async () => (await calls()).filter(call => call.selector === 'inspect').length).toBe(inspectionsBefore + 1);
   await expect(status).toHaveText('Shared preference snapshot read.');
   assert.equal(await inspectedDraft.evaluate(field => field.value), '', 'inspection scrubs the prior private draft');
 
