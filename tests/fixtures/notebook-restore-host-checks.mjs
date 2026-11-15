@@ -1,3 +1,4 @@
+import {showPanel} from './navigation.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {expect} from '@playwright/test';
@@ -32,7 +33,8 @@ export async function verifyNotebookRestoreHosts(request,c,existing,staleAction)
 }
 
 export async function verifyNotebookRestoreUi(page,c,capture){
- await readFreshTabletState(page);
+ await showPanel(page,'notebook-restore');
+ await readFreshTabletState(page);await showPanel(page,'notebook-restore');
  const section=page.locator('section[aria-labelledby="notebook-restore-title"]'),field=section.locator('textarea'),status=page.getByTestId('notebook-restore-status');
  const preview=section.getByRole('button',{name:'Preview notebook restore',exact:true}),confirm=section.getByRole('button',{name:'Confirm notebook restore',exact:true});
  await field.fill(source);await preview.focus();await page.keyboard.press('Enter');await expect(status).toContainText('preview ready');await expect(field).toHaveValue('');
@@ -47,7 +49,7 @@ export async function verifyNotebookRestoreUi(page,c,capture){
   await field.fill(source);await preview.click();await expect(confirm).toBeEnabled();const before=await c.snapshot();
   if(event==='pagehide')await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
   else if(event==='hidden')await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));delete document.visibilityState;});
-  else await readFreshTabletState(page);
+  else await readFreshTabletState(page);await showPanel(page,'notebook-restore');
   await expect(confirm).toHaveCount(0);assert.equal((await c.snapshot()).calls,before.calls);
  }
  // Actual App's common guards and clear lists include both fixed restore controllers.

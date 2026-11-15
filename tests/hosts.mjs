@@ -49,17 +49,25 @@ async function installFixture(context, localOrigin) {
 
 async function verify(page, host, fixture) {
   let releasePending;
-  await page.getByRole('heading', { name: 'A home for your Buddies.' }).waitFor();
+  await page.getByRole('heading', { name: 'Tablet', exact: true }).waitFor();
   assert.equal(await page.getByRole('heading', { name: 'Not configured', exact: true }).count(), 1);
   assert.equal(await page.getByText(`${host} edition`, { exact: true }).count(), 1);
   assert.equal(await page.getByTestId('version').textContent(), info.version);
-  assert.equal(await page.getByText('Coming in a later release', { exact: true }).count(), 3);
+  assert.equal(await page.getByText('Coming in a later release', { exact: true }).count(), 0);
+  // Both actual hosts load deferred workflows through the same visible navigation.
+  for (const [destination, title] of [['settings','Settings'],['data','Data'],['backup','Backup & sync'],['troubleshooting','Troubleshooting'],['tablet','Tablet']]) {
+    await page.getByTestId('nav-' + destination).click();
+    await page.getByRole('heading',{level:1,name:title,exact:true}).waitFor();
+    if (destination === 'settings') await page.getByRole('heading',{name:'Reader, Writer and export',exact:true}).waitFor();
+    if (destination === 'data') assert.equal(await page.locator('#product-settings-title').count(),0);
+  }
   await page.getByTestId('official-version').filter({ hasText: fixture.tag }).waitFor();
   assert.equal(await page.getByTestId('installed-version').textContent(), 'Unknown — tablet not connected');
   assert.equal(await page.getByTestId('eligible-version').textContent(), 'Qualified available version: unavailable');
   assert.equal(await page.getByRole('button', { name: 'Install unavailable', exact: true }).isDisabled(), true);
   assert.equal(await page.locator('#release-source option[value=community]').isDisabled(), true);
   assert.equal(fixture.requests, 1, 'The initial UI load must use the release fixture before any refresh or reload');
+  await page.getByText('Manager updates', {exact:true}).click();
   await page.getByTestId('available-manager-version').filter({ hasText: fixture.managerTag }).waitFor();
   assert.equal(await page.getByTestId('current-manager-version').textContent(), info.version);
   assert.equal(fixture.managerRequests, 1, 'Manager first load uses its independent intercepted repository');
@@ -149,9 +157,8 @@ async function verifyStyles(page, host) {
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    const grid = await page.getByRole('heading', { name: 'Install & update', exact: true })
-      .evaluate(el => getComputedStyle(el.closest('section').parentElement).gridTemplateColumns.split(' ').length);
-    assert.equal(grid, width < 768 ? 1 : 3);
+    const display = await page.locator('.app-layout').evaluate(el => getComputedStyle(el).display);
+    assert.equal(display, width < 761 ? 'block' : 'grid');
   }
   // Reset at the brand, then use actual keyboard traversal to the skip link
   // and controls; prior release-preview clicks must not determine test order.
@@ -159,10 +166,19 @@ async function verifyStyles(page, host) {
   await page.keyboard.press('Shift+Tab');
   await verifyFocus(page.locator('.ui-skip'));
   await page.keyboard.press('Tab'); // brand
+  for (const destination of ['tablet','settings','data','backup','troubleshooting']) {
+    await page.keyboard.press('Tab');
+    await verifyFocus(page.getByTestId('nav-' + destination));
+  }
+  await page.keyboard.press('Tab'); // project guide
+  if (await page.locator('.activity-tray').count()) {
+    await page.keyboard.press('Tab');
+    await verifyFocus(page.locator('.activity-tray > summary'));
+  }
   await page.keyboard.press('Tab'); // read tablet state
   await verifyFocus(page.getByRole('button', { name: 'Read tablet state' }));
-  await page.keyboard.press('Tab'); // disconnect
-  await verifyFocus(page.getByRole('button', { name: 'Disconnect', exact: true }));
+  assert.equal(await page.getByRole('button', { name: 'Disconnect', exact: true }).isDisabled(), true);
+  await page.keyboard.press('Tab'); // connection setup guide
   await page.keyboard.press('Tab'); // refresh
   assert.equal(await refresh.evaluate(el => el === document.activeElement), true);
   await verifyFocus(refresh);
@@ -194,11 +210,7 @@ if (!packaged) {
       await page.setViewportSize({ width: 390, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.screenshot({ path: 'test-results/browser-mobile.png', fullPage: true });
-      await page.locator('#release-source').focus();
-      await page.keyboard.press('Shift+Tab');
-      await page.keyboard.press('Shift+Tab');
-      await page.keyboard.press('Shift+Tab');
-      await page.keyboard.press('Shift+Tab');
+      await page.locator('header a').focus();
       await page.keyboard.press('Shift+Tab');
       assert.equal(await page.locator(':focus').textContent(), 'Skip to content');
       await context.close();

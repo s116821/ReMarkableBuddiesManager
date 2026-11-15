@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './navigation.mjs';
 import {expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -5,10 +6,11 @@ import {conversation} from './conversation-management.mjs';
 import {ids} from './handwriting-records.mjs';
 const reference=JSON.parse(await readFile(new URL('./conversation-inventory-reference-vectors.json',import.meta.url),'utf8'));
 export async function verifyProductAppBoundaries(page){
+ await showPanel(page,'product');
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();
+ await readTabletFor(page,'product');
  const outgoing=[...reference.outgoing_idle_controllers,'conversationController','managementController','restoreController','selectedController','handwritingController'];assert.equal(outgoing.length,15);
- const begin=page.getByRole('button',{name:'Begin product settings edit',exact:true}),status=page.getByTestId('product-settings-status');
+ const begin=page.getByRole('button',{name:'Edit Reader & Writer',exact:true}),status=page.getByTestId('product-settings-status');
  await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.productClears={};for(const name of names){const c=a[name],old=c.clear.bind(c);c.clear=(...args)=>{a.productClears[name]=(a.productClears[name]??0)+1;return old(...args);};}},outgoing);
  await begin.click();await expect(status).toContainText('ready to edit');
  const counts=await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).productClears);assert.equal(Object.keys(counts).length,15);assert.ok(Object.values(counts).every(x=>x===1),JSON.stringify(counts));

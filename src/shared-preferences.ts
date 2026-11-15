@@ -32,6 +32,13 @@ export class SharedPreferenceController {
     this.publish({...this.state, state: 'idle', reference: null, view: null, busy: false});
   }
 
+  /** Drop revealed presentation while retaining an unresolved original reference. */
+  hide() {
+    if (this.state.busy) return;
+    if (this.state.state === 'unknown') { this.publish({...this.state, view: null}); return; }
+    this.clear();
+  }
+
   async run(adapter: SharedPreferenceAdapter, request: SharedPreferenceRequest | null,
             stillCurrent: () => boolean = () => true) {
     if (!request || (this.state.busy && request.action !== 'cancel')) return;
