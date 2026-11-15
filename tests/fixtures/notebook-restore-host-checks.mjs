@@ -60,7 +60,7 @@ export async function verifyNotebookRestoreUi(page,c,capture){
    a.notebookRestore.set(s);const clears=[];for(const name of ['clearArchivePeers','clearSharedArchivePeers2','clearNotebookPeers','clearRestorePeers','clearManagementPeers','clearConversationPeers','clearSourceCachePeers']){c.setDraft('/private/draft');a[name]();clears.push(c.state.draft==='');}return {guards,clears};});
   assert.ok(edges.guards.every(Boolean));assert.ok(edges.clears.every(Boolean));
  }
- await field.fill(source);await c.hold();try{await preview.click();await c.entered();await expect(page.locator('#ordinary-restore-source')).toBeDisabled();await expect(page.getByRole('button',{name:'Preview notebook export',exact:true})).toBeDisabled();await section.getByRole('button',{name:'Stop notebook restore wait',exact:true}).click();}finally{await c.release();}
+ await field.fill(source);await c.hold();try{await preview.click();await c.entered();await showPanel(page,'restore');await expect(page.locator('#ordinary-restore-source')).toBeDisabled();await showPanel(page,'notebook');await expect(page.getByRole('button',{name:'Preview notebook export',exact:true})).toBeDisabled();await showPanel(page,'notebook-restore');await section.getByRole('button',{name:'Stop notebook restore wait',exact:true}).click();}finally{await c.release();}
  await expect(status).toContainText('Stopped waiting');
  const html=await page.content();for(const secret of [source,'stdout_base64',identity.boot_id,identity.connection_id])assert.equal(html.includes(secret),false);
  console.log('Actual notebook restore UI: keyboard preview, cleared private input, one Apply, preserved uncertain history, current-only Status, lifecycle and peer boundaries pass');

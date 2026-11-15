@@ -56,7 +56,7 @@ async function verify(page, setState, capture, release) {
   await setState('conflict'); await read.click(); await expect(heads).toHaveCount(2);
   await search.click(); await expect(heads).toHaveCount(0); await read.waitFor();
   await setState('delayed'); await read.click(); await readTabletFor(page,'memory');
-  await release(); await expect(heads).toHaveCount(0); await expect(status).toContainText('Select a search result');
+  await release(); await expect(heads).toHaveCount(0); await expect(status).toHaveCount(0);
   await setState('conflict'); await search.click(); await read.waitFor(); await read.click(); await expect(heads).toHaveCount(2);
   await disconnectFor(page,'memory');await expect(heads).toHaveCount(0);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');

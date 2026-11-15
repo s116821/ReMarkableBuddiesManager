@@ -39,7 +39,7 @@ async function quiescence(page,control){
 }
 async function ui(page,control,kind){
  await showPanel(page,'cache');
- await page.reload();const field=page.locator('#cache-cleanup-document'),prepare=page.getByRole('button',{name:'Prepare cleanup preview',exact:true}),status=page.getByTestId('cache-cleanup-status'),preview=page.getByTestId('cache-cleanup-preview');
+ await page.reload();await showPanel(page,'cache');const field=page.locator('#cache-cleanup-document'),prepare=page.getByRole('button',{name:'Prepare cleanup preview',exact:true}),status=page.getByTestId('cache-cleanup-status'),preview=page.getByTestId('cache-cleanup-preview');
  await expect(field).toHaveValue('');await expect(preview).toHaveCount(0);const before=await control.snapshot();await readTabletFor(page,'cache');assert.equal((await control.snapshot()).cleanups,before.cleanups,'connection never prepares');
  await field.fill(doc);await expect(prepare).toBeEnabled();await prepare.click();await expect(preview).toHaveCount(1);await expect(field).toHaveValue('');await expect(status).toContainText('confirmation required');const after=await control.snapshot();assert.equal(after.cleanups,before.cleanups+1,'preview has no implicit apply');
  for(const width of [390,1280]){
@@ -70,7 +70,7 @@ async function ui(page,control,kind){
   await observedIdle();await field.fill(doc);await expect(prepare).toBeEnabled();await reset();await prepare.click();await expect(preview).toHaveCount(1);await verify();await reset();await page.getByRole('button',{name:'Confirm cache cleanup',exact:true}).click();await expect(status).toContainText('outcome unknown');await verify();await reset();await page.getByRole('button',{name:'Check original cache cleanup',exact:true}).last().click();await expect(status).toContainText('unchanged');await verify();console.log('27 actual cleanup prepare/confirm/status outgoing peer clear calls, nine peers each');
 
  }
- await page.reload();await expect(preview).toHaveCount(0);await expect(field).toHaveValue('');
+ await page.reload();await showPanel(page,'cache');await expect(preview).toHaveCount(0);await expect(field).toHaveValue('');
 }
 const f=addCleanupFixture(sourceCacheFixture());let ownerGate=null;
 const rawRun=f.observer.run;f.observer.run=async function(...args){if(ownerGate){ownerGate.entered.resolve();await ownerGate.wait.promise;}return rawRun.apply(this,args);};
