@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
 import {mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
@@ -13,8 +14,9 @@ const unconfigured=JSON.parse(fixtures.find(r=>r.name==='inspect-unconfigured').
 const chosen=JSON.parse(fixtures.find(r=>r.name==='choose-local-current').report_utf8);
 async function isolate(context,origin){await context.route('**/*',route=>{const url=route.request().url();if(url.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(url.startsWith('file:')||origin&&new URL(url).origin===origin)return route.continue();return route.abort();});}
 async function verify(page,control,capture){
+ await showPanel(page,'local');
  const review=page.getByRole('button',{name:'Review change',exact:true}),confirm=page.getByRole('button',{name:'Save Local-only',exact:true}),status=page.getByTestId('local-mode-choice-status');
- const read=async()=>{await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();};
+ const read=async()=>{await readTabletFor(page,'local');};
  await expect(review).toBeDisabled();await read();await review.click();await expect(status).toContainText('Review complete');await expect(page.getByTestId('local-mode-choice-current')).toContainText('Not set');
  for(const width of [390,1280]){await page.setViewportSize({width,height:1100});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await capture(width);}
  for(const event of ['pagehide','hidden','same-ID-refresh']){
@@ -33,7 +35,7 @@ async function verify(page,control,capture){
  await review.click();await expect(status).toContainText('Review complete');await expect(page.getByTestId('local-mode-choice-current')).toContainText('Local only');await confirm.click();await expect(status).toContainText('Local-only mode was saved');assert.notEqual(await control.epoch(),first);assert.equal(await control.choices(),2);
  await control.lost();await review.click();await expect(status).toContainText('Review complete');await confirm.click();await expect(status).toContainText('Save not confirmed');assert.equal(await control.choices(),3);await expect(confirm).toHaveCount(0);
  await review.click();await expect(status).toContainText('Save not confirmed');assert.equal(await control.choices(),3);await expect(confirm).toHaveCount(0);
- await page.reload();await page.getByRole('heading',{name:'Save Local-only mode',exact:true}).waitFor({timeout:14000});await expect(page.getByTestId('local-mode-choice-retained').locator('li')).toHaveCount(3);assert.equal(await control.choices(),3);
+ await page.reload();await showPanel(page,'local');await page.getByRole('heading',{name:'Save Local-only mode',exact:true}).waitFor({timeout:14000});await expect(page.getByTestId('local-mode-choice-retained').locator('li')).toHaveCount(3);assert.equal(await control.choices(),3);
  await read();await page.getByRole('button',{name:'Check saved mode',exact:true}).last().click();await expect(status).toContainText('earlier save is still unconfirmed');await expect(page.getByTestId('local-mode-choice-current')).toContainText('Local only');await expect(page.getByTestId('local-mode-choice-retained').locator('li').last()).toContainText('Save not confirmed');assert.equal(await control.choices(),3);await expect(confirm).toHaveCount(0);
  const text=await page.textContent('body');for(const field of ['request_sha256','binding_sha256','root_id','"actor"','"token"','"operation"'])assert.equal(text.includes(field),false);
  await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await expect(page.getByTestId('local-mode-choice-current')).toHaveCount(0);await expect(page.getByTestId('local-mode-choice-retained').locator('li').last()).toContainText('Save not confirmed');assert.equal(await control.choices(),3);

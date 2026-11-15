@@ -24,6 +24,7 @@ import type {PackageOperation,PackageRetained} from '../host/resident-package-pr
 `})
 export class ResidentPackagePanel implements OnDestroy{
  readonly adapter=input.required<ResidentPackageAdapter>();readonly tablet=input<TabletObservation|null>(null);readonly allowed=input(false);readonly epoch=input(0);readonly pause=input.required<()=>Promise<boolean>>();readonly busy=output<boolean>();readonly starting=output<void>();
+ readonly visible=input(true);readonly changed=output<PackageUiState>();
  readonly state=signal<PackageUiState>({busy:false,status:'Package controls not reviewed',view:null,retained:[]});
  private controller:ResidentPackageController|null=null;private generation=0;
  private async run(action:'review'|'confirm'|'check'|'retained',operation?:PackageOperation,row?:PackageRetained,resume=false){
@@ -39,7 +40,12 @@ export class ResidentPackagePanel implements OnDestroy{
   }catch{if(g===this.generation){this.controller?.clear();this.state.update(s=>({...s,view:null,status:'Package controls unavailable'}));}}
   finally{clearTimeout(timer);if(g===this.generation){this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}}
  }
- constructor(){effect(()=>{this.epoch();this.stop();});}
+ constructor(){
+  effect(()=>{this.epoch();this.stop();});
+  effect(()=>this.changed.emit(this.state()));
+  // Hide only unused review authority; pending work and original outcomes stay available.
+  effect(()=>{if(!this.visible()&&!this.state().busy&&this.state().view?.state==='ready')this.stop();});
+ }
  canReview(){const t=this.tablet();return !!t&&this.allowed()&&!this.state().busy&&!this.state().retained.some(r=>r.connection_id===t.connection_id&&r.state!=='completed');}
  canCheck(r:PackageRetained){const t=this.tablet();return !!t&&this.allowed()&&!this.state().busy&&r.connection_id===t.connection_id&&r.boot_id===t.boot_id;}
  consequence(){return ({disable:'Buddy will no longer start automatically.',remove:'The owned Buddy package will be removed.',replace:'The installed Buddy package will be replaced.'})[this.state().view?.operation??'disable'];}

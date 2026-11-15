@@ -1,3 +1,4 @@
+import {showPanel} from './navigation.mjs';
 import {expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -5,6 +6,7 @@ import {conversation} from './conversation-management.mjs';
 import {ids} from './handwriting-records.mjs';
 const reference=JSON.parse(await readFile(new URL('./conversation-inventory-reference-vectors.json',import.meta.url),'utf8'));
 export async function verifyStorageInitializationAppBoundaries(page,busyLane='storage'){
+ await showPanel(page,'setup');
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
  const review=page.getByRole('button',{name:'Review storage setup',exact:true});
  const ready=async()=>{await expect.poll(()=>page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));return a.sourceCachePeerBusy()||a.storageInitialization().busy;})).toBe(false);await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).storageInitializationController.clear());await review.click();await expect(page.getByTestId('storage-initialization-status')).toContainText('Review complete');};
