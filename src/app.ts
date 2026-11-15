@@ -78,6 +78,7 @@ export class App implements OnDestroy {
   readonly referenceSetup = signal(false);
   readonly managerUpdates = signal(false);
   readonly customEndpoint = signal(false);
+  private readonly cloudReviewTarget = signal<'preferences' | 'restore' | null>(null);
   toggleEndpoint(checked: boolean) {
     if (!checked && !this.model().busy) this.modelController.action('base_url', 'keep');
     this.customEndpoint.set(checked);
@@ -107,7 +108,7 @@ export class App implements OnDestroy {
     add('settings','reader','Reader & Writer',this.product());
     add('settings','shared','Shared preferences',{...this.sharedPreferences(), uncertain:this.sharedPreferences().state === 'unknown'});
     add('backup','setup','Backup setup',this.isolatedRoot());
-    add('backup','cloud','Cloud backups',{busy:this.cloudBackup().busy, uncertain:this.cloudBackup().cleanupPending || this.cloudBackup().downloadAttempted});
+    add('backup','cloud','Cloud backups',{busy:this.cloudBackup().busy, uncertain:this.cloudBackup().cleanupPending || (this.cloudBackup().downloadAttempted && !this.cloudReviewTarget())});
     add('tablet','setup','First configuration',{...this.firstConfiguration(), uncertain:this.firstConfigurationUnknown()});
     add('settings','model','Model connection',this.model());
     add('settings','model','API key',this.fileCredential());
@@ -350,7 +351,7 @@ export class App implements OnDestroy {
   readonly runtimeIdentity = signal(this.runtimeController.state);
   private readonly researchController=new ResearchSettingsController(state=>this.research.set(state),()=>{if(typeof document!=='undefined'){const input=document.getElementById('research-choice') as HTMLSelectElement|null;if(input)input.value='keep';}});
   readonly research=signal(this.researchController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.firstConfigurationController.discard(); this.clearPortable();this.savedConfigurationController.clear(); this.clearInspectionPeers(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
+  private readonly connectionController = new ConnectionController(this.host, state => { this.firstConfigurationController.discard(); this.clearPortable();this.savedConfigurationController.clear(); this.clearInspectionPeers(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); if (state.status === 'observed' && this.host.firstConfiguration) void this.firstConfigurationController.retained(this.host.firstConfiguration); });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -894,7 +895,7 @@ export class App implements OnDestroy {
     return !!this.host.isolatedBackup && this.drive().status === 'connected' && !this.cloudBackup().busy;
   }
   scanCloudBackups() {
-    if (this.canBrowseCloudBackups()) void this.cloudBackupController.scan();
+    if (this.canBrowseCloudBackups()) { this.cloudReviewTarget.set(null); void this.cloudBackupController.scan(); }
   }
   selectCloudBackup(choice: string) {
     if (this.canBrowseCloudBackups()) void this.cloudBackupController.select(choice);
@@ -924,19 +925,21 @@ export class App implements OnDestroy {
       this.clearRestorePeers();
       // Transfer custody to the restore view before preparation; ordinary navigation would clear the cloud source.
       this.archiveTask.set('restore'); this.archiveFamily.set('legacy');
+      this.cloudReviewTarget.set('restore');
       this.showLocation(resolveLocation('backup','archives'));
       await this.cloudBackupController.previewRestore(target, pause, current,
         deadline => this.restoreController.beginBackupPreview(target, deadline, cancel));
     } else {
       this.clearPortablePeers();
       // Deliberate cloud-to-editor handoff preserves the exact selected backup and consumer receipt.
+      this.cloudReviewTarget.set('preferences');
       this.showLocation(resolveLocation('settings','preferences'));
       await this.cloudBackupController.previewPreferences(target, pause, current,
         deadline => this.portableController.beginBackupPreview(target, deadline, cancel));
     }
   }
 
-  clearCloudBackups() { this.cloudBackupController.cancel(); }
+  clearCloudBackups() { this.cloudReviewTarget.set(null); this.cloudBackupController.cancel(); }
   signInDrive() { this.clearCloudBackups(); void this.driveController.begin(); }
   checkDrive() { this.clearCloudBackups(); void this.driveController.action('check'); }
   cancelDrive() { this.clearCloudBackups(); void this.driveController.action('cancel'); }

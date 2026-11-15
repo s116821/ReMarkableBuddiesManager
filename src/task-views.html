@@ -885,7 +885,7 @@
     <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSharedPreferences(false)" [disabled]="!app.canInspectSharedPreferences()">Inspect shared preferences</button>
     <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSharedPreferences(true)" [disabled]="!app.canInspectSharedPreferences()">Inspect and reveal private prompt</button>
     <button class="ui-button ui-button-secondary" type="button" (click)="app.refreshSharedPreferenceOriginals()" [disabled]="app.sharedPreferences().busy || !app.host.sharedPreferences">Refresh original edits</button>
-    <button class="ui-button ui-button-secondary" type="button" (click)="app.stopSharedPreference()" [disabled]="!app.sharedPreferences().busy && !app.sharedPreferences().view">Clear shared view or stop waiting</button>
+    @if (app.sharedPreferences().busy || app.sharedPreferences().view) { <button class="ui-button ui-button-secondary" type="button" (click)="app.stopSharedPreference()" [disabled]="!app.sharedPreferences().busy && !app.sharedPreferences().view">Clear shared view or stop waiting</button> }
   </div>
   <p role="status" data-testid="shared-preference-status">{{ app.sharedPreferences().busy ? 'Waiting for Buddy…' : app.sharedLabels[app.sharedPreferences().state] }}</p>
   @if (app.sharedPreferences().view; as view) {
@@ -926,7 +926,8 @@
 }
 @if (app.isView('backup','setup')) {
 <section aria-labelledby="isolated-root-title" class="ui-panel my-6">
-      <h2 id="isolated-root-title">Prepare isolated backup storage</h2>
+      <h2 id="isolated-root-title">Prepare backup storage</h2>
+@if (!app.host.isolatedRoot) { <p>This Manager host cannot prepare cloud backup storage.</p> }
       <p>Prepare cloud storage for a backup already selected on the tablet.</p>
       <div class="flex flex-wrap gap-2 my-3">
         <button class="ui-button ui-button-secondary" type="button" (click)="app.beginIsolatedRoot()" [disabled]="!app.canBeginIsolatedRoot()">Review saved backup</button>

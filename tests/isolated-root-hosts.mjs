@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import assert from 'node:assert/strict';
 import {mkdtemp, rm} from 'node:fs/promises';
 import os from 'node:os';
@@ -22,7 +23,8 @@ async function isolate(context, origin) {
 }
 
 async function verify(page, control) {
-  const section = page.getByRole('region', {name: 'Prepare isolated backup storage'});
+  await showPanel(page,'backup-setup');
+  const section = page.getByRole('region', {name: 'Prepare backup storage'});
   const status = section.getByTestId('isolated-root-status');
   const review = section.getByRole('button', {name: 'Review saved backup'});
   const prepare = section.getByRole('button', {name: 'Prepare cloud storage'});
@@ -30,10 +32,10 @@ async function verify(page, control) {
   const rows = section.getByTestId('isolated-root-retained').locator('li');
   const report = section.getByTestId('isolated-root-report');
   const read = async () => {
-    await page.getByRole('button', {name: 'Read tablet state', exact: true}).click();
-    await page.getByTestId('tablet-model').waitFor();
+    await readTabletFor(page, 'backup-setup');
   };
   const openReview = async () => {
+    await showPanel(page,'backup-setup');
     await review.click();
     await expect(status).toContainText('Review complete');
     await expect(prepare).toBeEnabled();
@@ -62,6 +64,7 @@ async function verify(page, control) {
   await read();
   await expect(prepare).toHaveCount(0);
   await openReview();
+  await showPanel(page,'local');
   await page.getByRole('button', {name: 'Review change', exact: true}).click();
   await expect(prepare).toHaveCount(0);
   await expect(page.getByTestId('local-mode-choice-status')).toContainText('Review complete');
@@ -75,9 +78,11 @@ async function verify(page, control) {
   await control.hold();
   await prepare.click();
   await expect(status).toContainText('Preparing cloud storage');
+  await showPanel(page,'local');
   await expect(page.getByRole('button', {name: 'Review change', exact: true})).toBeDisabled();
   await expect(page.getByRole('button', {name: 'Read saved storage mode', exact: true})).toBeDisabled();
   await control.release();
+  await showPanel(page,'backup-setup');
   await expect(status).toContainText('outcome is unknown');
   await expect(report).toHaveCount(0);
   await expect(rows).toHaveCount(1);

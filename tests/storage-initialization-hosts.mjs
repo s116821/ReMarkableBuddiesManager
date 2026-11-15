@@ -75,6 +75,10 @@ async function firstConfigurationUI(page, first) {
   await first.loseOutput();
   await create.click();
   await expect(status).toContainText('creation was not confirmed');
+  await showPanel(page,'drive');
+  await expect(page.locator('.activity-tray')).toContainText('First configuration');
+  await showPanel(page,'setup');
+  await expect(status).toContainText('creation was not confirmed');
   await expect(review).toBeDisabled();
   await expect(page.getByTestId('first-configuration-original')).toHaveCount(1);
   await first.restoreOutput();

@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {lstat, mkdtemp, realpath, rm} from 'node:fs/promises';
@@ -78,11 +79,13 @@ async function isolate(context, origin) {
 }
 
 async function verify(page, control) {
+  await showPanel(page,'drive');
+  await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
+  await showPanel(page,'cloud');
   const status = page.getByTestId('cloud-backup-status');
   const list = page.getByTestId('cloud-backup-list');
   const selection = page.getByTestId('cloud-backup-selection');
   const scan = page.getByRole('button', {name: 'Scan for cloud backups', exact: true});
-  await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
   await expect(page.getByTestId('tablet-model')).toHaveCount(0);
   await scan.click();
   await expect(status).toContainText('hasn’t verified access');
@@ -112,7 +115,9 @@ async function verify(page, control) {
   await expect(page.getByRole('button', {name: 'Preview backup data restore', exact: true})).toHaveCount(0);
   assert.doesNotMatch(await list.textContent(), /PrivateRoot|PrivateRevision|authorizationId|appProperties/);
 
+  await showPanel(page,'drive');
   await page.getByRole('button', {name: 'Check connection', exact: true}).click();
+  await showPanel(page,'cloud');
   await expect(selection).toHaveCount(0);
   await expect(list).toHaveCount(0);
   await expect(scan).toBeEnabled();
@@ -129,6 +134,7 @@ async function verifyElectronReload(page, control) {
   const status = operation => request({version: 1, action: 'status', operation});
   const reload = async () => {
     await page.reload();
+    await showPanel(page,'drive');
     await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
   };
   const priorReads = await control.get('readCount'), priorAborts = await control.get('abortedReads');
@@ -255,13 +261,13 @@ async function packagedPreviewRefusal(page, app) {
 }
 
 async function verifyPreferences(page, control) {
+  await showPanel(page,'drive');
   const button = name => page.getByRole('button', {name, exact: true});
   const confirm = button('Confirm preferences import');
   const review = button('Review backup preferences');
   await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
   async function selectDownloaded() {
-    await button('Read tablet state').click();
-    await expect(page.getByTestId('tablet-model')).toBeVisible();
+    await readTabletFor(page,'cloud');
     await button('Scan for cloud backups').click();
     await expect(review).toHaveCount(0);
     await button('Select revision').click();
@@ -294,23 +300,31 @@ async function verifyPreferences(page, control) {
 
 async function verifyRestore(page, snapshot, setup) {
   const button = name => page.getByRole('button', {name, exact: true});
-  await button('Read tablet state').click();
-  await expect(page.getByTestId('tablet-model')).toBeVisible();
-  await button('Scan for cloud backups').click();
-  await button('Select revision').click();
-  await button('Download and verify').click();
-  const preview = button('Preview backup data restore');
+  await readTabletFor(page,setup ? 'setup' : 'cloud');
   if (setup) {
-    await page.getByRole('heading', {name: 'Prepare Buddy storage', exact: true}).scrollIntoViewIfNeeded();
     await button('Review first configuration').click();
     await expect(button('Create default configuration')).toBeEnabled();
+  }
+  const selectDownloaded = async () => {
+    await showPanel(page,'cloud');
+    await button('Scan for cloud backups').click();
+    await button('Select revision').click();
+    await button('Download and verify').click();
+  };
+  await selectDownloaded();
+  const preview = button('Preview backup data restore');
+  if (setup) {
     await expect(preview).toBeDisabled();
     assert.deepEqual((await snapshot()).staged, []);
+    await showPanel(page,'setup');
     await button('Create default configuration').click();
     await expect(page.getByTestId('first-configuration-status')).toContainText('created and verified');
     assert.deepEqual(setup.state.calls.map(call => call.request.selector), ['check-initial', 'create-initial']);
+    // Leaving Cloud backups clears its private selection; explicitly select and verify a fresh download.
+    await selectDownloaded();
   }
   await expect(preview).toBeEnabled();
+  const releasesBeforePreview = (await snapshot()).releases;
   await preview.click();
   const confirm = button('Confirm restore');
   await expect(confirm).toBeEnabled();
@@ -320,7 +334,7 @@ async function verifyRestore(page, snapshot, setup) {
   const prepared = await snapshot();
   assert.deepEqual(prepared.restoreSelectors, ['prepare']);
   assert.deepEqual(prepared.staged, ['receive', 'check', 'check']);
-  assert.equal(prepared.releases, 3);
+  assert.equal(prepared.releases, releasesBeforePreview + 1);
   assert.doesNotMatch(await page.locator('body').innerText(), /private-backup-restore/);
   await confirm.click();
   await expect(page.getByTestId('ordinary-restore-original')).toBeVisible();
@@ -404,6 +418,7 @@ async function verifyPackagedBrowser(executablePath, env) {
       const response = await page.goto(origin + '/preview/');
       assert.equal(response.status(), 200);
       // Angular rendered from the packaged ASAR, with no protected host configuration.
+      await showPanel(page,'drive');
       await expect(page.getByTestId('drive-status')).toContainText('Google Drive');
       await expect(page.getByTestId('tablet-model')).toHaveCount(0);
       assert.equal(await page.evaluate(() => typeof globalThis.managerHost), 'undefined');
@@ -431,8 +446,9 @@ async function verifyPackagedBrowser(executablePath, env) {
       await packagedPreviewRefusal(page, app);
 
       const button = name => page.getByRole('button', {name, exact: true});
-      await button('Read tablet state').click();
+      await readTabletFor(page,'tablet');
       await expect(page.getByTestId('tablet-model')).toHaveText(firstConfigurationTablet.model);
+      await showPanel(page,'setup');
       const review = button('Review first configuration');
       await expect(review).toBeEnabled();
       const [reviewResponse] = await Promise.all([
@@ -453,6 +469,7 @@ async function verifyPackagedBrowser(executablePath, env) {
       await expect(page.getByTestId('first-configuration-status')).toHaveText(
         'First configuration requires a qualified Buddy installation and quiescent wired tablet.');
       await expect(button('Create default configuration')).toHaveCount(0);
+      await showPanel(page,'tablet');
       await button('Disconnect').click();
       await expect(page.getByTestId('tablet-model')).toHaveCount(0);
       assert.equal(await app.evaluate(() => globalThis.fixtureFirstConfigurationCalls), 0);

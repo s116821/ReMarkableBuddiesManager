@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {mkdir, mkdtemp, readFile} from 'node:fs/promises';
@@ -21,6 +22,7 @@ async function isolate(context, origin) {
 }
 
 async function exercise(page, set, calls) {
+  await showPanel(page,'shared');
   const panel = page.getByRole('region', {name: 'Shared group preferences'});
   const status = panel.getByTestId('shared-preference-status');
   // Original recovery remains keyboard reachable even before a tablet is read.
@@ -30,7 +32,7 @@ async function exercise(page, set, calls) {
   await page.keyboard.press('Tab');
   await expect(originals).toBeFocused();
   assert.equal(await originals.evaluate(button => button.matches(':focus-visible')), true);
-  await page.getByRole('button', {name: 'Read tablet state', exact: true}).click();
+  await readTabletFor(page, 'shared');
   const inspect = panel.getByRole('button', {name: 'Inspect shared preferences', exact: true});
   await expect(inspect).toBeEnabled();
   await inspect.click();
@@ -43,6 +45,12 @@ async function exercise(page, set, calls) {
 
   await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
   await expect(panel.locator('pre')).toContainText(privateText.trim());
+  await showPanel(page,'research');
+  await expect(page.getByText(privateText.trim(),{exact:true})).toHaveCount(0);
+  await showPanel(page,'shared');
+  await expect(panel.locator('pre')).toHaveCount(0);
+  await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
+  await expect(panel.locator('pre')).toContainText(privateText.trim());
   await panel.getByRole('button', {name: 'Clear shared view or stop waiting'}).click();
   await expect(panel.locator('pre')).toHaveCount(0);
   await inspect.click();
@@ -53,6 +61,9 @@ async function exercise(page, set, calls) {
   await panel.getByLabel('Apply these declarations to this shared group').check();
   await set('lost');
   await panel.getByRole('button', {name: 'Save shared preferences'}).click();
+  await expect(status).toContainText('outcome is unknown');
+  await showPanel(page,'research');
+  await showPanel(page,'shared');
   await expect(status).toContainText('outcome is unknown');
   const edit = (await calls()).filter(call => call.selector === 'edit');
   assert.equal(edit.length, 1);
