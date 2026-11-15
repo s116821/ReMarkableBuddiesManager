@@ -236,7 +236,7 @@
         <p class="text-sm text-muted">An empty result does not mean storage or retained history is empty. Later management requires separate explicit selection and a fresh inspection.</p>
       }
     }
-  </section>@if (app.conversationInventory().view || app.conversationManagement().retained.length || app.conversationManagement().busy) {
+  </section>@if (app.conversationInventory().view || app.conversationManagement().retained.length || app.conversationManagement().busy || !['No conversation selected', 'Conversation preview cleared'].includes(app.conversationManagement().status)) {
 <section class="ui-panel my-6" aria-labelledby="conversation-management-title">
     <h2 id="conversation-management-title">Selected conversation</h2>
     <p class="text-sm text-muted">Local logical removal preserves history, turns, source media, export associations and native pages. It does not reclaim physical space or synchronize deletion. Runtime remains unverified. The Buddy service must already be inactive; Manager does not stop it.</p>

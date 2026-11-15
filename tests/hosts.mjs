@@ -54,6 +54,13 @@ async function verify(page, host, fixture) {
   assert.equal(await page.getByText(`${host} edition`, { exact: true }).count(), 1);
   assert.equal(await page.getByTestId('version').textContent(), info.version);
   assert.equal(await page.getByText('Coming in a later release', { exact: true }).count(), 0);
+  // Both actual hosts load deferred workflows through the same visible navigation.
+  for (const [destination, title] of [['settings','Settings'],['data','Data'],['backup','Backup & sync'],['troubleshooting','Troubleshooting'],['tablet','Tablet']]) {
+    await page.getByTestId('nav-' + destination).click();
+    await page.getByRole('heading',{level:1,name:title,exact:true}).waitFor();
+    if (destination === 'settings') await page.getByRole('heading',{name:'Reader, Writer and export',exact:true}).waitFor();
+    if (destination === 'data') assert.equal(await page.locator('#product-settings-title').count(),0);
+  }
   await page.getByTestId('official-version').filter({ hasText: fixture.tag }).waitFor();
   assert.equal(await page.getByTestId('installed-version').textContent(), 'Unknown — tablet not connected');
   assert.equal(await page.getByTestId('eligible-version').textContent(), 'Qualified available version: unavailable');
@@ -167,6 +174,7 @@ async function verifyStyles(page, host) {
   await page.keyboard.press('Tab'); // read tablet state
   await verifyFocus(page.getByRole('button', { name: 'Read tablet state' }));
   assert.equal(await page.getByRole('button', { name: 'Disconnect', exact: true }).isDisabled(), true);
+  await page.keyboard.press('Tab'); // connection setup guide
   await page.keyboard.press('Tab'); // refresh
   assert.equal(await refresh.evaluate(el => el === document.activeElement), true);
   await verifyFocus(refresh);

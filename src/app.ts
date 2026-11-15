@@ -70,6 +70,7 @@ export class App implements OnDestroy {
   readonly archiveFamily = signal('notebook');
   readonly storageTask = signal('overview');
   readonly referenceSetup = signal(false);
+  readonly managerUpdates = signal(false);
   readonly customEndpoint = signal(false);
   toggleEndpoint(checked: boolean) {
     if (!checked && !this.model().busy) this.modelController.action('base_url', 'keep');
@@ -95,6 +96,8 @@ export class App implements OnDestroy {
     const add = (destination: Destination, item: string, label: string, state: {busy: boolean; retained?: readonly unknown[]; uncertain?: boolean}) => {
       if (state.busy || state.retained?.length || state.uncertain) rows.push({destination, item, label, busy: state.busy, review: !state.busy});
     };
+    add('tablet','manager','Manager download',{busy:['downloading','cancelling'].includes(this.download().status),uncertain:this.downloadUnknown()});
+    add('backup','account','Google account',{busy:['connecting','checking','revoking'].includes(this.drive().status),uncertain:this.drive().status === 'revocation-unconfirmed'});
     add('settings','reader','Reader & Writer',this.product());
     add('settings','model','Model connection',this.model());
     add('settings','model','API key',this.fileCredential());
@@ -107,9 +110,12 @@ export class App implements OnDestroy {
     add('data','memory','Fact inspection',this.memoryInspection());
     add('data','memory','Forget fact',this.forget());
     add('data','conversations','Conversations',this.conversationManagement());
+    add('data','conversations','Conversation list',this.conversationInventory());
     add('data','handwriting','Handwriting',this.handwritingRecords());
     add('data','storage','Cache cleanup',this.cacheCleanup());
     add('data','storage','Storage setup',this.storageInitialization());
+    add('data','storage','Storage inspection',this.ownedV3());
+    add('data','storage','Cache inspection',this.cacheInventory());
     add('backup','mode','Data mode',this.localModeChoice());
     add('backup','archives','Notebook export',this.notebookArchive());
     add('backup','archives','History export',this.selectedArchive());
@@ -154,11 +160,13 @@ export class App implements OnDestroy {
   isView(destination: string, item?: string) { return this.location().destination === destination && (!item || this.location().item === item); }
   hasActivity(destination: string) { return this.activity().some(row => row.destination === destination); }
   openActivity(row: {destination: Destination; item: string; label: string}) {
+    if (row.label === 'Manager download') this.managerUpdates.set(true);
     if (row.item === 'archives') {
       this.chooseArchive('task', row.label.includes('restore') ? 'restore' : 'export');
       this.chooseArchive('family', row.label.startsWith('Notebook') ? 'notebook' : row.label.startsWith('History') ? 'history' : 'legacy');
     }
-    if (row.label === 'Cache cleanup') this.storageTask.set('cache');
+    if (row.label === 'Cache cleanup' || row.label === 'Cache inspection') this.storageTask.set('cache');
+    if (row.label === 'Storage inspection') this.storageTask.set('overview');
     if (row.label === 'Storage setup') this.storageTask.set('setup');
     if (row.label === 'Credential reference') this.referenceSetup.set(true);
     this.navigate(row.destination, row.item);

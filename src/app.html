@@ -16,7 +16,7 @@
         <button class="ui-button ui-button-primary" type="button" (click)="connectTablet()" [disabled]="connection().status === 'checking'">Read tablet state</button>
         <button class="ui-button ui-button-secondary" type="button" (click)="disconnectTablet()" [disabled]="!connection().observation && connection().status !== 'checking'">Disconnect</button>
       </div>
-      @if (connection().status === 'unconfigured') { <p class="mt-3 text-sm text-muted">Set up the local host connection first. Browser users open the Manager served by the local helper; SSH credentials stay on that host. See the project guide.</p> }
+      @if (connection().status === 'unconfigured') { <p class="mt-3 text-sm text-muted">Set up the connection on this computer first. Browser users open Manager through its local helper. <a href="https://github.com/s116821/RemarkableBuddiesDocs" target="_blank" rel="noopener noreferrer">Connection setup guide ↗</a></p> }
       @if (connection().status !== 'unconfigured' && connection().status !== 'checking' && connection().status !== 'observed') { <p class="ui-error mt-3" role="alert">No current tablet observation. Check the USB cable, host setup and tablet trust, then explicitly read again.</p> }
       @if (connection().observation; as tablet) {
         <dl class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -61,7 +61,7 @@
       <details class="mt-3"><summary>Why installation is unavailable</summary><p class="text-sm">Release metadata does not prove installation eligibility.</p><ul class="ml-5 list-disc text-sm">@for (blocker of blockers; track blocker) { <li>{{ blocker }}</li> }</ul></details>
       <button class="ui-button ui-button-secondary mt-3" type="button" disabled>Install unavailable</button>
     </div>
-  </section><details class="context-details"><summary>Manager updates</summary><section class="ui-panel my-6" aria-labelledby="manager-release-title">
+  </section><details class="context-details" [open]="managerUpdates()" (toggle)="managerUpdates.set($any($event.target).open)"><summary>Manager updates</summary><section class="ui-panel my-6" aria-labelledby="manager-release-title">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <h2 id="manager-release-title">Manager releases</h2>
       <button class="ui-button ui-button-primary" type="button" (click)="refreshManager()" [disabled]="managerRelease().status === 'checking'">Refresh Manager releases</button>
