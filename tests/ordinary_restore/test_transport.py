@@ -204,6 +204,7 @@ class StagePeer(Peer):
         self.input = bytearray()
         self.held = []
         self.read_eof = False
+        self.exit_status_sent = threading.Event()
 
     def check_channel_exec_request(self, channel, command):
         if command.decode() == o.COMMAND:
@@ -243,6 +244,7 @@ class StagePeer(Peer):
                 channel.close()
                 return
             channel.send_exit_status(7 if self.mode == 'nonzero' else 0)
+            self.exit_status_sent.set()
             if self.mode != 'no-eof':
                 channel.shutdown_write()
 
@@ -290,16 +292,20 @@ class StageSSH(unittest.TestCase):
                                  snapshot=lambda _: BASELINE, dial=lambda _: client, notices=Notice(),
                                  expected_connection=IDENTITY,
                                  inspection=lambda t: s.execute(t, value,
-                                                                 s.time.monotonic() + (1 if mode == 'no-eof' else 8),
+                                                                 s.time.monotonic() + 8,
                                                                  lambda: dispatched.append(selector), read))
 
             try:
                 if mode not in ('complete', 'early-cleaned'):
                     expected = o.Refusal if mode in ('drift', 'no-eof') else ValueError
-                    with self.assertRaises(expected):
+                    with self.assertRaises(expected) as failure:
                         observe()
                     self.assertEqual(dispatched, [selector])
                     self.assertEqual(peer.commands[1], s.COMMANDS[selector])
+                    if mode == 'no-eof':
+                        self.assertTrue(peer.read_eof)
+                        self.assertTrue(peer.exit_status_sent.is_set())
+                        self.assertEqual(failure.exception.status, 'timeout')
                     return
                 observed = observe()
                 self.assertEqual(dispatched, [selector])
