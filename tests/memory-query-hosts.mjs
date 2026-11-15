@@ -30,7 +30,7 @@ async function isolate(context, origin) {
 async function verify(page, setState, capture, release, waitRefresh, hostState) {
  await showPanel(page,'memory');
   await readTabletFor(page,'memory');
-  const input = page.getByLabel('Search memory', { exact: true }); const search = page.getByRole('button', { name: 'Search global memory', exact: true });
+  const input = page.getByRole('textbox', { name: 'Search memory', exact: true }); const search = page.getByRole('button', { name: 'Search global memory', exact: true });
   const samples=[];
   await input.evaluate(el=>{globalThis.memoryInputEvents=[];el.addEventListener('input',()=>{globalThis.memoryInputEvents.push({time:Date.now(),characters:el.value.length,bytes:new TextEncoder().encode(el.value).length});});});
   async function snapshot(phase){const value=await input.inputValue();samples.push({phase,time:Date.now(),connection:await page.locator('.sidebar-note').innerText(),modelPresent:await page.getByTestId('tablet-model').count(),status:await page.getByTestId('memory-status').textContent(),disabled:await search.isDisabled(),characters:value.length,bytes:new TextEncoder().encode(value).length,validInput:validMemoryText(value),host:await hostState(),inputEvents:await page.evaluate(()=>globalThis.memoryInputEvents)});}

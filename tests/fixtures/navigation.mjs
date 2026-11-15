@@ -13,6 +13,8 @@ const panels = {
   export: ['backup', 'archives', '', '', 'export', 'legacy'],
   archive: ['backup', 'archives', '', '', 'export', 'history'],
   notebook: ['backup', 'archives', '', '', 'export', 'notebook'],
+  'notebook-check': ['backup', 'archives', '', '', 'check', 'notebook'],
+  'archive-check': ['backup', 'archives', '', '', 'check', 'history'],
   restore: ['backup', 'archives', '', '', 'restore', 'legacy'],
   'notebook-restore': ['backup', 'archives', '', '', 'restore', 'notebook'],
   configuration: ['troubleshooting', 'configuration'], basic: ['troubleshooting', 'diagnostics'],
@@ -26,9 +28,11 @@ export async function showPanel(page, panel) {
   const [destination, item, summary, storage, task, family] = route;
   const main = page.getByTestId(`nav-${destination}`);
   if (await main.getAttribute('aria-current') !== 'page') await main.click();
+  await expect(main).toHaveAttribute('aria-current', 'page');
   if (item) {
     const sub = page.getByTestId(`nav-${destination}-${item}`);
     if (await sub.getAttribute('aria-current') !== 'page') await sub.click();
+    await expect(sub).toHaveAttribute('aria-current', 'page');
   }
   if (storage && await page.locator('#storage-task').inputValue() !== storage) await page.locator('#storage-task').selectOption(storage);
   if (task && await page.locator('#archive-task').inputValue() !== task) await page.locator('#archive-task').selectOption(task);
