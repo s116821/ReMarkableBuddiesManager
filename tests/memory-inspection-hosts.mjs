@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -35,11 +36,12 @@ async function isolate(context, origin) {
   });
 }
 async function verify(page, setState, capture, release) {
+ await showPanel(page,'memory');
   const read = page.getByRole('button', { name: 'Inspect current revisions', exact: true });
   const status = page.getByTestId('memory-inspection-status');
   const heads = page.getByTestId('memory-head');
   const search = page.getByRole('button', { name: 'Search global memory', exact: true });
-  await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
+  await readTabletFor(page,'memory');
   await page.locator('#memory-query').fill('gravity'); await search.click();
   await expect(page.getByTestId('memory-status')).toHaveText('Search complete'); await read.waitFor();
   await read.click(); await expect(status).toContainText('Conflict — 2 current revisions'); await expect(heads).toHaveCount(2); await expect(heads.nth(1)).toContainText('Deletion record');
@@ -53,10 +55,10 @@ async function verify(page, setState, capture, release) {
   await release(); await expect(status).toHaveText('Memory inspection cancelled'); await expect(heads).toHaveCount(0);
   await setState('conflict'); await read.click(); await expect(heads).toHaveCount(2);
   await search.click(); await expect(heads).toHaveCount(0); await read.waitFor();
-  await setState('delayed'); await read.click(); await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
-  await release(); await expect(heads).toHaveCount(0); await expect(status).toContainText('Select a search result');
+  await setState('delayed'); await read.click(); await readTabletFor(page,'memory');
+  await release(); await expect(heads).toHaveCount(0); await expect(status).toHaveCount(0);
   await setState('conflict'); await search.click(); await read.waitFor(); await read.click(); await expect(heads).toHaveCount(2);
-  await page.getByRole('button', { name: 'Disconnect', exact: true }).click(); await expect(heads).toHaveCount(0);
+  await disconnectFor(page,'memory');await expect(heads).toHaveCount(0);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
 }
 const helper = await startHelper({ root: path.resolve(packaged ? 'dist/manager/browser' : 'test-results/development/browser'),

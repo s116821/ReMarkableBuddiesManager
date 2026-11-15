@@ -33,8 +33,9 @@ async function verify(page, expected) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await page.getByRole('button', { name: 'Read tablet state' }).evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(34, 77, 64)');
   }
-  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-  await page.getByRole('heading', { name: 'Disconnected', exact: true }).waitFor();
+  const disconnect=page.getByRole('button', { name: 'Disconnect', exact: true });
+  if(expected==='observed'){await disconnect.click();await page.getByRole('heading', { name: 'Disconnected', exact: true }).waitFor();}
+  else assert.equal(await disconnect.isDisabled(),true,'No active connection is available to disconnect');
   assert.equal(await page.getByTestId('tablet-model').count(), 0);
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
 }

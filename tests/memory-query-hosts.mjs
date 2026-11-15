@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -27,11 +28,12 @@ async function isolate(context, origin) {
   });
 }
 async function verify(page, setState, capture, release, waitRefresh, hostState) {
-  await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
-  const input = page.getByLabel('Search memory', { exact: true }); const search = page.getByRole('button', { name: 'Search global memory', exact: true });
+ await showPanel(page,'memory');
+  await readTabletFor(page,'memory');
+  const input = page.getByRole('textbox', { name: 'Search memory', exact: true }); const search = page.getByRole('button', { name: 'Search global memory', exact: true });
   const samples=[];
   await input.evaluate(el=>{globalThis.memoryInputEvents=[];el.addEventListener('input',()=>{globalThis.memoryInputEvents.push({time:Date.now(),characters:el.value.length,bytes:new TextEncoder().encode(el.value).length});});});
-  async function snapshot(phase){const value=await input.inputValue();samples.push({phase,time:Date.now(),connection:await page.locator('#connection-title').textContent(),modelPresent:await page.getByTestId('tablet-model').count(),status:await page.getByTestId('memory-status').textContent(),disabled:await search.isDisabled(),characters:value.length,bytes:new TextEncoder().encode(value).length,validInput:validMemoryText(value),host:await hostState(),inputEvents:await page.evaluate(()=>globalThis.memoryInputEvents)});}
+  async function snapshot(phase){const value=await input.inputValue();samples.push({phase,time:Date.now(),connection:await page.locator('.sidebar-note').innerText(),modelPresent:await page.getByTestId('tablet-model').count(),status:await page.getByTestId('memory-status').textContent(),disabled:await search.isDisabled(),characters:value.length,bytes:new TextEncoder().encode(value).length,validInput:validMemoryText(value),host:await hostState(),inputEvents:await page.evaluate(()=>globalThis.memoryInputEvents)});}
   async function clickSearch(mode){await snapshot(`before:${mode}`);try{await search.click();}catch(error){await snapshot(`failed:${mode}`);console.error('Memory-query fixture state:',JSON.stringify(samples));throw error;}}
 
   await input.fill('gravity 第二行 🦊'); await clickSearch('complete'); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
@@ -47,7 +49,7 @@ async function verify(page, setState, capture, release, waitRefresh, hostState) 
   await expect(page.getByTestId('memory-status')).toHaveText('Search cancelled');
   await release(); await page.waitForTimeout(100); await expect(page.getByTestId('memory-fact')).toHaveCount(0);
   await setState('complete'); await clickSearch('complete-after-cancel'); await expect(page.getByTestId('memory-fact')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Disconnect', exact: true }).click(); await expect(page.getByTestId('memory-fact')).toHaveCount(0); await expect(search).toBeDisabled();
+  await disconnectFor(page,'memory');await expect(page.getByTestId('memory-fact')).toHaveCount(0); await expect(search).toBeDisabled();
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
 }
 // Keep later automatic observation reads pending in this semantic UI fixture.
@@ -96,7 +98,7 @@ try {
     await expect.poll(()=>app.evaluate(()=>globalThis.memoryObservationReads),{timeout:7000}).toBeGreaterThan(1);
     assert.equal(await app.evaluate(()=>globalThis.memoryObservationPending.size),1);
     await app.evaluate(async()=>{const require=process.mainModule.require.bind(process.mainModule);require('node:v8').setFlagsFromString('--expose-gc');const gc=require('node:vm').runInNewContext('gc');for(let i=0;i<3;i++){gc();await new Promise(resolve=>setImmediate(resolve));}});
-    await expect(page.locator('#connection-title')).toHaveText('Wired tablet observed');
+    await expect(page.locator('.sidebar-note')).toContainText('Wired tablet observed');
     await expect(page.getByRole('button',{name:'Search global memory',exact:true})).toBeEnabled();
     assert.equal(await app.evaluate(()=>globalThis.memoryObservationPending.size),1);
     const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG().toString('base64'));

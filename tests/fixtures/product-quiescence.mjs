@@ -1,8 +1,10 @@
+import {showPanel} from './navigation.mjs';
 import {expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 export async function verifyProductQuiescence(page,control){
+ await showPanel(page,'product');
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
- const begin=page.getByRole('button',{name:'Begin product settings edit',exact:true}),status=page.getByTestId('product-settings-status');
+ const begin=page.getByRole('button',{name:'Edit Reader & Writer',exact:true}),status=page.getByTestId('product-settings-status');
  for(const mode of ['before-dispatch','late-reply','stop-before-dispatch','expire-before-dispatch']){
   await expect.poll(()=>page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));return a.productPeerBusy()||a.product().busy;})).toBe(false);
   const poll=await control.holdPoll(mode);await page.evaluate(()=>{const a=window.ng.getComponent(document.querySelector('app-root'));void a.connectionController.read(a.connectionController.generation);});await poll.entered();const before=await control.snapshot();
