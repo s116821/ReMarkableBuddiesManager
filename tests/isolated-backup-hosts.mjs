@@ -7,7 +7,7 @@ import path from 'node:path';
 import {chromium, _electron as electron, expect} from '@playwright/test';
 import {startHelper} from '../host/browser-helper.mjs';
 import {backupPreferencesFixture, identity} from './fixtures/isolated-backup-preferences.mjs';
-import {firstConfigurationFixture} from './fixtures/first-configuration.mjs';
+import {firstConfigurationFixture, tablet as firstConfigurationTablet} from './fixtures/first-configuration.mjs';
 
 // Source-derived synthetic provider frames. The real host, transport and UI
 // consume them, but they are not live Drive or producer-emitted evidence.
@@ -382,6 +382,20 @@ async function verifyPackagedBrowser(executablePath, env) {
     await expect.poll(() => app.evaluate(() => globalThis.managerBrowserHelperOrigin ?? '')).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     origin = await app.evaluate(() => globalThis.managerBrowserHelperOrigin);
     assert.equal(await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().length), 0);
+    await app.evaluate((_electron, tablet) => {
+      const require = process.mainModule.require.bind(process.mainModule);
+      const path = require('node:path');
+      const {WiredObserver} = require(path.join(process.resourcesPath, 'host', 'observer.mjs'));
+      globalThis.fixtureFirstConfigurationCalls = 0;
+      WiredObserver.prototype.observe = async function () {
+        this.lastObservation = structuredClone(tablet);
+        return {contract_version: 1, status: 'observed', observation: this.lastObservation};
+      };
+      WiredObserver.prototype.runFirstConfiguration = async function () {
+        globalThis.fixtureFirstConfigurationCalls++;
+        throw Error('Unexpected first configuration selector in packaged browser fixture');
+      };
+    }, firstConfigurationTablet);
     const browser = await chromium.launch();
     try {
       const context = await browser.newContext({viewport: {width: 390, height: 980}});
@@ -415,6 +429,34 @@ async function verifyPackagedBrowser(executablePath, env) {
       await page.reload();
       await verify(page, control);
       await packagedPreviewRefusal(page, app);
+
+      const button = name => page.getByRole('button', {name, exact: true});
+      await button('Read tablet state').click();
+      await expect(page.getByTestId('tablet-model')).toHaveText(firstConfigurationTablet.model);
+      const review = button('Review first configuration');
+      await expect(review).toBeEnabled();
+      const [reviewResponse] = await Promise.all([
+        page.waitForResponse(response => {
+          const request = response.request();
+          return response.url() === origin + '/manager-first-configuration' &&
+            request.method() === 'POST' && request.postDataJSON()?.action === 'review';
+        }),
+        review.click(),
+      ]);
+      assert.equal(reviewResponse.status(), 200);
+      const {connection_id, boot_id} = firstConfigurationTablet;
+      const request = reviewResponse.request().postDataJSON();
+      assert.deepEqual(request, {action: 'review', connection_id, boot_id, invocation: request.invocation});
+      assert.deepEqual(await reviewResponse.json(), {
+        version: 1, state: 'unavailable', invocation: request.invocation, reference: null, current: null, retained: [],
+      });
+      await expect(page.getByTestId('first-configuration-status')).toHaveText(
+        'First configuration requires a qualified Buddy installation and quiescent wired tablet.');
+      await expect(button('Create default configuration')).toHaveCount(0);
+      await button('Disconnect').click();
+      await expect(page.getByTestId('tablet-model')).toHaveCount(0);
+      assert.equal(await app.evaluate(() => globalThis.fixtureFirstConfigurationCalls), 0);
+
       assert.equal(await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().length), 0);
       await control.set('hold', true);
       await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).click();
