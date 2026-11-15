@@ -75,6 +75,13 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write('source_sha=' + pin['sourceSha'] + '\n')
           PY
+      - name: Build frontend before native compilation
+        env:
+          MANAGER_CANDIDATE_TAG: ${{ steps.freeze.outputs.tag }}
+          MANAGER_CANDIDATE_SHA: ${{ steps.freeze.outputs.sha }}
+        run: |
+          npm run build:development
+          npm run build
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: s116821/ReMarkableBuddies
@@ -436,13 +443,8 @@ jobs:
               output.write('ORACLE_ROOT=' + str(oracle) + '\n')
               output.write('ORACLE_TEST_ROOT=' + str(tests) + '\n')
           PY
-      - name: Build development, production and native packages
-        env:
-          MANAGER_CANDIDATE_TAG: ${{ steps.freeze.outputs.tag }}
-          MANAGER_CANDIDATE_SHA: ${{ steps.freeze.outputs.sha }}
+      - name: Package native applications
         run: |
-          npm run build:development
-          npm run build
           MANAGER_PACKAGE_PLATFORM=win32 npm run package
           MANAGER_PACKAGE_PLATFORM=linux npm run package
       - name: Assemble fixed release inventory

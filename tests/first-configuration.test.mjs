@@ -231,4 +231,28 @@ test('the shared browser maintenance bridge preserves bounds, parsers and stream
   ok = false;
   await assert.rejects(host.storageInitialization(first), {message: 'Storage preparation unavailable'});
   assert.deepEqual([cancelled, released], [3, 10]);
+
+  ok = true;
+  chunks = [encoder.encode('\ufeff{}')];
+  assert.deepEqual(await host.localModeChoice({}), {});
+  assert.deepEqual([cancelled, released], [4, 10]);
+  chunks = [encoder.encode('\ufeff{}')];
+  assert.deepEqual(await host.isolatedRoot({}), {});
+  assert.deepEqual(timeout.mock.calls.at(-1).arguments, [46000]);
+  assert.deepEqual([cancelled, released], [5, 11]);
+
+  chunks = [encoder.encode('\ufeff{}')];
+  await assert.rejects(host.ordinaryExport({}), SyntaxError);
+  assert.deepEqual([cancelled, released], [6, 11]);
+  frame(2048);
+  assert.deepEqual(await host.downloads.request({action: 'status'}), {value: 1});
+  assert.deepEqual(timeout.mock.calls.at(-1).arguments, [10000]);
+  frame(2049);
+  await assert.rejects(host.downloads.request({action: 'status'}), {message: 'Download response refused'});
+  assert.deepEqual([cancelled, released], [8, 11]);
+  ok = false;
+  await assert.rejects(host.isolatedRoot({}), {message: 'Isolated backup helper unavailable'});
+  await assert.rejects(host.localModeChoice({}), {message: 'Local-only helper unavailable'});
+  await assert.rejects(host.downloads.request({action: 'status'}), {message: 'Download host unavailable'});
+  assert.deepEqual([cancelled, released], [8, 11]);
 });
