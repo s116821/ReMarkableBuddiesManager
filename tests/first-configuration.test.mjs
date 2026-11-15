@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {FirstConfigurationHost} from '../host/first-configuration.mjs';
 import {MaintenanceIO} from '../host/maintenance-io.mjs';
 import {FirstConfigurationController} from '../src/first-configuration.ts';
+import {currentHost} from '../src/host.ts';
 import {firstConfigurationFixture, tablet, target, invocation, noDispatch} from './fixtures/first-configuration.mjs';
 
 const bind = (action, index, ref, sample = tablet) => ({action, ...target(sample), invocation: invocation(index),
@@ -160,4 +161,74 @@ test('actual controller discards a queued confirmation and retains uncertainty a
   await controller.run('check', tablet, f.run, pause);
   assert.equal(controller.state.current, 'present');
   assert.equal(controller.state.retained[0].outcome, 'unknown');
+});
+
+test('the shared browser maintenance bridge preserves bounds, parsers and stream custody', async t => {
+  const environment = {window: {}, location: {hostname: 'elsewhere', protocol: 'http:'}};
+  for (const [key, value] of Object.entries(environment)) {
+    const original = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, {value, configurable: true});
+    t.after(() => {
+      if (original) Object.defineProperty(globalThis, key, original);
+      else delete globalThis[key];
+    });
+  }
+
+  const encoder = new TextEncoder(), signal = new AbortController().signal;
+  let cancelled = 0, released = 0, chunks = [], ok = true;
+  const reader = {
+    async read() { return chunks.length ? {done: false, value: chunks.shift()} : {done: true}; },
+    async cancel() { cancelled++; },
+    releaseLock() { released++; },
+  };
+  const timeout = t.mock.method(AbortSignal, 'timeout', () => signal);
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => ({ok, body: {getReader: () => reader}}));
+  const host = currentHost();
+  const first = {action: 'retained'};
+  await assert.rejects(host.firstConfiguration(first), {message: 'Tablet maintenance helper unavailable'});
+  environment.location.hostname = '127.0.0.1';
+  environment.location.protocol = 'https:';
+  await assert.rejects(host.firstConfiguration(first), {message: 'Tablet maintenance helper unavailable'});
+  assert.equal(fetchMock.mock.callCount(), 0);
+  environment.location.protocol = 'http:';
+
+  const frame = size => {
+    chunks = [encoder.encode('{"value":1}'), encoder.encode(' '.repeat(size - 11))];
+  };
+  frame(8192);
+  assert.deepEqual(await host.firstConfiguration(first), {value: 1});
+  assert.deepEqual(fetchMock.mock.calls[0].arguments, ['/manager-first-configuration', {
+    method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
+    body: '{"action":"retained"}', signal,
+  }]);
+  assert.deepEqual(timeout.mock.calls[0].arguments, [14000]);
+  assert.deepEqual([cancelled, released], [0, 1]);
+
+  frame(8193);
+  await assert.rejects(host.researchSettings({}), {message: 'Research response refused'});
+  assert.deepEqual([cancelled, released], [1, 2]);
+  frame(16384);
+  assert.deepEqual(await host.inspectOwnedV3({}), {value: 1});
+  frame(16385);
+  await assert.rejects(host.inspectOwnedV3({}), {message: 'Stored data inspection response refused'});
+  assert.deepEqual([cancelled, released], [2, 4]);
+  frame(270336);
+  assert.deepEqual(await host.handwritingRecords({}), {value: 1});
+  frame(270337);
+  await assert.rejects(host.handwritingRecords({}), {message: 'Archive operation response refused'});
+
+  const duplicate = '{"value":1,"value":2}';
+  chunks = [encoder.encode(duplicate)];
+  await assert.rejects(host.firstConfiguration(first), {message: 'Ordinary restore refused'});
+  chunks = [encoder.encode(duplicate)];
+  assert.deepEqual(await host.storageInitialization(first), {value: 2});
+  chunks = [encoder.encode('\ufeff{}')];
+  await assert.rejects(host.storageInitialization(first), SyntaxError);
+  chunks = [Uint8Array.of(0xff)];
+  await assert.rejects(host.storageInitialization(first), TypeError);
+  assert.deepEqual([cancelled, released], [3, 10]);
+
+  ok = false;
+  await assert.rejects(host.storageInitialization(first), {message: 'Storage preparation unavailable'});
+  assert.deepEqual([cancelled, released], [3, 10]);
 });
