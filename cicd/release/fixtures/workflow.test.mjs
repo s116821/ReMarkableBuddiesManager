@@ -220,7 +220,7 @@ if (manager) test('Windows integration stops at each failed native command', () 
   assert.ok(nativeIndex < integration.steps.findIndex(s => /npx playwright install/.test(s.run ?? '')));
   assert.ok(nativeIndex < integration.steps.indexOf(step), 'Fail before long UI suites if native custody is broken');
   const commands = step.run.trim().split('\n').map(s => s.trim());
-  assert.deepEqual(commands.slice(0, 4), ['npm run test:hosts','npm run test:package','npm run test:wired-hosts','npm run test:wired-hosts -- --packaged']);
+  assert.deepEqual(commands.slice(0, 5), ['npm run test:hosts','npm run test:navigation-hosts','npm run test:package','npm run test:wired-hosts','npm run test:wired-hosts -- --packaged']);
   assert.ok(commands.every(command => /^npm run test:[a-z-]+(?: -- --packaged)?$/.test(command)));
   assert.equal(step.shell ?? integration.defaults.run.shell, 'bash');
   for (let failAt=1; failAt<=commands.length; failAt++) {
