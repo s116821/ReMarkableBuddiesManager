@@ -347,7 +347,7 @@
     <p class="text-sm text-muted">Review the selected fact before confirming. Forgetting removes the fact from active use. History and original documents remain; no disk space is reclaimed and cloud propagation is not verified.</p>
     <div class="flex flex-wrap gap-2 my-3">
       <button class="ui-button ui-button-secondary" type="button" (click)="app.prepareForget()" [disabled]="!app.host.memoryForget || !app.forgetHead() || app.forget().busy || app.forget().uncertain">Review forgetting this fact</button>
-      
+
       @if (app.forget().busy || app.forget().view?.state === 'prepared') {
 <button class="ui-button ui-button-secondary" type="button" (click)="app.stopForget()" [disabled]="!app.forget().busy && app.forget().view?.state !== 'prepared'">Stop local wait</button>
 }
