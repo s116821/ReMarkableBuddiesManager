@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import {request as httpRequest} from 'node:http';
 import {mkdtemp, realpath, rm, writeFile} from 'node:fs/promises';
 import os from 'node:os';
@@ -9,7 +9,7 @@ import {startHelper} from '../host/browser-helper.mjs';
 import {IsolatedBackupPreferences} from '../host/isolated-backup-preferences.mjs';
 import {IsolatedBackupHost} from '../host/isolated-backup-host.mjs';
 import {OrdinaryRestoreHost} from '../host/ordinary-restore.mjs';
-import {parseBackupPreferencesResult, parseIsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
+import {parseBackupPreferencesResult, parseBackupRestoreResult, parseIsolatedBackupResult} from '../host/isolated-backup-protocol.mjs';
 import {backupPreferencesFixture, identity} from './fixtures/isolated-backup-preferences.mjs';
 
 // Source-derived synthetic frames. This exercises the actual loopback bridge;
@@ -426,4 +426,43 @@ test('a partially received backup request cannot start work after document navig
   const next = await h.result(scan);
   assert.equal((await h.settle(next.operation)).status, 'observed');
   assert.equal(h.captures.length, 1);
+});
+
+test('loopback data preview binds the closed frame and existing target before staging', {timeout: 10000}, async t => {
+  const parent = await realpath(os.tmpdir());
+  const directory = await mkdtemp(path.join(parent, 'manager-backup-data-preview-'));
+  const f = await backupPreferencesFixture(directory);
+  let helper;
+  t.after(async () => {
+    try { await helper?.close(); }
+    finally { await f.close(); await removeFixtureDirectory(parent, directory); }
+  });
+  await writeFile(path.join(directory, 'index.html'), '<main>fixture</main>');
+  helper = await startHelper({root: directory, observer: f.observer, backupComposition: f.composition,
+    backupRestoreDestination: f.restoreDestination});
+  const page = await fetch(helper.origin + '/preview/');
+  const headers = {Origin: helper.origin, Cookie: page.headers.get('set-cookie').split(';')[0], 'Content-Type': 'application/json'};
+  await page.text();
+  const [operation, reference] = await fixtureSelection(f.composition.isolatedBackup);
+  const q = {version: 1, action: 'preview-restore', operation, reference, invocation: randomUUID(), ...identity};
+  const send = body => fetch(helper.origin + '/manager-isolated-backup', {method: 'POST', headers, body: JSON.stringify(body)});
+  assert.equal((await send({...q, invocation: '-' })).status, 400);
+  assert.equal((await send({...q, path: '/home/root/refused'})).status, 400);
+  const wrong = {...q, connection_id: '0'.repeat(64)};
+  const refusal = await send(wrong);
+  assert.equal(refusal.status, 200);
+  assert.equal(parseBackupRestoreResult(await refusal.json(), wrong).status, 'invalidated');
+  assert.deepEqual(f.snapshot().staged, []);
+  assert.deepEqual(f.snapshot().restoreSelectors, []);
+  const response = await send(q);
+  assert.equal(response.status, 200);
+  const ready = parseBackupRestoreResult(await response.json(), q);
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.preview.ordinary_restore.preview.source.complete_media, false);
+  assert.doesNotMatch(JSON.stringify(ready), /private-backup-restore|source_path_sha256/);
+  assert.deepEqual(f.snapshot().restoreSelectors, ['prepare']);
+  const cancelled = await send(cancel(operation));
+  assert.equal(cancelled.status, 200);
+  assert.equal((await cancelled.json()).cleanupPending, false);
+  assert.deepEqual(f.snapshot().staged, ['receive', 'check', 'check', 'release']);
 });

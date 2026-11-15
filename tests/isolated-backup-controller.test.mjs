@@ -431,3 +431,28 @@ test('download uses the original remaining selection window and keeps a current 
   assert.equal(c.state.cleanupPending, true);
   assert.equal(events.filter(event => event.action === 'cancel').length, 1);
 });
+
+test('data preview controller sends the original pair and ordinary invocation after local pause', async t => {
+  const pause = deferred(), calls = [], settled = [];
+  const {host} = syntheticHost(t, {downloadSelection: async () => ({status: 'verified', cleanupPending: false,
+    inspection: {markerSha256: digest, manifests: 1, objects: 0, completeMedia: false, declaredSettings: 1}})});
+  const c = open(t, async q => {
+    calls.push(q);
+    if (q.action !== 'preview-restore') return host.request(q);
+    const {operation, reference, invocation} = q;
+    return {version: 1, operation, reference, invocation, status: 'busy', retryable: true, preview: null, cleanupPending: false};
+  });
+  await choose(c);
+  await c.download();
+  await waitFor(() => !c.state.busy);
+  const invocation = device, target = {connection_id: reference(8), boot_id: device};
+  const pending = c.previewRestore(target, () => pause.promise, () => true,
+    () => ({invocation, current: () => true, settle: result => settled.push(result), discard() {}}));
+  assert.equal(c.state.previewing, true);
+  assert.equal(calls.some(q => q.action === 'preview-restore'), false);
+  pause.resolve(true);
+  await pending;
+  assert.deepEqual(calls.at(-1), {...calls.find(q => q.action === 'download'), action: 'preview-restore', invocation, ...target});
+  assert.equal(settled.length, 1);
+  assert.equal(c.state.previewAvailable, true);
+});

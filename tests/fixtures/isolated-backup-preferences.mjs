@@ -6,6 +6,8 @@ import {IsolatedBackupStaging} from '../../host/isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from '../../host/isolated-backup-verifier.mjs';
 import {DRIVE_SCOPE} from '../../host/drive-auth.mjs';
 import {artifact, hostFixture, identity} from './portable-configuration.mjs';
+import {restoreFixture, restoreReport} from './ordinary-restore.mjs';
+import {OrdinaryRestoreHost} from '../../host/ordinary-restore.mjs';
 
 export {identity};
 const json = value => Buffer.from(JSON.stringify(value));
@@ -94,13 +96,65 @@ export async function backupPreferencesFixture(directory, {beforeRelease} = {}) 
   });
   composition.driveAuth.oauth = () => ({setCredentials() {}, refreshAccessToken() { assert.fail('Unexpected refresh'); }});
   composition.driveAuth.account = async () => ({account: grant.account, tokens: grant.tokens});
+  const ordinary = restoreFixture({report(selector, body, state) {
+    const report = restoreReport(selector, body, state);
+    if (selector === 'prepare') {
+      report.data.intent.archive_sha256 = hash(data);
+      report.data.intent.complete_media = false;
+      report.data.intent.staged_configuration_sha256 = null;
+      for (const summary of [report.data.preview.source, report.data.preview.target]) {
+        summary.complete_media = false;
+        summary.configuration_included = false;
+      }
+    } else if (report.data?.inspection) {
+      report.data.inspection.complete_media = false;
+      report.data.inspection.configuration_included = false;
+    }
+    return report;
+  }});
+  ordinary.state.status = 'desired-generation-observed';
+  const observer = target.f.observer, run = observer.run.bind(observer);
+  observer.run = (action, packet) => {
+    if (action !== 'ordinary-restore') return run(action, packet);
+    ordinary.observer.lastObservation = observer.lastObservation;
+    return ordinary.observer.run(action, packet);
+  };
+  const restore = new OrdinaryRestoreHost({observer, io: target.f.io, beforeIO: () => target.f.portable.invalidate()});
+  const staged = [];
+  const restoreDestination = Object.freeze({target: identity, async stageDestination(source) {
+    source.signal.throwIfAborted();
+    assert.deepEqual({connection_id: source.connection_id, boot_id: source.boot_id}, identity);
+    staged.push('receive');
+    for (const [name, expected] of [['data/backup.json', data], ['portable-configuration.json', prefs], ['isolated-backup.json', markerBytes]]) {
+      const chunks = [];
+      await source.readFile(name, async chunk => { chunks.push(Buffer.from(chunk)); });
+      assert.deepEqual(Buffer.concat(chunks), expected);
+    }
+    return Object.freeze({root: '/home/root/.private-backup-restore',
+      async assertOwned(bounds) {
+        assert.ok(bounds.current() && !bounds.signal.aborted);
+        assert.equal(bounds.markerSha256, hash(markerBytes));
+        staged.push('check');
+        return true;
+      },
+      release(withLease) {
+        return withLease(async bounds => {
+          assert.ok(bounds.current() && !bounds.signal.aborted);
+          staged.push('release');
+          return true;
+        });
+      }});
+  }});
   const close = async () => {
-    try { await Promise.all([composition.dispose(), target.f.portable.dispose()]); }
+    try { await Promise.all([composition.dispose(), target.f.portable.dispose(), restore.dispose()]); }
     finally { for (const [owner, name, original] of originals) owner.prototype[name] = original; }
   };
   try { assert.equal((await composition.driveAuth.check()).status, 'connected'); }
   catch (error) { await close(); throw error; }
-  const snapshot = () => ({...target.snapshot(), releases,
+  const snapshot = () => ({...target.snapshot(), releases, staged: [...staged],
+    restoreSelectors: ordinary.calls.map(call => call.selector),
+    restoreApply: ordinary.calls.findLast(call => call.selector === 'apply')?.input ?? null,
+    restoreStatus: ordinary.calls.findLast(call => call.selector === 'status')?.input ?? null,
     prepareOperation: target.f.calls.find(call => call.action === 'portable-configuration' && call.selector === 'prepare')?.body?.operation ?? null});
-  return {composition, observer: target.f.observer, target, close, snapshot};
+  return {composition, observer, target, restore, restoreDestination, close, snapshot};
 }

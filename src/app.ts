@@ -766,20 +766,32 @@ export class App implements OnDestroy {
   downloadCloudBackup() {
     if (this.canBrowseCloudBackups()) void this.cloudBackupController.download();
   }
-  canReviewCloudBackupPreferences() {
-    return this.canBrowseCloudBackups() && this.cloudBackup().previewAvailable && this.portableAvailable();
+  canReviewCloudBackup(data = false) {
+    return this.canBrowseCloudBackups() && this.cloudBackup().previewAvailable && (data
+      ? !!this.host.ordinaryRestore && this.profile().inspection && !this.restoreBusy('legacy') &&
+        this.restoreController.state.retained.length < 8
+      : this.portableAvailable());
   }
 
-  async reviewCloudBackupPreferences() {
+  async reviewCloudBackup(data = false) {
     const target = this.connection().observation;
-    if (!target || !this.canReviewCloudBackupPreferences()) return;
-    this.clearPortablePeers();
-    await this.cloudBackupController.previewPreferences(target, async () => {
+    if (!target || !this.canReviewCloudBackup(data)) return;
+    const pause = async () => {
       await this.connectionController.pauseObservation();
       return this.connection().observation === target;
-    }, () => this.connection().observation === target && this.profile().savedConfigurationProbe &&
-      this.drive().status === 'connected',
-    deadline => this.portableController.beginBackupPreview(target, deadline, () => this.clearCloudBackups()));
+    };
+    const current = () => this.connection().observation === target && this.drive().status === 'connected' &&
+      (data ? this.profile().inspection : this.profile().savedConfigurationProbe);
+    const cancel = () => this.clearCloudBackups();
+    if (data) {
+      this.clearRestorePeers();
+      await this.cloudBackupController.previewRestore(target, pause, current,
+        deadline => this.restoreController.beginBackupPreview(target, deadline, cancel));
+    } else {
+      this.clearPortablePeers();
+      await this.cloudBackupController.previewPreferences(target, pause, current,
+        deadline => this.portableController.beginBackupPreview(target, deadline, cancel));
+    }
   }
 
   clearCloudBackups() { this.cloudBackupController.cancel(); }

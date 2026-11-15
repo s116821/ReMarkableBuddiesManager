@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import {once} from 'node:events';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -14,6 +14,8 @@ import {createIsolatedBackupDrive} from '../host/isolated-backup-drive.mjs';
 import {IsolatedBackupStaging} from '../host/isolated-backup-staging.mjs';
 import {IsolatedBackupVerifier} from '../host/isolated-backup-verifier.mjs';
 import {restoreFixture, restoreReport, identity} from './fixtures/ordinary-restore.mjs';
+import {OrdinaryRestoreController} from '../src/ordinary-restore.ts';
+import {parseBackupRestoreResult, parseIsolatedBackupBridgeRequest} from '../host/isolated-backup-protocol.mjs';
 import {portableFixture, artifact as portableArtifact, selected as manualArtifact} from './fixtures/portable-configuration.mjs';
 import {IsolatedBackupPreferences} from '../host/isolated-backup-preferences.mjs';
 import {MemoryForgetHost} from '../host/memory-forget.mjs';
@@ -1041,11 +1043,11 @@ test('composition uses the original capture and joins active work before checked
   }
 });
 
-async function retainedStagePackage() {
+async function retainedStagePackage(variant = 'complete') {
   const root = new URL('./fixtures/isolated-backup-actual/', import.meta.url);
   const bytes = await readFile(new URL('receipt.json', root));
   assert.equal(hash(bytes), 'e90a495bb2e3a8c914a301b47b96d93b5946c9644bee4c3be8b06ede7c32f8b3');
-  const retained = JSON.parse(bytes).cases.complete;
+  const retained = JSON.parse(bytes).cases[variant];
   const members = new Map();
   for (const [name, expected] of Object.entries(retained.files)) {
     const content = await readFile(new URL(retained.directory + '/' + name, root));
@@ -1340,4 +1342,273 @@ test('expired active stage check cannot turn its retirement into a new lease', {
   assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
   assert.equal(await f.restore.host.dispose(), true);
   assert.deepEqual(selectors, ['receive-isolated-stage', 'check-isolated-stage', 'check-isolated-stage', 'check-isolated-stage']);
+});
+
+function backupRestoreOwner(t, f, stageDestination = createIsolatedStageDestination(f.restore.observer)) {
+  const [operation, reference] = f.original;
+  const request = {version: 1, action: 'preview-restore', operation, reference, invocation: randomUUID(), ...identity};
+  const cancel = {version: 1, action: 'cancel', operation};
+  const authority = {current: true};
+  const document = Symbol();
+  const callerCurrent = () => authority.current;
+  const context = {document, callerCurrent};
+  const owner = new IsolatedBackupPreferences({composition: f.composition, isolatedBackup: f.composition.isolatedBackup,
+    restore: f.restore.host, observer: f.restore.observer, restoreDestination: {target: identity, stageDestination},
+    portable: {prepareHandoff: () => assert.fail('Unexpected preferences Prepare')}});
+  t.after(() => owner.dispose());
+  const deliver = async q => owner.deliver(await owner.request(q, context), q, callerCurrent);
+  return {owner, request, cancel, authority, document, context, callerCurrent, deliver};
+}
+
+test('data preview bridge admits the exact retained package once and distinguishes unconsumed Busy', {timeout: 9000}, async t => {
+  for (const variant of ['complete', 'media-omitted']) {
+    await t.test(variant, async t => {
+      const retained = await retainedStagePackage(variant);
+      const completeMedia = variant === 'complete';
+      const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia});
+      f.releaseDone.resolve();
+      const selectors = stagePeer(f, retained);
+      const b = backupRestoreOwner(t, f);
+      const host = f.composition.isolatedBackup;
+      const q = b.request;
+      for (const bad of [{...q, invocation: 'wrong'}, {...q, source: '/home/root/refused'}, {...q, version: 2}]) {
+        assert.throws(() => parseIsolatedBackupBridgeRequest(bad), /frame refused/);
+      }
+      const token = f.restore.io.acquire('competing', 'fixture', 'check', {joined: true});
+      assert.ok(token);
+      try {
+        const busy = await b.deliver(q);
+        assert.equal(busy.status, 'busy');
+        assert.equal(busy.retryable, true);
+        assert.equal(host.canHandoff(q.operation, q.reference), true);
+        assert.deepEqual(selectors, []);
+      } finally { f.restore.io.release(token); }
+
+      const preview = { ...q, invocation: randomUUID() };
+      const ready = await b.deliver(preview);
+      assert.equal(ready.status, 'ready');
+      assert.equal(ready.invocation, preview.invocation);
+      assert.equal(ready.cleanupPending, false);
+      assert.equal(ready.preview.ordinary_restore.preview.source.complete_media, completeMedia);
+      assert.equal(ready.preview.ordinary_restore.preview.target.configuration_included, false);
+      assert.doesNotMatch(JSON.stringify(ready), /restore-v1-|custody_sha256|inventory_sha256|source_path_sha256/);
+      assert.throws(() => parseBackupRestoreResult({...ready, invocation: q.invocation}, preview), /frame refused/);
+      assert.throws(() => parseBackupRestoreResult({...ready, cleanupPending: true}, preview), /frame refused/);
+      assert.equal(host.canHandoff(q.operation, q.reference), false);
+      assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+
+      const preferences = {...q, action: 'preview-preferences'};
+      delete preferences.invocation;
+      const competing = await b.deliver(preferences);
+      assert.equal(competing.status, 'busy');
+      assert.equal(competing.retryable, false);
+      const original = ready.preview.ordinary_restore.reference;
+      assert.equal((await f.restore.use('confirm', original)).ordinary_restore.state, 'unknown');
+      assert.equal((await b.deliver(preferences)).status, 'invalidated');
+      f.restore.state.status = 'desired-generation-observed';
+      const reconciled = (await f.restore.use('status', original)).ordinary_restore;
+      assert.equal(reconciled.state, 'desired-generation-observed');
+      assert.equal(reconciled.apply_outcome, 'unknown');
+      assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare', 'apply', 'status']);
+      assert.equal(f.restore.calls[2].input, f.restore.calls[1].input);
+      assert.deepEqual(selectors, ['receive-isolated-stage', 'check-isolated-stage', 'check-isolated-stage',
+        'check-isolated-stage', 'release-isolated-stage']);
+    });
+  }
+});
+
+test('data preview joins exact backup Cancel through a held writer and refuses another preview action', {timeout: 6000}, async t => {
+  const retained = await retainedStagePackage();
+  const entered = Promise.withResolvers(), drain = Promise.withResolvers(), aborted = Promise.withResolvers();
+  t.after(() => drain.resolve());
+  const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true,
+    holdMemberRead: async bounds => {
+      const {signal} = bounds();
+      signal.addEventListener('abort', aborted.resolve, {once: true});
+      entered.resolve();
+      await drain.promise;
+      signal.throwIfAborted();
+    }});
+  f.releaseDone.resolve();
+  const selectors = stagePeer(f, retained);
+  const b = backupRestoreOwner(t, f);
+  const preview = b.owner.request(b.request, b.context);
+  await entered.promise;
+  const second = {...b.request, action: 'preview-preferences'};
+  delete second.invocation;
+  assert.equal((await b.deliver(second)).retryable, false);
+  const cancellation = b.owner.request(b.cancel, b.context);
+  assert.equal(b.owner.request(b.cancel, b.context), cancellation);
+  await aborted.promise;
+  assert.equal(f.restore.io.revoke(), false);
+  assert.equal(f.events.includes('stage-release'), false);
+  drain.resolve();
+  const invalid = await preview;
+  assert.equal(invalid.status, 'invalidated');
+  assert.equal(invalid.preview, null);
+  assert.equal(invalid.retryable, false);
+  assert.equal((await cancellation).cleanupPending, true);
+  assert.deepEqual(selectors, ['receive-isolated-stage']);
+  assert.deepEqual(f.restore.calls, []);
+  assert.equal(f.events.filter(event => event === 'stage-release').length, 1);
+});
+
+test('data preview withholds Ready on source cleanup uncertainty and retires an undelivered original', {timeout: 8000}, async t => {
+  for (const mode of ['source-uncertain', 'document-drift']) {
+    await t.test(mode, async t => {
+      const retained = await retainedStagePackage();
+      const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true,
+        beforeRelease: () => { if (mode === 'source-uncertain') throw Error('Synthetic source retirement failed'); }});
+      f.releaseDone.resolve();
+      const selectors = stagePeer(f, retained);
+      const b = backupRestoreOwner(t, f);
+      const reply = await b.owner.request(b.request, b.context);
+      if (mode === 'source-uncertain') {
+        assert.equal(reply.status, 'unavailable');
+        assert.equal(reply.preview, null);
+        assert.equal(reply.retryable, false);
+        assert.equal(reply.cleanupPending, true);
+      } else {
+        assert.equal(reply.status, 'ready');
+        b.authority.current = false;
+        assert.throws(() => b.owner.deliver(reply, b.request, b.callerCurrent), /caller refused/);
+        await b.owner.invalidate(b.document);
+      }
+      assert.deepEqual(selectors, ['receive-isolated-stage', 'check-isolated-stage', 'check-isolated-stage',
+        'release-isolated-stage']);
+      assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+    });
+  }
+});
+
+test('ordinary controller Stop uses exact backup Cancel on both sides of the possible-Apply boundary', {timeout: 9000}, async t => {
+  for (const mode of ['pre-apply-check', 'possible-apply', 'confirm-busy']) {
+    await t.test(mode, async t => {
+      const retained = await retainedStagePackage();
+      const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true});
+      f.releaseDone.resolve();
+      const selectors = stagePeer(f, retained);
+      const b = backupRestoreOwner(t, f);
+      const controller = new OrdinaryRestoreController(() => {});
+      t.after(() => controller.dispose());
+      const ordinary = [];
+      const adapter = {ordinaryRestore: q => {
+        ordinary.push(q.action);
+        return f.restore.host.request(q);
+      }};
+      const sent = [];
+      let cancelled;
+      const editor = controller.beginBackupPreview(identity, performance.now() + 45000, () => {
+        sent.push(b.cancel);
+        cancelled = b.owner.request(b.cancel, b.context);
+      });
+      assert.ok(editor);
+      const q = {...b.request, invocation: editor.invocation};
+      const ready = await b.deliver(q);
+      editor.settle(ready);
+      const reference = controller.state.view.reference;
+      const entered = Promise.withResolvers(), drained = Promise.withResolvers(), aborted = Promise.withResolvers();
+      t.after(() => drained.resolve());
+      if (mode === 'confirm-busy') {
+        const token = f.restore.io.acquire('competing', 'fixture', 'check', {joined: true});
+        await controller.confirm(adapter, f.restore.observer.lastObservation, async () => true);
+        assert.equal(controller.state.view.state, 'busy');
+        assert.deepEqual(sent, [b.cancel]);
+        assert.equal((await cancelled).cleanupPending, true);
+        f.restore.io.release(token);
+        assert.equal(selectors.includes('release-isolated-stage'), false);
+        assert.deepEqual(ordinary, ['confirm']);
+        return;
+      }
+      if (mode === 'pre-apply-check') {
+        const run = f.restore.observer.runIsolatedStage;
+        f.restore.observer.runIsolatedStage = async function(request, bounds, body) {
+          if (request.selector === 'check-isolated-stage') {
+            bounds.signal.addEventListener('abort', aborted.resolve, {once: true});
+            entered.resolve();
+            await drained.promise;
+            bounds.signal.throwIfAborted();
+          }
+          return run.call(this, request, bounds, body);
+        };
+      } else {
+        f.restore.state.onRaw = async (report, request) => {
+          if (request.selector !== 'apply') return report;
+          entered.resolve();
+          await drained.promise;
+          throw Error('Synthetic lost possible-Apply reply');
+        };
+      }
+      const confirm = controller.confirm(adapter, f.restore.observer.lastObservation, async () => true);
+      await entered.promise;
+      await controller.stop(adapter);
+      assert.deepEqual(sent, [b.cancel]);
+      assert.deepEqual(ordinary, ['confirm']);
+      assert.equal(controller.state.retained[0].reference, reference);
+      if (mode === 'pre-apply-check') {
+        await aborted.promise;
+        assert.equal(f.restore.io.revoke(), false);
+        drained.resolve();
+        assert.equal((await cancelled).cleanupPending, true);
+        await confirm;
+        assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+        assert.equal(selectors.includes('release-isolated-stage'), false);
+      } else {
+        await cancelled;
+        assert.equal(f.restore.observer.cancels, 0);
+        drained.resolve();
+        await confirm;
+        assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare', 'apply']);
+        assert.equal(selectors.includes('release-isolated-stage'), false);
+        f.restore.state.status = 'desired-generation-observed';
+        await controller.status(adapter, f.restore.observer.lastObservation, controller.state.retained[0], async () => true);
+        assert.equal(controller.state.view.apply_outcome, 'unknown');
+        assert.equal(f.restore.calls.at(-1).input, f.restore.calls.find(call => call.selector === 'apply').input);
+      }
+    });
+  }
+});
+
+test('data preview Cancel joins the original Prepare without deleting an unresolved reader stage', {timeout: 6000}, async t => {
+  const retained = await retainedStagePackage();
+  const f = await stagedRestore(t, {retained, digest: retained.files['data/backup.json'].sha256, completeMedia: true});
+  f.releaseDone.resolve();
+  const selectors = stagePeer(f, retained);
+  const entered = Promise.withResolvers(), drained = Promise.withResolvers();
+  t.after(() => drained.resolve());
+  f.restore.state.onRaw = async (report, q) => {
+    assert.equal(q.selector, 'prepare');
+    entered.resolve();
+    await drained.promise;
+    return report;
+  };
+  const b = backupRestoreOwner(t, f);
+  const issued = b.owner.request(b.request, b.context);
+  await entered.promise;
+  const cancel = b.owner.request(b.cancel, b.context);
+  let settled = false;
+  void cancel.then(() => { settled = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.equal(f.restore.io.revoke(), false);
+  drained.resolve();
+  assert.equal((await issued).preview, null);
+  assert.equal((await cancel).cleanupPending, true);
+  assert.deepEqual(selectors, ['receive-isolated-stage', 'check-isolated-stage']);
+  assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare']);
+});
+
+test('an old issued data preview cannot discard the succeeding manual restore editor', {timeout: 6000}, async t => {
+  const f = await stagedRestore(t);
+  f.releaseDone.resolve();
+  const b = backupRestoreOwner(t, f, f.transfer);
+  const old = (await b.deliver(b.request)).preview;
+  assert.ok(old);
+  const manual = await f.restore.prepare();
+  assert.equal(manual.ordinary_restore.state, 'ready');
+  const stale = await f.restore.host.discardHandoffPreview(old);
+  assert.ok(stale === false || stale.cleanupPending === false);
+  assert.equal(await f.restore.host.discardHandoffPreview(manual), false);
+  assert.equal(f.restore.host.assertCurrent(manual), manual);
+  assert.deepEqual(f.restore.calls.map(call => call.selector), ['prepare', 'prepare']);
 });

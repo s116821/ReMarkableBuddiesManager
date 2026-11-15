@@ -146,7 +146,7 @@ app.whenReady().then(async () => {
   const {IsolatedBackupPreferences, isManagerMainFrame, watchBackupDocument,
     registerIsolatedBackupHandler, registerPortableConfigurationHandler} =
     await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-preferences.mjs')).href);
-  const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer: rawObserver});
+  const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer: rawObserver, restore});
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
   const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

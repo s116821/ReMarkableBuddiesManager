@@ -1,4 +1,5 @@
 import type {PortableResult} from './portable-configuration-protocol.mjs';
+import type {RestoreResult} from './ordinary-restore-protocol.mjs';
 
 export const ISOLATED_BACKUP_REQUEST_BYTES: number;
 export const ISOLATED_BACKUP_RESPONSE_BYTES: number;
@@ -59,11 +60,20 @@ export interface BackupPreferencesResult {
   preview: PortableResult | null;
   cleanupPending: boolean;
 }
-export type IsolatedBackupBridgeRequest = IsolatedBackupRequest | BackupPreferencesRequest;
-export type IsolatedBackupBridgeResult = IsolatedBackupResult | BackupPreferencesResult;
+export type BackupRestoreRequest = Omit<BackupPreferencesRequest, 'action'> & {
+  action: 'preview-restore'; invocation: string;
+};
+export type BackupRestoreResult = Omit<BackupPreferencesResult, 'status' | 'preview'> & {
+  invocation: string;
+  status: 'ready' | 'busy' | 'capacity' | 'invalidated' | 'unavailable';
+  preview: RestoreResult | null;
+};
+export type IsolatedBackupBridgeRequest = IsolatedBackupRequest | BackupPreferencesRequest | BackupRestoreRequest;
+export type IsolatedBackupBridgeResult = IsolatedBackupResult | BackupPreferencesResult | BackupRestoreResult;
 export function parseIsolatedBackupBridgeRequest(value: unknown): IsolatedBackupBridgeRequest;
 export function parseIsolatedBackupBridgeResult(value: unknown, request: IsolatedBackupBridgeRequest): IsolatedBackupBridgeResult;
 export function parseBackupPreferencesResult(value: unknown, request: BackupPreferencesRequest): BackupPreferencesResult;
+export function parseBackupRestoreResult(value: unknown, request: BackupRestoreRequest): BackupRestoreResult;
 export function parseIsolatedBackupJson(input: Uint8Array, limit: number): unknown;
 export function parseIsolatedBackupRequest(value: unknown): IsolatedBackupRequest;
 export function parseIsolatedBackupResult(value: unknown, request?: IsolatedBackupRequest): IsolatedBackupResult;

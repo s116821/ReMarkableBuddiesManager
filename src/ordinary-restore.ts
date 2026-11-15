@@ -2,6 +2,7 @@ import {displayModelText,spliceModelText,reconcileModelText} from '../host/opaqu
 import {parseRestoreRequest,parseRestoreResult,parseNotebookRestoreResult,restoreResponseContext,restorePath,type RestoreRequest,type RestoreResult,type RestoreView,type RestoreRetained} from '../host/ordinary-restore-protocol.mjs';
 import {validateResult} from '../host/observation-protocol.mjs';
 import type {TabletObservation} from './observation';
+import type {BackupRestoreResult} from '../host/isolated-backup-protocol.mjs';
 export type RestoreFamily='legacy'|'notebook';
 export interface RestoreAdapter {ordinaryRestore?:(request:RestoreRequest)=>Promise<RestoreResult>;notebookRestore?:(request:RestoreRequest)=>Promise<RestoreResult>}
 export interface RestoreUiState {draft:string;busy:boolean;status:string;view:RestoreView|null;retained:RestoreRetained[]}
@@ -12,6 +13,7 @@ interface Target {reference:string;invocation:string;connection_id:string;boot_i
 export class OrdinaryRestoreController{
  state:RestoreUiState={draft:'',busy:false,status:'Enter one archive already on this tablet',view:null,retained:[]};
  private invalid=false;private version=0;private before:{version:number;start:number;end:number;type:string;data:string|null}|null=null;
+ private backup:(Pick<Target,'connection_id'|'boot_id'>&{deadline:number;onClear:()=>void})|null=null;
  private generation=0;private active:(Omit<Target,'reference'>&{reference:string|null})|null=null;private ready:Target|null=null;private timer:ReturnType<typeof setTimeout>|undefined;
  private readonly expiries=new Map<string,number>();private readonly expiryTimers=new Map<string,ReturnType<typeof setTimeout>>();
  private readonly changed:(s:RestoreUiState)=>void;private readonly erase:()=>void;private readonly now:()=>number;private readonly uuid:()=>string;
@@ -21,7 +23,7 @@ export class OrdinaryRestoreController{
  private publish(p:Partial<RestoreUiState>){this.state={...this.state,...p};this.changed(this.state);}
  valid(){return !this.invalid&&restorePath(this.state.draft);}
  text(){return displayModelText(this.state.draft);}
- setDraft(value:string){if(this.state.busy)return false;if([...value].some(c=>{const n=c.codePointAt(0)!;return n>=0xd800&&n<=0xdfff;})||new TextEncoder().encode(value).length>4096){this.invalid=true;this.publish({status:'Source edit refused — enter a fresh bounded path'});return false;}this.invalid=false;this.version++;this.before=null;clearTimeout(this.timer);this.ready=null;this.publish({draft:value,view:null});return true;}
+ setDraft(value:string){if(this.state.busy)return false;if([...value].some(c=>{const n=c.codePointAt(0)!;return n>=0xd800&&n<=0xdfff;})||new TextEncoder().encode(value).length>4096){this.invalid=true;this.publish({status:'Source edit refused — enter a fresh bounded path'});return false;}this.invalid=false;this.version++;this.before=null;clearTimeout(this.timer);this.ready=null;this.publish({draft:value,view:null});this.dropBackup();return true;}
  beforeInput(start:number,end:number,type:string,data:string|null){if(!this.state.busy)this.before={version:this.version,start,end,type,data};}
  paste(start:number,end:number,text:string){if(this.state.busy)return false;try{return this.setDraft(spliceModelText(this.state.draft,start,end,text));}catch{this.invalid=true;return false;}}
  input(next:string){if(this.state.busy)return;const b=this.before;try{let candidate:string|null=null;
@@ -33,22 +35,56 @@ export class OrdinaryRestoreController{
  private rows(rows:RestoreRetained[]){const merged=new Map(this.state.retained.map(r=>[r.reference,r]));for(const r of rows)merged.set(r.reference,{...r,status_available:r.status_available&&(this.expiries.get(r.reference)??Infinity)>this.now()});return [...merged.values()];}
  private expireAt(reference:string,deadline:number){if(this.expiries.has(reference))return;this.expiries.set(reference,deadline);const timer=setTimeout(()=>{this.expiryTimers.delete(reference);this.publish({retained:this.state.retained.map(r=>r.reference===reference?{...r,status_available:false}:r)});},Math.max(1,deadline-this.now()));this.expiryTimers.set(reference,timer);(timer as unknown as {unref?:()=>void}).unref?.();}
  private retire(reference:string){clearTimeout(this.expiryTimers.get(reference));this.expiryTimers.delete(reference);this.expiries.delete(reference);this.publish({retained:this.state.retained.filter(r=>r.reference!==reference)});}
- clear(){this.generation++;clearTimeout(this.timer);this.active=null;this.ready=null;this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:false,view:null,status:'Restore draft and preview cleared'});}
+ private dropBackup(){const original=this.backup;this.backup=null;original?.onClear();}
+ clear(){this.generation++;clearTimeout(this.timer);this.active=null;this.ready=null;this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:false,view:null,status:'Restore draft and preview cleared'});this.dropBackup();}
+ beginBackupPreview({connection_id,boot_id}:Pick<Target,'connection_id'|'boot_id'>,deadline:number,onClear:()=>void){
+  if(this.capability!=='ordinaryRestore'||this.state.busy||this.state.retained.length>=8)return null;
+  this.clear();
+  const original=this.backup={connection_id,boot_id,deadline:Math.min(deadline,this.now()+120000),onClear};
+  const invocation=this.uuid(),generation=this.generation;
+  const current=()=>this.backup===original&&this.generation===generation;
+  this.publish({busy:true});
+  return {invocation,current,discard:()=>{
+   if(this.backup===original){this.backup=null;this.clear();}
+  },settle:(result:BackupRestoreResult)=>{
+   if(!current())return;
+   const view=result.preview?.ordinary_restore;
+   if(!view){this.backup=null;this.publish({busy:false,status:labels[result.status]});return;}
+   if(result.invocation!==invocation||view.state!=='ready')throw Error('Restore preview refused');
+   this.accept(view);
+   this.armReady(view,{connection_id,boot_id,invocation},original.deadline,generation);
+  }};
+ }
  dispose(){this.clear();for(const t of this.expiryTimers.values())clearTimeout(t);this.expiryTimers.clear();}
  private accept(v:RestoreView){let retained=this.rows(v.retained);if(v.reference&&(['restored','desired-generation-observed'].includes(v.state)||v.state==='not-dispatched'&&!v.retained.some(r=>r.reference===v.reference))){this.retire(v.reference);retained=retained.filter(r=>r.reference!==v.reference);}if(v.reference&&['unsupported','unavailable'].includes(v.state)&&!v.retained.some(r=>r.reference===v.reference))retained=retained.map(r=>r.reference===v.reference?{...r,status_available:false}:r);this.publish({busy:false,view:v,retained,status:labels[v.state]??'Ordinary restore unavailable'});}
  private unknown(reference:string,tablet:TabletObservation){const row:RestoreRetained={reference,connection_id:tablet.connection_id,boot_id:tablet.boot_id,state:'unknown',apply_outcome:'unknown',status_available:(this.expiries.get(reference)??0)>this.now()};this.publish({busy:false,view:{state:'unknown',reference,preview:null,inspection:null,report:null,apply_outcome:'unknown',retained:[row]},retained:this.rows([row]),status:labels['unknown']});}
+ private armReady(view:RestoreView,target:Omit<Target,'reference'>,deadline:number,generation:number){
+  const reference=view.reference;
+  if(!reference)return;
+  this.ready={reference,...target};
+  this.timer=setTimeout(()=>{
+   if(generation===this.generation&&this.state.view?.reference===reference){
+    const status=this.backup?labels.invalidated:'Restore preview expired — enter the archive path to prepare a new preview';
+    this.clear();
+    this.publish({status});
+   }
+  },Math.max(1,deadline-this.now()));
+ }
  async prepare(adapter:RestoreAdapter,tablet:TabletObservation,pause:()=>Promise<boolean>){if(this.state.busy||!this.valid()||this.state.retained.length>=8)return;await this.run(adapter,tablet,'prepare',null,pause);}
  async confirm(adapter:RestoreAdapter,tablet:TabletObservation,pause:()=>Promise<boolean>){if(this.state.busy||this.state.view?.state!=='ready'||!this.state.view.reference)return;await this.run(adapter,tablet,'confirm',this.state.view.reference,pause);}
  async status(adapter:RestoreAdapter,tablet:TabletObservation,row:RestoreRetained,pause:()=>Promise<boolean>){if(this.state.busy||!this.canCheck(row)||tablet.connection_id!==row.connection_id||tablet.boot_id!==row.boot_id)return;await this.run(adapter,tablet,'status',row.reference,pause);}
  async retained(adapter:RestoreAdapter){const g=this.generation;try{const q={action:'retained' as const},r=await this.invoke(adapter,q);if(g===this.generation)this.publish({retained:this.rows(this.parseResult(r,q,validateResult).ordinary_restore.retained)});}catch{/* Host-memory metadata never reconstructs private source or intent. */}}
  private async run(adapter:RestoreAdapter,tablet:TabletObservation,action:'prepare'|'confirm'|'status',reference:string|null,pause:()=>Promise<boolean>){
+  if(action!=='confirm')this.dropBackup();
   const invocation=this.uuid(),g=++this.generation,started=this.now(),identity={connection_id:tablet.connection_id,boot_id:tablet.boot_id};let q:RestoreRequest|null=parseRestoreRequest(action==='prepare'?{action,...identity,invocation,source:this.state.draft}:{action,...identity,invocation,reference});const context=restoreResponseContext(q),speculative=action==='confirm'&&!!reference&&!this.state.retained.some(r=>r.reference===reference);let possible=false,timer:ReturnType<typeof setTimeout>|undefined;
   clearTimeout(this.timer);this.ready=null;this.active={reference,invocation,...identity};this.invalid=false;this.version++;this.before=null;this.erase();this.publish({draft:'',busy:true,view:null,status:action==='prepare'?'Checking the archive and preparing a restore preview...':action==='confirm'?'Restoring archived Buddy data...':'Checking whether the expected data is on the tablet...'});
-  try{const result=await Promise.race([(async()=>{if(!await pause()||g!==this.generation)return null;if(action==='confirm'&&reference){possible=true;this.expireAt(reference,started+1800000);this.publish({retained:this.rows([{reference,...identity,state:'unknown',apply_outcome:'unknown',status_available:true}])});}const pending=this.invoke(adapter,q!);q=null;const v=await pending;if(g!==this.generation)return null;return this.parseResult(v,context,validateResult);})(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Restore wait expired')),14000);})]);
-   if(g!==this.generation)return;this.active=null;if(!result){this.clear();return;}const v=result.ordinary_restore;if(speculative&&reference&&['busy','capacity'].includes(v.state)&&!v.retained.some(r=>r.reference===reference))this.retire(reference);this.accept(v);
-   if(action==='prepare'&&v.state==='ready'&&v.reference){this.ready={reference:v.reference,invocation,...identity};const ref=v.reference;this.timer=setTimeout(()=>{if(g===this.generation&&this.state.view?.reference===ref){this.clear();this.publish({status:'Restore preview expired — enter the archive path to prepare a new preview'});}},Math.max(1,120000-(this.now()-started)));}
-  }catch{if(g===this.generation){this.generation++;this.active=null;if(action==='confirm'&&possible&&reference)this.unknown(reference,tablet);else this.publish({busy:false,view:null,status:labels['unavailable']});}}
+  try{const result=await Promise.race([(async()=>{if(!await pause()||g!==this.generation)return null;if(action==='confirm'&&reference){const backup=this.backup;if(backup&&(backup.deadline<=this.now()||backup.connection_id!==identity.connection_id||backup.boot_id!==identity.boot_id))return null;possible=true;this.expireAt(reference,started+1800000);this.publish({retained:this.rows([{reference,...identity,state:'unknown',apply_outcome:'unknown',status_available:true}])});}const pending=this.invoke(adapter,q!);q=null;const v=await pending;if(g!==this.generation)return null;return this.parseResult(v,context,validateResult);})(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Restore wait expired')),14000);})]);
+   if(g!==this.generation)return;this.active=null;if(!result){this.clear();return;}const v=result.ordinary_restore;if(speculative&&reference&&['busy','capacity'].includes(v.state)&&!v.retained.some(r=>r.reference===reference))this.retire(reference);
+   if(action==='confirm'){if(['busy','capacity','not-dispatched','unavailable'].includes(v.state))this.dropBackup();else this.backup=null;}
+   this.accept(v);
+   if(action==='prepare'&&v.state==='ready')this.armReady(v,{invocation,...identity},started+120000,g);
+  }catch{if(g===this.generation){this.generation++;this.active=null;this.dropBackup();if(action==='confirm'&&possible&&reference)this.unknown(reference,tablet);else this.publish({busy:false,view:null,status:labels['unavailable']});}}
   finally{q=null;clearTimeout(timer);}
  }
- async stop(adapter:RestoreAdapter){const target=this.active?.reference?{...this.active,reference:this.active.reference}:this.ready?{...this.ready}:null;this.clear();const g=this.generation;if(!target){this.publish({status:'Stopped waiting. The tablet may still finish checking the archive.'});return;}this.publish({busy:true,status:'Stopping this wait...'});let timer:ReturnType<typeof setTimeout>|undefined;const q=parseRestoreRequest({action:'cancel',...target});try{const r=await Promise.race([this.invoke(adapter,q),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Stop wait expired')),14000);})]);if(g===this.generation)this.accept(this.parseResult(r,q,validateResult).ordinary_restore);}catch{if(g===this.generation)this.publish({busy:false,view:null,status:'The wait ended. Earlier results have been kept; stopping does not undo changes.'});}finally{clearTimeout(timer);}}
+ async stop(adapter:RestoreAdapter){if(this.backup){this.clear();return;}const target=this.active?.reference?{...this.active,reference:this.active.reference}:this.ready?{...this.ready}:null;this.clear();const g=this.generation;if(!target){this.publish({status:'Stopped waiting. The tablet may still finish checking the archive.'});return;}this.publish({busy:true,status:'Stopping this wait...'});let timer:ReturnType<typeof setTimeout>|undefined;const q=parseRestoreRequest({action:'cancel',...target});try{const r=await Promise.race([this.invoke(adapter,q),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Stop wait expired')),14000);})]);if(g===this.generation)this.accept(this.parseResult(r,q,validateResult).ordinary_restore);}catch{if(g===this.generation)this.publish({busy:false,view:null,status:'The wait ended. Earlier results have been kept; stopping does not undo changes.'});}finally{clearTimeout(timer);}}
 }

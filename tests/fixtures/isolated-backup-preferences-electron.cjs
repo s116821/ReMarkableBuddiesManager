@@ -13,11 +13,11 @@ app.whenReady().then(async () => {
     await import('../../host/isolated-backup-preferences.mjs');
   const {MemoryForgetHost} = await import('../../host/memory-forget.mjs');
   const fixture = await backupPreferencesFixture(app.getPath('userData'));
-  const {composition, observer, target} = fixture;
+  const {composition, observer, target, restore, restoreDestination} = fixture;
   const {driveAuth, isolatedBackup} = composition;
   const {portable, io} = target.f;
-  const wrapped = new MemoryForgetHost({observer, io, beforeIO: () => portable.invalidate()}).wrap();
-  const preferences = new IsolatedBackupPreferences({composition, isolatedBackup, portable, observer});
+  const wrapped = new MemoryForgetHost({observer, io, beforeIO: () => {portable.invalidate();restore.invalidate();}}).wrap();
+  const preferences = new IsolatedBackupPreferences({composition, isolatedBackup, portable, observer, restore, restoreDestination});
   const ui = path.join(root, 'dist/manager/browser/index.html');
   const uiUrl = pathToFileURL(ui).href;
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -34,6 +34,14 @@ app.whenReady().then(async () => {
   });
   registerIsolatedBackupHandler(ipcMain, authorized, document, preferences);
   registerPortableConfigurationHandler(ipcMain, authorized, portable);
+  const {parseRestoreRequest} = await import('../../host/ordinary-restore-protocol.mjs');
+  ipcMain.handle('manager:ordinaryRestore', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw Error('Fixture restore caller refused');
+    const original = document();
+    const value = await restore.request(parseRestoreRequest(args[0]));
+    if (original !== document() || !authorized(event, [])) throw Error('Fixture restore document invalidated');
+    return restore.assertCurrent(value);
+  });
   for (const action of ['observe', 'cancel']) {
     ipcMain.handle('manager:' + action, (event, ...args) => {
       if (!authorized(event, args)) throw Error('Fixture observation caller refused');

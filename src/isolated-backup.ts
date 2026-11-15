@@ -1,5 +1,6 @@
 import {
-  parseIsolatedBackupResult, parseBackupPreferencesResult, type BackupPreferencesRequest, type BackupPreferencesResult,
+  parseIsolatedBackupResult, parseIsolatedBackupBridgeResult, type BackupPreferencesRequest, type BackupPreferencesResult,
+  type BackupRestoreRequest, type BackupRestoreResult,
   type IsolatedBackupBridgeRequest, type IsolatedBackupBridgeResult, type IsolatedBackupResult, type IsolatedBackupRequest,
   type IsolatedBackupDownloadResult, type IsolatedBackupInspection, type IsolatedBackupSelection,
   type IsolatedBackupStatus, type IsolatedBackupSummary,
@@ -7,12 +8,13 @@ import {
 
 export type IsolatedBackupAdapter = (request: IsolatedBackupBridgeRequest) => Promise<IsolatedBackupBridgeResult>;
 type Target = Pick<BackupPreferencesRequest, 'connection_id' | 'boot_id'>;
+type PreviewEditor<R> = {current: () => boolean; settle: (result: R) => void; discard: () => void; invocation?: string};
 
 const previewLabels: Record<BackupPreferencesResult['status'], string> = {
   ready: 'Review the changes in the Preferences panel.',
   'no-change': 'This backup would make no saved preference changes.',
   busy: 'Another maintenance operation is active.',
-  invalidated: 'Backup preferences preview expired or was cancelled.',
+  invalidated: 'Backup preview expired or was cancelled.',
   capacity: 'Check an unconfirmed import in the Preferences panel first.',
   unsupported: 'Installed Buddy does not support this preferences operation.',
   'not-dispatched': 'Could not prepare preferences from this backup.',
@@ -170,8 +172,19 @@ export class IsolatedBackupController {
     discard?.();
   }
 
-  async previewPreferences(target: Target, pause: () => Promise<boolean>, current: () => boolean,
-    begin: (deadline: number) => {current: () => boolean; settle: (result: BackupPreferencesResult) => void; discard: () => void} | null) {
+  previewPreferences(target: Target, pause: () => Promise<boolean>, current: () => boolean,
+    begin: (deadline: number) => PreviewEditor<BackupPreferencesResult> | null) {
+    return this.preview(false, target, pause, current, begin);
+  }
+
+  previewRestore(target: Target, pause: () => Promise<boolean>, current: () => boolean,
+    begin: (deadline: number) => (PreviewEditor<BackupRestoreResult> & {invocation: string}) | null) {
+    return this.preview(true, target, pause, current, begin);
+  }
+
+  private async preview<R extends BackupPreferencesResult | BackupRestoreResult>(
+    data: boolean, target: Target, pause: () => Promise<boolean>, current: () => boolean,
+    begin: (deadline: number) => PreviewEditor<R> | null) {
     const {selected, busy, previewAvailable} = this.state;
     const operation = this.owner;
     if (this.disposed || busy || !previewAvailable || !operation || !selected ||
@@ -180,29 +193,25 @@ export class IsolatedBackupController {
     const preview = begin(this.selectionDeadline);
     if (!preview) return;
     this.discardPreview = preview.discard;
-    this.publish({busy: true, previewing: true, previewAvailable: false, message: 'Preparing backup preferences…'});
-    const request = {version: 1, action: 'preview-preferences', operation, reference: selected.reference,
+    this.publish({busy: true, previewing: true, previewAvailable: false, message: 'Preparing backup preview…'});
+    const source = {version: 1, operation, reference: selected.reference,
       connection_id: target.connection_id, boot_id: target.boot_id} as const;
+    const request: BackupPreferencesRequest | BackupRestoreRequest = data
+      ? {...source, action: 'preview-restore', invocation: preview.invocation!}
+      : {...source, action: 'preview-preferences'};
+    const live = () => generation === this.viewGeneration && current() && preview.current() &&
+      performance.now() < this.selectionDeadline;
+    const invalidate = () => { if (generation === this.viewGeneration) this.clear(previewLabels.invalidated, true); };
     try {
-      if (!await pause() || !current() || !preview.current()) {
-        if (generation === this.viewGeneration) this.clear(previewLabels.invalidated, true);
-        return;
-      }
-      if (generation !== this.viewGeneration) return;
-      if (performance.now() >= this.selectionDeadline) {
-        this.clear(previewLabels.invalidated, true);
-        return;
-      }
-      const result = parseBackupPreferencesResult(await this.adapter(request), request);
-      if (generation !== this.viewGeneration) return;
-      if (!current() || !preview.current() || performance.now() >= this.selectionDeadline) {
-        this.clear(previewLabels.invalidated, true);
-        return;
-      }
+      if (!await pause() || !live()) return invalidate();
+      const result = parseIsolatedBackupBridgeResult(await this.adapter(request), request) as R;
+      if (!live()) return invalidate();
       if (result.status !== 'ready') this.discardPreview = null;
       preview.settle(result);
       this.publish({busy: false, previewing: false, previewAvailable: result.retryable,
-        cleanupPending: result.cleanupPending, message: previewLabels[result.status]});
+        cleanupPending: result.cleanupPending, message: data && result.status === 'ready'
+          ? 'Review the Ordinary Restore panel.' : data && ['unavailable', 'capacity'].includes(result.status)
+            ? 'Backup data preview is unavailable.' : previewLabels[result.status]});
     } catch {
       if (generation === this.viewGeneration) this.clear(lostReply, true);
     }

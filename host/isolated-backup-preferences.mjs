@@ -13,8 +13,8 @@ function admittedTarget(sample, request) {
   return {connection_id: sample.connection_id, boot_id: sample.boot_id};
 }
 
-function previewReply({operation, reference}, status, preview = null, cleanupPending = false, retryable = false) {
-  return {version: 1, operation, reference, status, retryable, preview, cleanupPending};
+function previewReply({operation, reference, invocation}, status, preview = null, cleanupPending = false, retryable = false) {
+  return {version: 1, operation, reference, ...(invocation ? {invocation} : {}), status, retryable, preview, cleanupPending};
 }
 
 export class IsolatedBackupPreferences {
@@ -23,13 +23,19 @@ export class IsolatedBackupPreferences {
   #disposal;
   #deliveries = new WeakMap();
 
-  constructor({composition, isolatedBackup, portable, observer}) {
-    Object.assign(this, {composition, isolatedBackup, portable, observer});
+  constructor({composition, isolatedBackup, portable, observer, restore, restoreDestination}) {
+    Object.assign(this, {composition, isolatedBackup, portable, observer, restore, restoreDestination});
   }
 
   #forget(attempt) {
     attempt.selection.removeEventListener('abort', attempt.abortSelection);
     if (this.#attempt === attempt) this.#attempt = null;
+  }
+
+  #discard(attempt) {
+    if (!attempt.issued) return false;
+    return attempt.retirement ??= Promise.resolve().then(() => attempt.owner.discardHandoffPreview(attempt.issued))
+      .then(result => result?.cleanupPending === true, () => true);
   }
 
   #cancel(attempt) {
@@ -41,7 +47,8 @@ export class IsolatedBackupPreferences {
           Promise.resolve().then(() => this.isolatedBackup.request({version: 1, action: 'cancel', operation})),
           attempt.pending,
         ]);
-        const cleanupPending = result.status === 'rejected' || preview.status === 'rejected' ||
+        const uncertain = await this.#discard(attempt);
+        const cleanupPending = uncertain || result.status === 'rejected' || preview.status === 'rejected' ||
           result.value?.cleanupPending === true || preview.value?.cleanupPending === true;
         return cleanupPending
           ? {version: 1, operation, status: 'invalidated', inspection: null, cleanupPending: true}
@@ -51,7 +58,7 @@ export class IsolatedBackupPreferences {
       }
     });
     attempt.controller.abort();
-    if (attempt.issued) this.portable.discardHandoffPreview(attempt.issued);
+    void this.#discard(attempt);
     return attempt.cancellation;
   }
 
@@ -71,21 +78,28 @@ export class IsolatedBackupPreferences {
 
   request(request, {document, callerCurrent, onAbandon}) {
     if (!callerCurrent()) throw Error('Backup inspection caller refused');
-    if (request.action !== 'preview-preferences') {
+    const data = request.action === 'preview-restore';
+    if (!data && request.action !== 'preview-preferences') {
       const attempt = this.#attempt;
       if (request.action === 'cancel' && attempt?.document === document &&
           attempt.request.operation === request.operation) return this.#cancel(attempt);
       return this.isolatedBackup.request(request);
     }
-    if (this.#closed || !this.composition?.preferencesPreviewAvailable) return previewReply(request, 'unavailable');
+    const destination = this.restoreDestination;
+    if (this.#closed || !this.composition?.preferencesPreviewAvailable ||
+        data && (!this.restore || typeof destination?.stageDestination !== 'function')) {
+      return previewReply(request, 'unavailable');
+    }
     if (this.#attempt) return previewReply(request, 'busy');
     const {operation, reference} = request;
     const target = admittedTarget(this.observer.lastObservation, request);
-    if (!target || !this.isolatedBackup.canHandoff(operation, reference)) return previewReply(request, 'invalidated');
+    if (!target || data && (!destination.target || !sameTarget(target, destination.target)) ||
+        !this.isolatedBackup.canHandoff(operation, reference)) return previewReply(request, 'invalidated');
     const selection = this.isolatedBackup.selectionSignal(operation, reference);
     if (!selection || selection.aborted) return previewReply(request, 'invalidated');
 
-    const attempt = {request, document, selection, controller: new AbortController(), issued: null};
+    const attempt = {request, document, selection, controller: new AbortController(), issued: null,
+      owner: data ? this.restore : this.portable};
     this.#attempt = attempt;
     const current = () => !this.#closed && this.#attempt === attempt && !attempt.controller.signal.aborted &&
       callerCurrent() && sameTarget(this.observer.lastObservation, target) &&
@@ -99,12 +113,12 @@ export class IsolatedBackupPreferences {
 
     attempt.pending = Promise.resolve().then(async () => {
       if (!current()) return previewReply(request, 'invalidated');
-      const result = await this.composition.preparePreferences(operation, reference, {
-        portable: this.portable, target, signal: attempt.controller.signal, current, releaseAttempt,
-      });
+      const options = {target, signal: attempt.controller.signal, current, releaseAttempt};
+      const result = data ? await this.composition.prepareRestore(operation, reference, {
+        ...options, restore: this.restore, stageDestination: destination.stageDestination, invocation: request.invocation,
+      }) : await this.composition.preparePreferences(operation, reference, {...options, portable: this.portable});
       if (result.status === 'ready') attempt.issued = result.preview;
       if (!current()) {
-        if (attempt.issued) this.portable.discardHandoffPreview(attempt.issued);
         void this.#cancel(attempt);
         return previewReply(request, 'invalidated', null, result.cleanupPending);
       }
@@ -118,7 +132,6 @@ export class IsolatedBackupPreferences {
         const retired = await this.#cancel(attempt);
         return {...result, cleanupPending: result.cleanupPending || retired?.cleanupPending === true};
       }
-      // Preserve the issued object and original custody until synchronous adapter publication.
       this.#deliveries.set(result, {attempt, current});
       return result;
     }, async error => {
@@ -134,10 +147,11 @@ export class IsolatedBackupPreferences {
       if (!callerCurrent()) throw Error('Backup inspection caller refused');
       const result = parseIsolatedBackupBridgeResult(value, request);
       if (delivery) {
-        if (!delivery.current()) {
-          throw Error('Backup preferences preview invalidated');
+        if (!delivery.current() || result.retryable &&
+            !this.isolatedBackup.canHandoff(request.operation, request.reference)) {
+          throw Error('Backup preview invalidated');
         }
-        if (result.preview) this.portable.assertCurrent(result.preview);
+        if (result.preview) delivery.attempt.owner.assertCurrent(result.preview);
       }
       if (delivery && result.status !== 'ready') this.#forget(delivery.attempt);
       return result;

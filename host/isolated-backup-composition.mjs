@@ -50,25 +50,43 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
   const isolatedBackup = new IsolatedBackupHost({driveAuth, downloadSelection,
     releaseSelection: (operation, reference) => coordinator?.release(operation, reference)});
 
-  function takeHandoff(operation, reference) {
-    return !closing && isolatedBackup.takeVerifiedHandoff(operation, reference);
-  }
+  const sourceHandoff = (operation, reference, current) => async (consume, signal) => {
+    if (closing || signal.aborted || current && !current() ||
+        !isolatedBackup.takeVerifiedHandoff(operation, reference)) {
+      return {status: 'invalidated', cleanupPending: false};
+    }
+    let release;
+    const abort = () => {
+      release ??= coordinator.release(operation, reference).catch(() => ({cleanupPending: true}));
+    };
+    signal.addEventListener('abort', abort, {once: true});
+    let result, retired;
+    try {
+      result = await coordinator.handoff(operation, reference, consume);
+    } catch {
+      result = {status: 'unavailable', cleanupPending: false};
+      abort();
+    } finally {
+      signal.removeEventListener('abort', abort);
+      // Release joins handoff. Await only from outside its consumer.
+      retired = await release;
+    }
+    return retired?.cleanupPending ? {...result, cleanupPending: true} : result;
+  };
 
   return Object.freeze({
     driveAuth,
     isolatedBackup,
     downloadSelection,
-    async prepareRestore(operation, reference, {restore, target, stageDestination}) {
-      if (closing || !coordinator) return {status: 'unavailable', preview: null, cleanupPending: false};
+    async prepareRestore(operation, reference, {restore, target, stageDestination, invocation, signal, current, releaseAttempt}) {
+      if (closing || !coordinator || typeof stageDestination !== 'function') {
+        return {status: 'unavailable', preview: null, cleanupPending: false};
+      }
       if (!isolatedBackup.canHandoff(operation, reference)) {
         return {status: 'invalidated', preview: null, cleanupPending: false};
       }
-      return restore.prepareHandoff(target, consume => {
-        if (!takeHandoff(operation, reference)) {
-          return Promise.resolve({status: 'invalidated', cleanupPending: false});
-        }
-        return coordinator.handoff(operation, reference, consume);
-      }, stageDestination);
+      return restore.prepareHandoff(target, sourceHandoff(operation, reference, current),
+        stageDestination, {invocation, signal, current, releaseAttempt});
     },
     get preferencesPreviewAvailable() { return !closing && !!coordinator; },
     async preparePreferences(operation, reference, {portable, target, signal, current, releaseAttempt} = {}) {
@@ -78,28 +96,7 @@ export function createIsolatedBackupComposition({hostRoot, store = new DriveStor
       if (!isolatedBackup.canHandoff(operation, reference)) {
         return {status: 'invalidated', preview: null, cleanupPending: false};
       }
-      return portable.prepareHandoff(target, async (consume, signal) => {
-        if (signal.aborted || !takeHandoff(operation, reference)) {
-          return {status: 'invalidated', cleanupPending: false};
-        }
-        let release;
-        const abort = () => {
-          release ??= coordinator.release(operation, reference).catch(() => ({cleanupPending: true}));
-        };
-        signal.addEventListener('abort', abort, {once: true});
-        let result, retired;
-        try {
-          result = await coordinator.handoff(operation, reference, consume);
-        } catch {
-          result = {status: 'unavailable', cleanupPending: false};
-          abort();
-        } finally {
-          signal.removeEventListener('abort', abort);
-          // release joins handoff. Await it here, outside the consumer.
-          retired = await release;
-        }
-        return retired?.cleanupPending ? {...result, cleanupPending: true} : result;
-      }, {signal, current, releaseAttempt});
+      return portable.prepareHandoff(target, sourceHandoff(operation, reference, current), {signal, current, releaseAttempt});
     },
     dispose() {
       if (!closing) {

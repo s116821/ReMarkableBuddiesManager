@@ -108,6 +108,7 @@ async function verify(page, control) {
   await expect(download).toHaveCount(0);
   await expect(page.getByTestId('cloud-backup-verification')).toHaveCount(0);
   await expect(page.getByRole('button', {name: 'Review backup preferences', exact: true})).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Preview backup data restore', exact: true})).toHaveCount(0);
   assert.doesNotMatch(await list.textContent(), /PrivateRoot|PrivateRevision|authorizationId|appProperties/);
 
   await page.getByRole('button', {name: 'Check connection', exact: true}).click();
@@ -226,24 +227,30 @@ async function packagedPreviewRefusal(page, app) {
     const require = process.mainModule.require.bind(process.mainModule);
     const path = require('node:path');
     const {WiredObserver} = require(path.join(process.resourcesPath, 'host', 'observer.mjs'));
-    globalThis.fixturePortableCalls = 0;
+    globalThis.fixturePreviewCalls = 0;
     WiredObserver.prototype.run = async function (action) {
-      if (action === 'portable-configuration') globalThis.fixturePortableCalls++;
+      if (['portable-configuration', 'ordinary-restore'].includes(action)) globalThis.fixturePreviewCalls++;
       throw Error('Unexpected wired command in packaged refusal fixture');
     };
+    WiredObserver.prototype.runIsolatedStage = async function () {
+      globalThis.fixturePreviewCalls++;
+      throw Error('Unexpected staging in packaged refusal fixture');
+    };
   });
-  const result = await page.evaluate(async target => {
-    const request = {version: 1, action: 'preview-preferences',
-      operation: 'a'.repeat(64), reference: 'b'.repeat(64), ...target};
-    if (globalThis.managerHost) return globalThis.managerHost.isolatedBackup(request);
-    const response = await fetch('/manager-isolated-backup', {method: 'POST',
-      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)});
-    if (!response.ok) throw Error('Packaged preview refusal returned no frame');
-    return response.json();
-  }, identity);
-  assert.deepEqual(result, {version: 1, operation: 'a'.repeat(64), reference: 'b'.repeat(64),
-    status: 'unavailable', retryable: false, preview: null, cleanupPending: false});
-  assert.equal(await app.evaluate(() => globalThis.fixturePortableCalls), 0);
+  for (const action of ['preview-preferences', 'preview-restore']) {
+    const ids = {operation: 'a'.repeat(64), reference: 'b'.repeat(64),
+      ...(action === 'preview-restore' ? {invocation: '203744f0-53cc-4076-85a8-066d0e2d4d85'} : {})};
+    const result = await page.evaluate(async request => {
+      if (globalThis.managerHost) return globalThis.managerHost.isolatedBackup(request);
+      const response = await fetch('/manager-isolated-backup', {method: 'POST',
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)});
+      if (!response.ok) throw Error('Packaged preview refusal returned no frame');
+      return response.json();
+    }, {version: 1, action, ...ids, ...identity});
+    assert.deepEqual(result, {version: 1, ...ids,
+      status: 'unavailable', retryable: false, preview: null, cleanupPending: false});
+  }
+  assert.equal(await app.evaluate(() => globalThis.fixturePreviewCalls), 0);
 }
 
 async function verifyPreferences(page, control) {
@@ -284,11 +291,41 @@ async function verifyPreferences(page, control) {
   assert.equal((await control.snapshot()).releases, 2);
 }
 
+async function verifyRestore(page, snapshot) {
+  const button = name => page.getByRole('button', {name, exact: true});
+  await button('Read tablet state').click();
+  await expect(page.getByTestId('tablet-model')).toBeVisible();
+  await button('Scan for cloud backups').click();
+  await button('Select revision').click();
+  await button('Download and verify').click();
+  const preview = button('Preview backup data restore');
+  await expect(preview).toBeEnabled();
+  await preview.click();
+  const confirm = button('Confirm restore');
+  await expect(confirm).toBeEnabled();
+  await expect(page.getByTestId('ordinary-restore-preview')).toContainText('some media is not included');
+  await expect(page.getByTestId('ordinary-restore-preview')).toContainText('Saved settings included: no');
+  await expect(page.locator('#ordinary-restore-source')).toHaveValue('');
+  const prepared = await snapshot();
+  assert.deepEqual(prepared.restoreSelectors, ['prepare']);
+  assert.deepEqual(prepared.staged, ['receive', 'check', 'check']);
+  assert.equal(prepared.releases, 3);
+  assert.doesNotMatch(await page.locator('body').innerText(), /private-backup-restore/);
+  await confirm.click();
+  await expect(page.getByTestId('ordinary-restore-original')).toBeVisible();
+  await button('Check this restore').click();
+  await expect(page.getByTestId('ordinary-restore-inspection')).toBeVisible();
+  const checked = await snapshot();
+  assert.deepEqual(checked.restoreSelectors, ['prepare', 'apply', 'status']);
+  assert.deepEqual(checked.staged, ['receive', 'check', 'check', 'check', 'release']);
+  assert.equal(checked.restoreStatus, checked.restoreApply);
+}
+
 async function verifySourcePreferences(profile, env) {
   const fixture = await backupPreferencesFixture(profile);
   try {
     const helper = await startHelper({root: path.resolve('dist/manager/browser'),
-      backupComposition: fixture.composition, observer: fixture.observer});
+      backupComposition: fixture.composition, observer: fixture.observer, backupRestoreDestination: fixture.restoreDestination});
     try {
       const browser = await chromium.launch();
       try {
@@ -298,6 +335,7 @@ async function verifySourcePreferences(profile, env) {
         await page.goto(helper.origin + '/preview/');
         await verifyPreferences(page, {snapshot: fixture.snapshot,
           setNoChange: value => { fixture.target.f.portableState.noop = value; }});
+        await verifyRestore(page, fixture.snapshot);
       } finally { await browser.close(); }
     } finally { await helper.close(); }
   } finally { await fixture.close(); }
@@ -319,6 +357,7 @@ async function verifySourcePreferences(profile, env) {
     await app.evaluate(() => globalThis.backupPreferencesFixture.load());
     await verifyPreferences(page, {snapshot: () => app.evaluate(() => globalThis.backupPreferencesFixture.snapshot()),
       setNoChange: value => app.evaluate((_electron, value) => globalThis.backupPreferencesFixture.setNoChange(value), value)});
+    await verifyRestore(page, () => app.evaluate(() => globalThis.backupPreferencesFixture.snapshot()));
   } finally { await app.close(); }
 }
 

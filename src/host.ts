@@ -284,7 +284,7 @@ export function currentHost(): ManagerHost {
     isolatedBackup: async (input:IsolatedBackupBridgeRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('Backup inspection helper unavailable');
       const request = parseIsolatedBackupBridgeRequest(input);
-      const limit = request.action === 'preview-preferences' ? BACKUP_PREFERENCES_RESPONSE_BYTES : ISOLATED_BACKUP_RESPONSE_BYTES;
+      const limit = request.action.startsWith('preview-') ? BACKUP_PREFERENCES_RESPONSE_BYTES : ISOLATED_BACKUP_RESPONSE_BYTES;
       const response = await fetch('/manager-isolated-backup', {method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request), signal: AbortSignal.timeout(14000)});
       if (!response.ok || !response.body) throw Error('Backup inspection helper unavailable');

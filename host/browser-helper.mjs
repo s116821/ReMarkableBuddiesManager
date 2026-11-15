@@ -68,7 +68,7 @@ import {ConversationManagementHost} from './conversation-management.mjs';
 import {parseManagementRequest,parseManagementResult} from './conversation-management-protocol.mjs';
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth, downloads = new ManagerDownloads(),
-  isolatedRootStore, backupComposition }) {
+  isolatedRootStore, backupComposition, backupRestoreDestination }) {
   driveAuth = backupComposition?.driveAuth ?? driveAuth ?? new DriveAuth();
   const isolatedBackup = backupComposition?.isolatedBackup ?? new IsolatedBackupHost({driveAuth});
   let backupDocument = Symbol();
@@ -98,7 +98,8 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   localMode=new LocalModeChoiceHost({observer:observer,io,beforeIO:()=>invalidatePeers(localMode)});
   isolatedRoot=new IsolatedRootHost({observer,store:isolatedRootStore,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
   sharedPreferences = new SharedPreferencesHost({observer, io, beforeIO: () => invalidatePeers(sharedPreferences)});
-  const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer});
+  const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer,
+    restore, restoreDestination: backupRestoreDestination});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
