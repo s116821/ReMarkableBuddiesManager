@@ -96,6 +96,22 @@
     </div>
   </section></details>
 }
+<!-- Keep the lazy controller mounted after opening so changing tasks cannot lose Stop outcomes. -->
+<section class="ui-panel my-6" [hidden]="!isView('tablet')" aria-labelledby="service-controls-title">
+  <h2 id="service-controls-title">Buddy service</h2>
+  @if (!serviceStopOpen()) { <p>Review a supported stop request and check earlier attempts. Availability depends on the installed Buddy and this host.</p><button class="ui-button ui-button-secondary" type="button" (click)="serviceStopOpen.set(true)">Open Buddy stop controls</button> }
+  @if (serviceStopOpen()) {
+    <service-stop-panel [adapter]="serviceStopAdapter" [tablet]="connection().observation" [allowed]="!!host.serviceStop && profile().inspection && !storageInitializationPeerBusy() && !storageInitialization().busy" [epoch]="serviceStopEpoch()" [visible]="isView('tablet')" [pause]="pauseServiceStop" (busy)="serviceStopBusy.set($event)" (changed)="serviceStopState.set($event)" (starting)="prepareServiceStop()" />
+  }
+</section>
+<!-- Package outcomes retain their original controller across task navigation. -->
+<section class="ui-panel my-6" [hidden]="!isView('tablet')" aria-labelledby="package-controls-title">
+  <h2 id="package-controls-title">Buddy installation</h2>
+  @if (!residentPackageOpen()) { <p>Review changes to the installed Buddy package or check an earlier operation. Availability depends on the installed package and this host.</p><button class="ui-button ui-button-secondary" type="button" (click)="residentPackageOpen.set(true)">Open Buddy package controls</button> }
+  @if (residentPackageOpen()) {
+    <resident-package-panel [adapter]="residentPackageAdapter" [tablet]="connection().observation" [allowed]="!!host.residentPackage && profile().inspection && !storageInitializationPeerBusy() && !storageInitialization().busy" [epoch]="residentPackageEpoch()" [visible]="isView('tablet')" [pause]="pauseServiceStop" (busy)="residentPackageBusy.set($event)" (changed)="residentPackageState.set($event)" (starting)="prepareResidentPackage()" />
+  }
+</section>
 @defer (when location().destination !== 'tablet') {
 @if (!isView('tablet')) { <manager-task-views [app]="this" /> }
 }
