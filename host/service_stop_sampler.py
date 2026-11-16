@@ -334,11 +334,16 @@ class Sampler:
         rows=self._stat_chain([self._stat_script(p) for p in parents])
         return self._validate_parents(parents,rows)
 
-    def file(self,path,limit=32768,contents=False,private=False):
+    def _protected_file(self,path,limit,private=False):
         parents=self.parents(path);before=self.stat(path)
         f,nlink=before;mode=int(f['mode'])
         if f['uid']!='0' or f['gid']!='0' or mode&0o170000!=0o100000 or mode&0o022 or int(f['length'])>limit:refuse()
         if private and (mode&0o7777!=0o600 or nlink!=1 or int(f['length'])==0):refuse()
+        return before,parents
+
+    def file(self,path,limit=32768,contents=False,private=False):
+        before,parents=self._protected_file(path,limit,private)
+        f=before[0]
         tail=[self._stat_script(path),*(self._stat_script(p) for p,_ in parents)]
         if contents:
             out=self.text(path,limit)
@@ -452,18 +457,19 @@ class Sampler:
             elif got!=wanted:refuse()
         return result
 
-    def process(self,service,app,artifact,argv0=None):
-        argv0=app if argv0 is None else argv0
+    @staticmethod
+    def _process_start(raw,pid):
+        stat=raw.decode('ascii')
+        if stat.split(' ',1)[0]!=pid or ')' not in stat:refuse()
+        fields=stat.rsplit(')',1)[1].split()
+        if len(fields)<20 or fields[0] in ('Z','X','x') or not re.fullmatch('[1-9][0-9]*',fields[19]):refuse()
+        return fields[19]
+
+    def _process_identity(self,service,app,argv0):
         pid=service['state']['MainPID']
         if not re.fullmatch('[1-9][0-9]*',pid) or not 1<int(pid)<2**32:refuse()
         root='/proc/'+pid
-        def start(raw):
-            stat=raw.decode('ascii')
-            if stat.split(' ',1)[0]!=pid or ')' not in stat:refuse()
-            fields=stat.rsplit(')',1)[1].split()
-            if len(fields)<20 or fields[0] in ('Z','X','x') or not re.fullmatch('[1-9][0-9]*',fields[19]):refuse()
-            return fields[19]
-        before=start(self.text(root+'/stat',4096));cmd=self.text(root+'/cmdline',len(argv0)+1)
+        before=self._process_start(self.text(root+'/stat',4096),pid);cmd=self.text(root+'/cmdline',len(argv0)+1)
         if cmd!=argv0.encode()+b'\0':refuse()
         code,exe,err=self.command('readlink -- '+shlex.quote(root+'/exe'),4096)
         if code or err or exe!=app.encode()+b'\n':refuse()
@@ -478,14 +484,53 @@ class Sampler:
             if rows!=[['0','0','0','0']]:refuse()
         membership=membership.decode('ascii').splitlines()
         if membership.count('0::/system.slice/'+BUDDY)!=1:refuse()
-        running=metadata(opening)[0]
+        return pid,before,metadata(opening)
+
+    def process(self,service,app,artifact,argv0=None):
+        argv0=app if argv0 is None else argv0
+        pid,before,opening=self._process_identity(service,app,argv0)
+        root='/proc/'+pid
+        exe_stat=self._stat_script(root+'/exe',follow=True)
+        running=opening[0]
         if running!= {k:v for k,v in artifact.items() if k!='sha256'}:refuse()
         checksum,closing,end=self._read_frames(
             ('sha256sum -- '+shlex.quote(root+'/exe'),4096),
             (exe_stat,4096),
             (self._text_script(root+'/stat',4096),4096))
-        if checksum!=(artifact['sha256']+'  '+root+'/exe\n').encode() or metadata(closing)[0]!=running or start(end)!=before:refuse()
+        if checksum!=(artifact['sha256']+'  '+root+'/exe\n').encode() or metadata(closing)[0]!=running or self._process_start(end,pid)!=before:refuse()
         return dict(pid=pid,start_ticks=before,uid='0',gid='0',executable=app,argv=[argv0],sha256=artifact['sha256'])
+
+    def _ordinary_process(self, service, app, argv0, path_opening, *, sampled_sha256=None):
+        expected, parents = path_opening
+        pid, before, opening = self._process_identity(service, app, argv0)
+        if opening != expected:
+            refuse()
+        root = '/proc/' + pid
+        executable = root + '/exe'
+        path_tail = [self._stat_script(app), *(self._stat_script(p) for p, _ in parents)]
+        closing_reads = (
+            (self._stat_script(executable, follow=True), 4096),
+            (self._text_script(root + '/stat', 4096), 4096),
+            (' && '.join(path_tail), 4096),
+        )
+        if sampled_sha256 is None:
+            # The installed path and proc executable opened on the same protected
+            # inode and full stat tuple. Hash the running executable, then close
+            # both identities around that read before sharing its digest.
+            value, closing, end, path_rows = self._read_frames(
+                ('sha256sum -- ' + shlex.quote(executable), 4096), *closing_reads)
+            if not re.fullmatch(b'[a-f0-9]{64}  ' + re.escape(executable.encode('ascii')) + b'\n', value):
+                refuse()
+            sampled_sha256 = value[:64].decode('ascii')
+        else:
+            # Independent closing process sample. The digest belongs to this
+            # capture only, and the exact proc and path stat tuples must still join.
+            closing, end, path_rows = self._read_frames(*closing_reads)
+        if (metadata(closing) != expected or self._process_start(end, pid) != before or
+                self._stat_rows(path_rows, len(path_tail)) != [expected, *(row for _, row in parents)]):
+            refuse()
+        return dict(pid=pid, start_ticks=before, uid='0', gid='0', executable=app,
+                    argv=[argv0], sha256=sampled_sha256)
 
     def lease(self):
         parents=self.parents(LEASE_DIRECTORY);directory=self.stat(LEASE_DIRECTORY,missing=True)
@@ -603,16 +648,19 @@ class Sampler:
         else:self.package_conflicts()
         r['artifacts']={k:None for k in slots}
         for key in slots:
-            if profile=='ordinary-manual' and key not in ('buddy_unit','buddy_executable'):continue
+            if profile=='ordinary-manual' and key!='buddy_unit':continue
             cap=134217728 if key in ('buddy_executable','stock_executable','adapter','companion_executable') else 32768
             evidence,content=self.file(slots[key],cap,contents=key=='recovery_profile')
             r['artifacts'][key]=evidence
             if key=='recovery_profile':r['recovery_profile_base64']=base64.b64encode(content).decode('ascii')
         def process():
-            artifact=r['artifacts']['buddy_executable']
-            return (self.process(r['buddy'],executable,artifact,argv0=app) if alias else
-                    self.process(r['buddy'],executable,artifact))
-        r['process']=process()
+            return self.process(r['buddy'],executable,r['artifacts']['buddy_executable'])
+        if profile=='ordinary-manual':
+            ordinary_opening=self._protected_file(executable,134217728)
+            r['process']=self._ordinary_process(r['buddy'],executable,app,ordinary_opening)
+            r['artifacts']['buddy_executable']=dict(ordinary_opening[0][0],sha256=r['process']['sha256'])
+        else:
+            r['process']=process()
         os_release,kernel=self._read_frames(
             (self._text_script('/etc/os-release',16384),16384),
             (self._text_script('/proc/sys/kernel/osrelease',256),256))
@@ -632,15 +680,18 @@ class Sampler:
             r['helper']=self.service(HELPER);r['stock']=self.service(STOCK)
             r['companion'],r['companion_group']=self.companion(r['lease_base64'])
             r['vendor_policy']={name:self.vendor_policy(unit) for name,unit in [('stock',STOCK),('companion',COMPANION)]}
-        if self.service(BUDDY)!=r['buddy'] or process()!=r['process']:refuse()
+        if self.service(BUDDY)!=r['buddy']:refuse()
+        closing_process=(self._ordinary_process(r['buddy'],executable,app,ordinary_opening,
+                                                sampled_sha256=r['process']['sha256'])
+                         if profile=='ordinary-manual' else process())
+        if closing_process!=r['process']:refuse()
         if alias:
             paths=self._parent_paths(app)
             target_raw,parent_rows=self._read_frames(
                 (self._stat_script(executable),4096),
                 (' && '.join(self._stat_script(path) for path in paths),4096))
-            target=metadata(target_raw)[0]
-            if (not int(target['mode'])&0o111 or
-                target!={k:v for k,v in r['artifacts']['buddy_executable'].items() if k!='sha256'}):refuse()
+            target=metadata(target_raw)
+            if not int(target[0]['mode'])&0o111 or target!=ordinary_opening[0]:refuse()
             parents=self._validate_parents(paths,self._stat_rows(parent_rows,len(paths)))
             if self._ordinary_alias_leaf(app,parents)!=alias:refuse()
         if time.monotonic()>=self.deadline:raise shared.Refusal('timeout')

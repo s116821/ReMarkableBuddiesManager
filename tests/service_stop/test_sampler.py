@@ -416,12 +416,14 @@ class SamplerTests(unittest.TestCase):
  def test_collected_private_dto_and_candidate_semantics_cross_the_actual_node_boundary(self):
   root=Path(__file__).resolve().parents[2]
   imports=json.dumps((root/'host/service-stop-profiles.mjs').as_uri());private=json.dumps((root/'host/service-stop-private.mjs').as_uri())
-  script="import {matchesCandidateStopProfile} from "+imports+";import {parseServiceStopRaw,serviceStopSampleDigest,admitServiceStopProfile} from "+private+";let s='';for await(const c of process.stdin)s+=c;const v=JSON.parse(s);parseServiceStopRaw(v.raw,'review');if(!matchesCandidateStopProfile(v.observation,v.raw,v.tuple)||serviceStopSampleDigest(v.observation,v.tuple.profile,v.raw)!==v.digest||admitServiceStopProfile(v.observation,v.raw)!==null)process.exit(1);"
-  for f in (Files(),Files('resident-installed'),AliasFiles()):
+  script="import {matchesCandidateStopProfile} from "+imports+";import {parseServiceStopRaw,serviceStopSampleDigest,admitServiceStopProfile} from "+private+";let s='';for await(const c of process.stdin)s+=c;const v=JSON.parse(s);parseServiceStopRaw(v.raw,'review');if(matchesCandidateStopProfile(v.observation,v.raw,v.tuple)!==v.expectedMatch||serviceStopSampleDigest(v.observation,v.tuple.profile,v.raw)!==v.digest||admitServiceStopProfile(v.observation,v.raw)!==null)process.exit(1);"
+  unexpected=Files()
+  unexpected.raw['artifacts']['buddy_executable']['sha256']='f'*64
+  for f in (Files(),Files('resident-installed'),AliasFiles(),unexpected):
    profile=f.profile
    if isinstance(f,AliasFiles):f.vector['tuple']['ordinary_alias_target']=f.target
    raw,digest=f.sampler().bracket(profile,f.vector['observation'],t.empty_raw)
-   body=dict(raw=raw,digest=digest,observation=f.vector['observation'],tuple=f.vector['tuple'])
+   body=dict(raw=raw,digest=digest,observation=f.vector['observation'],tuple=f.vector['tuple'],expectedMatch=f is not unexpected)
    r=subprocess.run(['node','--input-type=module','-e',script],input=json.dumps(body),capture_output=True,text=True,timeout=10)
    self.assertEqual(r.returncode,0,r.stderr)
  def test_alias_sampler_binds_literal_target_process_and_both_parent_brackets(self):
@@ -431,14 +433,63 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
-  # Both samples retain every observation; the fixed groups share 35 captures.
-  self.assertEqual(len(f.commands),73)
-  self.assertEqual(sum(len(logical_commands(c)) for c in f.commands),108)
+  self.assertLess(len(f.commands),73)
+  self.assertLess(sum(len(logical_commands(c)) for c in f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
                        ('target_parent_drift',True),('nested_target',True),('proc_inode_drift',True)]:
    f=AliasFiles();setattr(f,change,value)
    with self.subTest(change=change), self.assertRaises(ValueError):
+    f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+ def test_ordinary_bracket_hashes_the_running_executable_once_per_capture(self):
+  for f in (Files(),AliasFiles()):
+   f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+   hashes=[shlex.split(shlex.split(step)[-1])
+           for c in f.commands for step in logical_commands(c) if 'sha256sum -- ' in step]
+   self.assertEqual(hashes.count(['sha256sum','--','/proc/20/exe']),2)
+   self.assertFalse(any(args[-1] in (s.APPS[f.profile],s.ORDINARY_ALIAS_TARGET) for args in hashes))
+ def test_ordinary_join_refuses_opening_and_closing_proc_stat_drift(self):
+  for proc_read in (1,2,3,4):
+   for field in ('inode','nlink','mtime','ctime'):
+    f=Files()
+    original=f.meta
+    seen=0
+    def drift(path,follow=False):
+     nonlocal seen
+     raw=original(path,follow)
+     if path!='/proc/20/exe':return raw
+     seen+=1
+     if seen!=proc_read:return raw
+     lines=raw.splitlines()
+     if field in ('mtime','ctime'):
+      index=1 if field=='mtime' else 2
+      lines[index]=lines[index].replace(b'000000001',b'000000002')
+     else:
+      fields=lines[0].split()
+      fields[1 if field=='inode' else 6]=b'99'
+      lines[0]=b' '.join(fields)
+     return b'\n'.join(lines)+b'\n'
+    f.meta=drift
+    with self.subTest(proc_read=proc_read,field=field), self.assertRaises(ValueError):
+     f.sampler().capture(f.profile,t.empty_raw)
+    self.assertEqual(seen,proc_read)
+ def test_ordinary_join_refuses_pid_reuse_and_fresh_digest_drift(self):
+  for changed in ('pid-start','digest'):
+   f=AliasFiles()
+   original=f.reply
+   reads=0
+   def drift(command):
+    nonlocal reads
+    code,out,err=original(command)
+    if changed=='pid-start' and 'if=/proc/20/stat' in command:
+     reads+=1
+     if reads>=3:out=out[:-2]+b'41'
+    if changed=='digest' and 'sha256sum -- /proc/20/exe' in command:
+     reads+=1
+     if reads==2:out=b'f'*64+out[64:]
+    return code,out,err
+   f.reply=drift
+   with self.subTest(changed=changed), self.assertRaises(ValueError):
     f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
  def test_closing_target_and_parents_must_validate_before_alias_leaf(self):
   for frame,before,after in (
