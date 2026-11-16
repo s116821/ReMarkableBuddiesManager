@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron } from '@playwright/test';
 import { mkdtemp, writeFile, chmod, rm, mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -17,11 +18,11 @@ async function isolate(context, localOrigin) {
   });
 }
 async function verify(page, publish, host) {
+ await showPanel(page,'owned');
   const button = page.getByRole('button', { name: 'Inspect owned data', exact: true });
   assert.equal(await button.isDisabled(), true);
   const read = async () => {
-    await page.getByRole('button', { name: 'Read tablet state', exact: true }).click();
-    await page.getByTestId('tablet-model').waitFor();
+    await readTabletFor(page,'owned');
     await page.getByTestId('inspection-status').filter({ hasText: /^Not inspected$/ }).waitFor();
   };
   const check = async (value, expected) => {
@@ -76,8 +77,7 @@ async function verify(page, publish, host) {
   assert.equal(await page.getByText('PROTECTED_SENTINEL').count(), 0);
   await check({ ...inspection(ownedReport()), observation: { ...tablet, boot_id: '22222222-2222-2222-2222-222222222222' } }, /read tablet state again/);
   assert.equal(await page.getByTestId('observed-bytes').count(), 0);
-  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-  await page.getByRole('heading', { name: 'Disconnected', exact: true }).waitFor();
+  await disconnectFor(page,'owned');
   assert.equal(await button.isDisabled(), true);
   assert.equal(await page.getByTestId('inspection-status').textContent(), 'Not inspected');
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
@@ -107,8 +107,8 @@ try {
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
   if (process.platform === 'linux') await verify(page, v => writeFile(payload, JSON.stringify(v)), packaged ? 'desktop-packaged' : 'desktop');
   else {
-    await page.getByRole('button', { name: 'Read tablet state', exact: true }).click();
-    await page.getByRole('heading', { name: 'Not configured', exact: true }).waitFor();
+    await showPanel(page,'tablet');await page.getByRole('button',{name:'Read tablet state',exact:true}).click();
+    await page.getByRole('heading', { name: 'Not configured', exact: true }).waitFor();await showPanel(page,'owned');
     assert.equal(await page.getByRole('button', { name: 'Inspect owned data' }).isDisabled(), true);
     // Test-only substitution of main-process IPC responses exercises the actual
     // sandbox/preload/shared renderer; it is NOT native Windows USB evidence.

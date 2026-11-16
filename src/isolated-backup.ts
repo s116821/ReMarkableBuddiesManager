@@ -11,11 +11,11 @@ type Target = Pick<BackupPreferencesRequest, 'connection_id' | 'boot_id'>;
 type PreviewEditor<R> = {current: () => boolean; settle: (result: R) => void; discard: () => void; invocation?: string};
 
 const previewLabels: Record<BackupPreferencesResult['status'], string> = {
-  ready: 'Review the changes in the Preferences panel.',
+  ready: 'Review the preference changes before confirming.',
   'no-change': 'This backup would make no saved preference changes.',
   busy: 'Another maintenance operation is active.',
   invalidated: 'Backup preview expired or was cancelled.',
-  capacity: 'Check an unconfirmed import in the Preferences panel first.',
+  capacity: 'Check an unconfirmed import in Transfer preferences first.',
   unsupported: 'Installed Buddy does not support this preferences operation.',
   'not-dispatched': 'Could not prepare preferences from this backup.',
   unavailable: 'Backup preferences preview is unavailable.',
@@ -210,7 +210,7 @@ export class IsolatedBackupController {
       preview.settle(result);
       this.publish({busy: false, previewing: false, previewAvailable: result.retryable,
         cleanupPending: result.cleanupPending, message: data && result.status === 'ready'
-          ? 'Review the Ordinary Restore panel.' : data && ['unavailable', 'capacity'].includes(result.status)
+          ? 'Review the restore preview before confirming.' : data && ['unavailable', 'capacity'].includes(result.status)
             ? 'Backup data preview is unavailable.' : previewLabels[result.status]});
     } catch {
       if (generation === this.viewGeneration) this.clear(lostReply, true);
