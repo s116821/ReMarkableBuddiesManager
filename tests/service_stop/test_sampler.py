@@ -291,26 +291,40 @@ class SamplerTests(unittest.TestCase):
   f.meta=meta
   with self.assertRaises(ValueError):f.sampler().file('/opt/bin/reader-buddy')
   self.assertEqual(reads,2)
-  self.assertEqual(len(f.commands),4)
-  before,leaf,read,after=[shlex.split(c)[-1] for c in f.commands]
+  self.assertEqual(len(f.commands),3)
+  before,leaf,read,after=[shlex.split(step)[-1] for c in f.commands for step in logical_commands(c)]
   self.assertEqual(read,'sha256sum -- /opt/bin/reader-buddy')
   self.assertEqual(after,leaf+' && '+before)
- def test_batched_tail_refuses_incomplete_overfull_or_failed_metadata(self):
+ def test_hash_and_tail_refuse_invalid_framing_individual_caps_status_and_stderr(self):
   for name,mutate in [
    ('short',lambda out:(0,out[:-1],b'')),
    ('extra',lambda out:(0,out+b'\n',b'')),
+   ('hash-cap',lambda out:(0,b'x'*4097+b'\0'+out.split(b'\0',1)[1],b'')),
+   ('metadata-cap',lambda out:(0,out.split(b'\0',1)[0]+b'\0'+b'x'*4097+b'\0',b'')),
+   ('hash-path',lambda out:(0,out.replace(b'  /opt/bin/reader-buddy\n',b'  /other\n',1),b'')),
    ('exit',lambda out:(1,out,b'')),
    ('stderr',lambda out:(0,out,b'warning')),
   ]:
    f=Files();instance=f.sampler()
    def run(transport,command,deadline,cap):
     code,out,err=f.run(transport,command,deadline,cap)
-    if len(f.commands)==4:return mutate(out)
+    if len(f.commands)==3:
+     self.assertEqual(cap,8194)
+     return mutate(out)
     return code,out,err
    instance.run=run
    with self.subTest(name=name), self.assertRaises(ValueError):
     instance.file('/opt/bin/reader-buddy')
-   self.assertEqual(len(f.commands),4)
+   self.assertEqual(len(f.commands),3)
+ def test_private_contents_keep_their_separate_bounded_read_and_tail(self):
+  f=Files('resident-installed')
+  expected=f.contents[s.LEASE]
+  evidence,data=f.sampler().file(s.LEASE,contents=True,private=True)
+  self.assertEqual(data,expected)
+  self.assertEqual(evidence['sha256'],s.hashlib.sha256(expected).hexdigest())
+  self.assertEqual(len(f.commands),4)
+  self.assertTrue(shlex.split(f.commands[2])[-1].startswith('dd bs=1 count=32769 '))
+  self.assertTrue(all(logical_commands(command)==[command] for command in f.commands))
  @unittest.skipUnless(sys.platform=='linux','local GNU parent chain')
  def test_actual_gnu_parent_batch_producer_and_unsafe_missing_symlink(self):
   self.exercise_parent_batch()
@@ -417,8 +431,8 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
-  # Both samples retain every observation; the fixed groups share 29 captures.
-  self.assertEqual(len(f.commands),79)
+  # Both samples retain every observation; the fixed groups share 35 captures.
+  self.assertEqual(len(f.commands),73)
   self.assertEqual(sum(len(logical_commands(c)) for c in f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
@@ -426,6 +440,31 @@ class SamplerTests(unittest.TestCase):
    f=AliasFiles();setattr(f,change,value)
    with self.subTest(change=change), self.assertRaises(ValueError):
     f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+ def test_closing_target_and_parents_must_validate_before_alias_leaf(self):
+  for frame,before,after in (
+   (0,b'1 2 0 0 ',b'1 99 0 0 '),
+   (0,b'0 0 81ed',b'0 0 81a4'),
+   (1,b'0 0 41ed',b'0 0 41ff'),
+  ):
+   f=AliasFiles();instance=f.sampler()
+   target=s.PREFIX+shlex.quote(instance._stat_script(f.target))
+   closing_commands=[]
+   def run(transport,command,deadline,cap):
+    code,out,err=f.run(transport,command,deadline,cap)
+    steps=logical_commands(command)
+    if len(steps)==2 and steps[0]==target:
+     closing_commands.append(command)
+     self.assertEqual(cap,8194)
+     parts=out.split(b'\0')
+     self.assertIn(before,parts[frame])
+     parts[frame]=parts[frame].replace(before,after,1)
+     out=b'\0'.join(parts)
+    return code,out,err
+   instance.run=run
+   with self.subTest(frame=frame,before=before,after=after), self.assertRaises(ValueError):
+    instance.capture(f.profile,t.empty_raw)
+   self.assertEqual(closing_commands,[f.commands[-1]])
+   self.assertEqual(f.alias_reads,2)
  def test_actual_cli_disabled_stop_never_uses_host_config_or_ssh(self):
   v=VECTORS[0];q=dict(connection_id=v['observation']['connection_id'],boot_id=v['observation']['boot_id'],selector='stop',budget_ms=12000,expected=dict(profile='ordinary-manual',sample_sha256=v['sample_sha256']))
   r=subprocess.run([sys.executable,t.__file__],input=json.dumps(q),capture_output=True,text=True,timeout=3,env=dict(os.environ,MANAGER_WIRED_CONFIG='THIS_MUST_NOT_BE_READ'))

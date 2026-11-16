@@ -334,35 +334,34 @@ class Sampler:
         rows=self._stat_chain([self._stat_script(p) for p in parents])
         return self._validate_parents(parents,rows)
 
-    def _verify_path_tail(self,path,before,parents):
-        # Group the existing trailing leaf and parent reads in their original order.
-        # Every row must match the corresponding fresh, validated opening metadata.
-        scripts=[self._stat_script(path)]
-        scripts.extend(self._stat_script(p) for p,_ in parents)
-        if self._stat_chain(scripts)!=[before,*(row for _,row in parents)]:refuse()
-
     def file(self,path,limit=32768,contents=False,private=False):
         parents=self.parents(path);before=self.stat(path)
         f,nlink=before;mode=int(f['mode'])
         if f['uid']!='0' or f['gid']!='0' or mode&0o170000!=0o100000 or mode&0o022 or int(f['length'])>limit:refuse()
         if private and (mode&0o7777!=0o600 or nlink!=1 or int(f['length'])==0):refuse()
+        tail=[self._stat_script(path),*(self._stat_script(p) for p,_ in parents)]
         if contents:
             out=self.text(path,limit)
             if len(out)!=int(f['length']):refuse()
             checksum=hashlib.sha256(out).hexdigest()
+            closing=self._stat_chain(tail)
         else:
-            code,value,err=self.command('sha256sum -- '+shlex.quote(path),4096)
-            if code or err:refuse()
+            value,rows=self._read_frames(
+                ('sha256sum -- '+shlex.quote(path),4096),
+                (' && '.join(tail),4096))
             text=value.decode('ascii')
             if not re.fullmatch('[a-f0-9]{64}  '+re.escape(path)+'\n',text):refuse()
             checksum=text[:64]
             out=None
-        self._verify_path_tail(path,before,parents)
+            closing=self._stat_rows(rows,len(tail))
+        if closing!=[before,*(row for _,row in parents)]:refuse()
         return dict(f,sha256=checksum),out
 
     def ordinary_alias(self, app):
         if app != APPS['ordinary-manual']:refuse()
-        parents=self.parents(app)
+        return self._ordinary_alias_leaf(app,self.parents(app))
+
+    def _ordinary_alias_leaf(self, app, parents):
         before=self.stat(app,allow_link=True)
         f,nlink=before
         mode=int(f['mode'])
@@ -635,10 +634,15 @@ class Sampler:
             r['vendor_policy']={name:self.vendor_policy(unit) for name,unit in [('stock',STOCK),('companion',COMPANION)]}
         if self.service(BUDDY)!=r['buddy'] or process()!=r['process']:refuse()
         if alias:
-            target=self.stat(executable)[0]
+            paths=self._parent_paths(app)
+            target_raw,parent_rows=self._read_frames(
+                (self._stat_script(executable),4096),
+                (' && '.join(self._stat_script(path) for path in paths),4096))
+            target=metadata(target_raw)[0]
             if (not int(target['mode'])&0o111 or
-                target!={k:v for k,v in r['artifacts']['buddy_executable'].items() if k!='sha256'} or
-                self.ordinary_alias(app)!=alias):refuse()
+                target!={k:v for k,v in r['artifacts']['buddy_executable'].items() if k!='sha256'}):refuse()
+            parents=self._validate_parents(paths,self._stat_rows(parent_rows,len(paths)))
+            if self._ordinary_alias_leaf(app,parents)!=alias:refuse()
         if time.monotonic()>=self.deadline:raise shared.Refusal('timeout')
         return r
 
