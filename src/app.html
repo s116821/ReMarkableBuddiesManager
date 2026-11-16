@@ -7,7 +7,7 @@
 @if (destination().items.length) {<nav class="subnav" [attr.aria-label]="destination().label + ' sections'">@for (item of destination().items; track item.id) {<button type="button" [attr.aria-current]="location().item === item.id ? 'page' : null" [attr.data-testid]="'nav-' + destination().id + '-' + item.id" (click)="navigate(destination().id, item.id)">{{ item.label }}</button>}</nav>}
 @if (!isView('tablet') && !isView('backup', 'account') && connection().status !== 'observed') {<div class="connection-notice"><span>Connect your tablet to read or change its saved data.</span><button type="button" class="text-link" (click)="navigate('tablet')">Open Tablet →</button></div>}
 <div class="view-content">
-@if (isView('tablet')) {
+@if (isView('tablet','overview')) {
 <section class="my-6 flex flex-wrap items-center gap-6 rounded-xl border border-divider bg-green-50 p-6" aria-labelledby="connection-title">
     <div class="hidden sm:grid h-24 w-18 shrink-0 place-items-center rounded border-2 border-l-8 border-boundary bg-paper font-serif text-muted" aria-hidden="true"><span>rM</span></div>
     <div class="min-w-0 flex-1" aria-live="polite"><p class="ui-eyebrow">TABLET CONNECTION</p><h2 id="connection-title">{{ connectionLabels[connection().status] }}</h2>
@@ -96,7 +96,7 @@
     </div>
   </section></details>
 }
-@defer (when location().destination !== 'tablet') {
-@if (!isView('tablet')) { <manager-task-views [app]="this" /> }
+@defer (when !isView('tablet','overview')) {
+@if (!isView('tablet','overview')) { <manager-task-views [app]="this" /> }
 }
 </div><footer class="workspace-footer"><span>ReMarkableBuddies Manager <code data-testid="version">{{ version }}</code></span></footer></main></div>

@@ -18,6 +18,7 @@ from unittest.mock import Mock, patch
 root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / 'host'))
 sys.path.insert(0, str(root / 'tests/wired'))
+import first_configuration_transport as first
 import storage_initialization_transport as q
 import wired_observer as o
 from test_observer import Peer, Files
@@ -259,6 +260,94 @@ class Transport(unittest.TestCase):
                         transport.close()
                         client.close()
                         server.close()
+
+
+
+
+class FirstConfigurationTransport(unittest.TestCase):
+    SERVICE = {'LoadState': 'loaded', 'ActiveState': 'inactive', 'SubState': 'dead'}
+    REPLY = b'{"report_version":1,"operation":"create-initial","state":"created"}\n'
+
+    def sequence(self, tail=b'', eof=True, closed=False):
+        class Channel:
+            def __init__(self, output):
+                self.buffers = [bytearray(output)]
+                self.closed = closed
+                self.eof_received = False
+                self.commands = []
+                self.polls = 0
+                self.exit_reads = 0
+            def settimeout(self, _):
+                pass
+            def exec_command(self, command):
+                self.commands.append(command)
+            def shutdown_write(self):
+                pass
+            def recv_ready(self):
+                return bool(self.buffers)
+            def recv(self, _):
+                return self.buffers.pop(0)
+            def recv_stderr_ready(self):
+                return False
+            def exit_status_ready(self):
+                return True
+            def recv_exit_status(self):
+                self.exit_reads += 1
+                return 0
+            def advance(self, _):
+                self.polls += 1
+                if self.polls == 1 and tail:
+                    self.buffers.append(tail)
+                if self.polls >= 2:
+                    self.eof_received = eof
+            def close(self):
+                self.closed = True
+        channel = Channel(self.REPLY)
+        transport = Mock()
+        transport.open_session.return_value = channel
+        return transport, channel
+
+    def run_first(self, transport, channel, service=None):
+        value = dict(REQUEST, selector='create-initial', service=self.SERVICE)
+        sample = {'boot_id': BOOT, 'service': self.SERVICE if service is None else service}
+        submitted = Mock()
+        with patch.object(first.shared, 'inspect', side_effect=lambda _: dict(sample)), \
+                patch.object(first.time, 'sleep', side_effect=channel.advance):
+            return first.execute(transport, value, time.monotonic()+1, submitted)
+
+    def test_exit_status_before_explicit_eof_keeps_waiting(self):
+        transport, channel = self.sequence()
+        observation = self.run_first(transport, channel)
+        self.assertEqual(channel.commands, [first.PREFIX+'create-initial'])
+        self.assertEqual(channel.polls, 2)
+        self.assertEqual(channel.exit_reads, 1)
+        self.assertEqual(observation['_first_config']['state'], 'created')
+
+    def test_valid_json_followed_by_late_tail_is_refused_after_eof(self):
+        transport, channel = self.sequence(tail=b'{}\n')
+        with self.assertRaises(ValueError):
+            self.run_first(transport, channel)
+        self.assertEqual(channel.polls, 2)
+        self.assertEqual(channel.exit_reads, 1)
+
+    def test_missing_eof_refuses_even_with_exit_status_and_valid_json(self):
+        transport, channel = self.sequence(eof=False, closed=True)
+        with self.assertRaisesRegex(ValueError, 'EOF missing'):
+            self.run_first(transport, channel)
+        self.assertEqual(channel.exit_reads, 0)
+
+    def test_running_service_or_wrong_command_fields_refuse_before_dispatch(self):
+        transport, channel = self.sequence()
+        with self.assertRaises(o.Refusal):
+            self.run_first(transport, channel, dict(self.SERVICE, ActiveState='active'))
+        transport.open_session.assert_not_called()
+        self.assertEqual(channel.commands, [])
+        value = dict(REQUEST, selector='check-initial', service=self.SERVICE)
+        self.assertEqual(first.request(json.dumps(value).encode()), value)
+        for altered in [dict(value, selector='inspect'), dict(value, source='/foreign'),
+                        dict(value, service=dict(self.SERVICE, SubState='running'))]:
+            with self.assertRaises(ValueError):
+                first.request(json.dumps(altered).encode())
 
 
 if __name__ == '__main__':

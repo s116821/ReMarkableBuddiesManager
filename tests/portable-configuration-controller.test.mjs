@@ -14,4 +14,41 @@ test('queued File/observation pause and same-ID invalidation suppress late previ
 test('lost import survives local clear and failed original Status without replay; Status carries no artifact',async()=>{
  const f=open();await f.controller.read(f.adapter,tablet,async()=>true,file());f.portableState.mode='lost';await f.controller.confirm(f.adapter,tablet);assert.equal(f.controller.state.uncertain,true);const original=f.controller.state.retained[0];f.controller.clear();await f.controller.status({portableConfiguration:async()=>{throw Error('PRIVATE_TRANSPORT_CANARY');}},tablet,original,async()=>true);assert.equal(f.controller.state.retained[0].reference,original.reference);f.portableState.mode='normal';await f.controller.status(f.adapter,tablet,original,async()=>true);assert.equal(f.controller.state.view.state,'desired-file-observed');assert.equal(f.controller.state.uncertain,false);assert.deepEqual(Object.keys(f.calls.at(-1).body),['intent']);assert.equal(f.calls.filter(c=>c.selector==='apply').length,1);f.portable.dispose();
 });
+test('backup preview shares Confirm and retains the original across a lost Apply', async t => {
+ const f = open();
+ t.after(() => f.portable.dispose());
+ let backupCancellations = 0;
+ const begin = () => f.controller.beginBackupPreview(tablet, performance.now() + 10000, () => backupCancellations++);
+ const {connection_id, boot_id} = tablet;
+ const makePreview = async () => ({
+  preview: await f.portable.request({action: 'prepare', connection_id, boot_id,
+   artifact_base64: Buffer.from(JSON.stringify(artifact)).toString('base64')}),
+  status: 'ready',
+ });
+ const stale = begin();
+ const staleResult = await makePreview();
+ f.controller.clear();
+ assert.equal(backupCancellations, 1);
+ await f.controller.read(f.adapter, tablet, async () => true, file());
+ const successor = f.controller.state.view.reference;
+ stale.settle(staleResult);
+ assert.equal(f.controller.state.view.reference, successor);
+ const current = begin();
+ current.settle(await makePreview());
+ assert.equal(f.controller.state.backupPreview, true);
+ assert.equal(f.calls.filter(c => c.selector === 'apply').length, 0);
+ f.portableState.mode = 'lost';
+ const original = f.controller.state.view.reference;
+ await f.controller.confirm(f.adapter, tablet);
+ assert.equal(f.controller.state.view.state, 'unknown');
+ assert.equal(f.controller.state.uncertain, true);
+ f.controller.clear();
+ assert.equal(backupCancellations, 1, 'clearing after possible Apply must leave backup cancellation detached');
+ assert.equal(f.controller.state.retained[0].reference, original);
+ f.portableState.mode = 'normal';
+ await f.controller.status(f.adapter, tablet, f.controller.state.retained[0], async () => true);
+ assert.equal(f.controller.state.view.state, 'desired-file-observed');
+ assert.equal(f.calls.filter(c => c.selector === 'apply').length, 1);
+});
+
 test('local download failure cannot become a saved-file claim or dispatch import',async()=>{const f=open(()=>{throw Error('PRIVATE_FILESYSTEM_CANARY');});await f.controller.read(f.adapter,tablet,async()=>true);assert.match(f.controller.state.status,/could not be handed/);assert.equal(f.controller.state.view,null);assert.equal(f.calls.some(c=>c.selector==='apply'),false);assert.equal(JSON.stringify(f.controller.state).includes('PRIVATE_FILESYSTEM_CANARY'),false);f.portable.dispose();});

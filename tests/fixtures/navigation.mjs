@@ -1,14 +1,15 @@
 import {expect} from '@playwright/test';
 
 const panels = {
-  tablet: ['tablet'], manager: ['tablet', '', 'Manager updates'],
+  tablet: ['tablet', 'overview'], manager: ['tablet', 'overview', 'Manager updates'],
   product: ['settings', 'reader'], model: ['settings', 'model'],
   credential: ['settings', 'model', 'Credential file reference setup'],
   research: ['settings', 'research'], personalization: ['settings', 'personalization'],
   'memory-settings': ['settings', 'memory'], portable: ['settings', 'preferences'],
   conversations: ['data', 'conversations'], memory: ['data', 'memory'], handwriting: ['data', 'handwriting'],
   storage: ['data', 'storage', '', 'overview'], cache: ['data', 'storage', '', 'cache'],
-  setup: ['data', 'storage', '', 'setup'], owned: ['data', 'storage', '', 'legacy'],
+  setup: ['tablet', 'setup'], owned: ['data', 'storage', '', 'legacy'],
+  shared: ['settings', 'shared'], 'backup-setup': ['backup', 'setup'], cloud: ['backup', 'cloud'],
   drive: ['backup', 'account'], mode: ['backup', 'mode'], local: ['backup', 'mode', 'Change to Local-only'],
   export: ['backup', 'archives', '', '', 'export', 'legacy'],
   archive: ['backup', 'archives', '', '', 'export', 'history'],

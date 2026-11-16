@@ -71,12 +71,14 @@ class AdmissionAndAssets(unittest.TestCase):
             def download(repo, asset, size, digest, token):
                 calls.append(asset)
                 self.assertEqual(digest, sha256(packages / NAMES[0]))
-            with patch("verify_release.verify_packages", return_value=manifest), patch("verify_release.Path") as path_class:
+            original_inputs = root / "original-build-inputs"
+            with patch("verify_release.verify_packages", return_value=manifest) as verify, patch("verify_release.Path") as path_class:
                 # Keep the optional notes file in the owned temporary directory.
                 path_class.return_value = root / "notes"
                 with contextlib.redirect_stdout(io.StringIO()):
                     retained(packages, candidate, observation, "fixture/owned", "not-a-credential",
-                             root / "missing", downloader=download)
+                             root / "missing", downloader=download, oracle_root=original_inputs)
+                verify.assert_called_once_with(packages, candidate, oracle_root=original_inputs)
             self.assertEqual(calls, [90])
             self.assertEqual({p.name for p in (root / "missing").iterdir()},
                              set(NAMES[1:]) | {"provenance.json"})
