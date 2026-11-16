@@ -11,7 +11,7 @@ import tempfile
 import threading
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 HOST = Path(__file__).resolve().parents[2] / 'host'
 sys.path.insert(0, str(HOST))
@@ -126,14 +126,24 @@ class WindowsFixtures(unittest.TestCase):
             with self.assertRaises(o.Refusal): w.validate_snapshot(CONFIG, ADAPTER, nodes, ROUTE, ROUTE)
         self.assertNotEqual(good, w.validate_snapshot(CONFIG, ADAPTER, [(9, *ANCESTRY[0][1:]), ANCESTRY[1]], ROUTE, ROUTE))
 
-    def test_socket_requires_network_order_set_host_order_get_before_source_connect(self):
-        sock = Mock(); sock.getsockopt.return_value = 7
+    def test_socket_verifies_interface_and_tcp_options_before_connect(self):
+        sock = Mock()
+        sock.getsockopt.side_effect = [7, 1]
         sock.getsockname.return_value = ('10.11.99.2', 99); sock.getpeername.return_value = ('10.11.99.1', 22)
         with patch.object(w.socket, 'socket', return_value=sock):
             self.assertIs(w.bound_socket(CONFIG, {'index': 7}), sock)
-        sock.setsockopt.assert_called_once_with(socket.IPPROTO_IP, 31, socket.htonl(7))
-        names = [call[0] for call in sock.method_calls]
-        self.assertLess(names.index('getsockopt'), names.index('bind')); self.assertLess(names.index('bind'), names.index('connect'))
+        self.assertEqual(sock.method_calls, [
+            call.settimeout(3),
+            call.setsockopt(socket.IPPROTO_IP, 31, socket.htonl(7)),
+            call.getsockopt(socket.IPPROTO_IP, 31),
+            call.bind(('10.11.99.2', 0)),
+            call.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            call.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY),
+            call.connect(('10.11.99.1', 22)),
+            call.getsockname(),
+            call.getpeername(),
+        ])
+        sock.getsockopt.side_effect = None
         for readback in (0, 8, socket.htonl(7)):
             sock.reset_mock(); sock.getsockopt.return_value = readback
             with patch.object(w.socket, 'socket', return_value=sock), self.assertRaises(o.Refusal): w.bound_socket(CONFIG, {'index': 7})
@@ -141,6 +151,25 @@ class WindowsFixtures(unittest.TestCase):
         sock.reset_mock(); sock.setsockopt.side_effect = OSError('unsupported')
         with patch.object(w.socket, 'socket', return_value=sock), self.assertRaises(o.Refusal) as failure: w.bound_socket(CONFIG, {'index': 7})
         self.assertEqual(failure.exception.status, 'unsupported-host'); sock.connect.assert_not_called()
+
+    def test_socket_closes_before_connect_on_invalid_tcp_option(self):
+        for case, set_result, get_result, status in (
+            ('set error', OSError('unsupported'), 1, 'unsupported-host'),
+            ('get error', None, OSError('unsupported'), 'unsupported-host'),
+            ('disabled', None, 0, 'disconnected'),
+            ('unexpected readback', None, 2, 'disconnected'),
+        ):
+            with self.subTest(case=case):
+                sock = Mock()
+                sock.setsockopt.side_effect = [None, set_result]
+                sock.getsockopt.side_effect = [7, get_result]
+                with patch.object(w.socket, 'socket', return_value=sock), self.assertRaises(o.Refusal) as failure:
+                    w.bound_socket(CONFIG, {'index': 7})
+                self.assertEqual(failure.exception.status, status)
+                sock.bind.assert_called_once_with(('10.11.99.2', 0))
+                self.assertEqual(sock.setsockopt.call_args, call(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1))
+                sock.connect.assert_not_called()
+                sock.close.assert_called_once()
 
     def test_notification_latched_readd_closes_owned_socket(self):
         n = w.Notifications.__new__(w.Notifications)
@@ -234,6 +263,8 @@ class WindowsNative(unittest.TestCase):
             sock.setsockopt(socket.IPPROTO_IP, 31, socket.htonl(index))
             self.assertEqual(sock.getsockopt(socket.IPPROTO_IP, 31), index)
             sock.bind(('127.0.0.1', 0))
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self.assertEqual(sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY), 1)
             self.assertEqual(sock.getsockname()[0], '127.0.0.1')
         finally: sock.close()
 

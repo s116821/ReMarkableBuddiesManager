@@ -304,6 +304,12 @@ def bound_socket(config, snapshot):
         except OSError:
             raise Refusal('unsupported-host') from None
         sock.bind((config['source_address'], 0))
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            if sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY) != 1:
+                raise Refusal('disconnected')
+        except OSError:
+            raise Refusal('unsupported-host') from None
         sock.connect((PEER, 22))
         if sock.getsockname()[0] != config['source_address'] or sock.getpeername() != (PEER, 22):
             raise Refusal('disconnected')
