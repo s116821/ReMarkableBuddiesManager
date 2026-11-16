@@ -44,6 +44,8 @@ export class DriveAuth {
   #disposed = false;
   #guardClosures = new Set();
   #disposal;
+  #tabletGrant = null;
+  #tabletPhase = 'none';
   constructor({ store = new DriveStore(), endpoints = GOOGLE_ENDPOINTS, ttlMs = 300000, requestMs = 15000, backupReadFactory = null } = {}) {
     require(Object.keys(endpoints).sort().join() === endpointKeys, 'configuration-unavailable');
     // Constructor-only trusted test seam. Product callers never receive endpoints/client/path arguments.
@@ -225,11 +227,16 @@ export class DriveAuth {
     } catch { return { status: authority.aborted ? 'invalidated' : 'unavailable' }; }
   }
   stop() {
-    this.generation++; this.#invalidateRead(); this.work?.abort(); this.work = null;
+    this.generation++; this.#invalidateRead(); this.#clearTablet(); this.work?.abort(); this.work = null;
     if (this.flow) { clearTimeout(this.flow.timer); this.flow.abort.abort(); this.flow.server?.closeAllConnections(); this.flow.server?.close(); }
     this.flow = null;
   }
-  cancel() { const pending = Boolean(this.flow || this.work); this.stop(); if (pending) this.state = publicState('cancelled'); return this.state; }
+  cancel() {
+    const tablet = Boolean(this.#tabletGrant || this.flow?.purpose === 'tablet');
+    const pending = Boolean(this.flow || this.work || tablet);
+    this.stop(); if (tablet) this.#tabletPhase = 'cancelled';
+    if (pending) this.state = publicState('cancelled'); return this.state;
+  }
   ownsAuthorizationUrl(url) { return Boolean(this.flow && this.flow.url === url); }
   oauth(config, redirectUri, signal) {
     const client = new OAuth2Client({ clientId: config.clientId, clientSecret: config.clientSecret ?? undefined, redirectUri,
@@ -245,14 +252,18 @@ export class DriveAuth {
     };
     return client;
   }
-  async begin() {
+  begin() { return this.#begin('host'); }
+  // Host-only until the verified tablet workflow supplies its public composition.
+  beginTabletAuthorization() { return this.#begin('tablet'); }
+  async #begin(purpose) {
     this.stop(); const generation = this.generation;
     try {
-      const baseline = this.snapshot(); require(baseline.config, 'configuration-unavailable');
+      const baseline = this.snapshot(); require(!this.#disposed && baseline.config, 'configuration-unavailable');
+      if (purpose === 'tablet') { require(baseline.saved, 'configuration-unavailable'); this.#tabletPhase = 'connecting'; }
       const abort = new AbortController(); const oauth = this.oauth(baseline.config, undefined, abort.signal);
       const pkce = await oauth.generateCodeVerifierAsync();
       require(generation === this.generation, 'cancelled');
-      const flow = { ...baseline, generation, abort, oauth, verifier: pkce.codeVerifier, state: randomBytes(32).toString('hex'), consumed: false };
+      const flow = { ...baseline, purpose, generation, abort, oauth, verifier: pkce.codeVerifier, state: randomBytes(32).toString('hex'), consumed: false };
       flow.server = createServer((req, res) => this.callback(flow, req, res));
       flow.server.requestTimeout = 3000; flow.server.headersTimeout = 3000; flow.server.maxHeadersCount = 32;
       await new Promise((resolve, reject) => { flow.server.once('error', reject); flow.server.listen(0, '127.0.0.1', resolve); });
@@ -262,10 +273,10 @@ export class DriveAuth {
       flow.url = flow.oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent select_account', scope: DRIVE_SCOPE,
         state: flow.state, code_challenge: pkce.codeChallenge, code_challenge_method: 'S256' });
       require(flow.url.length <= 4096);
-      flow.timer = setTimeout(() => { if (this.flow === flow) { this.stop(); this.state = publicState('expired'); } }, this.ttlMs);
+      flow.timer = setTimeout(() => { if (this.flow === flow) { this.stop(); if (purpose === 'tablet') this.#tabletPhase = 'expired'; this.state = publicState('expired'); } }, this.ttlMs);
       flow.timer.unref(); this.flow = flow; this.state = publicState('connecting');
       return { state: this.state, authorizationUrl: flow.url };
-    } catch (error) { if (generation === this.generation) this.state = publicState('unavailable', null, null, ['configuration-unavailable', 'cancelled'].includes(error.message) ? error.message : 'storage-unavailable');
+    } catch (error) { if (generation === this.generation) { if (purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('unavailable', null, null, ['configuration-unavailable', 'cancelled'].includes(error.message) ? error.message : 'storage-unavailable'); }
       return { state: this.state, authorizationUrl: null }; }
   }
   callback(flow, req, res) {
@@ -283,7 +294,7 @@ export class DriveAuth {
       require(!u.searchParams.has('iss') || u.searchParams.get('iss') === 'https://accounts.google.com');
       require(u.searchParams.has('error') !== u.searchParams.has('code'));
       if (u.searchParams.has('error')) {
-        flow.consumed = true; finish(200); this.stop(); this.state = publicState('denied'); return;
+        flow.consumed = true; finish(200); this.stop(); if (flow.purpose === 'tablet') this.#tabletPhase = 'denied'; this.state = publicState('denied'); return;
       }
       const code = u.searchParams.get('code'); require(text(code, 4096));
       flow.consumed = true; finish(200); flow.server.close();
@@ -318,10 +329,64 @@ export class DriveAuth {
     try {
       const response = await flow.oauth.getToken({ code, codeVerifier: flow.verifier, redirect_uri: flow.redirect });
       require(this.current(flow), 'cancelled'); require(text(response.tokens.refresh_token), 'authorization-required');
-      const observed = await this.account(flow.oauth, response.tokens, flow.config.clientId);
-      this.save(flow, observed);
-    } catch { if (this.current(flow)) this.state = publicState('authorization-failed', flow.saved?.account ?? null, flow.saved ? new Date(flow.saved.checkedAt).toISOString() : null, 'authorization-failed'); }
+      const observed = await this.account(flow.oauth, response.tokens, flow.config.clientId,
+        flow.purpose === 'tablet' ? flow.saved.account : null);
+      if (flow.purpose === 'tablet') this.#saveTablet(flow, observed);
+      else this.save(flow, observed);
+    } catch { if (this.current(flow)) { if (flow.purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('authorization-failed', flow.saved?.account ?? null, flow.saved ? new Date(flow.saved.checkedAt).toISOString() : null, 'authorization-failed'); } }
     finally { if (this.flow === flow) { clearTimeout(flow.timer); this.flow = null; } flow.server.close(); }
+  }
+  #clearTablet(phase = 'none') {
+    if (this.#tabletGrant) clearTimeout(this.#tabletGrant.timer);
+    this.#tabletGrant = null; this.#tabletPhase = phase;
+  }
+  #saveTablet(flow, observed) {
+    require(this.current(flow), 'cancelled');
+    const current = this.snapshot();
+    require(current.config && current.saved && current.clientRecord.digest === flow.clientRecord.digest &&
+      current.grantRecord.digest === flow.grantRecord.digest && observed.tokens.scope === DRIVE_SCOPE &&
+      observed.tokens.refresh_token !== current.saved.tokens.refresh_token);
+    const pending = { reference: randomBytes(32).toString('hex'), generation: flow.generation,
+      clientDigest: flow.clientRecord.digest, grantDigest: flow.grantRecord.digest,
+      config: structuredClone(flow.config), observed: structuredClone(observed),
+      expires: Math.min(Date.now() + Math.min(this.ttlMs, 300000), observed.tokens.expiry_date) };
+    pending.timer = setTimeout(() => { if (this.#tabletGrant === pending) this.#clearTablet('expired'); }, Math.max(1, pending.expires - Date.now()));
+    pending.timer.unref(); this.#tabletGrant = pending; this.#tabletPhase = 'ready';
+    // The host grant has not been refreshed or replaced by this second consent.
+    this.publish('cached', current.saved.account, current.saved.checkedAt, current);
+  }
+  #currentTablet() {
+    const pending = this.#tabletGrant;
+    if (!pending) return null;
+    if (Date.now() >= pending.expires) { this.#clearTablet('expired'); return null; }
+    try {
+      require(!this.#disposed && !this.flow && !this.work && pending.generation === this.generation);
+      const current = this.snapshot();
+      if (Date.now() >= pending.expires) { this.#clearTablet('expired'); return null; }
+      require(current.config && current.saved && current.clientRecord.digest === pending.clientDigest &&
+        current.grantRecord.digest === pending.grantDigest);
+      return pending;
+    } catch { this.#clearTablet('unavailable'); return null; }
+  }
+  tabletAuthorizationStatus() {
+    const pending = this.#currentTablet();
+    return Object.freeze({ status: this.#tabletPhase, reference: pending?.reference ?? null,
+      account: pending ? Object.freeze({ label: pending.observed.account.label }) : null });
+  }
+  // Private one-use data, never a renderer/IPC result. The eventual writer owns
+  // USB target/mode admission and must not equate this take with installation.
+  takeTabletAuthorization(reference, collection) {
+    const pending = this.#currentTablet();
+    if (!pending || pending.reference !== reference) return null;
+    require(typeof collection === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(collection) &&
+      collection !== '00000000-0000-0000-0000-000000000000');
+    const { config, observed } = pending;
+    const credential = { credential_version: 1, client_id: config.clientId, client_secret: config.clientSecret,
+      access_token: observed.tokens.access_token, refresh_token: observed.tokens.refresh_token,
+      expires_at: Math.floor(observed.tokens.expiry_date / 1000), scopes: [DRIVE_SCOPE],
+      account_permission_id: observed.account.permissionId, collection };
+    this.#clearTablet('consumed');
+    return credential;
   }
   async check() {
     this.stop(); const generation = this.generation; let baseline;
