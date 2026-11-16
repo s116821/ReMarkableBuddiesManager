@@ -53,6 +53,10 @@ async function verifyTabletDrive(page, peer, host) {
   const save = panel.getByRole('button', {name: 'Save tablet connection', exact: true});
   const check = panel.getByRole('button', {name: 'Check original tablet change', exact: true});
   const consent = panel.getByRole('link', {name: 'Continue tablet sign-in with Google', exact: true});
+  const editModel = page.getByRole('button', {name: 'Edit model', exact: true});
+  await showPanel(page, 'model');
+  await expect(editModel).toBeEnabled();
+  await showPanel(page, 'drive');
   await expect(connect).toBeEnabled();
   await connect.click();
   await expect(status).toContainText('Finish signing in with Google');
@@ -67,6 +71,22 @@ async function verifyTabletDrive(page, peer, host) {
   assert.equal(review.takes, 1);
   assert.equal(review.applies, 0, 'showing the account does not write a credential');
   await save.click();
+  try {
+    await expect.poll(async () => (await peer.snapshot()).applies).toBe(1);
+    const held = await peer.snapshot();
+    assert.equal(held.originals.length, 1);
+    await showPanel(page, 'model');
+    await expect(editModel).toBeDisabled();
+    await editModel.evaluate(button => button.click());
+    await showPanel(page, 'drive');
+    const afterNavigation = await peer.snapshot();
+    assert.equal(afterNavigation.applies, 1);
+    assert.equal(afterNavigation.wiredCalls, held.wiredCalls);
+    assert.equal(afterNavigation.wiredCancels, held.wiredCancels);
+    assert.deepEqual(afterNavigation.originals, held.originals);
+  } finally {
+    await peer.releaseApply();
+  }
   await expect(status).toContainText(/result is unknown|response was lost/i);
   const pending = await peer.snapshot();
   assert.equal(pending.applies, 1);
@@ -201,6 +221,7 @@ try {
       return result;
     };
     WiredObserver.prototype.run = (...args) => peers.observer.run(...args);
+    WiredObserver.prototype.cancel = () => peers.observer.cancel();
     const channel = 'manager:tabletDriveSetup';
     const invoke = ipcMain._invokeHandlers.get(channel);
     if (typeof invoke !== 'function') throw Error('Tablet Drive IPC handler missing');
@@ -217,6 +238,7 @@ try {
     completeConsent: () => app.evaluate(() => globalThis.tabletDriveFixture.completeConsent()),
     holdBegin: () => app.evaluate(() => globalThis.tabletDriveFixture.holdBegin()),
     releaseBegin: () => app.evaluate(() => globalThis.tabletDriveFixture.releaseBegin()),
+    releaseApply: () => app.evaluate(() => globalThis.tabletDriveFixture.releaseApply()),
     snapshot: () => app.evaluate(() => globalThis.tabletDriveFixture.snapshot()),
     replies: () => app.evaluate(() => globalThis.tabletDriveFixture.replies)
   }, host);

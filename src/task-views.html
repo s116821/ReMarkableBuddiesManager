@@ -38,7 +38,7 @@
     <h2 id="model-settings-title">Model connection</h2>
     <p class="text-sm text-muted">Choose a model and, if needed, a custom endpoint. Existing values stay private. Saving does not restart Buddy or test the provider connection.</p>
     <div class="flex flex-wrap gap-2 my-3">
-      <button class="ui-button ui-button-secondary" type="button" (click)="app.beginModel()" [disabled]="!app.host.modelSettings || !app.profile().savedConfigurationProbe || app.model().busy">Edit model</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="app.beginModel()" [disabled]="!app.canBeginModel()">Edit model</button>
       <button class="ui-button ui-button-primary" type="button" (click)="app.saveModel()" [disabled]="!app.modelCanSave()">Save model</button>
       @if (app.model().busy || app.model().view?.state === 'ready') {
 <button class="ui-button ui-button-secondary" type="button" (click)="app.stopModel()" [disabled]="!app.model().busy && app.model().view?.state !== 'ready'">{{ app.model().busy ? 'Stop model wait' : 'Cancel model edit' }}</button>

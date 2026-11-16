@@ -329,7 +329,7 @@ export class App implements OnDestroy {
   restoreState(family:RestoreFamily){return family==='notebook'?this.notebookRestore():this.ordinaryRestore();}
   private restoreControllerFor(family:RestoreFamily){return family==='notebook'?this.notebookRestoreController:this.restoreController;}
   private restoreCapability(family:RestoreFamily){return family==='notebook'?this.host.notebookRestore:this.host.ordinaryRestore;}
-  settingsBusy(){return this.firstConfiguration().busy||this.sharedPreferences().busy||this.portable().busy||this.localModeChoice().busy||this.product().busy||this.isolatedRoot().busy;}
+  settingsBusy(){return this.tabletDrive().busy||this.firstConfiguration().busy||this.sharedPreferences().busy||this.portable().busy||this.localModeChoice().busy||this.product().busy||this.isolatedRoot().busy;}
   restoresBusy(){return this.notebookRestore().busy||this.ordinaryRestore().busy;}
   private clearRestores(){this.notebookRestoreController.clear();this.restoreController.clear();}
   private readonly managementController=new ConversationManagementController(state=>this.conversationManagement.set(state),()=>{document.querySelectorAll<HTMLSelectElement>('#conversation-management-choice').forEach(field=>{field.value='';});});
@@ -347,7 +347,7 @@ export class App implements OnDestroy {
   readonly memorySettingsCanSave=computed(()=>this.memorySettings().view?.state==='ready'&&!this.fileCredential().busy&&!this.credential().busy&&!this.memorySettings().busy&&!this.memorySettingsPeerBusy()&&this.memorySettings().valid&&this.memorySettings().retained.length<8);
   private readonly modelController=new ModelSettingsController(state=>this.model.set(state),key=>{document.querySelectorAll<HTMLTextAreaElement>(key?'#model-replacement-'+key:'[id^="model-replacement-"]').forEach(field=>{field.value='';});});
   readonly model=signal(this.modelController.state);
-  readonly modelCanSave=computed(()=>this.model().view?.state==='ready'&&!this.model().busy&&this.model().valid&&this.model().retained.length<8);
+  readonly modelCanSave=computed(()=>this.model().view?.state==='ready'&&!this.model().busy&&!this.archiveMaintenanceBusy1()&&this.model().valid&&this.model().retained.length<8);
   readonly modelRows=computed(()=>{const current=this.model().view?.current;if(!current)return [];return (['model','base_url'] as ModelKey[]).map(key=>({key,label:key==='model'?'Model':'Endpoint',originLabel:{default:'No saved override',declared:'Saved value present','declared-null':'Explicitly empty'}[current[key].origin],action:this.model().actions[key]}));});
   private readonly productController=new ProductSettingsController(state=>this.product.set(state),()=>{document.querySelectorAll<HTMLSelectElement>('[id^="product-"]').forEach(field=>{field.value="";});});
   readonly product=signal(this.productController.state);
@@ -469,7 +469,7 @@ export class App implements OnDestroy {
 
   archiveMaintenanceBusy1(){return ((((this.settingsBusy()||this.handwritingRecords().busy)||this.archiveBusy())||this.restoresBusy())||this.conversationManagement().busy||this.conversationInventory().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy)||this.fileCredential().busy||this.credential().busy||this.research().busy||this.memorySettings().busy;}
   archiveMaintenanceBusy2(){return ((((this.settingsBusy()||this.handwritingRecords().busy)||this.archiveBusy())||this.restoresBusy())||this.conversationManagement().busy||this.conversationInventory().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy);}
-  archiveMaintenanceBusy3(){return this.isolatedRoot().busy||(((this.handwritingRecords().busy||this.archiveBusy())||this.restoresBusy())||this.conversationManagement().busy||this.conversationInventory().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy)||this.fileCredential().busy||this.credential().busy||this.research().busy||this.memorySettings().busy;}
+  archiveMaintenanceBusy3(){return this.tabletDrive().busy||this.isolatedRoot().busy||(((this.handwritingRecords().busy||this.archiveBusy())||this.restoresBusy())||this.conversationManagement().busy||this.conversationInventory().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy)||this.fileCredential().busy||this.credential().busy||this.research().busy||this.memorySettings().busy;}
   private clearSharedArchivePeers1(){this.clearPortable();this.modelController.clear();this.localModeController.clear();this.productController.clear();this.basicController.clear();}
   private clearSharedArchivePeers2(){this.clearPortable();this.cleanupController.clear();this.handwritingController.clear();this.notebookController.clear();this.selectedController.clear();this.clearRestores();this.managementController.clear();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();}
   private clearSharedArchivePeers3(){this.clearPortable();this.localModeController.clear();this.productController.clear();this.basicController.clear();this.forgetController.clear();}
@@ -528,7 +528,7 @@ export class App implements OnDestroy {
   async stopNotebookArchive(){if(this.notebookPeerBusy())return;if(this.host.notebookArchive)await this.notebookController.stop({notebookArchive:q=>this.host.notebookArchive!(q)});}
   async showNotebookArchiveOriginals(){if(this.host.notebookArchive)await this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)});}
   restoreAttemptMessage=restoreAttemptMessage;
-  restorePeerBusy(family:RestoreFamily='legacy'){return this.isolatedRoot().busy||this.restoreState(family==='legacy'?'notebook':'legacy').busy||this.localModeChoice().busy||this.product().busy||this.handwritingRecords().busy||this.archiveBusy()||this.conversationManagement().busy||this.conversationInventory().busy||this.cacheInventory().busy||this.ownedV3().busy||this.storageInitialization().busy||this.cacheCleanup().busy||this.fileCredential().busy||this.credential().busy||this.memorySettings().busy||this.research().busy||this.model().busy||this.basic().busy||this.forget().busy||this.archiveExport().busy;}
+  restorePeerBusy(family:RestoreFamily='legacy'){return this.tabletDrive().busy||this.isolatedRoot().busy||this.restoreState(family==='legacy'?'notebook':'legacy').busy||this.localModeChoice().busy||this.product().busy||this.handwritingRecords().busy||this.archiveBusy()||this.conversationManagement().busy||this.conversationInventory().busy||this.cacheInventory().busy||this.ownedV3().busy||this.storageInitialization().busy||this.cacheCleanup().busy||this.fileCredential().busy||this.credential().busy||this.memorySettings().busy||this.research().busy||this.model().busy||this.basic().busy||this.forget().busy||this.archiveExport().busy;}
   private restoreBusy(family:RestoreFamily){return this.restoreState(family).busy||this.restorePeerBusy(family);}
   updateRestoreSource(event:Event,family:RestoreFamily='legacy'){if(this.restoreBusy(family))return;const field=event.target as HTMLTextAreaElement;this.restoreControllerFor(family).input(field.value);field.value=this.restoreControllerFor(family).text();}
   restoreSourceText(family:RestoreFamily='legacy'){return this.restoreControllerFor(family).text();}
@@ -630,7 +630,7 @@ export class App implements OnDestroy {
   canCheckMemorySettings(record:MemorySettingsRetained){const t=this.connection().observation;return !this.memorySettings().busy&&!this.memorySettingsPeerBusy()&&!!t&&t.connection_id===record.connection_id&&t.boot_id===record.boot_id;}
   async stopMemorySettings(){if(this.memorySettingsPeerBusy())return;if(this.host.memorySettings)await this.memorySettingsController.stop({memorySettings:q=>this.host.memorySettings!(q)});}
   exportText(){return this.exportController.text();}
-  private portablePeersBusy(){return this.isolatedRoot().busy||this.localModeChoice().busy||this.product().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.cacheCleanup().busy||this.handwritingRecords().busy||this.notebookArchive().busy||this.selectedArchive().busy||this.restoresBusy()||this.conversationManagement().busy||this.conversationInventory().busy||this.storageInitialization().busy||this.ownedV3().busy||this.cacheInventory().busy||this.fileCredential().busy||this.credential().busy||this.memorySettings().busy||this.research().busy||this.forget().busy;}
+  private portablePeersBusy(){return this.tabletDrive().busy||this.isolatedRoot().busy||this.localModeChoice().busy||this.product().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.cacheCleanup().busy||this.handwritingRecords().busy||this.notebookArchive().busy||this.selectedArchive().busy||this.restoresBusy()||this.conversationManagement().busy||this.conversationInventory().busy||this.storageInitialization().busy||this.ownedV3().busy||this.cacheInventory().busy||this.fileCredential().busy||this.credential().busy||this.memorySettings().busy||this.research().busy||this.forget().busy;}
   private clearPortablePeers(){this.clearIsolatedRoot();this.sharedPreferenceController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.notebookController.clear();this.selectedController.clear();this.restoreController.clear();this.notebookRestoreController.clear();this.managementController.clear();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.clearCredentialAndPolicyViews();this.localModeController.clear();this.productController.clear();this.basicController.clear();this.modelController.clear();this.forgetController.clear();this.savedConfigurationController.clear();}
   portableAvailable(){return !this.sharedPreferences().busy&&!!this.host.portableConfiguration&&this.profile().savedConfigurationProbe&&!this.portablePeersBusy()&&!this.portable().busy;}
   canInspectSharedPreferences() {
@@ -726,8 +726,11 @@ export class App implements OnDestroy {
   researchTarget(record:ResearchRetained){const tablet=this.connection().observation;return tablet?.connection_id===record.connection_id&&tablet.boot_id===record.boot_id;}
   async checkResearch(record:ResearchRetained){const tablet=this.connection().observation;if(!tablet||!this.host.researchSettings||this.researchPeerBusy())return;this.clearResearchPeers();await this.researchController.status({researchSettings:q=>this.host.researchSettings!(q)},record,tablet,()=>this.pauseResearch(tablet));}
   async stopResearch(){if(this.researchPeerBusy())return;if(this.host.researchSettings)await this.researchController.stop({researchSettings:q=>this.host.researchSettings!(q)});}
-  async beginModel(){if(this.archiveMaintenanceBusy1())return;this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();
-    const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.modelSettings||this.model().busy)return;
+  canBeginModel() {
+    return !!this.host.modelSettings && this.profile().savedConfigurationProbe && !this.model().busy && !this.archiveMaintenanceBusy1();
+  }
+  async beginModel(){if(!this.canBeginModel())return;this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();
+    const tablet=this.connection().observation;if(!tablet||!this.host.modelSettings)return;
     this.exportController.clear();this.clearSharedArchivePeers3();this.savedConfigurationController.clear();
     await this.modelController.begin({modelSettings:q=>this.host.modelSettings!(q)},tablet,async()=>{await this.connectionController.pause();return this.connection().observation===tablet&&this.profile().savedConfigurationProbe;});
   }
@@ -743,7 +746,7 @@ export class App implements OnDestroy {
   modelTarget(record:ModelRetained){const tablet=this.connection().observation;return tablet?.connection_id===record.connection_id&&tablet.boot_id===record.boot_id;}
   async checkModel(record:ModelRetained){if(this.archiveMaintenanceBusy1())return;this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();const tablet=this.connection().observation;if(tablet&&this.host.modelSettings){this.exportController.clear();this.clearSharedArchivePeers3();await this.modelController.status({modelSettings:q=>this.host.modelSettings!(q)},record,tablet);}}
   async stopModel(){if(this.archiveMaintenanceBusy1())return;if(this.host.modelSettings)await this.modelController.stop({modelSettings:q=>this.host.modelSettings!(q)},()=>this.connectionController.pause());}
-  productPeerBusy(){return this.isolatedRoot().busy||this.localModeChoice().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.forget().busy||this.research().busy||this.memorySettings().busy||this.credential().busy||this.fileCredential().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy||this.conversationInventory().busy||this.conversationManagement().busy||this.restoresBusy()||this.archiveBusy()||this.handwritingRecords().busy;}
+  productPeerBusy(){return this.tabletDrive().busy||this.isolatedRoot().busy||this.localModeChoice().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.forget().busy||this.research().busy||this.memorySettings().busy||this.credential().busy||this.fileCredential().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy||this.conversationInventory().busy||this.conversationManagement().busy||this.restoresBusy()||this.archiveBusy()||this.handwritingRecords().busy;}
   async beginProduct(){if(this.productPeerBusy())return;if(this.archiveMaintenanceBusy3())return;
     const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.productSettings||this.settingsBusy())return;
     this.localModeController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();
@@ -801,7 +804,7 @@ export class App implements OnDestroy {
   readonly localModeLabels={'unconfigured':'Not set','local-only':'Local only','isolated-backup':'Separate cloud backup','shared-group':'Shared group'};
   readonly localModeOutcomeLabels={unknown:'Save not confirmed',acknowledged:'Saved',refused:'Not saved'};
   localModeHasUnconfirmed(){return this.localModeChoice().view?.state==='unknown'||this.localModeChoice().retained.some(r=>r.state==='unknown');}
-  localModePeerBusy(){return this.product().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.forget().busy||this.research().busy||this.memorySettings().busy||this.credential().busy||this.fileCredential().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy||this.conversationInventory().busy||this.conversationManagement().busy||this.restoresBusy()||this.archiveBusy()||this.handwritingRecords().busy;}
+  localModePeerBusy(){return this.tabletDrive().busy||this.product().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.forget().busy||this.research().busy||this.memorySettings().busy||this.credential().busy||this.fileCredential().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy||this.conversationInventory().busy||this.conversationManagement().busy||this.restoresBusy()||this.archiveBusy()||this.handwritingRecords().busy;}
   private localModeAdapter(){return {localModeChoice:(q:import('../host/local-mode-choice-protocol.mjs').LocalModeRequest)=>this.host.localModeChoice!(q)};}
   private clearLocalModePeers(preserveIsolatedReview=false){this.savedModeController.clear();this.savedConfigurationController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers(preserveIsolatedReview);this.modelController.clear();this.productController.clear();this.basicController.clear();this.forgetController.clear();this.memoryInspectionController.clear();this.memoryController.clear();this.ownedController.clear();this.personalizationController.clear();this.runtimeController.clear();}
   canBeginLocalMode(){return !!this.host.localModeChoice&&this.profile().savedModeProbe&&!this.localModeChoice().busy&&!this.isolatedRoot().busy&&!this.localModePeerBusy();}
@@ -978,25 +981,25 @@ export class App implements OnDestroy {
   clearCloudBackups() { this.cloudReviewTarget.set(null); this.cloudBackupController.cancel(); }
   canSetupTabletDrive() {
     return !!this.host.tabletDriveSetup && !!this.connection().observation && this.profile().savedModeProbe &&
-      !this.tabletDrive().busy && !this.isolatedRoot().busy && !this.isolatedRootPeerBusy();
+      !this.tabletDrive().busy && !this.firstConfiguration().busy && !this.isolatedRoot().busy && !this.isolatedRootPeerBusy();
   }
   async setupTabletDrive(intent: 'connect' | 'remove') {
     const target = this.connection().observation;
     if (!target || !this.canSetupTabletDrive()) return;
     this.clearCloudBackups(); this.clearLocalModePeers(true);
     await this.connectionController.pauseObservation();
-    if (this.connection().observation !== target) return;
+    if (this.connection().observation !== target || !this.canSetupTabletDrive()) return;
     await this.tabletDriveController.begin(target, intent);
   }
   async confirmTabletDrive() {
     if (!this.canSetupTabletDrive()) return;
     await this.connectionController.pauseObservation();
-    await this.tabletDriveController.confirm();
+    if (this.canSetupTabletDrive()) await this.tabletDriveController.confirm();
   }
   async checkTabletDrive(record: TabletDriveRetained) {
     if (!this.canSetupTabletDrive()) return;
     await this.connectionController.pauseObservation();
-    await this.tabletDriveController.check(record);
+    if (this.canSetupTabletDrive()) await this.tabletDriveController.check(record);
   }
   refreshTabletDrive() { void this.tabletDriveController.loadRetained(); }
   cancelTabletDrive() { this.tabletDriveController.clear(); }
