@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import { chromium,_electron as electron,expect } from '@playwright/test';
 import { mkdtemp,mkdir,rm,readFile,writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -10,12 +11,13 @@ import { prepared,key } from './fixtures/memory-forget.mjs';
 const packaged=process.argv.includes('--packaged');await mkdir('test-results',{recursive:true});
 async function isolate(context,origin){await context.route('**/*',route=>{const u=route.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||(origin&&new URL(u).origin===origin))return route.continue();return route.abort();});}
 async function verify(page){
- const panel=page.locator('section[aria-labelledby="product-settings-title"]'),begin=panel.getByRole('button',{name:'Begin product settings edit',exact:true}),status=panel.getByRole('status');
- const prepare=async()=>{await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await begin.click();await expect(status).toContainText('ready to edit');await page.locator('#product-reader_enabled').selectOption('false');};
- await prepare();await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));await expect(panel.locator('select')).toHaveCount(0);await expect(panel.getByRole('button',{name:'Save product settings',exact:true})).toBeDisabled();
+ await showPanel(page,'product');
+ const panel=page.locator('section[aria-labelledby="product-settings-title"]'),begin=panel.getByRole('button',{name:'Edit Reader & Writer',exact:true}),status=panel.getByRole('status');
+ const prepare=async()=>{await readTabletFor(page,'product');await begin.click();await expect(status).toContainText('ready to edit');await page.locator('#product-reader_enabled').selectOption('false');};
+ await prepare();await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));await expect(panel.locator('select')).toHaveCount(0);await expect(panel.getByRole('button',{name:'Save Reader & Writer',exact:true})).toBeDisabled();
  await prepare();await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));delete document.visibilityState;});await expect(panel.locator('select')).toHaveCount(0);
- await prepare();await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await expect(panel.locator('select')).toHaveCount(0);
- await page.clock.install();await prepare();await page.clock.fastForward(120000);await page.clock.runFor(100);await expect(panel.locator('select')).toHaveCount(0);await expect(panel.getByRole('button',{name:'Save product settings',exact:true})).toBeDisabled();
+ await prepare();await readTabletFor(page,'product');await expect(panel.locator('select')).toHaveCount(0);
+ await page.clock.install();await prepare();await page.clock.fastForward(120000);await page.clock.runFor(100);await expect(panel.locator('select')).toHaveCount(0);await expect(panel.getByRole('button',{name:'Save Reader & Writer',exact:true})).toBeDisabled();
  console.log('Actual product UI pagehide/hidden/observation/ready-expiry DOM clearing pass');
 }
 

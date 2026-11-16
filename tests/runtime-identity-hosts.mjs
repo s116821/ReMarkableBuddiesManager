@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -10,15 +11,16 @@ const identity=status=>({report_version:1,status,binary_version:status==='report
 const observed=()=>({contract_version:1,status:'observed',observation:tablet});let value={...observed(),runtime_identity:identity('reported')};
 async function isolate(context,origin){await context.route('**/*',route=>{const url=route.request().url();if(url.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(url.startsWith('file:')||(origin&&new URL(url).origin===origin))return route.continue();return route.abort();});}
 async function verify(page,publish,capture){
+ await showPanel(page,'runtime');
  const button=page.getByRole('button',{name:'Read binary version',exact:true});assert.equal(await button.isDisabled(),true);
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await button.click();
+ await readTabletFor(page,'runtime');await button.click();
  const status=page.getByTestId('runtime-identity-status');await status.filter({hasText:'reported — unverified'}).waitFor();await expect(page.getByTestId('runtime-binary-version')).toHaveText('dev.v0.2.0-73-g6254092');
- assert.match(await page.getByTestId('installed-version').textContent(),/provenance not verified/);assert.equal(await page.getByRole('button',{name:'Install unavailable'}).isDisabled(),true);
+ await showPanel(page,'tablet');assert.match(await page.getByTestId('installed-version').textContent(),/provenance not verified/);assert.equal(await page.getByRole('button',{name:'Install unavailable'}).isDisabled(),true);await showPanel(page,'runtime');
  for(const width of[390,1280]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  await page.locator('#runtime-title').scrollIntoViewIfNeeded();await capture();
  for(const state of['missing','unsafe','unsupported']){await publish({...observed(),runtime_identity:identity(state)});await button.click();await status.filter({hasText:`identity ${state}`}).waitFor();assert.equal(await page.getByTestId('runtime-binary-version').count(),0);}
  await publish({...observed(),runtime_identity:{...identity('reported'),secret:'PRIVATE_SENTINEL'}});await button.click();await status.filter({hasText:'unavailable or unsupported'}).waitFor();assert.equal(await page.getByText('PRIVATE_SENTINEL').count(),0);
- await page.getByRole('button',{name:'Disconnect',exact:true}).click();await page.getByRole('heading',{name:'Disconnected',exact:true}).waitFor();assert.equal(await button.isDisabled(),true);assert.equal(await page.getByTestId('runtime-binary-version').count(),0);
+ await disconnectFor(page,'runtime');assert.equal(await button.isDisabled(),true);assert.equal(await page.getByTestId('runtime-binary-version').count(),0);
  assert.equal(await page.evaluate(()=>typeof window.require),'undefined');assert.equal(await page.evaluate(()=>typeof window.process),'undefined');
 }
 const browser=await chromium.launch();const helper=await startHelper({root:path.resolve('dist/manager/browser'),observer:{observe:async()=>observed(),inspectRuntime:async()=>value,cancel:()=>({contract_version:1,status:'cancelled',observation:null})},driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})}});

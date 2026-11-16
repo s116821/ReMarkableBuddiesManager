@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium,_electron as electron,expect } from '@playwright/test';
 import { mkdtemp,mkdir,rm,readFile,writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
@@ -13,11 +14,12 @@ const packaged=process.argv.includes('--packaged');
 const folder=await mkdtemp(path.join(os.tmpdir(),'manager-configuration-ui-'));await mkdir('test-results',{recursive:true});
 async function isolate(context,origin){await context.route('**/*',r=>{const u=r.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return r.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||origin&&new URL(u).origin===origin)return r.continue();return r.abort();});}
 async function verify(page,setMode,waitStarted,release,readGeneration,frames,capture){
+ await showPanel(page,'configuration');
  const inspect=page.getByRole('button',{name:'Inspect saved configuration',exact:true}),cancel=page.getByRole('button',{name:'Cancel configuration inspection',exact:true}),status=page.getByTestId('saved-configuration-status'),fields=page.getByTestId('saved-configuration-fields');
  const row=key=>page.locator(`[data-field="${key}"]`);
  // Repeated status text is not completion evidence; bind each case to its own transport start.
  async function start(mode){const ticket=await setMode(mode);await inspect.click();await waitStarted(ticket,mode==='delayed');return ticket;}
- async function read(){await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();}
+ async function read(){await readTabletFor(page,'configuration');}
  await expect(status).toHaveText('Not inspected');await expect(inspect).toBeDisabled();await read();await start('default');await expect(status).toContainText('runtime remains unverified');await expect(fields.locator('[data-field]')).toHaveCount(25);await expect(row('model')).toContainText('No configured value');await expect(row('model')).toContainText('Default');
  await start('null');await expect(row('model')).toContainText('Explicit null');await expect(row('debug_dump')).toContainText('Not specified');
  await start('scalars');await expect(row('sync.max_media_bytes')).toContainText('268435456');await expect(row('sync.namespaces')).toContainText('conversation, export-association, handwriting, source, subject-memory');
@@ -30,7 +32,7 @@ async function verify(page,setMode,waitStarted,release,readGeneration,frames,cap
  const cancelledRead=await start('delayed');await cancel.click();await expect(status).toHaveText('Configuration inspection cancelled');const followingRead=await start('delayed');const followingGeneration=await readGeneration();await frames();assert.equal(await readGeneration(),followingGeneration,JSON.stringify(configTrace));await release(followingRead);await expect(status).toContainText('runtime remains unverified');await start('default');await expect(row('model')).toContainText('No configured value');await release(cancelledRead);await expect(row('model')).toContainText('No configured value');
  const refreshedRead=await start('delayed');await read();await expect(status).toHaveText('Not inspected');await start('scalars');await expect(row('sync.max_media_bytes')).toContainText('268435456');await release(refreshedRead);await expect(row('sync.max_media_bytes')).toContainText('268435456');
  const reloadedRead=await start('delayed');await page.reload();await expect(status).toHaveText('Not inspected');await read();await start('default');await expect(row('model')).toContainText('No configured value');await release(reloadedRead);await expect(row('model')).toContainText('No configured value');
- await page.getByRole('button',{name:'Disconnect',exact:true}).click();await expect(fields).toHaveCount(0);await expect(inspect).toBeDisabled();assert.equal(await page.evaluate(()=>typeof window.require),'undefined');assert.equal(await page.evaluate(()=>typeof window.process),'undefined');
+ await disconnectFor(page,'configuration');await expect(fields).toHaveCount(0);await expect(inspect).toBeDisabled();assert.equal(await page.evaluate(()=>typeof window.require),'undefined');assert.equal(await page.evaluate(()=>typeof window.process),'undefined');
 }
 function selected(mode){return report(mode==='null'?'explicit-null-options':mode==='scalars'?'declared-safe-scalars':mode==='private'||mode==='delayed'?'private-sentinels':mode==='invalid'?'duplicate-null-model':mode==='unavailable'?'over-input-cap':mode==='unsupported'?'unsupported-config-version':'default');}
 let sequence=0;const scheduled=[],started=new Set(),pending=new Map();
