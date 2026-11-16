@@ -21,10 +21,17 @@ import type {ServiceStopRetained} from '../host/service-stop-protocol.mjs';
 `})
 export class ServiceStopPanel implements OnDestroy{
  readonly adapter=input.required<ServiceStopAdapter>();readonly tablet=input<TabletObservation|null>(null);readonly allowed=input(false);readonly epoch=input(0);readonly pause=input.required<()=>Promise<boolean>>();
- readonly busy=output<boolean>();readonly starting=output<void>();
+ readonly visible=input(true);
+ readonly busy=output<boolean>();readonly starting=output<void>();readonly changed=output<ServiceStopUiState>();
  private controller:ServiceStopController|null=null;private generation=0;private loading=false;
  readonly state=signal<ServiceStopUiState>({status:'Buddy stop not reviewed',busy:false,view:null,retained:[]});
- constructor(){effect(()=>{this.epoch();this.clear();});}
+ constructor(){
+  effect(()=>{this.epoch();this.clear();});
+  effect(()=>this.changed.emit(this.state()));
+  // Navigation leaves in-flight work and retained outcomes alone. A review that
+  // has not been confirmed is invalidated, including a late hidden review.
+  effect(()=>{if(!this.visible()&&!this.state().busy&&this.state().view?.state==='ready')this.clear();});
+ }
  private clear(){this.generation++;this.loading=false;this.controller?.clear();this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}
  stop(){this.generation++;this.loading=false;this.controller?.stop();this.state.update(s=>({...s,busy:false}));this.busy.emit(false);}
  canReview(){const t=this.tablet();return !!t&&this.allowed()&&!this.state().busy&&this.state().retained.length<8&&!this.state().retained.some(r=>r.connection_id===t.connection_id&&r.outcome==='unknown');}

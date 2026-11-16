@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import {stageDevelopmentBrowserAssets} from './fixtures/development-browser-assets.mjs';
 import {verifyNotebookArchiveAppBoundaries} from './fixtures/notebook-archive-app-boundaries.mjs';
 import {ServiceStopHost} from '../host/service-stop.mjs';
@@ -45,9 +46,15 @@ async function reciprocalNotebook(request,control){
  console.log('Actual notebook export/restore and Stop idle previews invalidate reciprocally; retained lookup has no I/O or invalidation; native profiles remain0');
 }
 async function isolate(context,origin){await context.route('**/*',r=>{const u=r.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return r.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||origin&&new URL(u).origin===origin)return r.continue();return r.abort();});}
+async function showStop(page){
+ await showPanel(page,'tablet');
+ const open=page.getByRole('button',{name:'Open Buddy stop controls',exact:true});
+ if(await open.count())await open.click();
+ await expect(page.getByRole('button',{name:'Review stopping Buddy',exact:true})).toBeVisible();
+}
 async function loadingDeadline(page,control){
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();
+ await readTabletFor(page,'tablet');
  await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).connectionController.pauseObservation());
  await page.clock.install();let enter,release,finished;const entered=new Promise(r=>{enter=r;}),gate=new Promise(r=>{release=r;}),done=new Promise(r=>{finished=r;});
  const handler=async route=>{const response=await route.fetch();enter();await gate;await route.fulfill({response});finished();};
@@ -57,6 +64,7 @@ async function loadingDeadline(page,control){
  console.log('Actual lazy controller loading shares14-second UI deadline; late module cannot dispatch');
 }
 async function stopOutgoing(page){
+ await showStop(page);
  if(!await page.evaluate(()=>!!window.ng?.getComponent))return;
  const names=['portableController','notebookController','storageInitializationController','ownedV3Controller','cacheController','handwritingController','selectedController','restoreController','notebookRestoreController','managementController','conversationController','cleanupController','fileCredentialController','credentialController','memorySettingsController','researchController','modelController','localModeController','productController','basicController','forgetController','savedModeController','memoryInspectionController','ownedController','runtimeController','exportController','savedConfigurationController','memoryController','personalizationController'];
  const epoch=await page.evaluate(names=>{const a=window.ng.getComponent(document.querySelector('app-root'));a.stopOutgoingCounts={};a.stopOutgoingOriginals={};for(const name of names){const c=a[name],old=c.clear;a.stopOutgoingOriginals[name]=old;c.clear=function(...args){a.stopOutgoingCounts[name]=(a.stopOutgoingCounts[name]??0)+1;return old.apply(this,args);};}return a.serviceStopEpoch();},names);
@@ -67,37 +75,39 @@ async function stopOutgoing(page){
 async function portableUiPeers(page,control){
  const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true});
  const file=page.locator('#portable-file'),confirm=page.getByRole('button',{name:'Confirm preferences import',exact:true}),exportButton=page.getByRole('button',{name:'Export preferences',exact:true});
- const choose=async()=>{await expect(file).toBeEnabled();await file.setInputFiles({name:'preferences.json',mimeType:'application/json',buffer:Buffer.from(portableSelection,'base64')});await expect(confirm).toBeEnabled();};
+ const choose=async()=>{await showPanel(page,'portable');await expect(file).toBeEnabled();await file.setInputFiles({name:'preferences.json',mimeType:'application/json',buffer:Buffer.from(portableSelection,'base64')});await expect(confirm).toBeEnabled();};
  await control.admission(true);let held=false;
  try{
-  await choose();await review.click();await expect(stop).toBeEnabled();await expect(confirm).toHaveCount(0);
+  await choose();await showStop(page);await review.click();await expect(stop).toBeEnabled();await showPanel(page,'portable');await expect(confirm).toHaveCount(0);
   const before=await control.snapshot();await choose();await expect(stop).toHaveCount(0);assert.equal((await control.snapshot()).stops,before.stops);
-  await control.hold();held=true;await review.click();await control.entered();await expect(file).toBeDisabled();await expect(exportButton).toBeDisabled();await control.release();held=false;await expect(stop).toBeEnabled();
-  await control.hold();held=true;await exportButton.click();await control.entered();await expect(review).toBeDisabled();await expect(stop).toHaveCount(0);await control.release();held=false;await expect(page.getByTestId('portable-status')).toContainText('handed to the save flow');
+  await showStop(page);await control.hold();held=true;await review.click();await control.entered();await showPanel(page,'portable');await expect(file).toBeDisabled();await expect(exportButton).toBeDisabled();await control.release();held=false;
+  await expect(page.getByTestId('service-stop-status')).toContainText('cleared');await expect(stop).toHaveCount(0);await showStop(page);await expect(stop).toHaveCount(0);
+  await review.click();await expect(stop).toBeEnabled();await showPanel(page,'portable');
+  await control.hold();held=true;await exportButton.click();await control.entered();await showStop(page);await expect(review).toBeDisabled();await expect(stop).toHaveCount(0);await control.release();held=false;await showPanel(page,'portable');await expect(page.getByTestId('portable-status')).toContainText('handed to the save flow');
   assert.equal((await control.snapshot()).stops,before.stops);
  }finally{if(held)await control.release();await control.admission(false);}
- assert.equal(await control.productionClosed(),true);console.log('Actual portable preferences and Stop UI reciprocal preview invalidation and Busy guards pass with zero Stop submissions');
+ assert.equal(await control.productionClosed(),true);console.log('Actual portable preferences and Stop navigation invalidation, hidden late-review clearing and Busy guards pass with zero Stop submissions');
 }
 async function notebookUiPeers(page,control){
  const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true});
  const cases=[
-  {field:'#notebook-archive-path',action:'export',earlier:'exports',source:'/home/root/backups/notebook-new',state:'notebookArchive',controller:'notebookController'},
-  {field:'#notebook-restore-source',action:'restore',earlier:'restores',source:notebookRestoreSource,state:'notebookRestore',controller:'notebookRestoreController'},
+  {panel:'notebook',field:'#notebook-archive-path',action:'export',earlier:'exports',source:'/home/root/backups/notebook-new',state:'notebookArchive',controller:'notebookController'},
+  {panel:'notebook-restore',field:'#notebook-restore-source',action:'restore',earlier:'restores',source:notebookRestoreSource,state:'notebookRestore',controller:'notebookRestoreController'},
  ];
- const reviewReady=async()=>{const before=await control.snapshot();await review.click();await expect.poll(async()=>(await control.snapshot()).all).toBe(before.all+1);await expect(stop).toBeEnabled();};
+ const reviewReady=async()=>{await showStop(page);const before=await control.snapshot();await review.click();await expect.poll(async()=>(await control.snapshot()).all).toBe(before.all+1);await expect(stop).toBeEnabled();};
  await control.admission(true);
  try{for(const lane of cases){
-  const field=page.locator(lane.field),preview=page.getByRole('button',{name:`Preview notebook ${lane.action}`,exact:true}),confirm=page.getByRole('button',{name:`Confirm notebook ${lane.action}`,exact:true});
-  await reviewReady();const before=await control.snapshot();
-  await page.getByRole('button',{name:`Show earlier notebook ${lane.earlier}`,exact:true}).click();assert.deepEqual(await control.snapshot(),before);await expect(stop).toBeEnabled();
+  const field=page.locator(lane.field),preview=page.getByRole('button',{name:'Preview notebook '+lane.action,exact:true}),confirm=page.getByRole('button',{name:'Confirm notebook '+lane.action,exact:true});
+  await reviewReady();await showPanel(page,lane.panel);await expect(stop).toHaveCount(0);const before=await control.snapshot();
+  await page.getByRole('button',{name:'Show earlier notebook '+lane.earlier,exact:true}).click();assert.deepEqual(await control.snapshot(),before);await expect(stop).toHaveCount(0);
   await field.fill(lane.source);await preview.click();await expect(confirm).toBeEnabled();await expect(stop).toHaveCount(0);await expect(field).toHaveValue('');
-  await reviewReady();if(lane.action==='restore')await expect(confirm).toHaveCount(0);else await expect(confirm).toBeDisabled();await expect(field).toHaveValue('');
+  await reviewReady();await showPanel(page,lane.panel);await expect(confirm).toHaveCount(0);await expect(field).toHaveValue('');
   if(await page.evaluate(()=>!!window.ng?.getComponent)){
    await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).serviceStopBusy.set(true));await expect(field).toBeDisabled();await expect(preview).toBeDisabled();await page.evaluate(()=>window.ng.getComponent(document.querySelector('app-root')).serviceStopBusy.set(false));
-   await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set({...a[lane.state](),busy:true});},lane);await expect(review).toBeDisabled();await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set(a[lane.controller].state);},lane);
+   await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set({...a[lane.state](),busy:true});},lane);await showStop(page);await expect(review).toBeDisabled();await page.evaluate(lane=>{const a=window.ng.getComponent(document.querySelector('app-root'));a[lane.state].set(a[lane.controller].state);},lane);
   }
  }}finally{await control.admission(false);}
- assert.equal(await control.productionClosed(),true);console.log('Actual notebook export/restore and Stop UI reciprocal ready invalidation, Busy/edit guards and retained no-I/O pass; default profile admission restored');
+ assert.equal(await control.productionClosed(),true);console.log('Actual notebook export/restore and Stop UI navigation invalidation, Busy/edit guards and retained no-I/O pass; default profile admission restored');
 }
 async function unknownCoexistence(request,control){
  const stopBefore=await request('serviceStop',{action:'retained'}),unknown=stopBefore.service_stop.retained.find(r=>r.outcome==='unknown');assert.ok(unknown);
@@ -108,16 +118,30 @@ async function unknownCoexistence(request,control){
  assert.equal(await control.productionClosed(),true);console.log('Actual notebook and Stop unknown histories survive reciprocal current-only refresh/check with no original upgrade');
 }
 async function syntheticLifecycle(page,control){
+ await showStop(page);
  await control.admission(true);
  try{
   const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true}),stop=page.getByRole('button',{name:'Stop Buddy',exact:true}),status=page.getByTestId('service-stop-status');
   await review.click();await expect(stop).toBeEnabled();await control.inactive();await stop.click();await expect(status).toContainText('Stop requested');await expect(page.locator('service-stop-panel')).toContainText('Current service: inactive');
-  await review.click();await expect(stop).toBeEnabled();await control.unknown(true);await stop.click();await expect(status).toContainText('not confirmed');await expect(page.locator('service-stop-panel')).toContainText('Stop request unconfirmed');await control.unknown(false);
+  await review.click();await expect(stop).toBeEnabled();await control.unknown(true);
+  const mounted=await page.locator('service-stop-panel').elementHandle();let held=false;
+  try{
+   await control.hold();held=true;await stop.click();await control.entered();const pending=await control.snapshot();
+   await showPanel(page,'drive');await expect(page.locator('.activity-tray')).toContainText('Buddy stop');
+   assert.equal(await mounted.evaluate(el=>el.isConnected),true,'navigation preserves the original Stop controller element');
+   assert.deepEqual(await control.snapshot(),pending,'navigation never retries or cancels the pending Stop');
+   await control.release();held=false;await expect(status).toContainText('not confirmed');
+   const completed=await control.snapshot(),tray=page.locator('.activity-tray');
+   if(!await tray.evaluate(el=>el.open))await tray.locator('summary').click();
+   await page.getByRole('button',{name:'Buddy stop · Review results',exact:true}).click();
+   await expect(status).toBeVisible();await expect(page.locator('service-stop-panel')).toContainText('Stop request unconfirmed');
+   assert.deepEqual(await control.snapshot(),completed,'returning to the original result never replays Stop');
+  }finally{if(held)await control.release();await control.unknown(false);}
   await page.getByRole('button',{name:'Check service state',exact:true}).last().click();try{await expect(page.locator('service-stop-panel')).toContainText('Current service: inactive');}catch(e){console.log('Synthetic refresh trace',await control.debug());throw e;}await expect(page.locator('service-stop-panel')).toContainText('Stop request unconfirmed');const before=await control.snapshot();await expect(review).toBeDisabled();assert.deepEqual(await control.snapshot(),before,'Unknown blocks another review/submission');
  }finally{await control.unknown(false);await control.admission(false);}
  assert.equal(await control.productionClosed(),true);console.log('Actual shared UI synthetic accepted/unknown/current separation passes; default production admission restored');
 }
-async function ui(page){await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await page.getByRole('button',{name:'Open Buddy stop controls',exact:true}).click();const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true});await expect(review).toBeEnabled();await review.focus();await expect(review).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');await expect(page.getByRole('button',{name:'Stop Buddy',exact:true})).toHaveCount(0);for(const width of [390,1280]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}const html=await page.content();for(const x of ['sample_sha256','recovery_profile_base64','lease_base64',identity.connection_id,identity.boot_id])assert.equal(html.includes(x),false);}
+async function ui(page){await readTabletFor(page,'tablet');await showStop(page);const review=page.getByRole('button',{name:'Review stopping Buddy',exact:true});await expect(review).toBeEnabled();await review.focus();await expect(review).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');await expect(page.getByRole('button',{name:'Stop Buddy',exact:true})).toHaveCount(0);for(const width of [390,1280]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}const html=await page.content();for(const x of ['sample_sha256','recovery_profile_base64','lease_base64',identity.connection_id,identity.boot_id])assert.equal(html.includes(x),false);}
 await mkdir('test-results',{recursive:true});
 let capturedStop,savedStopAdmission;const originalStopRequest=ServiceStopHost.prototype.request;ServiceStopHost.prototype.request=function(q){capturedStop=this;return originalStopRequest.call(this,q);};
 const f=serviceStopFixture(),helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer:f.observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){}}}),browser=await chromium.launch();

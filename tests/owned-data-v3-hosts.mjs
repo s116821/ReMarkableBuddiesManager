@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import {verifyOwnedV3Quiescence} from './fixtures/owned-v3-quiescence.mjs';
 import {verifyOwnedV3AppBoundaries} from './fixtures/owned-v3-app-boundaries.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
@@ -24,8 +25,9 @@ async function matrix(request,control){
 }
 async function preserveUnknown(request){const r=(await request('localModeChoice',{action:'begin',...identity})).local_mode_choice;const lost=(await request('localModeChoice',{action:'choose',...identity,reference:r.reference})).local_mode_choice;assert.equal(lost.state,'unknown');const before=await request('localModeChoice',{action:'retained'});await request('inspectOwnedV3',identity);assert.deepEqual(await request('localModeChoice',{action:'retained'}),before);}
 async function ui(page,control,capture){
+ await showPanel(page,'storage');
  const inspect=page.getByRole('button',{name:'Inspect stored data including notebooks',exact:true}),status=page.getByTestId('owned-v3-status'),view=page.getByTestId('owned-v3-view');
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await expect(inspect).toBeEnabled();assert.equal((await control.snapshot()).reads,0);
+ await readTabletFor(page,'storage');await expect(inspect).toBeEnabled();assert.equal((await control.snapshot()).reads,0);
  await inspect.click();await expect(status).toHaveText('Complete');await expect(view).toContainText('Notebook metadata (included above)');for(const width of [390,1280]){await page.setViewportSize({width,height:1100});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await capture(width);}
  for(const mode of ['maximum-u64-complete-total','overflow-unknown-not-saturated','partial-notebook-not-inspected']){await control.mode(mode);await inspect.click();await expect(status).toHaveText(mode==='maximum-u64-complete-total'?'Complete':'Some data could not be checked');await expect(view).toContainText(mode==='maximum-u64-complete-total'?'18,446,744,073,709,551,615':mode==='overflow-unknown-not-saturated'?'Unknown':'Not checked');}
  for(const event of ['stop','pagehide','hidden','refresh']){
@@ -33,7 +35,7 @@ async function ui(page,control,capture){
   if(event==='stop')await page.getByRole('button',{name:'Stop waiting',exact:true}).click();
   else if(event==='pagehide')await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
   else if(event==='hidden')await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));delete document.visibilityState;});
-  else await page.getByRole('button',{name:'Read tablet state',exact:true}).click();
+  else await readTabletFor(page,'storage');
   await expect(view).toHaveCount(0);await control.release();await control.idle();await expect(status).not.toHaveText('Complete');await expect(view).toHaveCount(0);
  }
  await control.mode('complete-generation4');await inspect.click();await expect(status).toHaveText('Complete');const html=await page.content();for(const secret of ['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','stdout_base64','owner_actor','lease_identity_check'])assert.equal(html.includes(secret),false);
@@ -60,9 +62,8 @@ try{
  const verdicts=await app.evaluate(({app},rows)=>{const require=process.mainModule.require.bind(process.mainModule),path=require('node:path'),root=app.isPackaged?path.join(process.resourcesPath,'host'):path.join(app.getAppPath(),'host'),{parseOwnedV3Raw}=require(path.join(root,'owned-data-v3-private.mjs'));return rows.map(row=>{try{parseOwnedV3Raw(Buffer.from(row.raw_utf8));return true;}catch{return false;}});},vectors);assert.deepEqual(verdicts,vectors.map(v=>v.expected_valid));
  for(const code of ['window.managerHost.inspectOwnedV3()','window.managerHost.inspectOwnedV3({}, {})','window.managerHost.inspectOwnedV3({path:"PRIVATE"})'])assert.equal(await page.evaluate(code+'.then(()=>false,()=>true)'),true);
  assert.equal(await app.evaluate(async({ipcMain,BrowserWindow})=>{const h=ipcMain._invokeHandlers.get('manager:inspectOwnedV3'),c=BrowserWindow.getAllWindows()[0].webContents;let refused=0;for(const e of [{},{sender:c,senderFrame:{url:c.getURL()}}])try{await h(e,{});}catch{refused++;}return refused;}),2);
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();
- await page.getByRole('button',{name:'Disconnect',exact:true}).click();
- const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
+ await readTabletFor(page,'tablet');
+ await disconnectFor(page,'storage');const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
  const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.v3Harness.v3.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.v3Harness.v3.gate?.entered)).toBe(true),snapshot:()=>app.evaluate(()=>({calls:globalThis.v3Harness.v3.calls,reads:globalThis.v3Harness.v3.reads,cancels:globalThis.v3Observer.generation})),release:()=>app.evaluate(()=>{const s=globalThis.v3Harness.v3,g=s.gate;s.gate=null;g.resolve();}),idle:()=>expect.poll(()=>app.evaluate(()=>globalThis.v3Harness.v3.active)).toBe(0),mode:id=>app.evaluate((_e,id)=>{globalThis.v3Harness.v3.raw=globalThis.v3Vectors.find(v=>v.id===id).raw_utf8;},id)};
  await app.evaluate((_e,root)=>{globalThis.v3FixtureRoot=root;},path.resolve('.'));await matrix(request,control);await preserveUnknown(request);await app.evaluate(()=>{globalThis.v3Harness.v3.reads=0;});await page.reload();
  await ui(page,control,async width=>{

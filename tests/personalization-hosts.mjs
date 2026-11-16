@@ -1,3 +1,4 @@
+import {showPanel,readTabletFor,disconnectFor} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -31,7 +32,8 @@ async function isolate(context, origin) {
   });
 }
 async function verify(page, setFailure, capture, readSaved) {
-  await page.getByRole('button', { name: 'Read tablet state', exact: true }).click(); await page.getByTestId('tablet-model').waitFor();
+ await showPanel(page,'personalization');
+  await readTabletFor(page,'personalization');
   const read = page.getByRole('button', { name: 'Read personalization', exact: true }); await read.click();
   const status = page.getByTestId('personalization-status'); await status.filter({ hasText: 'activation unverified' }).waitFor();
   const field = page.getByLabel('Response preference', { exact: true }); assert.equal(await field.inputValue(), initial.text.replace(/\r\n/g, '\n'));
@@ -51,7 +53,7 @@ async function verify(page, setFailure, capture, readSaved) {
   await setFailure('busy'); await page.getByRole('button', { name: 'Save preference', exact: true }).click(); await status.filter({ hasText: 'busy' }).waitFor();
   await setFailure(null); await read.click(); await status.filter({ hasText: 'activation unverified' }).waitFor();
   await page.getByRole('button', { name: 'Clear saved preference', exact: true }).click(); await status.filter({ hasText: 'restart required' }).waitFor(); await expect(field).toHaveValue('');
-  await page.getByRole('button', { name: 'Disconnect', exact: true }).click(); await page.getByRole('heading', { name: 'Disconnected', exact: true }).waitFor(); assert.equal(await field.count(),0); assert.equal(await read.isDisabled(),true);
+  await disconnectFor(page,'personalization'); assert.equal(await field.count(),0); assert.equal(await read.isDisabled(),true);
   assert.equal(await page.evaluate(() => typeof window.require),'undefined'); assert.equal(await page.evaluate(() => typeof window.process),'undefined');
 }
 const helper = await startHelper({ root: path.resolve('dist/manager/browser'), observer: { observe: async () => inspect(), personalization: async q => respond(q), cancel: () => ({ contract_version: 1, status: 'cancelled', observation: null }) }, driveAuth: { status: async () => ({ contract_version: 1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false }), dispose() {} } });

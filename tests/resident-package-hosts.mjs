@@ -1,4 +1,5 @@
 /* global window,document,innerWidth */
+import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import {chromium,_electron as electron,expect} from '@playwright/test';
 import {mkdtemp,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {startHelper} from '../host/browser-helper.mjs';
@@ -21,15 +22,45 @@ async function matrix(request,control){let busy=0;
  assert.equal(Object.keys(lanes).length,23);assert.equal(busy,46);console.log(JSON.stringify({actual_factory_peers:23,busy_directions:busy,production_profiles_enabled:0}));
 }
 async function ui(page,control){
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();
+ await readTabletFor(page,'tablet');
  await page.getByRole('button',{name:'Open Buddy package controls',exact:true}).click();
  const review=page.getByRole('button',{name:'Review removing Buddy',exact:true}),confirmButton=page.getByRole('button',{name:'Confirm package change',exact:true}),status=page.getByTestId('resident-package-status');
  await control.admission(false);const before=await control.snapshot();await review.click();await expect(status).toContainText('unavailable');await expect(confirmButton).toHaveCount(0);assert.deepEqual(await control.snapshot(),before);
- await control.admission(true);await review.click();await expect(confirmButton).toBeEnabled();
+ await control.admission(true);
+ // A review finishing after navigation cannot leave hidden confirmation authority.
+ let held=false;
+ try{
+  await control.hold();held=true;await review.click();await control.entered();await showPanel(page,'portable');
+  await expect(page.getByRole('button',{name:'Export preferences',exact:true})).toBeDisabled();
+  await control.release();held=false;await expect(status).toContainText('Package wait stopped');
+  await showPanel(page,'tablet');await expect(confirmButton).toHaveCount(0);
+ }finally{if(held)await control.release();}
+ await review.click();await expect(confirmButton).toBeEnabled();
  // Actual shared App incoming Stop action clears a package review without a package send.
  await page.getByRole('button',{name:'Open Buddy stop controls',exact:true}).click();await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await expect(page.getByTestId('service-stop-status')).toContainText('not qualified');await expect(confirmButton).toHaveCount(0);
- await review.click();await expect(confirmButton).toBeEnabled();await confirmButton.click();await expect(status).toContainText('unconfirmed');await expect(confirmButton).toHaveCount(0);
+ await review.click();await expect(confirmButton).toBeEnabled();
+ const mounted=await page.locator('resident-package-panel').elementHandle();
+ try{
+  await control.hold();held=true;await confirmButton.click();await control.entered();const pending=await control.snapshot();
+  await showPanel(page,'drive');await expect(page.locator('.activity-tray')).toContainText('Buddy package');
+  assert.equal(await mounted.evaluate(el=>el.isConnected),true,'navigation preserves the original package controller');
+  assert.deepEqual(await control.snapshot(),pending,'navigation neither retries nor cancels a pending package operation');
+  await control.release();held=false;await expect(status).toContainText('unconfirmed');
+  const completed=await control.snapshot(),tray=page.locator('.activity-tray');
+  if(!await tray.evaluate(el=>el.open))await tray.locator('summary').click();
+  await page.getByRole('button',{name:'Buddy package · Review results',exact:true}).click();
+  await expect(status).toBeVisible();await expect(confirmButton).toHaveCount(0);
+  assert.deepEqual(await control.snapshot(),completed,'Activity opens the original outcome without replay');
+ }finally{if(held)await control.release();}
  const count=await control.snapshot();await page.getByRole('button',{name:'Check original package operation',exact:true}).click();await expect(status).toContainText('Step verified');assert.equal((await control.snapshot()).continuations,count.continuations);
+ // A late remaining-step review is also unused authority; the original continuable row survives.
+ try{
+  await control.hold();held=true;await page.getByRole('button',{name:'Review remaining step',exact:true}).click();await control.entered();
+  await showPanel(page,'drive');await control.release();held=false;await expect(status).toContainText('Package wait stopped');
+  await expect(page.locator('.activity-tray')).toContainText('Buddy package');await showPanel(page,'tablet');
+  await expect(confirmButton).toHaveCount(0);await expect(page.getByRole('button',{name:'Review remaining step',exact:true})).toBeEnabled();
+  assert.equal((await control.snapshot()).continuations,count.continuations,'hidden review never continues the original operation');
+ }finally{if(held)await control.release();}
  for(let phase=1;phase<=2;phase++){
   await page.getByRole('button',{name:'Review remaining step',exact:true}).click();await expect(confirmButton).toBeEnabled();assert.equal((await control.snapshot()).continuations,phase-1);
   await confirmButton.click();await expect(status).toContainText(phase===1?'Step verified':'Requested package change verified');assert.equal((await control.snapshot()).continuations,phase);
@@ -37,7 +68,7 @@ async function ui(page,control){
  const ended=await control.snapshot();assert.equal(ended.executions,1);assert.equal(ended.stops,0);await page.getByRole('button',{name:'Check original package operation',exact:true}).click();await expect(status).toContainText('Requested package change verified');assert.equal((await control.snapshot()).continuations,2);
  for(const width of [390,1280]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);}
  const html=await page.content();for(const secret of ['proof_sha256','policy_id',identity.connection_id,identity.boot_id])assert.equal(html.includes(secret),false);
- await control.admission(false);console.log('Actual shared UI: unavailable gate, Stop invalidation, unknown/Check, two separately confirmed remaining phases, goal completion, no replay, responsive/private reduction pass');
+ await control.admission(false);console.log('Actual shared UI: unavailable gate, Stop invalidation, hidden review clearing, pending/unknown Activity recovery, two separately confirmed remaining phases, goal completion, no replay, responsive/private reduction pass');
 }
 let captured;const original=ResidentPackageHost.prototype.request;ResidentPackageHost.prototype.request=function(q){captured=this;return original.call(this,q);};
 const f=residentPackageFixture(),helper=await startHelper({root:path.resolve('dist/manager/browser'),observer:f.observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){}}}),browser=await chromium.launch();
@@ -57,8 +88,8 @@ try{
  await app.evaluate(async({app,BrowserWindow})=>{await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`);BrowserWindow.getAllWindows()[0].show();});
  for(const code of ['window.managerHost.residentPackage()','window.managerHost.residentPackage({}, {})','window.managerHost.residentPackage({path:"CANARY"})'])assert.equal(await page.evaluate(code+'.then(()=>false,()=>true)'),true);
  assert.equal(await app.evaluate(async({ipcMain,BrowserWindow})=>{const h=ipcMain._invokeHandlers.get('manager:residentPackage'),c=BrowserWindow.getAllWindows()[0].webContents;let n=0;for(const e of [{},{sender:c,senderFrame:{url:c.getURL()}}])try{await h(e,{});}catch{n++;}return n;}),2);
- await page.getByRole('button',{name:'Read tablet state',exact:true}).click();await page.getByTestId('tablet-model').waitFor();await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+ await readTabletFor(page,'tablet');await page.getByRole('button',{name:'Disconnect',exact:true}).click();
  const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});assert.equal((await request('residentPackage',begin)).resident_package.state,'unavailable');
- const control={admission:enabled=>app.evaluate((_electron,enabled)=>{globalThis.actualPackageHost.admit=enabled?()=>globalThis.packageBinding:()=>null;},enabled),snapshot:()=>app.evaluate(()=>({all:globalThis.packageHarness.initialization.all,package:globalThis.packageHarness.package.calls.length,executions:globalThis.packageHarness.package.calls.filter(q=>q.selector==='execute').length,continuations:globalThis.packageHarness.package.calls.filter(q=>q.selector==='continue').length,stops:globalThis.packageHarness.stop.calls.filter(q=>q.selector==='stop').length})),hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.packageHarness.initialization.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.packageHarness.initialization.gate?.entered)).toBe(true),release:()=>app.evaluate(()=>{const s=globalThis.packageHarness.initialization,g=s.gate;s.gate=null;g.resolve();})};
+ const control={admission:enabled=>app.evaluate((_electron,enabled)=>{globalThis.actualPackageHost.admit=enabled?()=>globalThis.packageBinding:()=>null;},enabled),snapshot:()=>app.evaluate(()=>({all:globalThis.packageHarness.initialization.all,package:globalThis.packageHarness.package.calls.length,executions:globalThis.packageHarness.package.calls.filter(q=>q.selector==='execute').length,continuations:globalThis.packageHarness.package.calls.filter(q=>q.selector==='continue').length,stops:globalThis.packageHarness.stop.calls.filter(q=>q.selector==='stop').length,cancels:globalThis.packageHarness.observer.cancels})),hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.packageHarness.initialization.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.packageHarness.initialization.gate?.entered)).toBe(true),release:()=>app.evaluate(()=>{const s=globalThis.packageHarness.initialization,g=s.gate;s.gate=null;g.resolve();})};
  await control.admission(true);await matrix(request,control);await ui(page,control);console.log('Electron guarded actual IPC/preload/factory/shared UI pass');
 }finally{await app.close();await rm(folder,{recursive:true,force:true});}
