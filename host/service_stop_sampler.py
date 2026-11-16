@@ -112,8 +112,9 @@ def run_fixed(transport, command, deadline, cap=32768):
 
 
 def _framed_script(*commands):
-    # Only for fixed reads that require exit 0, empty stderr and NUL-free
-    # output. Each trailing separator is emitted after its command succeeds.
+    # Fixed reads require exit 0 and empty stderr; separators follow success.
+    # _frames requires NUL-free fields. The ordinary process parser separately
+    # accounts for the raw argv terminator before consuming its separator.
     return ' && '.join(command + FRAME_END for command in commands)
 
 
