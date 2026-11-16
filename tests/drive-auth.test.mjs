@@ -19,23 +19,30 @@ async function fixture(t, options = {}) {
     // Native custody has its own real NTFS fixtures; protocol tests use a plain in-memory store below.
     await rm(root, { recursive: true });
   } else { await chmod(root, 0o700); await writeFile(path.join(root, 'client.json'), JSON.stringify(config), { mode: 0o600 }); }
-  const state = { requests: [], scope: DRIVE_SCOPE, account: 'fixture-account', label: 'fixture@example.invalid', tokens: 0, gate: null };
+  const state = { requests: [], refreshRequests: [], scope: DRIVE_SCOPE, account: 'fixture-account',
+    label: 'fixture@example.invalid', tokens: 0, gate: null };
   const server = createServer(async (req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1'); let body = ''; for await (const chunk of req) body += chunk;
     state.requests.push({ method: req.method, path: u.pathname });
     res.setHeader('Content-Type', 'application/json');
     if (u.pathname === '/token') {
       const fields = new URLSearchParams(body); state.tokens++;
-      if (fields.get('grant_type') === 'authorization_code') {
+      const signingIn = fields.get('grant_type') === 'authorization_code';
+      if (signingIn) {
         assert.equal(fields.get('client_id'), CLIENT); assert.equal(fields.get('code'), 'synthetic-code');
         assert.equal(createHash('sha256').update(fields.get('code_verifier')).digest('base64url'), state.challenge);
-      } else assert.equal(fields.get('refresh_token'), secret);
+      } else state.refreshRequests.push(fields.get('refresh_token'));
       if (state.gate) await state.gate.promise;
       if (state.oversize) return res.end('x'.repeat(65537));
       if (state.redirect) { res.writeHead(302, { Location: '/forbidden' }).end(); return; }
-      res.end(JSON.stringify({ access_token: 'synthetic-access-token', refresh_token: secret, expires_in: 3600, token_type: 'Bearer', scope: state.scope }));
+      const refreshToken = signingIn ? secret : state.refreshToken;
+      res.end(JSON.stringify({ access_token: 'synthetic-access-token', refresh_token: refreshToken,
+        expires_in: 3600, token_type: 'Bearer', scope: state.scope }));
     } else if (u.pathname === '/tokeninfo') res.end(JSON.stringify({ aud: state.audience ?? CLIENT, scope: state.scope, expires_in: 3600 }));
-    else if (u.pathname === '/about') res.end(JSON.stringify({ user: { permissionId: state.account, emailAddress: state.label } }));
+    else if (u.pathname === '/about') {
+      await state.beforeAbout?.();
+      res.end(JSON.stringify({ user: { permissionId: state.account, emailAddress: state.label } }));
+    }
     else if (u.pathname === '/revoke') {
       assert.equal(u.searchParams.get('token'), secret);
       res.writeHead(state.revokeFail ? 503 : 200).end(state.revokeFail ? JSON.stringify({ error: secret }) : '{}');
@@ -64,6 +71,14 @@ async function fixture(t, options = {}) {
 }
 async function settled(auth) { for (let i = 0; i < 200 && ['connecting', 'checking', 'revoking'].includes(auth.state.status); i++) await new Promise(r => setTimeout(r, 10)); assert.ok(!['connecting', 'checking', 'revoking'].includes(auth.state.status)); }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+
+function expireGrant(store) {
+  const original = store.grant();
+  const expired = structuredClone(original.value);
+  expired.tokens.expiry_date = Date.now() - 1;
+  store.save(expired, store.client().digest, original.digest);
+  return store.grant();
+}
 
 test('actual maintained PKCE/token/scope/about flow commits guarded host grant; restart is cached, never backup-ready', async t => {
   const f = await fixture(t); assert.equal(f.auth.status().status, 'disconnected'); await f.signIn();
@@ -101,10 +116,56 @@ test('reauth/account failure preserves prior bytes; actual provider refresh and 
   const f = await fixture(t); await f.signIn(); let original = f.store.grant();
   f.state.scope = 'openid'; await f.signIn(); assert.equal(f.store.grant().digest, original.digest);
   f.state.scope = DRIVE_SCOPE;
-  const expired = structuredClone(original.value); expired.tokens.expiry_date = Date.now() - 1;
-  f.store.save(expired, f.store.client().digest, original.digest); f.state.requests.length = 0;
+  expireGrant(f.store); f.state.requests.length = 0;
   assert.equal((await f.auth.check()).status, 'connected'); assert.deepEqual(f.state.requests.map(r => r.path), ['/token', '/tokeninfo', '/about']);
   original = f.store.grant(); f.state.account = 'different-account'; assert.equal((await f.auth.check()).status, 'authorization-failed'); assert.equal(f.store.grant().digest, original.digest);
+});
+test('actual provider rotation is saved and the next refresh uses it even when the response omits a token', async t => {
+  const f = await fixture(t);
+  await f.signIn();
+  const replacement = 'synthetic-rotated-refresh-credential';
+  f.state.refreshToken = replacement;
+  expireGrant(f.store);
+  const refreshed = await f.auth.check();
+  assert.equal(refreshed.status, 'connected');
+  assert.equal(f.store.grant().value.tokens.refresh_token, replacement);
+  assert.equal(JSON.stringify(refreshed).includes(replacement), false);
+
+  delete f.state.refreshToken;
+  expireGrant(f.store);
+  assert.equal((await f.auth.check()).status, 'connected');
+  assert.deepEqual(f.state.refreshRequests, [secret, replacement]);
+  assert.equal(f.store.grant().value.tokens.refresh_token, replacement);
+});
+test('a malformed refresh token or a changed account preserves the original grant', async t => {
+  for (const [replacement, account] of [[null, 'fixture-account'], ['synthetic-rotation', 'different-account']]) {
+    const f = await fixture(t);
+    await f.signIn();
+    const original = expireGrant(f.store);
+    f.state.refreshToken = replacement;
+    f.state.account = account;
+    const result = await f.auth.check();
+    assert.equal(result.status, 'authorization-failed');
+    assert.equal(f.store.grant().digest, original.digest);
+  }
+});
+test('cancellation after receiving a rotated token preserves the original grant', async t => {
+  const f = await fixture(t);
+  await f.signIn();
+  const original = expireGrant(f.store);
+  f.state.refreshToken = 'synthetic-cancelled-rotation';
+  const reachedAbout = deferred();
+  const releaseAbout = deferred();
+  f.state.beforeAbout = () => { reachedAbout.resolve(); return releaseAbout.promise; };
+  const checking = f.auth.check();
+  try {
+    await Promise.race([reachedAbout.promise, checking.then(() => assert.fail('Account check did not start'))]);
+    assert.equal(f.auth.cancel().status, 'cancelled');
+  } finally {
+    releaseAbout.resolve();
+  }
+  assert.equal((await checking).status, 'cancelled');
+  assert.equal(f.store.grant().digest, original.digest);
 });
 test('local disconnect never calls revoke; explicit failed revoke preserves custody and reports uncertainty without leaking errors', async t => {
   const f = await fixture(t); await f.signIn(); const original = f.store.grant().digest; f.state.revokeFail = true;
