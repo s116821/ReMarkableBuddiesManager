@@ -143,6 +143,21 @@ class ReceiveCompletion(unittest.TestCase):
         self.assertTrue(all(channel.eof.values()))
         self.assertIn(0.0, channel.timeouts)
 
+    def test_complete_batch_frames_wait_for_stderr_eof_and_refuse_late_diagnostic(self):
+        for stderr in ([], [(.02, b'late diagnostic'), (.03, None)]):
+            clock = Clock()
+            channel = ScheduledChannel(clock, [(0, b'left\0right\0'), (0, None)], stderr)
+            connection = Mock()
+            connection.open_session.return_value = channel
+            with patch.object(sampler.time, 'monotonic', clock.monotonic), \
+                    patch.object(sampler.time, 'sleep', clock.sleep):
+                instance = sampler.Sampler(connection, 100.05)
+                with self.assertRaises(ValueError if stderr else shared.Refusal):
+                    instance._read_frames(('left-fixed-read', 4), ('right-fixed-read', 5))
+            self.assertEqual(channel.eof, {'stdout': True, 'stderr': bool(stderr)})
+            self.assertTrue(channel.closed)
+            connection.open_session.assert_called_once()
+
     def test_stdout_backlog_does_not_starve_stderr_bound(self):
         with self.assertRaises(ValueError):
             self.run_channel([(0, b'x' * 16384), (0, None)], [(0, b'e' * 8193), (0, None)])

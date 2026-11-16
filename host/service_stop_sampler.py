@@ -43,6 +43,7 @@ PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c
 # Both implementations preserve literal internal newlines and append one final
 # newline for -c. Do not use --printf or encode literal backslash-n separators.
 STAT_FORMAT = '%d %i %u %g %f %s %h\n%y\n%z'
+FRAME_END = " && printf '\\000'"
 
 
 def refuse():
@@ -110,6 +111,27 @@ def run_fixed(transport, command, deadline, cap=32768):
         channel.close()
 
 
+def _framed_script(*commands):
+    # Only for fixed reads that require exit 0, empty stderr and NUL-free
+    # output. Each trailing separator is emitted after its command succeeds.
+    return ' && '.join(command + FRAME_END for command in commands)
+
+
+def _frames(reply, caps, deadline):
+    if time.monotonic() >= deadline:
+        raise shared.Refusal('timeout')
+    code, out, err = reply
+    if type(code) is not int or code or type(err) is not bytes or err or type(out) is not bytes:
+        refuse()
+    parts = out.split(b'\0', len(caps) + 1)
+    if len(parts) != len(caps) + 1 or parts[-1]:
+        refuse()
+    results = parts[:-1]
+    if any(len(part) > cap for part, cap in zip(results, caps, strict=True)):
+        refuse()
+    return results
+
+
 def timestamp(value):
     m=re.fullmatch(r'(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.(\d{9}) ([+-])(\d\d)(\d\d)',value)
     if not m:refuse()
@@ -149,11 +171,11 @@ class _TypedHooks:
         self.owner,self.bus,self.client = None,None,None
         self.units = []
 
-    def run(self, command, cap=4096):
+    def run(self, command, cap=4096, count=1):
         try:
-            if self.commands >= self.maximum or time.monotonic() >= self.sampler.deadline:
+            if self.commands + count > self.maximum or time.monotonic() >= self.sampler.deadline:
                 raise ValueError()
-            self.commands += 1
+            self.commands += count
             reply = self.sampler.run(self.sampler.transport,command,self.sampler.deadline,cap)
             code,out,err = reply
             if (time.monotonic() >= self.sampler.deadline or type(code) is not int
@@ -164,14 +186,22 @@ class _TypedHooks:
         except Exception:
             raise TypedHookRefusal('typed hook observation refused') from None
 
-    def call(self, destination, path, interface, method, signature='', *arguments, cap=4096):
-        command = hooks.BUS_PREFIX + shlex.quote('exec ' + shlex.join(
-            (*hooks.CALL_PREFIX,destination,path,interface,method,signature,*arguments)))
-        return self.run(command,cap)
+    @staticmethod
+    def call_script(destination, path, interface, method, signature='', *arguments):
+        return shlex.join((*hooks.CALL_PREFIX,destination,path,interface,method,signature,*arguments))
 
-    def dbus(self, method, signature='', *arguments):
-        return self.call('org.freedesktop.DBus','/org/freedesktop/DBus',
-                         'org.freedesktop.DBus',method,signature,*arguments)
+    def dbus_script(self, method, signature='', *arguments):
+        return self.call_script('org.freedesktop.DBus','/org/freedesktop/DBus',
+                                'org.freedesktop.DBus',method,signature,*arguments)
+
+    def bus_replies(self, scripts, cap=4096):
+        if len(scripts) == 1:
+            return [self.run(hooks.BUS_PREFIX + shlex.quote('exec ' + scripts[0]), cap)]
+        # Retain the original allowance for logical typed calls in a group.
+        count = len(scripts)
+        script = _framed_script(*scripts)
+        reply = self.run(hooks.BUS_PREFIX + shlex.quote(script), count * (cap + 1), count)
+        return [(0, out, b'') for out in _frames(reply, (cap,) * count, self.sampler.deadline)]
 
     def identity(self):
         value = hooks.identity(*self.run(hooks.PREFIX+shlex.quote(hooks.IDENTITY_SCRIPT)))
@@ -181,15 +211,18 @@ class _TypedHooks:
 
     def start(self):
         self.client = self.identity()
-        self.bus = hooks.bus_id(*self.dbus('GetId'))
-        self.owner = hooks.bus_owner(*self.dbus('GetNameOwner','s','org.freedesktop.systemd1'))
-        hooks.pid_one(*self.dbus('GetConnectionUnixProcessID','s',self.owner))
+        bus, owner = self.bus_replies((self.dbus_script('GetId'),
+                                       self.dbus_script('GetNameOwner','s','org.freedesktop.systemd1')))
+        self.bus = hooks.bus_id(*bus)
+        self.owner = hooks.bus_owner(*owner)
+        [pid] = self.bus_replies((self.dbus_script('GetConnectionUnixProcessID','s',self.owner),))
+        hooks.pid_one(*pid)
 
     def unit(self, unit):
         if unit not in UNIT_OBJECTS or not hooks.owner_valid(self.owner):
             raise ValueError()
-        reply = self.call(self.owner,'/org/freedesktop/systemd1',
-                          'org.freedesktop.systemd1.Manager','GetUnit','s',unit)
+        [reply] = self.bus_replies((self.call_script(self.owner,'/org/freedesktop/systemd1',
+                                      'org.freedesktop.systemd1.Manager','GetUnit','s',unit),))
         if hooks.scalar(*reply,'o') != UNIT_OBJECTS[unit]:
             raise ValueError()
 
@@ -197,10 +230,11 @@ class _TypedHooks:
         if unit not in self.units:
             self.unit(unit)
             self.units.append(unit)
+        scripts = tuple(self.call_script(self.owner,UNIT_OBJECTS[unit],'org.freedesktop.DBus.Properties',
+                                         'Get','ss','org.freedesktop.systemd1.Service',prop)
+                        for prop in hooks.PROPERTIES)
         result = {}
-        for prop in hooks.PROPERTIES:
-            reply = self.call(self.owner,UNIT_OBJECTS[unit],'org.freedesktop.DBus.Properties',
-                              'Get','ss','org.freedesktop.systemd1.Service',prop,cap=32768)
+        for prop, reply in zip(hooks.PROPERTIES, self.bus_replies(scripts, 32768), strict=True):
             observation = hooks.decode_hook(prop,reply[1],reply[2],reply[0],complete=True)
             if observation != dict(property=prop,observation='observed-empty',type_verified=True,reason='typed-empty'):
                 raise ValueError()
@@ -210,10 +244,13 @@ class _TypedHooks:
     def finish(self):
         for unit in self.units:
             self.unit(unit)
-        hooks.pid_one(*self.dbus('GetConnectionUnixProcessID','s',self.owner))
-        if hooks.bus_owner(*self.dbus('GetNameOwner','s','org.freedesktop.systemd1')) != self.owner:
+        pid, owner, bus = self.bus_replies((self.dbus_script('GetConnectionUnixProcessID','s',self.owner),
+                                            self.dbus_script('GetNameOwner','s','org.freedesktop.systemd1'),
+                                            self.dbus_script('GetId')))
+        hooks.pid_one(*pid)
+        if hooks.bus_owner(*owner) != self.owner:
             raise ValueError()
-        if hooks.bus_id(*self.dbus('GetId')) != self.bus or self.identity() != self.client:
+        if hooks.bus_id(*bus) != self.bus or self.identity() != self.client:
             raise ValueError()
 
     def clear(self):
@@ -244,6 +281,11 @@ class Sampler:
     def command(self,script,cap=32768):
         return self.run(self.transport,PREFIX+shlex.quote(script),self.deadline,cap)
 
+    def _read_frames(self, *reads):
+        scripts, caps = zip(*reads, strict=True)
+        reply = self.command(_framed_script(*scripts), sum(caps) + len(caps))
+        return _frames(reply, caps, self.deadline)
+
     @staticmethod
     def _stat_script(path,follow=False,allow_link=False):
         # Every caller uses a compiled fixed path or a range-checked MainPID path.
@@ -264,15 +306,20 @@ class Sampler:
     def _stat_chain(self,scripts):
         code,out,err=self.command(' && '.join(scripts),4096)
         if code or err:refuse()
-        lines=out.split(b'\n')
-        if len(lines)!=3*len(scripts)+1 or lines[-1]!=b'':refuse()
-        return [metadata(b'\n'.join(lines[i:i+3])+b'\n') for i in range(0,3*len(scripts),3)]
+        return self._stat_rows(out,len(scripts))
 
-    def parents(self,path):
-        parents=[str(parent) for parent in reversed(PurePosixPath(path).parents)]
-        if not parents:return []
-        # The host validates parents before any access to leaf contents.
-        rows=self._stat_chain([self._stat_script(p) for p in parents])
+    @staticmethod
+    def _stat_rows(out,count):
+        lines=out.split(b'\n')
+        if len(lines)!=3*count+1 or lines[-1]!=b'':refuse()
+        return [metadata(b'\n'.join(lines[i:i+3])+b'\n') for i in range(0,3*count,3)]
+
+    @staticmethod
+    def _parent_paths(path):
+        return [str(parent) for parent in reversed(PurePosixPath(path).parents)]
+
+    @staticmethod
+    def _validate_parents(parents,rows):
         result=[]
         for p,info in zip(parents,rows,strict=True):
             f=info[0];mode=int(f['mode'])
@@ -280,10 +327,17 @@ class Sampler:
             result.append((p,info))
         return result
 
-    def _verify_path_tail(self,path,before,parents,*,allow_link=False):
+    def parents(self,path):
+        parents=self._parent_paths(path)
+        if not parents:return []
+        # The host validates parents before any access to leaf contents.
+        rows=self._stat_chain([self._stat_script(p) for p in parents])
+        return self._validate_parents(parents,rows)
+
+    def _verify_path_tail(self,path,before,parents):
         # Group the existing trailing leaf and parent reads in their original order.
         # Every row must match the corresponding fresh, validated opening metadata.
-        scripts=[self._stat_script(path,allow_link=allow_link)]
+        scripts=[self._stat_script(path)]
         scripts.extend(self._stat_script(p) for p,_ in parents)
         if self._stat_chain(scripts)!=[before,*(row for _,row in parents)]:refuse()
 
@@ -317,21 +371,31 @@ class Sampler:
         if f['uid']!='0' or f['gid']!='0' or mode!=0o120777 or nlink!=1 or int(f['length'])!=len(expected):refuse()
         code,literal,err=self.command('readlink -- '+shlex.quote(app),256)
         if code or err or literal!=expected+b'\n':refuse()
-        target_parents=self.parents(ORDINARY_ALIAS_TARGET)
-        self._verify_path_tail(app,before,parents,allow_link=True)
+        # These are metadata reads only. Validate the target parents before
+        # returning evidence that allows access to any target leaf contents.
+        target_paths=self._parent_paths(ORDINARY_ALIAS_TARGET)
+        target_script=' && '.join(self._stat_script(p) for p in target_paths)
+        tail=[self._stat_script(app,allow_link=True),*(self._stat_script(p) for p,_ in parents)]
+        target_rows,tail_rows=self._read_frames((target_script,4096),(' && '.join(tail),4096))
+        target_parents=self._validate_parents(target_paths,self._stat_rows(target_rows,len(target_paths)))
+        if self._stat_rows(tail_rows,len(tail))!=[before,*(row for _,row in parents)]:refuse()
         def parent_digest(rows):
             return hashlib.sha256(json.dumps(rows,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
         return dict(f,links='1',literal=ORDINARY_ALIAS_TARGET,
                     link_parents_sha256=parent_digest(parents),
                     target_parents_sha256=parent_digest(target_parents))
 
-    def text(self,path,cap):
+    @staticmethod
+    def _text_script(path,cap):
         # Kernel/platform identity files are read-only sources, not trust anchors.
         # bs=1 makes count a byte limit even for short procfs reads. Probe one
         # excess byte; exact-cap EOF is valid, excess and nonzero exits refuse.
         # POSIX dd writes normal counters to stderr: suppress those, preserving
         # its exit status (including read errors and a missing utility). No retry.
-        code,out,err=self.command('dd bs=1 count='+str(cap+1)+' '+shlex.quote('if='+path)+' 2>/dev/null',cap+1)
+        return 'dd bs=1 count='+str(cap+1)+' '+shlex.quote('if='+path)+' 2>/dev/null'
+
+    def text(self,path,cap):
+        code,out,err=self.command(self._text_script(path,cap),cap+1)
         if code or err or len(out)>cap:refuse()
         return out
 
@@ -394,26 +458,34 @@ class Sampler:
         pid=service['state']['MainPID']
         if not re.fullmatch('[1-9][0-9]*',pid) or not 1<int(pid)<2**32:refuse()
         root='/proc/'+pid
-        def start():
-            stat=self.text(root+'/stat',4096).decode('ascii')
+        def start(raw):
+            stat=raw.decode('ascii')
             if stat.split(' ',1)[0]!=pid or ')' not in stat:refuse()
             fields=stat.rsplit(')',1)[1].split()
             if len(fields)<20 or fields[0] in ('Z','X','x') or not re.fullmatch('[1-9][0-9]*',fields[19]):refuse()
             return fields[19]
-        before=start();cmd=self.text(root+'/cmdline',len(argv0)+1)
+        before=start(self.text(root+'/stat',4096));cmd=self.text(root+'/cmdline',len(argv0)+1)
         if cmd!=argv0.encode()+b'\0':refuse()
         code,exe,err=self.command('readlink -- '+shlex.quote(root+'/exe'),4096)
         if code or err or exe!=app.encode()+b'\n':refuse()
-        status=self.text(root+'/status',16384).decode('ascii').splitlines()
+        exe_stat=self._stat_script(root+'/exe',follow=True)
+        status,membership,opening=self._read_frames(
+            (self._text_script(root+'/status',16384),16384),
+            (self._text_script(root+'/cgroup',16384),16384),
+            (exe_stat,4096))
+        status=status.decode('ascii').splitlines()
         for key in ('Uid:','Gid:'):
             rows=[v.split()[1:] for v in status if v.startswith(key)]
             if rows!=[['0','0','0','0']]:refuse()
-        membership=self.text(root+'/cgroup',16384).decode('ascii').splitlines()
+        membership=membership.decode('ascii').splitlines()
         if membership.count('0::/system.slice/'+BUDDY)!=1:refuse()
-        running=self.stat(root+'/exe',follow=True)[0]
+        running=metadata(opening)[0]
         if running!= {k:v for k,v in artifact.items() if k!='sha256'}:refuse()
-        code,out,err=self.command('sha256sum -- '+shlex.quote(root+'/exe'),4096)
-        if code or err or out!=(artifact['sha256']+'  '+root+'/exe\n').encode() or self.stat(root+'/exe',follow=True)[0]!=running or start()!=before:refuse()
+        checksum,closing,end=self._read_frames(
+            ('sha256sum -- '+shlex.quote(root+'/exe'),4096),
+            (exe_stat,4096),
+            (self._text_script(root+'/stat',4096),4096))
+        if checksum!=(artifact['sha256']+'  '+root+'/exe\n').encode() or metadata(closing)[0]!=running or start(end)!=before:refuse()
         return dict(pid=pid,start_ticks=before,uid='0',gid='0',executable=app,argv=[argv0],sha256=artifact['sha256'])
 
     def lease(self):
@@ -542,12 +614,15 @@ class Sampler:
             return (self.process(r['buddy'],executable,artifact,argv0=app) if alias else
                     self.process(r['buddy'],executable,artifact))
         r['process']=process()
-        os_release=self.text('/etc/os-release',16384).decode('ascii').splitlines()
+        os_release,kernel=self._read_frames(
+            (self._text_script('/etc/os-release',16384),16384),
+            (self._text_script('/proc/sys/kernel/osrelease',256),256))
+        os_release=os_release.decode('ascii').splitlines()
         versions=[x[len('IMG_VERSION='):] for x in os_release if x.startswith('IMG_VERSION=')]
         if len(versions)!=1:refuse()
         firmware=versions[0]
         if firmware.startswith('"') and firmware.endswith('"'):firmware=firmware[1:-1]
-        kernel=self.text('/proc/sys/kernel/osrelease',256).decode('ascii').strip()
+        kernel=kernel.decode('ascii').strip()
         if not re.fullmatch('[0-9.]+',firmware) or not kernel or any(ord(c)<32 or ord(c)>126 for c in kernel):refuse()
         r['platform']=dict(firmware=firmware,kernel=kernel)
         r['lease_observation'],r['lease_base64']=self.lease()

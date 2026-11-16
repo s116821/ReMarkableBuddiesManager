@@ -21,6 +21,15 @@ import service_stop_transport as t
 VECTORS=json.loads((Path(__file__).resolve().parents[1]/'fixtures/service-stop-profile-vectors.json').read_text())
 
 
+def logical_commands(command):
+ prefix=next((p for p in (s.PREFIX,s.hooks.BUS_PREFIX) if command.startswith(p)),None)
+ if prefix is None:return [command]
+ script=shlex.split(command)[-1]
+ if not script.endswith(s.FRAME_END):return [command]
+ scripts=script[:-len(s.FRAME_END)].split(s.FRAME_END+' && ')
+ return [prefix+shlex.quote(('exec ' if prefix==s.hooks.BUS_PREFIX else '')+part) for part in scripts]
+
+
 class Files:
  def __init__(self,profile='ordinary-manual'):
   self.vector=copy.deepcopy(next(v for v in VECTORS if v['tuple']['profile']==profile));self.raw=self.vector['raw'];self.profile=profile;self.commands=[];self.change=None;self.permission=False;self.extra_argv=False;self.bad_parent=False;self.namespace_drift=False;self.slotpaths=dict(s.SLOTS,buddy_executable=s.APPS[profile]);self.by_path={v:k for k,v in self.slotpaths.items()};self.contents={}
@@ -49,6 +58,16 @@ class Files:
   return f'{device} {inode} {uid} 0 {mode:x} {length} {1 if slot or record else 2}\n2026-01-01 00:00:00.000000001 +0000\n2026-01-01 00:00:00.000000001 +0000\n'.encode()
  def run(self,transport,command,deadline,cap):
   self.commands.append(command)
+  commands=logical_commands(command)
+  if commands==[command]:return self.reply(command)
+  stdout,stderr=b'',b''
+  for step in commands:
+   code,out,err=self.reply(step)
+   stdout+=out;stderr+=err
+   if code:return code,stdout,stderr
+   stdout+=b'\0'
+  return 0,stdout,stderr
+ def reply(self,command):
   if command.startswith('/bin/systemctl '):
    unit=command.rsplit(' ',1)[1];name={s.BUDDY:'buddy',s.HELPER:'helper',s.STOCK:'stock',s.COMPANION:'companion'}[unit]
    if '--property=UMask' in command:return 0,''.join(k+'='+v+'\n' for k,v in self.raw['vendor_policy'][name].items()).encode(),b''
@@ -145,15 +164,13 @@ class AliasFiles(Files):
   if path=='/proc/20/exe' and self.proc_inode_drift:raw=raw.replace(b'1 2 0 0 ',b'1 3 0 0 ',1)
   return raw
 
- def run(self,transport,command,deadline,cap):
+ def reply(self,command):
   parts=shlex.split(shlex.split(command)[-1]) if command.startswith(s.PREFIX) else []
   if parts and parts[0]=='readlink':
-   self.commands.append(command)
    return 0,((self.literal if parts[-1]==self.app else self.proc_path)+'\n').encode(),b''
   if self.nested_target and parts and parts[-1]==self.target and 'stat' in parts:
-   self.commands.append(command)
    return 1,b'',b''
-  return super().run(transport,command,deadline,cap)
+  return super().reply(command)
 
 
 class Channel:
@@ -171,6 +188,61 @@ class Channel:
 
 
 class SamplerTests(unittest.TestCase):
+ @unittest.skipUnless(shutil.which('sh'),'local POSIX shell frame producer')
+ def test_shell_frames_preserve_bytes_and_stop_after_failed_read(self):
+  commands=("printf 'one\n\n'", "printf 'two'")
+  shell=shutil.which('sh')
+  def run(*scripts):
+   result=subprocess.run([shell,'-c',s._framed_script(*scripts)],capture_output=True,timeout=3)
+   return result.returncode,result.stdout,result.stderr
+  deadline=time.monotonic()+5
+  self.assertEqual(s._frames(run(*commands),(5,3),deadline),[b'one\n\n',b'two'])
+  failed=run(commands[0],"printf 'err' >&2 && false",commands[1])
+  self.assertEqual(failed,(1,b'one\n\n\0',b'err'))
+  with self.assertRaises(ValueError):s._frames(failed,(5,0,3),deadline)
+ def test_frames_require_every_separator_and_individual_bound(self):
+  for out in (b'one\0two',b'one\0two\0tail',b'one\0two\0\0',b'one\0',b'four\0o\0'):
+   with self.subTest(out=out), self.assertRaises(ValueError):
+    s._frames((0,out,b''),(3,3),time.monotonic()+5)
+ def test_process_opening_facts_refuse_before_hash(self):
+  for path,bad in (
+   ('/status',b'Uid:\t1\t1\t1\t1\nGid:\t0\t0\t0\t0\n'),
+   ('/status',b'x'*16385),
+   ('/cgroup',b'0::/other.slice\n'),
+   ('/exe',None),
+  ):
+   f=Files();original=f.reply
+   artifact=dict(s.metadata(f.meta(s.APPS[f.profile]))[0],sha256=f.raw['artifacts']['buddy_executable']['sha256'])
+   def respond(command):
+    code,out,err=original(command)
+    parts=shlex.split(shlex.split(command)[-1])
+    if parts[-1]=='/proc/20'+path or 'if=/proc/20'+path in parts:
+     out=bad if bad is not None else out.replace(b'1 2 0 0 ',b'1 90 0 0 ',1)
+    return code,out,err
+   f.reply=respond
+   with self.subTest(path=path,oversize=bool(bad and len(bad)>4096)), self.assertRaises(ValueError):
+    f.sampler().process(f.raw['buddy'],s.APPS[f.profile],artifact)
+   self.assertEqual(len(f.commands),4)
+   self.assertFalse(any('sha256sum' in command for command in f.commands))
+ def test_process_post_hash_identity_and_start_tick_still_gate_acceptance(self):
+  for path in ('/exe','/stat'):
+   f=Files();original=f.reply;reads=0
+   artifact=dict(s.metadata(f.meta(s.APPS[f.profile]))[0],sha256=f.raw['artifacts']['buddy_executable']['sha256'])
+   def respond(command):
+    nonlocal reads
+    code,out,err=original(command)
+    parts=shlex.split(shlex.split(command)[-1])
+    if ((path=='/exe' and parts[:2]==['stat','-L']) or
+        (path=='/stat' and parts[0]=='dd' and 'if=/proc/20/stat' in parts)):
+     reads+=1
+     if reads==2:
+      out=out.replace(b'1 2 0 0 ',b'1 90 0 0 ',1) if path=='/exe' else out[:-2]+b'41'
+    return code,out,err
+   f.reply=respond
+   with self.subTest(path=path), self.assertRaises(ValueError):
+    f.sampler().process(f.raw['buddy'],s.APPS[f.profile],artifact)
+   self.assertEqual(reads,2)
+   self.assertEqual(len(f.commands),5)
  def test_parent_chain_is_one_ordered_command_with_original_metadata(self):
   f=Files();original=f.meta
   def meta(path,follow=False):
@@ -345,8 +417,9 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
-  # Two file tails and two alias tails per capture, across both captures.
-  self.assertEqual(len(f.commands),108)
+  # Both samples retain every observation; the fixed groups share 29 captures.
+  self.assertEqual(len(f.commands),79)
+  self.assertEqual(sum(len(logical_commands(c)) for c in f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
                        ('target_parent_drift',True),('nested_target',True),('proc_inode_drift',True)]:
