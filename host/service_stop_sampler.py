@@ -373,14 +373,15 @@ class Sampler:
         if mode&0o170000==0o100000:return None
         expected=ORDINARY_ALIAS_TARGET.encode('ascii')
         if f['uid']!='0' or f['gid']!='0' or mode!=0o120777 or nlink!=1 or int(f['length'])!=len(expected):refuse()
-        code,literal,err=self.command('readlink -- '+shlex.quote(app),256)
-        if code or err or literal!=expected+b'\n':refuse()
         # These are metadata reads only. Validate the target parents before
         # returning evidence that allows access to any target leaf contents.
         target_paths=self._parent_paths(ORDINARY_ALIAS_TARGET)
         target_script=' && '.join(self._stat_script(p) for p in target_paths)
         tail=[self._stat_script(app,allow_link=True),*(self._stat_script(p) for p,_ in parents)]
-        target_rows,tail_rows=self._read_frames((target_script,4096),(' && '.join(tail),4096))
+        literal,target_rows,tail_rows=self._read_frames(
+            ('readlink -- '+shlex.quote(app),256),
+            (target_script,4096),(' && '.join(tail),4096))
+        if literal!=expected+b'\n':refuse()
         target_parents=self._validate_parents(target_paths,self._stat_rows(target_rows,len(target_paths)))
         if self._stat_rows(tail_rows,len(tail))!=[before,*(row for _,row in parents)]:refuse()
         def parent_digest(rows):
@@ -465,14 +466,40 @@ class Sampler:
         if len(fields)<20 or fields[0] in ('Z','X','x') or not re.fullmatch('[1-9][0-9]*',fields[19]):refuse()
         return fields[19]
 
-    def _process_identity(self,service,app,argv0):
+    def _ordinary_process_opening(self, root, argv):
+        # The argv read includes its own NUL. Consume the exact argv and its
+        # separate separator before parsing the remaining record.
+        script = _framed_script(self._text_script(root+'/stat',4096),
+                                self._text_script(root+'/cmdline',len(argv)),
+                                'readlink -- '+shlex.quote(root+'/exe'))
+        cap = 4096 + len(argv) + 4096 + 3
+        code, out, err = self.command(script, cap)
+        if time.monotonic() >= self.deadline:
+            raise shared.Refusal('timeout')
+        if type(code) is not int or code or type(out) is not bytes or type(err) is not bytes or err or len(out)>cap:
+            refuse()
+        initial, separator, rest = out.partition(b'\0')
+        argv_frame = argv + b'\0'
+        if not separator or len(initial)>4096 or not rest.startswith(argv_frame):
+            refuse()
+        literal, separator, extra = rest[len(argv_frame):].partition(b'\0')
+        if not separator or extra or len(literal)>4096:
+            refuse()
+        return initial, literal
+
+    def _process_identity(self,service,app,argv0,*,ordinary=False):
         pid=service['state']['MainPID']
         if not re.fullmatch('[1-9][0-9]*',pid) or not 1<int(pid)<2**32:refuse()
         root='/proc/'+pid
-        before=self._process_start(self.text(root+'/stat',4096),pid);cmd=self.text(root+'/cmdline',len(argv0)+1)
-        if cmd!=argv0.encode()+b'\0':refuse()
-        code,exe,err=self.command('readlink -- '+shlex.quote(root+'/exe'),4096)
-        if code or err or exe!=app.encode()+b'\n':refuse()
+        if ordinary:
+            initial, exe = self._ordinary_process_opening(root, argv0.encode()+b'\0')
+            before = self._process_start(initial,pid)
+        else:
+            before=self._process_start(self.text(root+'/stat',4096),pid);cmd=self.text(root+'/cmdline',len(argv0)+1)
+            if cmd!=argv0.encode()+b'\0':refuse()
+            code,exe,err=self.command('readlink -- '+shlex.quote(root+'/exe'),4096)
+            if code or err:refuse()
+        if exe!=app.encode()+b'\n':refuse()
         exe_stat=self._stat_script(root+'/exe',follow=True)
         status,membership,opening=self._read_frames(
             (self._text_script(root+'/status',16384),16384),
@@ -502,7 +529,7 @@ class Sampler:
 
     def _ordinary_process(self, service, app, argv0, path_opening, *, sampled_sha256=None):
         expected, parents = path_opening
-        pid, before, opening = self._process_identity(service, app, argv0)
+        pid, before, opening = self._process_identity(service, app, argv0, ordinary=True)
         if opening != expected:
             refuse()
         root = '/proc/' + pid

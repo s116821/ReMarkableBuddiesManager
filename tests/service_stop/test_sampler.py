@@ -204,6 +204,48 @@ class SamplerTests(unittest.TestCase):
   for out in (b'one\0two',b'one\0two\0tail',b'one\0two\0\0',b'one\0',b'four\0o\0'):
    with self.subTest(out=out), self.assertRaises(ValueError):
     s._frames((0,out,b''),(3,3),time.monotonic()+5)
+ def test_ordinary_process_opening_accepts_raw_argv_with_distinct_frame_delimiter(self):
+  f=AliasFiles()
+  pid,start,opening=f.sampler()._process_identity(f.raw['buddy'],f.target,f.app,ordinary=True)
+  self.assertEqual((pid,start,opening),('20','40',s.metadata(f.meta(f.target))))
+  self.assertEqual(len(f.commands),2)
+  reads=[shlex.split(shlex.split(command)[-1]) for command in logical_commands(f.commands[0])]
+  self.assertEqual(reads,[
+   ['dd','bs=1','count=4097','if=/proc/20/stat','2>/dev/null'],
+   ['dd','bs=1',f'count={len(f.app.encode())+2}','if=/proc/20/cmdline','2>/dev/null'],
+   ['readlink','--','/proc/20/exe'],
+  ])
+  self.assertNotIn('stat -L',f.commands[0])
+  self.assertIn('stat -L',f.commands[1])
+ def test_invalid_ordinary_process_frames_refuse_before_followed_metadata(self):
+  f=AliasFiles()
+  initial=('20 (reader-buddy) S '+' '.join(['0']*18+['40'])).encode()+b'\0'
+  argv=f.app.encode()+b'\0\0'
+  literal=f.target.encode()+b'\n\0'
+  valid=initial+argv+literal
+  for label,reply in (
+   ('missing argv NUL',(0,initial+argv[:-1]+literal,b'')),
+   ('extra argv NUL',(0,initial+argv+b'\0'+literal,b'')),
+   ('wrong argv',(0,initial+b'/wrong\0\0'+literal,b'')),
+   ('extra argv',(0,initial+f.app.encode()+b'\0arg\0\0'+literal,b'')),
+   ('wrong link',(0,initial+argv+b'/wrong\n\0',b'')),
+   ('stat overflow',(0,b'x'*4097+b'\0'+argv+literal,b'')),
+   ('link overflow',(0,initial+argv+b'x'*4097+b'\0',b'')),
+   ('total overflow',(0,valid+b'x'*9000,b'')),
+   ('missing first delimiter',(0,initial[:-1]+argv+literal,b'')),
+   ('missing end delimiter',(0,valid[:-1],b'')),
+   ('missing link',(0,initial+argv,b'')),
+   ('extra frame',(0,valid+b'extra\0',b'')),
+   ('nonzero',(1,valid,b'')),
+   ('stderr',(0,valid,b'refused')),
+  ):
+   with self.subTest(label=label):
+    run=Mock(return_value=reply)
+    sampler=s.Sampler(Mock(),time.monotonic()+12,run=run)
+    with self.assertRaises(ValueError):
+     sampler._process_identity(f.raw['buddy'],f.target,f.app,ordinary=True)
+    run.assert_called_once()
+    self.assertNotIn('stat -L',run.call_args.args[1])
  def test_process_opening_facts_refuse_before_hash(self):
   for path,bad in (
    ('/status',b'Uid:\t1\t1\t1\t1\nGid:\t0\t0\t0\t0\n'),
@@ -433,7 +475,7 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
-  self.assertLess(len(f.commands),73)
+  self.assertEqual(len(f.commands),59)
   self.assertLess(sum(len(logical_commands(c)) for c in f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
@@ -441,6 +483,27 @@ class SamplerTests(unittest.TestCase):
    f=AliasFiles();setattr(f,change,value)
    with self.subTest(change=change), self.assertRaises(ValueError):
     f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+ def test_alias_batch_refuses_mismatched_literal_or_framing_without_target_leaf_read(self):
+  for label in ('literal','missing frame','extra frame','oversize','nonzero','stderr'):
+   with self.subTest(label=label):
+    f=AliasFiles();sampler=f.sampler()
+    def run(transport,command,deadline,cap):
+     code,out,err=f.run(transport,command,deadline,cap)
+     if 'readlink -- '+f.app not in command:
+      return code,out,err
+     if label=='literal':out=b'/incorrect\n\0'+out.split(b'\0',1)[1]
+     if label=='missing frame':out=out.split(b'\0',1)[0]+b'\0'
+     if label=='extra frame':out+=b'extra\0'
+     if label=='oversize':out=b'x'*257+b'\0'+out.split(b'\0',1)[1]
+     if label=='nonzero':code=1
+     if label=='stderr':err=b'refused'
+     return code,out,err
+    sampler.run=run
+    with self.assertRaises(ValueError):
+     sampler.ordinary_alias(f.app)
+    self.assertEqual(len(f.commands),3)
+    self.assertEqual(f.target_reads,0)
+    self.assertNotIn('sha256sum',f.commands[-1])
  def test_ordinary_bracket_hashes_the_running_executable_once_per_capture(self):
   for f in (Files(),AliasFiles()):
    f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
@@ -528,6 +591,13 @@ class SamplerTests(unittest.TestCase):
    self.assertEqual(raw['process']['argv'],[s.APPS[profile]]);self.assertEqual(raw['configuration'],dict(read='not-read',effective_mode='unverified'));self.assertEqual(len(digest),64)
    self.assertEqual(raw['lease_observation'],'occupied' if profile=='resident-installed' else 'absent-final-component')
    self.assertFalse(any('/environment' in c or '/config.json' in c or t.STOP_COMMAND in c for c in f.commands))
+   if profile=='resident-installed':
+    cmdlines=[i for i,command in enumerate(f.commands) if 'if=/proc/20/cmdline' in command]
+    self.assertTrue(cmdlines)
+    for i in cmdlines:
+     self.assertEqual(logical_commands(f.commands[i]),[f.commands[i]])
+     self.assertIn('if=/proc/20/stat',f.commands[i-1])
+     self.assertIn('readlink -- /proc/20/exe',f.commands[i+1])
  def test_permission_error_is_never_absence_and_unsafe_parent_refuses(self):
   f=Files();f.permission=True
   with self.assertRaises(ValueError):f.sampler().lease()
