@@ -1,7 +1,7 @@
 import {showPanel,readTabletFor} from './fixtures/navigation.mjs';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import {mkdir, mkdtemp, readFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, realpath, writeFile, rm} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {chromium, _electron as electron, expect} from '@playwright/test';
 import {startHelper} from '../host/browser-helper.mjs';
@@ -21,7 +21,10 @@ async function isolate(context, origin) {
   });
 }
 
-async function exercise(page, set, calls) {
+async function exercise(page, set, calls, {
+  capture = filename => page.screenshot({path: filename, fullPage: true}),
+  restoreNative = async () => {}
+} = {}) {
   await showPanel(page,'shared');
   const panel = page.getByRole('region', {name: 'Shared group preferences'});
   const status = panel.getByTestId('shared-preference-status');
@@ -51,10 +54,12 @@ async function exercise(page, set, calls) {
   const viewport = page.viewportSize() ?? {width: 1280, height: 1000};
   for (const width of [1280, 390]) {
     await page.setViewportSize({width, height: 1000});
+    assert.equal(await page.evaluate(() => globalThis.innerWidth), width);
     assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth), true);
-    await page.screenshot({path: `test-results/shared-preferences-${host}-${width}.png`, fullPage: true});
+    await capture(`test-results/shared-preferences-${host}-${width}.png`, {width, height: 1000});
   }
   await page.setViewportSize(viewport);
+  await restoreNative();
 
   await panel.getByRole('button', {name: 'Inspect and reveal private prompt'}).click();
   await expect(panel.locator('pre')).toContainText(privateText.trim());
@@ -157,13 +162,15 @@ console.log(`${packaged ? 'Production' : 'Development'} browser panel and guarde
 
 const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MANAGER_')));
 await mkdir('test-results', {recursive: true});
-const profile = await mkdtemp(path.resolve('test-results/shared-preferences-profile-'));
+const profileParent = await realpath('test-results');
+const profile = await mkdtemp(path.join(profileParent, 'shared-preferences-profile-'));
 Object.assign(env, {MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: profile});
-const app = await electron.launch({
-  executablePath: packaged ? packageExecutable : process.env.SHARED_PREFERENCES_ELECTRON,
-  args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env
-});
+let app;
 try {
+  app = await electron.launch({
+    executablePath: packaged ? packageExecutable : process.env.SHARED_PREFERENCES_ELECTRON,
+    args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env
+  });
   const page = await app.firstWindow();
   await isolate(app.context());
   assert.equal(await app.evaluate(({app}) => app.isPackaged), packaged);
@@ -204,10 +211,40 @@ try {
     await window.loadFile(path.join(root, 'dist/manager/browser/index.html'));
   }, path.resolve('tests/fixtures/shared-preferences.mjs'));
   assert.equal(await page.evaluate(() => typeof globalThis.window.require), 'undefined');
+  const nativeSize = () => app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].getContentSize());
+  const initialNativeSize = await nativeSize();
+  const resizeNative = async ([width, height]) => {
+    await app.evaluate(({BrowserWindow}, [w, h]) => {
+      BrowserWindow.getAllWindows()[0].setContentSize(w, h);
+    }, [width, height]);
+    // Each window edge can round when the OS converts between DIPs and physical pixels.
+    await expect.poll(async () => {
+      const [actualWidth, actualHeight] = await nativeSize();
+      return Math.max(Math.abs(actualWidth - width), Math.abs(actualHeight - height));
+    }).toBeLessThanOrEqual(2);
+  };
   await exercise(page,
     state => app.evaluate((_electron, value) => globalThis.sharedPreferenceHarness.set(value), state),
-    () => app.evaluate(() => globalThis.sharedPreferenceHarness.calls));
+    () => app.evaluate(() => globalThis.sharedPreferenceHarness.calls),
+    {
+      capture: async (filename, {width, height}) => {
+        await resizeNative([width, height]);
+        await expect.poll(() => page.evaluate(() => globalThis.innerWidth)).toBe(width);
+        const png = await app.evaluate(async ({BrowserWindow}) => {
+          const window = BrowserWindow.getAllWindows()[0];
+          const image = await window.webContents.capturePage(undefined, {stayHidden: true, stayAwake: true});
+          if (image.isEmpty()) throw new Error('Shared preferences desktop capture is empty');
+          return image.toPNG().toString('base64');
+        });
+        await writeFile(filename, Buffer.from(png, 'base64'));
+      },
+      restoreNative: () => resizeNative(initialNativeSize)
+    });
 } finally {
-  await app.close();
+  await app?.close();
+  assert.equal(await realpath(profile), profile);
+  assert.equal(path.dirname(profile), profileParent);
+  assert.equal(path.basename(profile).startsWith('shared-preferences-profile-'), true);
+  await rm(profile, {recursive: true, force: true});
 }
 console.log(`${packaged ? 'Packaged' : 'Source'} sandboxed Electron panel and guarded IPC passed with simulated Buddy replies.`);
