@@ -92,6 +92,8 @@ async function verifyTabletDrive(page, peer, host) {
   assert.equal(pending.applies, 1);
   assert.equal(pending.originals.length, 1);
 
+  // Retain the old document's reply bodies before Chromium can discard them.
+  await peer.replies();
   await page.reload();
   await readTabletFor(page, 'drive');
   await expect(check).toBeEnabled();
@@ -133,6 +135,30 @@ async function verifyTabletDrive(page, peer, host) {
   console.log(host + ': Tablet connection confirmation, original readback and navigation with synthetic peers');
 }
 
+function captureTabletDriveReplies(page, url) {
+  const reads = [];
+  const ignored = Symbol('no successful response');
+  const track = request => {
+    if (request.url() !== url) return;
+    // Register at request start so the drain also owns replies whose headers
+    // have not arrived. Store a settled result immediately to retain failures.
+    const read = request.response().then(response => response?.ok() ? response.json() : ignored);
+    reads.push(Promise.allSettled([read]).then(([result]) => result));
+  };
+  page.on('request', track);
+  return {
+    async replies() {
+      let results;
+      do { results = await Promise.all(reads); } while (results.length !== reads.length);
+      return results.flatMap(result => {
+        if (result.status === 'rejected') throw result.reason;
+        return result.value === ignored ? [] : [result.value];
+      });
+    },
+    detach: () => page.off('request', track)
+  };
+}
+
 let value = state('disconnected');
 const browserTablet = tabletDriveHostFixture();
 const cancelTablet = browserTablet.auth.cancel;
@@ -149,17 +175,12 @@ try {
   const context = await browser.newContext(); await isolate(context, helper.origin);
   const page = await context.newPage(); await page.goto(helper.origin + '/preview/');
   await verify(page, async v => { value = v; }, 'browser');
-  const replies = [];
-  page.on('response', response => {
-    if (!response.ok() || response.url() !== helper.origin + '/manager-tablet-drive') return;
-    const reply = response.json();
-    // Record any body failure for the final assertion without an early unhandled rejection.
-    void reply.catch(() => {});
-    replies.push(reply);
-  });
   value = connected();
   await page.reload();
-  await verifyTabletDrive(page, {...browserTablet, replies: () => Promise.all(replies)}, 'browser');
+  const capture = captureTabletDriveReplies(page, helper.origin + '/manager-tablet-drive');
+  try {
+    await verifyTabletDrive(page, {...browserTablet, replies: capture.replies}, 'browser');
+  } finally { capture.detach(); }
 } finally { await browser.close(); await helper.close(); }
 const packaged = process.argv.includes('--packaged');
 const executablePath = packaged ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`) : undefined;
