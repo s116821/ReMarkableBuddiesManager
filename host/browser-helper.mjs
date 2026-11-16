@@ -56,6 +56,8 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { WiredObserver } from './observer.mjs';
 import { DriveAuth } from './drive-auth.mjs';
+import {TabletDriveSetupHost} from './tablet-drive-setup.mjs';
+import {parseTabletDriveSetupRequest, parseTabletDriveSetupResult} from './tablet-drive-setup-protocol.mjs';
 import { parsePersonalizationRequest } from './personalization.mjs';
 import { ManagerDownloads } from './manager-downloads.mjs';
 import { parseDownloadRequest } from './manager-download-protocol.mjs';
@@ -74,8 +76,8 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   driveAuth = backupComposition?.driveAuth ?? driveAuth ?? new DriveAuth();
   const isolatedBackup = backupComposition?.isolatedBackup ?? new IsolatedBackupHost({driveAuth});
   let backupDocument = Symbol();
-  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let tabletDrive,sharedPreferences,portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [tabletDrive,sharedPreferences,portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer,io,beforeIO:()=>invalidatePeers(basic)});
@@ -103,6 +105,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   sharedPreferences = new SharedPreferencesHost({observer, io, beforeIO: () => invalidatePeers(sharedPreferences)});
   const backupPreferences = new IsolatedBackupPreferences({composition: backupComposition, isolatedBackup, portable, observer,
     restore, restoreDestination: backupRestoreDestination});
+  tabletDrive = new TabletDriveSetupHost({observer, driveAuth, io, beforeIO: () => invalidatePeers(tabletDrive)});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -413,6 +416,23 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       catch { refuse(503); }
       return;
     }
+    if (url.pathname === '/manager-tablet-drive') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' ||
+          req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const chunks = []; let bytes = 0, request;
+      try {
+        for await (const chunk of req) { bytes += chunk.length; if (bytes > 512) return refuse(413); chunks.push(chunk); }
+        request = parseTabletDriveSetupRequest(strictJson(Buffer.concat(chunks)));
+      } catch { return refuse(400); }
+      if (closing) return refuse(503);
+      try {
+        const value = await tabletDrive.request(request);
+        if (closing || req.aborted) return refuse(409);
+        parseTabletDriveSetupResult(tabletDrive.assertCurrent(value), request);
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value));
+      } catch { return refuse(409); }
+      return;
+    }
     if (url.pathname === '/manager-drive') {
       if (req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
       let body = '', bytes = 0;
@@ -477,6 +497,7 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       () => observer.cancel(),
       () => localMode.dispose(),
       () => isolatedRoot.dispose(),
+      () => tabletDrive.dispose(),
       () => download,
       () => stopped,
       () => firstConfiguration.dispose(),

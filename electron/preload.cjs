@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
     cancel: () => ipcRenderer.invoke('manager:drive:cancel'), check: () => ipcRenderer.invoke('manager:drive:check'),
     disconnect: () => ipcRenderer.invoke('manager:drive:disconnect'), revoke: id => ipcRenderer.invoke('manager:drive:revoke', id) }),
   downloads: Object.freeze({ request: (...args) => args.length !== 1 ? Promise.reject(new Error('Download input refused')) : ipcRenderer.invoke('manager:download', args[0]) }),
+  tabletDriveSetup: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:tabletDriveSetup', args[0]) : Promise.reject(Error('Tablet Drive arity refused')),
   memoryQuery: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory query input refused')) : ipcRenderer.invoke('manager:memoryQuery', args[0]),
   sharedPreferences: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:sharedPreferences', args[0]) : Promise.reject(Error('Shared preferences arity refused')),
   portableConfiguration: (...args) => args.length===1?ipcRenderer.invoke('manager:portableConfiguration',args[0]):Promise.reject(new Error('Portable preferences arity refused')),

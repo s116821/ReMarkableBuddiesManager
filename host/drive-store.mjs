@@ -30,6 +30,10 @@ export class DriveStore {
   appendIsolatedRootOperation(record, expectedDigest) {
     return this.operation({ operation: 'append-isolated-root-operation', record, expected_digest: expectedDigest });
   }
+  tabletDriveOperations() { return this.operation({ operation: 'read-tablet-drive-operations' }); }
+  saveTabletDriveOperations(value, expectedDigest) {
+    return this.operation({ operation: 'save-tablet-drive-operations', value, expected_digest: expectedDigest });
+  }
   save(value, client_digest, grant_digest) { return this.operation({ operation: 'save', value, client_digest, grant_digest }); }
   disconnect(client_digest, grant_digest) { return this.operation({ operation: 'disconnect', client_digest, grant_digest }); }
 }

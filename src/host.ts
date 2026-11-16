@@ -1,4 +1,6 @@
 import type {SharedPreferenceAdapter} from './shared-preferences';
+import type {TabletDriveSetupAdapter} from './tablet-drive-setup';
+import {parseTabletDriveSetupResult, type TabletDriveSetupRequest} from '../host/tablet-drive-setup-protocol.mjs';
 import {BACKUP_PREFERENCES_RESPONSE_BYTES, ISOLATED_BACKUP_RESPONSE_BYTES, parseIsolatedBackupJson,
   parseIsolatedBackupBridgeRequest, parseIsolatedBackupBridgeResult,
   type IsolatedBackupBridgeRequest, type IsolatedBackupBridgeResult} from '../host/isolated-backup-protocol.mjs';
@@ -172,6 +174,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly memoryQuery?: MemoryAdapter['memoryQuery'];
   readonly downloads?: DownloadAdapter;
   readonly driveAuth?: DriveAdapter;
+  readonly tabletDriveSetup?: TabletDriveSetupAdapter;
   readonly inspectRuntime?: RuntimeAdapter['inspectRuntime'];
   readonly personalization?: PersonalizationAdapter['personalization'];
   readonly contract_version: 1;
@@ -202,6 +205,12 @@ export const unsupportedDrive: DriveAdapter = { status: async () => unavailableD
   check: async () => unavailableDrive(), cancel: async () => unavailableDrive(), disconnect: async () => unavailableDrive(), revoke: async () => unavailableDrive() };
 export function currentHost(): ManagerHost {
   return window.managerHost ?? Object.freeze({
+    tabletDriveSetup: async (request: TabletDriveSetupRequest) => {
+      if (!isLoopbackHelper()) throw Error('Tablet Drive helper unavailable');
+      const read = legacyBridge<TabletDriveSetupRequest, unknown>('/manager-tablet-drive', 'Tablet Drive', 8192,
+        {timeout: 20000, helperFailure: true, responseLabel: 'Tablet Drive', gate: 'Tablet Drive helper unavailable'});
+      return parseTabletDriveSetupResult(await read(request), request);
+    },
     downloads: {request: legacyBridge<import('../host/manager-download-protocol.mjs').DownloadRequest, unknown>(
       '/manager-download', 'Download host', 2048, {timeout: 10000, helperFailure: true, responseLabel: 'Download', gate: 'Download host unavailable'})}, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
     sharedPreferences: async (request: SharedPreferenceRequest | null) => {

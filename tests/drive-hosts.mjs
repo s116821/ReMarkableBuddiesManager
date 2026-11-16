@@ -1,11 +1,12 @@
-import {showPanel} from './fixtures/navigation.mjs';
-import { chromium, _electron as electron } from '@playwright/test';
+import {readTabletFor, showPanel} from './fixtures/navigation.mjs';
+import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import { startHelper } from '../host/browser-helper.mjs';
 import { unavailableDrive } from '../host/drive-protocol.mjs';
+import {tabletDriveHostFixture} from './fixtures/tablet-drive-hosts.mjs';
 const root = await mkdtemp(path.join(os.tmpdir(), 'manager-drive-ui-'));
 await mkdir('test-results', { recursive: true });
 const state = status => ({ ...unavailableDrive(), status, error: null });
@@ -44,17 +45,106 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined'); assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
   console.log(`${host}: actual sandbox/shared UI with explicit synthetic auth-state responses; no live Google proof`);
 }
+async function verifyTabletDrive(page, peer, host) {
+  await readTabletFor(page, 'drive');
+  const panel = page.getByTestId('tablet-drive-setup');
+  const status = panel.getByTestId('tablet-drive-status');
+  const connect = panel.getByRole('button', {name: 'Connect this tablet…', exact: true});
+  const save = panel.getByRole('button', {name: 'Save tablet connection', exact: true});
+  const check = panel.getByRole('button', {name: 'Check original tablet change', exact: true});
+  const consent = panel.getByRole('link', {name: 'Continue tablet sign-in with Google', exact: true});
+  await expect(connect).toBeEnabled();
+  await connect.click();
+  await expect(status).toContainText('Finish signing in with Google');
+  await expect(save).toHaveCount(0);
+  if (host === 'browser') {
+    await expect(consent).toHaveAttribute('href', /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
+  } else await expect(consent).toHaveCount(0);
+  await peer.completeConsent();
+  await expect(panel.getByText('Synthetic account', {exact: true})).toBeVisible();
+  await expect(save).toBeEnabled();
+  const review = await peer.snapshot();
+  assert.equal(review.takes, 1);
+  assert.equal(review.applies, 0, 'showing the account does not write a credential');
+  await save.click();
+  await expect(status).toContainText(/result is unknown|response was lost/i);
+  const pending = await peer.snapshot();
+  assert.equal(pending.applies, 1);
+  assert.equal(pending.originals.length, 1);
+
+  await page.reload();
+  await readTabletFor(page, 'drive');
+  await expect(check).toBeEnabled();
+  await check.click();
+  await expect(status).toContainText('The requested credential state is present on the tablet');
+  await expect(check).toHaveCount(0);
+  const recovered = await peer.snapshot();
+  assert.equal(recovered.applies, 1);
+  assert.deepEqual(recovered.readbacks, [pending.originals[0].readback]);
+  assert.deepEqual(recovered.originals, []);
+
+  await peer.holdBegin();
+  await connect.click();
+  await expect.poll(async () => (await peer.snapshot()).held).toBe(true);
+  try { await showPanel(page, 'cloud'); }
+  finally { await peer.releaseBegin(); }
+  await expect.poll(async () => (await peer.snapshot()).finishes).toBe(recovered.finishes + 1);
+  await expect.poll(async () => (await peer.snapshot()).cancels).toBeGreaterThan(recovered.cancels);
+  await showPanel(page, 'drive');
+  await expect(connect).toBeEnabled();
+  await expect(save).toHaveCount(0);
+  await expect(consent).toHaveCount(0);
+  const navigated = await peer.snapshot();
+  assert.equal(navigated.takes, 1);
+  assert.equal(navigated.applies, 1);
+  assert.deepEqual(navigated.originals, []);
+
+  const replies = await peer.replies();
+  for (const state of ['authorizing', 'ready', 'unknown', 'observed']) {
+    assert.ok(replies.some(reply => reply.tablet_drive.state === state), 'Expected a reduced ' + state + ' reply');
+  }
+  const serialized = JSON.stringify(replies);
+  for (const privateValue of ['synthetic-client-secret', 'synthetic-access', 'synthetic-refresh', 'synthetic-account',
+    'client_secret', 'access_token', 'refresh_token', 'account_permission_id', 'credential_b64', 'binding_sha256',
+    'mode_token', 'parent_identity_sha256', 'local_mode_raw']) {
+    assert.equal(serialized.includes(privateValue), false, privateValue);
+    await expect(panel).not.toContainText(privateValue);
+  }
+  console.log(host + ': Tablet connection confirmation, original readback and navigation with synthetic peers');
+}
+
 let value = state('disconnected');
-const fixtureAuth = { status: async () => value, begin: async () => { const start = ['disconnected', 'cancelled'].includes(value.status); if (start) value = state('connecting'); return { state: value, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null }; },
-  cancel: async () => value = state('cancelled'), check: async () => value, disconnect: async () => value = state('disconnected'),
-  revoke: async id => { assert.equal(id, '1'.repeat(64)); return value = { ...connected(), status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; }, dispose: () => {} };
-const helper = await startHelper({ root: path.resolve('dist/manager/browser'), driveAuth: fixtureAuth });
+const browserTablet = tabletDriveHostFixture();
+const cancelTablet = browserTablet.auth.cancel;
+const fixtureAuth = Object.assign(browserTablet.auth, {
+  status: async () => value, begin: async () => { const start = ['disconnected', 'cancelled'].includes(value.status); if (start) value = state('connecting'); return { state: value, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null }; },
+  cancel: () => { cancelTablet(); if (value.status === 'connecting') value = state('cancelled'); return value; },
+  check: async () => value, disconnect: async () => value = state('disconnected'),
+  revoke: async id => { assert.equal(id, '1'.repeat(64)); return value = { ...connected(), status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; }
+});
+const helper = await startHelper({ root: path.resolve('dist/manager/browser'), observer: browserTablet.observer,
+  driveAuth: fixtureAuth, isolatedRootStore: {isolatedRootOperations: () => ({value: null, digest: null})} });
 const browser = await chromium.launch();
-try { const context = await browser.newContext(); await isolate(context, helper.origin); const page = await context.newPage(); await page.goto(helper.origin + '/preview/'); await verify(page, async v => { value = v; }, 'browser'); }
-finally { await browser.close(); await helper.close(); }
+try {
+  const context = await browser.newContext(); await isolate(context, helper.origin);
+  const page = await context.newPage(); await page.goto(helper.origin + '/preview/');
+  await verify(page, async v => { value = v; }, 'browser');
+  const replies = [];
+  page.on('response', response => {
+    if (!response.ok() || response.url() !== helper.origin + '/manager-tablet-drive') return;
+    const reply = response.json();
+    // Record any body failure for the final assertion without an early unhandled rejection.
+    void reply.catch(() => {});
+    replies.push(reply);
+  });
+  value = connected();
+  await page.reload();
+  await verifyTabletDrive(page, {...browserTablet, replies: () => Promise.all(replies)}, 'browser');
+} finally { await browser.close(); await helper.close(); }
 const packaged = process.argv.includes('--packaged');
 const executablePath = packaged ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`) : undefined;
-const app = await electron.launch({ executablePath, args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...process.env,
+const shellEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MANAGER_')));
+const app = await electron.launch({ executablePath, args: [...(packaged ? [] : ['.']), ...(process.platform === 'linux' ? ['--disable-gpu'] : [])], env: { ...shellEnv,
   MANAGER_TEST: '1', MANAGER_TEST_DEFER_LOAD: '1', MANAGER_TEST_PROFILE: root, MANAGER_DRIVE_AUTH_ROOT: path.join(root, 'missing'), MANAGER_DRIVE_PYTHON: process.env.MANAGER_DRIVE_PYTHON ?? (process.platform === 'linux' ? '/usr/bin/python3' : process.env.MANAGER_WIRED_PYTHON) } });
 try {
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
@@ -83,4 +173,51 @@ try {
     });
     await writeFile(`test-results/drive-${host}.png`, Buffer.from(png, 'base64'));
   });
+  // Keep the actual IPC handler and preload. Substitute only provider,
+  // protected storage and wired peers below the handler.
+  await app.evaluate(({ app, ipcMain }, fixturePath) => {
+    const require = process.mainModule.require.bind(process.mainModule);
+    const path = require('node:path');
+    const hostRoot = app.isPackaged ? path.join(process.resourcesPath, 'host') : path.join(app.getAppPath(), 'host');
+    const {DriveAuth} = require(path.join(hostRoot, 'drive-auth.mjs'));
+    const {DriveStore} = require(path.join(hostRoot, 'drive-store.mjs'));
+    const {WiredObserver} = require(path.join(hostRoot, 'observer.mjs'));
+    const peers = require(fixturePath).tabletDriveHostFixture();
+    globalThis.tabletDriveFixture = peers;
+    for (const name of ['snapshot', 'beginTabletAuthorization', 'tabletAuthorizationStatus',
+      'takeTabletAuthorization', 'ownsAuthorizationUrl', 'cancel']) {
+      DriveAuth.prototype[name] = function (...args) {
+        const value = peers.auth[name](...args);
+        this.generation = peers.auth.generation;
+        return value;
+      };
+    }
+    for (const name of ['tabletDriveOperations', 'saveTabletDriveOperations']) {
+      DriveStore.prototype[name] = (...args) => peers.store[name](...args);
+    }
+    WiredObserver.prototype.observe = async function () {
+      const result = await peers.observer.observe();
+      this.lastObservation = result.observation;
+      return result;
+    };
+    WiredObserver.prototype.run = (...args) => peers.observer.run(...args);
+    const channel = 'manager:tabletDriveSetup';
+    const invoke = ipcMain._invokeHandlers.get(channel);
+    if (typeof invoke !== 'function') throw Error('Tablet Drive IPC handler missing');
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, async (...args) => {
+      const value = await invoke(...args);
+      peers.replies.push(value);
+      return value;
+    });
+  }, path.resolve('tests/fixtures/tablet-drive-hosts.mjs'));
+  await app.evaluate((_electron, v) => { globalThis.driveFixture = v; }, connected());
+  await page.reload();
+  await verifyTabletDrive(page, {
+    completeConsent: () => app.evaluate(() => globalThis.tabletDriveFixture.completeConsent()),
+    holdBegin: () => app.evaluate(() => globalThis.tabletDriveFixture.holdBegin()),
+    releaseBegin: () => app.evaluate(() => globalThis.tabletDriveFixture.releaseBegin()),
+    snapshot: () => app.evaluate(() => globalThis.tabletDriveFixture.snapshot()),
+    replies: () => app.evaluate(() => globalThis.tabletDriveFixture.replies)
+  }, host);
 } finally { await app.close(); await rm(root, { recursive: true, force: true }); }

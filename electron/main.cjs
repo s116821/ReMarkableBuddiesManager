@@ -117,8 +117,10 @@ app.whenReady().then(async () => {
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {SharedPreferencesHost, registerSharedPreferenceHandler} = await import(pathToFileURL(path.join(hostRoot, 'shared-preferences.mjs')).href);
-  const io=new MaintenanceIO();let sharedPreferences,portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [sharedPreferences,portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const {TabletDriveSetupHost} = await import(pathToFileURL(path.join(hostRoot, 'tablet-drive-setup.mjs')).href);
+  const {parseTabletDriveSetupRequest, parseTabletDriveSetupResult} = await import(pathToFileURL(path.join(hostRoot, 'tablet-drive-setup-protocol.mjs')).href);
+  const io=new MaintenanceIO();let tabletDrive,sharedPreferences,portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [tabletDrive,sharedPreferences,portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,isolatedRoot,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -146,6 +148,7 @@ app.whenReady().then(async () => {
   localMode=new LocalModeChoiceHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(localMode)});
   isolatedRoot=new IsolatedRootHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(isolatedRoot)});
   const {driveAuth, isolatedBackup} = backupComposition;
+  tabletDrive = new TabletDriveSetupHost({observer: rawObserver, driveAuth, io, beforeIO: () => invalidatePeers(tabletDrive)});
   const {IsolatedBackupPreferences, isManagerMainFrame, watchBackupDocument,
     registerIsolatedBackupHandler, registerPortableConfigurationHandler} =
     await import(pathToFileURL(path.join(hostRoot, 'isolated-backup-preferences.mjs')).href);
@@ -316,6 +319,23 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Personalization caller refused');
     return observer.personalization(args[0]);
   });
+  ipcMain.handle('manager:tabletDriveSetup', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1) throw Error('Tablet Drive caller refused');
+    const request = parseTabletDriveSetupRequest(args[0]);
+    const value = await tabletDrive.request(request);
+    if (!authorized(event, [])) { tabletDrive.invalidate(); throw Error('Tablet Drive caller changed'); }
+    const result = parseTabletDriveSetupResult(tabletDrive.assertCurrent(value), request);
+    const url = result.tablet_drive.authorizationUrl;
+    if (request.action === 'begin' && url && driveAuth.ownsAuthorizationUrl(url) && process.env.MANAGER_TEST !== '1') {
+      try { await shell.openExternal(url); }
+      catch {
+        await tabletDrive.request({action: 'cancel', reference: result.tablet_drive.reference});
+        throw Error('Google sign-in could not be opened');
+      }
+      if (!authorized(event, [])) { tabletDrive.invalidate(); throw Error('Tablet Drive caller changed'); }
+    }
+    return tabletDrive.assertCurrent(result);
+  });
   for (const action of ['status', 'begin', 'cancel', 'check', 'disconnect', 'revoke']) ipcMain.handle(`manager:drive:${action}`, async (event, ...args) => {
     const allowed = action === 'revoke' ? args.length === 1 && typeof args[0] === 'string' && /^[a-f0-9]{64}$/.test(args[0]) : args.length === 0;
     if (!allowed || !authorized(event, [])) throw new Error('Drive caller refused');
@@ -341,6 +361,7 @@ app.whenReady().then(async () => {
       () => observer.cancel(),
       () => localMode.dispose(),
       () => isolatedRoot.dispose(),
+      () => tabletDrive.dispose(),
       () => download,
       () => firstConfiguration.dispose(),
       () => backupPreferences.dispose(),

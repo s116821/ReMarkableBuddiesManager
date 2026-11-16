@@ -1,10 +1,12 @@
 """Synthetic channel controls; no SSH/device/provider contact."""
 import base64
+import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -23,6 +25,40 @@ def choose(body=ORIGINAL):
 
 
 PROVISION_ORIGINAL = {'control_version': 1, 'operation': BOOT, 'expected': ORIGINAL['expected']}
+
+COLLECTION = '44444444-4444-4444-8444-444444444444'
+DRIVE_BINDING = hashlib.sha256(
+    b'["synthetic-desktop-client","fixture-account","44444444-4444-4444-8444-444444444444"]').hexdigest()
+DRIVE_ORIGINAL = {'config_sha256': 'b' * 64, 'credential_path_sha256': 'c' * 64, 'parent_identity_sha256': 'd' * 64,
+                  'device': BOOT, 'epoch': COLLECTION, 'mode': {'kind': 'local-only'}, 'mode_token': ORIGINAL['expected'],
+                  'slot': {'kind': 'absent'}}
+DRIVE_INSPECT = {'control_version': 1, 'action': 'inspect', 'expected_mode': ORIGINAL['expected']}
+
+
+def drive_input(body):
+    if isinstance(body, dict):
+        body = json.dumps(body).encode()
+    return dict(REQUEST, selector=q.DRIVE, input_base64=base64.b64encode(body).decode('ascii'))
+
+
+def drive_credential():
+    return {'credential_version': 1, 'client_id': 'synthetic-desktop-client', 'client_secret': None,
+            'access_token': 'synthetic-access', 'refresh_token': 'synthetic-refresh',
+            'expires_at': int(time.time()) + 3600, 'scopes': [q.DRIVE_SCOPE],
+            'account_permission_id': 'fixture-account', 'collection': COLLECTION}
+
+
+def drive_apply(credential):
+    if isinstance(credential, dict):
+        credential = json.dumps(credential).encode()
+    return {'control_version': 1, 'action': 'apply', 'operation': BOOT, 'original': DRIVE_ORIGINAL,
+            'change': {'kind': 'create', 'collection': COLLECTION, 'binding_sha256': DRIVE_BINDING,
+                       'credential_b64': base64.b64encode(credential).decode('ascii')}}
+
+
+def drive_report(action, outcome, current=None):
+    return {'report_version': 1, 'action': action, 'operation': None if action in ('inspect', None) else BOOT,
+            'outcome': outcome, 'current': current, 'disk_readback_verified': current is not None}
 
 
 def provision(body=None, budget_ms=45000):
@@ -43,6 +79,99 @@ class Transport(unittest.TestCase):
         transport = Mock()
         transport.open_session.return_value = channel
         return transport, channel
+
+    def test_drive_opens_only_the_existing_fixed_selector_and_preserves_exact_bytes(self):
+        raw_credential = json.dumps(drive_credential()).encode()
+        raw_credential = raw_credential.ljust(48 * 1024, b' ')
+        raw_request = json.dumps(drive_apply(raw_credential), indent=2).encode().ljust(68 * 1024, b' ')
+        self.assertEqual(len(raw_request), 68 * 1024)
+        outbound = json.dumps(drive_input(raw_request)).encode()
+        v = q.request(outbound)
+        self.assertGreater(len(outbound), q.MAX_REQUEST)
+        self.assertLessEqual(len(outbound), q.MAX_DRIVE_REQUEST)
+        current = dict(DRIVE_ORIGINAL, slot={'kind': 'present', 'sha256': hashlib.sha256(raw_credential).hexdigest(),
+            'metadata_sha256': 'e' * 64, 'binding_sha256': DRIVE_BINDING, 'collection': COLLECTION})
+        reply = json.dumps(drive_report('apply', 'verified', current)).encode().ljust(q.MAX_RESPONSE-1, b' ') + b'\n'
+        transport, channel = self.channel(reply)
+        channel.eof_received = True
+        channel.closed = False
+        with patch.object(q.shared, 'inspect', side_effect=[{'boot_id': BOOT}, {'boot_id': BOOT}]) as inspect:
+            result = q.execute(transport, v)
+        self.assertEqual(inspect.call_count, 2)
+        channel.exec_command.assert_called_once_with(q.PREFIX + 'drive-credential --sync-mode-input -')
+        channel.sendall.assert_called_once_with(raw_request)
+        channel.shutdown_write.assert_called_once()
+        channel.close.assert_called_once()
+        self.assertEqual(base64.b64decode(result['_local_mode_raw']['stdout_base64']), reply)
+        envelope = dict(contract_version=1, status='observed',
+                        observation={'boot_id': BOOT, 'connection_id': 'b'*64},
+                        local_mode_raw=result['_local_mode_raw'])
+        self.assertLess(len(json.dumps(envelope).encode()) + 1, q.MAX_REQUEST)
+        self.assertNotIn('synthetic-refresh', json.dumps(envelope))
+
+    def test_drive_request_bounds_and_rejected_shape_precede_inspection(self):
+        credential = drive_credential()
+        raw = json.dumps(credential).encode()
+        inspect = json.dumps(DRIVE_INSPECT).encode()
+        original = drive_apply(credential)
+        invalid = (
+            drive_input(inspect.ljust(68 * 1024 + 1, b' ')),
+            drive_input(drive_apply(raw.ljust(48 * 1024 + 1, b' '))),
+            drive_input(drive_apply(b'{"credential_version":1,' + raw[1:])),
+            drive_input(drive_apply(dict(credential, scopes=['unexpected']))),
+            drive_input(drive_apply(dict(credential, expires_at=1))),
+            drive_input(drive_apply(dict(credential, refresh_token='unsafe\nvalue'))),
+            drive_input(dict(original, original=dict(DRIVE_ORIGINAL, mode={'kind': 'shared-group'}))),
+            drive_input(dict(original, change=dict(original['change'], binding_sha256='f'*64))),
+            drive_input(dict(DRIVE_INSPECT, control_version=1.0)),
+            drive_input(dict(DRIVE_INSPECT, config_path='unexpected')),
+            drive_input(b'{"control_version":1,"action":"inspect","action":"apply"}'),
+            dict(drive_input(DRIVE_INSPECT), budget_ms=12001),
+            dict(drive_input(DRIVE_INSPECT), input_base64='Zh=='),
+        )
+        for v in invalid:
+            with self.assertRaises(ValueError):
+                q.request(json.dumps(v).encode())
+        for v in (REQUEST, choose(), provision()):
+            raw_old = json.dumps(v).encode().ljust(q.MAX_REQUEST + 1, b' ')
+            with self.assertRaises(ValueError):
+                q.request(raw_old)
+        with patch.object(q.shared, 'inspect') as inspect_call:
+            with self.assertRaises(ValueError):
+                q.execute(Mock(), invalid[0])
+        inspect_call.assert_not_called()
+
+    def test_drive_receipts_require_eof_exit_and_same_mode_context(self):
+        v = drive_input(DRIVE_INSPECT)
+        good = json.dumps(drive_report('inspect', 'observed', DRIVE_ORIGINAL)).encode() + b'\n'
+        for raw, eof, closed in [
+            (good, False, True),
+            (good + b' ', True, False),
+            (good[:-1].ljust(q.MAX_RESPONSE, b' ') + b'\n', True, False),
+            (json.dumps(drive_report('inspect', 'observed', dict(DRIVE_ORIGINAL,
+                        mode_token={'actor': BOOT, 'sha256': 'e'*64}))).encode() + b'\n', True, False),
+            (json.dumps(dict(drive_report('inspect', 'observed', DRIVE_ORIGINAL),
+                             refresh_token='PRIVATE_CANARY')).encode() + b'\n', True, False),
+        ]:
+            transport, channel = self.channel(raw)
+            channel.eof_received, channel.closed = eof, closed
+            with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+                try:
+                    result = q.execute(transport, v)
+                except ValueError as error:
+                    self.assertNotIn('PRIVATE_CANARY', str(error))
+                else:
+                    self.assertEqual(result['_local_mode_raw'], {'status': 'unavailable', 'stdout_base64': None})
+            channel.sendall.assert_called_once()
+            channel.close.assert_called_once()
+        transport, channel = self.channel(good)
+        channel.eof_received, channel.closed = True, False
+        with patch.object(q.shared, 'inspect', side_effect=[{'boot_id': BOOT}, {'boot_id': COLLECTION}]):
+            with self.assertRaises(q.shared.Refusal) as error:
+                q.execute(transport, v)
+        self.assertEqual(error.exception.status, 'cable-lost')
+        channel.sendall.assert_called_once()
+        channel.close.assert_called_once()
 
     def test_provision_accepts_only_the_exact_v1_input_with_its_own_budget(self):
         raw = json.dumps(PROVISION_ORIGINAL, indent=2).encode() + b' \n'

@@ -577,6 +577,33 @@
     </div>
     @if (app.driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
     <p class="mt-4 text-sm text-muted">Signing in does not change tablet settings or back up data. Use Cloud backups to inspect supported existing backups; replacement-device restore is not supported.</p>
+    @if (app.host.tabletDriveSetup) {
+      <div class="mt-6 border-t pt-5" data-testid="tablet-drive-setup">
+        <h3>Tablet connection</h3>
+        <p class="text-sm text-muted">Save a separate Google connection on your wired tablet. Buddy can then use it while this Manager is closed.</p>
+        <p class="my-3" role="status" data-testid="tablet-drive-status">{{ app.tabletDrive().status }}</p>
+        @if (app.drive().account) {
+          <div class="flex flex-wrap gap-3">
+            <button class="ui-button ui-button-primary" type="button" (click)="app.setupTabletDrive('connect')" [disabled]="!app.canSetupTabletDrive() || app.tabletDrive().view?.state === 'authorizing' || app.tabletDrive().view?.state === 'ready'">Connect this tablet…</button>
+            @if (app.tabletDrive().view) { <button class="ui-button ui-button-secondary" type="button" (click)="app.cancelTabletDrive()">Cancel tablet setup</button> }
+          </div>
+        }
+        @if (app.tabletDrive().view; as setup) {
+          @if (app.host.kind === 'browser' && setup.authorizationUrl) { <a class="ui-button ui-button-primary mt-3 inline-block" [href]="setup.authorizationUrl" target="_blank" rel="noopener noreferrer">Continue tablet sign-in with Google</a> }
+          @if (setup.state === 'ready') {
+            <div class="my-4 rounded border p-4">
+              <p>{{ setup.intent === 'remove' ? 'Remove the Google connection from the connected tablet. Existing backups will remain in Drive.' : 'Save this Google connection on the connected tablet.' }}</p>
+              @if (setup.account) { <p class="font-semibold break-words">{{ setup.account.label }}</p> }
+              <p class="text-sm text-muted">This does not change your backup mode or the Manager’s Google connection.</p>
+              <button class="ui-button ui-button-primary mt-3" type="button" (click)="app.confirmTabletDrive()" [disabled]="!app.canSetupTabletDrive()">{{ setup.intent === 'remove' ? 'Remove tablet connection' : 'Save tablet connection' }}</button>
+            </div>
+          }
+        }
+        @if (app.tabletDrive().uncertain) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.refreshTabletDrive()" [disabled]="app.tabletDrive().busy">Refresh pending changes</button> }
+        @for (record of app.tabletDrive().retained; track record.reference) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.checkTabletDrive(record)" [disabled]="!app.canSetupTabletDrive() || !record.status_available">Check original tablet change</button> }
+        <details class="mt-4 text-sm"><summary>Remove the tablet’s Google connection</summary><p>This removes only the tablet’s saved credentials. It does not delete backups or revoke Google access.</p><button class="ui-button ui-button-secondary mt-2" type="button" (click)="app.setupTabletDrive('remove')" [disabled]="!app.canSetupTabletDrive()">Review removal…</button></details>
+      </div>
+    }
   </section>
 }
 @if (app.isView('backup', 'mode')) {

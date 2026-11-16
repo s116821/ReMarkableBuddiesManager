@@ -12,6 +12,9 @@ import time
 import unittest
 
 script = Path(__file__).resolve().parents[2] / 'host/drive_store.py'
+sys.path.insert(0, str(script.parent))
+from wired_observer import Refusal
+
 spec = importlib.util.spec_from_file_location('drive_store', script)
 store = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(store)
@@ -29,6 +32,31 @@ def original(n=1, *, actor=None, epoch=None, padding=0):
                      'mode': {'kind': 'isolated-backup', 'backup': uid(4), 'binding_sha256': 'c' * 64}},
         'input_base64': base64.b64encode(raw).decode('ascii'), 'input_sha256': store.identity(raw),
     }
+
+
+def tablet_original(n=1, *, intent='connect', connection=None):
+    def uid(index):
+        return f'00000000-0000-4000-8000-{index:012d}'
+    present = {'kind': 'present', 'sha256': 'c' * 64, 'binding_sha256': 'd' * 64, 'collection': uid(10)}
+    absent = {'kind': 'absent'}
+    return {
+        'reference': f'{n:064x}', 'connection_id': connection or f'{100 + n:064x}', 'boot_id': uid(2), 'intent': intent,
+        'readback': {
+            'control_version': 1, 'action': 'readback', 'operation': uid(100 + n),
+            'original': {'config_sha256': 'a' * 64, 'credential_path_sha256': 'b' * 64,
+                         'parent_identity_sha256': 'f' * 64, 'device': uid(3), 'epoch': uid(11),
+                         'mode': {'kind': 'local-only'}, 'mode_token': {'actor': uid(1), 'sha256': 'a' * 64},
+                         'slot': absent if intent == 'connect' else dict(present, metadata_sha256='e' * 64)},
+            'desired': present if intent == 'connect' else absent,
+        },
+    }
+
+
+def tablet_binding(entry):
+    original = entry['readback']['original']
+    slot = entry['readback']['desired'] if entry['intent'] == 'connect' else original['slot']
+    return {'connection_id': entry['connection_id'], 'device': original['device'],
+            'collection': slot['collection'], 'binding_sha256': slot['binding_sha256']}
 
 
 class Custody(unittest.TestCase):
@@ -70,6 +98,122 @@ class Custody(unittest.TestCase):
         request = {'operation': 'append-isolated-root-operation', 'record': entry, 'expected_digest': expected}
         return subprocess.run([sys.executable, '-I', '-B', str(script), str(self.root)],
                               input=json.dumps(request).encode(), capture_output=True, timeout=5)
+
+    def tablet_read(self):
+        return store.operate(self.root, {'operation': 'read-tablet-drive-operations'})
+
+    def tablet_save(self, originals, expected=None, *, bindings=()):
+        return store.operate(self.root, {'operation': 'save-tablet-drive-operations',
+            'value': {'version': 1, 'originals': originals, 'bindings': list(bindings)}, 'expected_digest': expected})
+
+    def test_tablet_originals_survive_restart_and_resolve_by_cas(self):
+        self.save({'token': 'synthetic-original-alone'})
+        credentials = [store.private_read(self.root, key) for key in ('client', 'grant')]
+        self.assertEqual(self.tablet_read(), {'digest': None, 'value': None})
+        first, second = tablet_original(), tablet_original(2, intent='remove')
+        binding = tablet_binding(second)
+        prior = self.tablet_save([first])
+        current = self.tablet_save([first, second], prior['digest'], bindings=[binding])
+        child = subprocess.run([sys.executable, '-I', '-B', str(script), str(self.root)],
+            input=b'{"operation":"read-tablet-drive-operations"}', capture_output=True, timeout=5)
+        self.assertEqual(child.returncode, 0)
+        self.assertEqual(child.stderr, b'')
+        self.assertEqual(json.loads(child.stdout), {
+            'digest': current['digest'], 'value': {'version': 1, 'originals': [first, second], 'bindings': [binding]}})
+        self.assertNotIn(b'synthetic-original-alone', child.stdout)
+        with self.assertRaises(ValueError):
+            self.tablet_save([], prior['digest'])
+        resolved = self.tablet_save([second], current['digest'], bindings=[binding])
+        empty = self.tablet_save([], resolved['digest'], bindings=[binding])
+        self.assertEqual(self.tablet_read(), {
+            'digest': empty['digest'], 'value': {'version': 1, 'originals': [], 'bindings': [binding]}})
+        self.assertEqual([store.private_read(self.root, key) for key in ('client', 'grant')], credentials)
+        self.assertFalse((self.root / store.NAMES[store.RETENTION]).exists())
+
+    def test_tablet_binding_shape_capacity_and_unique_target(self):
+        entries = [tablet_binding(tablet_original(n)) for n in range(1, 10)]
+        shared_connection = dict(entries[0], device='00000000-0000-4000-8000-000000000099')
+        initial = self.tablet_save([], bindings=[entries[0], shared_connection])
+        for bindings in (
+            [entries[0], entries[0]],
+            [entries[0], dict(entries[0], collection=shared_connection['device'])],
+            [dict(entries[0], credential_b64='synthetic-no-storage')],
+            [dict(entries[0], collection='00000000-0000-0000-0000-000000000000')],
+            [dict(entries[0], device=entries[0]['device'] + '\n')],
+            [dict(entries[0], binding_sha256=True)],
+            entries,
+        ):
+            with self.assertRaises(ValueError):
+                self.tablet_save([], initial['digest'], bindings=bindings)
+        updated = self.tablet_save([], initial['digest'], bindings=entries[:8])
+        with self.assertRaises(ValueError):
+            self.tablet_save([], initial['digest'])
+        self.assertEqual(self.tablet_read(), {
+            'digest': updated['digest'], 'value': {'version': 1, 'originals': [], 'bindings': entries[:8]}})
+
+    def test_pending_tablet_original_reserves_binding_capacity_across_cas_writers(self):
+        entries = [tablet_binding(tablet_original(n)) for n in range(1, 9)]
+        pending = tablet_original(9)
+        full = self.tablet_save([], bindings=entries)
+        before = self.tablet_read()
+        with self.assertRaises(ValueError):
+            self.tablet_save([pending], full['digest'], bindings=entries)
+        self.assertEqual(self.tablet_read(), before)
+        same = self.tablet_save([tablet_original(1)], full['digest'], bindings=entries)
+        reserved = self.tablet_save([pending], same['digest'], bindings=entries[:7])
+        before = self.tablet_read()
+        with self.assertRaises(ValueError):
+            self.tablet_save([pending], reserved['digest'], bindings=entries)
+        self.assertEqual(self.tablet_read(), before)
+        final = self.tablet_save([], reserved['digest'], bindings=[*entries[:7], tablet_binding(pending)])
+        self.assertEqual(self.tablet_read()['digest'], final['digest'])
+
+    def test_tablet_originals_cannot_be_overwritten_or_replaced_in_same_cas(self):
+        first = tablet_original()
+        version = self.tablet_save([first])
+        changed = deepcopy(first)
+        changed['readback']['desired']['sha256'] = '0' * 64
+        same_connection = tablet_original(2, connection=first['connection_id'])
+        for originals in ([changed], [same_connection], [first, same_connection],
+                          [first, dict(tablet_original(2), reference=first['reference'])]):
+            with self.assertRaises(ValueError):
+                self.tablet_save(originals, version['digest'])
+        self.assertEqual(self.tablet_read()['value']['originals'], [first])
+        complete = self.tablet_save([tablet_original(n) for n in range(1, 9)], version['digest'])
+        with self.assertRaises(ValueError):
+            self.tablet_save([tablet_original(n) for n in range(1, 10)], complete['digest'])
+        self.assertEqual(len(self.tablet_read()['value']['originals']), 8)
+
+    def test_tablet_store_rejects_corrupt_or_secret_bearing_custody(self):
+        path = self.root / store.NAMES[store.TABLET_DRIVE]
+        sample = tablet_original()
+        token = b'synthetic-secret-bearing-record'
+        extra = dict(sample, extra=token.decode())
+        secret = deepcopy(sample)
+        secret['readback']['desired']['credential_b64'] = token.decode()
+        wrong_action = deepcopy(sample)
+        wrong_action['readback']['action'] = 'apply'
+        foreign_binding = tablet_original(intent='remove')
+        foreign_binding['readback']['original']['mode'] = {
+            'kind': 'isolated-backup', 'backup': foreign_binding['boot_id'], 'binding_sha256': '1' * 64}
+        for record in [extra, secret, wrong_action, foreign_binding, dict(sample, intent='remove')]:
+            with self.assertRaises(ValueError):
+                self.tablet_save([record])
+            self.assertFalse(path.exists())
+        for raw in [
+            b'{"version":1,"version":1,"originals":[],"bindings":[]}',
+            store.compact({'version': 1, 'originals': [secret], 'bindings': []}),
+            store.compact({'version': 1, 'originals': []}),
+            store.compact({'version': 1, 'originals': [], 'bindings': []}).ljust(store.MAX_TABLET_DRIVE + 1),
+        ]:
+            with store.exclusive(path) as stream:
+                stream.write(raw)
+            with self.assertRaises((ValueError, Refusal)):
+                self.tablet_read()
+            with self.assertRaises((ValueError, Refusal)):
+                self.tablet_save([sample], store.identity(raw))
+            self.assertEqual(path.read_bytes(), raw)
+            path.unlink()
 
     def test_isolated_append_cas_and_capacity_preserve_credential_bytes(self):
         self.save({'token': 'synthetic-original'})
@@ -131,9 +275,9 @@ class Custody(unittest.TestCase):
         ]:
             with store.exclusive(path) as stream:
                 stream.write(raw)
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, Refusal)):
                 self.retained()
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, Refusal)):
                 self.append(second, store.identity(raw))
             self.assertEqual(path.read_bytes(), raw)
             path.unlink()

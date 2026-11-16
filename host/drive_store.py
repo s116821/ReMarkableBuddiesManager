@@ -12,13 +12,19 @@ import uuid
 
 MAXIMUM = 49152
 NAMES = {'client': 'client.json', 'grant': 'grant.json',
-         'isolated-root-operations': 'isolated-root-operations.json'}
+         'isolated-root-operations': 'isolated-root-operations.json',
+         'tablet-drive-operations': 'tablet-drive-operations.json'}
 RETENTION = 'isolated-root-operations'
 RETENTION_LOCK = '.isolated-root-operations.lock'
 MAX_ORIGINALS = 8
 MAX_ORIGINAL_INPUT = 512
 MAX_ORIGINAL_RECORD = 2048
 MAX_RETENTION = 20480
+TABLET_DRIVE = 'tablet-drive-operations'
+TABLET_DRIVE_LOCK = '.tablet-drive-operations.lock'
+MAX_TABLET_DRIVE_RECORD = 4096
+MAX_TABLET_DRIVE = 40 * 1024
+MAX_TABLET_DRIVE_BINDINGS = 8
 
 
 def require(value):
@@ -254,6 +260,26 @@ def retention_writer(path):
             os.close(fd)
 
 
+def replace_retained(root, kind, maximum, root_identity, previous, raw):
+    stage = root / ('.' + kind.removesuffix('-operations') + '-stage-' + uuid.uuid4().hex)
+    stream = exclusive(stage)
+    staged = os.fstat(stream.fileno())
+    try:
+        with stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        require(checked_root(root) == root_identity and private_read(root, kind, maximum) == previous)
+        os.replace(stage, root / NAMES[kind])
+        require(checked_root(root) == root_identity and private_read(root, kind, maximum) == raw)
+        return {'committed': True, 'digest': identity(raw)}
+    finally:
+        if checked_root(root) == root_identity and stage.exists():
+            current = stage.stat(follow_symlinks=False)
+            if (current.st_dev, current.st_ino) == (staged.st_dev, staged.st_ino):
+                stage.unlink(missing_ok=True)
+
+
 def retain(root, request):
     if request['operation'] == 'read-isolated-root-operations':
         exact(request, 'operation')
@@ -275,30 +301,88 @@ def retain(root, request):
         raw = compact(value) + b'\n'
         require(len(raw) <= MAX_RETENTION)
         retained_value(raw)
-        stage = root / ('.isolated-root-stage-' + uuid.uuid4().hex)
-        stream = exclusive(stage)
-        staged = os.fstat(stream.fileno())
-        try:
-            with stream:
-                stream.write(raw)
-                stream.flush()
-                os.fsync(stream.fileno())
-            require(checked_root(root) == root_identity
-                    and private_read(root, RETENTION, MAX_RETENTION) == previous)
-            os.replace(stage, root / NAMES[RETENTION])
-            require(checked_root(root) == root_identity and private_read(root, RETENTION, MAX_RETENTION) == raw)
-            return {'committed': True, 'digest': identity(raw)}
-        finally:
-            if checked_root(root) == root_identity and stage.exists():
-                current = stage.stat(follow_symlinks=False)
-                if (current.st_dev, current.st_ino) == (staged.st_dev, staged.st_ino):
-                    stage.unlink(missing_ok=True)
+        return replace_retained(root, RETENTION, MAX_RETENTION, root_identity, previous, raw)
+
+
+def tablet_drive_value(raw):
+    if raw is None:
+        return {'version': 1, 'originals': [], 'bindings': []}
+    require(len(raw) <= MAX_TABLET_DRIVE)
+    value = parse(raw)
+    exact(value, 'version originals bindings')
+    originals, bindings = value['originals'], value['bindings']
+    require(type(value['version']) is int and value['version'] == 1
+            and type(originals) is list and len(originals) <= MAX_ORIGINALS
+            and type(bindings) is list and len(bindings) <= MAX_TABLET_DRIVE_BINDINGS)
+    targets = set()
+    for binding in bindings:
+        exact(binding, 'connection_id device collection binding_sha256')
+        require(digest(binding['connection_id']) and uuid_text(binding['device'])
+                and uuid_text(binding['collection']) and digest(binding['binding_sha256']))
+        target = (binding['connection_id'], binding['device'])
+        require(target not in targets)
+        targets.add(target)
+    # The isolated Python entry omits its own directory from sys.path.
+    # Reuse the adjacent wired validator's closed, nonsecret readback schema.
+    host = str(Path(__file__).resolve().parent)
+    if host not in sys.path:
+        sys.path.insert(0, host)
+    from local_mode_choice_transport import drive_request
+
+    references, connections = set(), set()
+    for record in originals:
+        exact(record, 'reference connection_id boot_id intent readback')
+        require(len(compact(record)) <= MAX_TABLET_DRIVE_RECORD)
+        reference, connection = record['reference'], record['connection_id']
+        require(digest(reference) and digest(connection) and uuid_text(record['boot_id'])
+                and reference not in references and connection not in connections)
+        request = record['readback']
+        exact(request, 'control_version action operation original desired')
+        require(request['action'] == 'readback' and record['intent'] in ('connect', 'remove'))
+        validated = drive_request(compact(request))
+        require(validated['desired']['kind'] == ('present' if record['intent'] == 'connect' else 'absent'))
+        references.add(reference)
+        connections.add(connection)
+        # A pending original may need a binding on resolution. Reserve its
+        # target immediately, counting an existing binding for it only once.
+        targets.add((connection, validated['original']['device']))
+        require(len(targets) <= MAX_TABLET_DRIVE_BINDINGS)
+    return value
+
+
+def tablet_drive_operations(root, request):
+    if request['operation'] == 'read-tablet-drive-operations':
+        exact(request, 'operation')
+        raw = private_read(root, TABLET_DRIVE, MAX_TABLET_DRIVE)
+        return {'value': tablet_drive_value(raw) if raw is not None else None, 'digest': identity(raw)}
+    exact(request, 'operation value expected_digest')
+    expected = request['expected_digest']
+    require(expected is None or digest(expected))
+    raw = compact(request['value']) + b'\n'
+    proposed = tablet_drive_value(raw)
+    root_identity = checked_root(root)
+    require(root_identity is not None)
+    with retention_writer(root / TABLET_DRIVE_LOCK):
+        require(checked_root(root) == root_identity)
+        previous = private_read(root, TABLET_DRIVE, MAX_TABLET_DRIVE)
+        require(identity(previous) == expected)
+        original = tablet_drive_value(previous)['originals']
+        by_reference = {entry['reference']: entry for entry in original}
+        by_connection = {entry['connection_id'] for entry in original}
+        for entry in proposed['originals']:
+            existing = by_reference.get(entry['reference'])
+            # CAS can drop a resolved original. It cannot rewrite it or install
+            # a different original for its target in the same transaction.
+            require(entry == existing if existing is not None else entry['connection_id'] not in by_connection)
+        return replace_retained(root, TABLET_DRIVE, MAX_TABLET_DRIVE, root_identity, previous, raw)
 
 
 def operate(root, request):
     operation = request.get('operation')
     if operation in ('read-isolated-root-operations', 'append-isolated-root-operation'):
         return retain(root, request)
+    if operation in ('read-tablet-drive-operations', 'save-tablet-drive-operations'):
+        return tablet_drive_operations(root, request)
     require(operation in {'read-client', 'read-grant', 'save', 'disconnect'})
     if operation.startswith('read-'):
         require(set(request) == {'operation'})
