@@ -244,11 +244,14 @@ class Sampler:
     def command(self,script,cap=32768):
         return self.run(self.transport,PREFIX+shlex.quote(script),self.deadline,cap)
 
-    def stat(self,path,follow=False,missing=False,allow_link=False):
+    @staticmethod
+    def _stat_script(path,follow=False,allow_link=False):
         # Every caller uses a compiled fixed path or a range-checked MainPID path.
         command=('stat -L ' if follow else 'stat ' if allow_link else 'test ! -L '+shlex.quote(path)+' && stat ')
-        command+='-c '+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(path)
-        code,out,err=self.command(command,4096)
+        return command+'-c '+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(path)
+
+    def stat(self,path,follow=False,missing=False,allow_link=False):
+        code,out,err=self.command(self._stat_script(path,follow,allow_link),4096)
         if code:
             # Exact C-locale envelopes, under independently bracketed parents.
             expected=tuple(("stat: "+prefix+" '"+path+"': No such file or directory\n").encode()
@@ -258,24 +261,31 @@ class Sampler:
         if err:refuse()
         return metadata(out)
 
-    def parents(self,path):
-        parents=[str(parent) for parent in reversed(PurePosixPath(path).parents)]
-        if not parents:return []
-        # One command per original chain, no cache. Only metadata is collected
-        # before host validation; callers cannot read leaf bytes/hashes yet.
-        scripts=['test ! -L '+shlex.quote(p)+' && stat -c '+shlex.quote(STAT_FORMAT)+' -- '+shlex.quote(p)
-                 for p in parents]
+    def _stat_chain(self,scripts):
         code,out,err=self.command(' && '.join(scripts),4096)
         if code or err:refuse()
         lines=out.split(b'\n')
-        if len(lines)!=3*len(parents)+1 or lines[-1]!=b'':refuse()
+        if len(lines)!=3*len(scripts)+1 or lines[-1]!=b'':refuse()
+        return [metadata(b'\n'.join(lines[i:i+3])+b'\n') for i in range(0,3*len(scripts),3)]
+
+    def parents(self,path):
+        parents=[str(parent) for parent in reversed(PurePosixPath(path).parents)]
+        if not parents:return []
+        # The host validates parents before any access to leaf contents.
+        rows=self._stat_chain([self._stat_script(p) for p in parents])
         result=[]
-        for i,p in enumerate(parents):
-            info=metadata(b'\n'.join(lines[3*i:3*i+3])+b'\n')
+        for p,info in zip(parents,rows,strict=True):
             f=info[0];mode=int(f['mode'])
             if f['uid']!='0' or f['gid']!='0' or mode&0o170000!=0o040000 or mode&0o022:refuse()
             result.append((p,info))
         return result
+
+    def _verify_path_tail(self,path,before,parents,*,allow_link=False):
+        # Group the existing trailing leaf and parent reads in their original order.
+        # Every row must match the corresponding fresh, validated opening metadata.
+        scripts=[self._stat_script(path,allow_link=allow_link)]
+        scripts.extend(self._stat_script(p) for p,_ in parents)
+        if self._stat_chain(scripts)!=[before,*(row for _,row in parents)]:refuse()
 
     def file(self,path,limit=32768,contents=False,private=False):
         parents=self.parents(path);before=self.stat(path)
@@ -293,7 +303,7 @@ class Sampler:
             if not re.fullmatch('[a-f0-9]{64}  '+re.escape(path)+'\n',text):refuse()
             checksum=text[:64]
             out=None
-        if self.stat(path)!=before or self.parents(path)!=parents:refuse()
+        self._verify_path_tail(path,before,parents)
         return dict(f,sha256=checksum),out
 
     def ordinary_alias(self, app):
@@ -308,7 +318,7 @@ class Sampler:
         code,literal,err=self.command('readlink -- '+shlex.quote(app),256)
         if code or err or literal!=expected+b'\n':refuse()
         target_parents=self.parents(ORDINARY_ALIAS_TARGET)
-        if self.stat(app,allow_link=True)!=before or self.parents(app)!=parents:refuse()
+        self._verify_path_tail(app,before,parents,allow_link=True)
         def parent_digest(rows):
             return hashlib.sha256(json.dumps(rows,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
         return dict(f,links='1',literal=ORDINARY_ALIAS_TARGET,

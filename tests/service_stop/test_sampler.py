@@ -73,11 +73,21 @@ class Files:
   if parts[0]=='stat' and '-f' in parts:return 0,b'63677270\n',b''
   if parts.count('stat')>1:
    chunks=[]
-   for i in range(0,len(parts),11):
-    pair=parts[i:i+10];path=pair[3]
-    assert pair==['test','!','-L',path,'&&','stat','-c',s.STAT_FORMAT,'--',path]
-    if i+10<len(parts):assert parts[i+10]=='&&'
+   i=0
+   while i<len(parts):
+    if parts[i]=='test':
+     path=parts[i+3]
+     assert parts[i:i+5]==['test','!','-L',path,'&&']
+     i+=5
+    else:
+     path=parts[i+4]
+     assert i==0 and path==getattr(self,'app',None)
+    assert parts[i:i+5]==['stat','-c',s.STAT_FORMAT,'--',path]
     chunks.append(self.meta(path))
+    i+=5
+    if i<len(parts):
+     assert parts[i]=='&&'
+     i+=1
    return 0,b''.join(chunks),b''
   if 'stat' in parts:
    legacy='/home/root/.local/lib/reader-buddy'
@@ -209,8 +219,26 @@ class SamplerTests(unittest.TestCase):
   f.meta=meta
   with self.assertRaises(ValueError):f.sampler().file('/opt/bin/reader-buddy')
   self.assertEqual(reads,2)
-  chains=[c for c in f.commands if shlex.split(shlex.split(c)[-1]).count('stat')==3]
-  self.assertEqual(len(chains),2);self.assertEqual(chains[0],chains[1])
+  self.assertEqual(len(f.commands),4)
+  before,leaf,read,after=[shlex.split(c)[-1] for c in f.commands]
+  self.assertEqual(read,'sha256sum -- /opt/bin/reader-buddy')
+  self.assertEqual(after,leaf+' && '+before)
+ def test_batched_tail_refuses_incomplete_overfull_or_failed_metadata(self):
+  for name,mutate in [
+   ('short',lambda out:(0,out[:-1],b'')),
+   ('extra',lambda out:(0,out+b'\n',b'')),
+   ('exit',lambda out:(1,out,b'')),
+   ('stderr',lambda out:(0,out,b'warning')),
+  ]:
+   f=Files();instance=f.sampler()
+   def run(transport,command,deadline,cap):
+    code,out,err=f.run(transport,command,deadline,cap)
+    if len(f.commands)==4:return mutate(out)
+    return code,out,err
+   instance.run=run
+   with self.subTest(name=name), self.assertRaises(ValueError):
+    instance.file('/opt/bin/reader-buddy')
+   self.assertEqual(len(f.commands),4)
  @unittest.skipUnless(sys.platform=='linux','local GNU parent chain')
  def test_actual_gnu_parent_batch_producer_and_unsafe_missing_symlink(self):
   self.exercise_parent_batch()
@@ -317,6 +345,8 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
+  # Two file tails and two alias tails per capture, across both captures.
+  self.assertEqual(len(f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
                        ('target_parent_drift',True),('nested_target',True),('proc_inode_drift',True)]:
