@@ -129,6 +129,13 @@ async function verify(page, control) {
   await expect(selection).toHaveCount(0);
 }
 
+async function beginHeldCloudScan(page, control, expectedReads) {
+  await showPanel(page,'cloud');
+  await control.set('hold', true);
+  await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).click();
+  await expect.poll(() => control.get('readCount')).toBe(expectedReads);
+}
+
 async function verifyElectronReload(page, control) {
   const request = value => page.evaluate(value => globalThis.managerHost.isolatedBackup(value), value);
   const status = operation => request({version: 1, action: 'status', operation});
@@ -475,9 +482,7 @@ async function verifyPackagedBrowser(executablePath, env) {
       assert.equal(await app.evaluate(() => globalThis.fixtureFirstConfigurationCalls), 0);
 
       assert.equal(await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().length), 0);
-      await control.set('hold', true);
-      await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).click();
-      await expect.poll(() => control.get('readCount')).toBe(2);
+      await beginHeldCloudScan(page, control, 2);
     } finally { await browser.close(); }
     await verifyQuitWaitsForRestore(app);
   } finally { await app.close(); }
@@ -504,7 +509,12 @@ async function verifySourceBrowser() {
       await isolate(context, helper.origin);
       const page = await context.newPage();
       await page.goto(helper.origin + '/preview/');
-      await verify(page, {get: key => drive.control[key], set: (key, value) => { drive.control[key] = value; }});
+      const control = {get: key => drive.control[key], set: (key, value) => { drive.control[key] = value; }};
+      await verify(page, control);
+      // Exercise the packaged helper's final transition from Tablet back to Cloud
+      // backups without relying on that destination having stayed mounted.
+      await showPanel(page,'tablet');
+      await beginHeldCloudScan(page, control, drive.control.readCount + 1);
     } finally { await browser.close(); }
   } finally { await helper.close(); }
   assert.equal(tabletObservations, 0);
