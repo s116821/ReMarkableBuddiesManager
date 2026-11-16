@@ -1,3 +1,4 @@
+import {showPanel} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron } from '@playwright/test';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,6 +19,7 @@ async function isolate(context, origin) {
   });
 }
 async function verify(page, publish, host, capture = () => page.screenshot({ path: `test-results/drive-${host}.png`, fullPage: true })) {
+ await showPanel(page,'drive');
   const status = page.getByTestId('drive-status');
   await status.filter({ hasText: 'Not signed in' }).waitFor();
   const sign = page.getByRole('button', { name: 'Sign in to Google Drive', exact: true });
@@ -53,7 +55,7 @@ const app = await electron.launch({ executablePath, args: [...(packaged ? [] : [
 try {
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
-  await page.getByTestId('drive-status').filter({ hasText: 'Google Drive setup required' }).waitFor();
+  await showPanel(page,'drive');await page.getByTestId('drive-status').filter({ hasText: 'Google Drive setup required' }).waitFor();
   assert.equal(await page.evaluate(() => window.managerHost.driveAuth.revoke('wrong').then(() => 'accepted', () => 'refused')), 'refused');
   // Actual packaged module/custody missing-config refusal above; response substitution below
   // is an explicit renderer/preload/IPC fixture, not OAuth or Windows filesystem evidence.
