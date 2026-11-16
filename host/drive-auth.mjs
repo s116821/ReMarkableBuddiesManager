@@ -395,7 +395,21 @@ export class DriveAuth {
       const abort = new AbortController(); this.work = abort; this.state = publicState('checking');
       const oauth = this.oauth(baseline.config, undefined, abort.signal); oauth.setCredentials(baseline.saved.tokens);
       let credentials = baseline.saved.tokens;
-      if (credentials.expiry_date <= Date.now() + 60000) credentials = (await oauth.refreshAccessToken()).credentials;
+      if (credentials.expiry_date <= Date.now() + 60000) {
+        let refreshToken = credentials.refresh_token;
+        // The library emits the provider response before restoring the old refresh token.
+        const captureRefreshToken = updated => {
+          if (Object.hasOwn(updated, 'refresh_token')) refreshToken = updated.refresh_token;
+        };
+        oauth.once('tokens', captureRefreshToken);
+        try {
+          const refreshed = await oauth.refreshAccessToken();
+          require(text(refreshToken), 'authorization-required');
+          credentials = { ...refreshed.credentials, refresh_token: refreshToken };
+        } finally {
+          oauth.off('tokens', captureRefreshToken);
+        }
+      }
       const observed = await this.account(oauth, credentials, baseline.config.clientId, baseline.saved.account);
       require(generation === this.generation && !abort.signal.aborted, 'cancelled');
       const committed = this.store.save({ schema: 1, clientId: baseline.config.clientId, ...observed, checkedAt: Date.now() }, baseline.clientRecord.digest, baseline.grantRecord.digest);
