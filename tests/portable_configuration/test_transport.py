@@ -97,6 +97,20 @@ class Completion(unittest.TestCase):
         self.assertGreaterEqual(elapsed, .03)
 
 class Transport(unittest.TestCase):
+    def test_capacities_preferences_never_import_enrollment(self):
+        settings = dict(product_settings=dict(schema_version=1, export_destination='capacities'))
+        candidate = dict(portable_configuration_version=1, settings=settings)
+        body = dict(portable_import_version=1,operation=BOOT,base_sha256='b'*64,config_path_sha256=q.PATH_HASH,artifact=candidate)
+        value = request('prepare', body)
+        self.assertEqual(q.request(json.dumps(value).encode()), value)
+        for injected in [
+            {**settings, 'capacities_export': dict(grant_id=BOOT)},
+            dict(product_settings={**settings['product_settings'], 'grant_id':BOOT}),
+            dict(product_settings={**settings['product_settings'], 'access_token':'SYNTHETIC_PRIVATE_TOKEN'}),
+        ]:
+            with self.assertRaises(ValueError):
+                q.request(json.dumps(request('prepare', {**body, 'artifact':{**candidate, 'settings':injected}})).encode())
+
     def test_exact_private_packets_limits_numeric_alias_and_no_unsafe_selector(self):
         prepare=dict(portable_import_version=1,operation=BOOT,base_sha256='b'*64,config_path_sha256=q.PATH_HASH,artifact=ARTIFACT)
         for selector,body in [('export',None),('inspect',None),('prepare',prepare),('apply',dict(intent=INTENT,artifact=ARTIFACT)),('status',dict(intent=INTENT))]:

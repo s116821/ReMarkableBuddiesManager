@@ -30,7 +30,7 @@ export function parsePortableArtifact(v){
   for(const [key,x] of Object.entries(value)){
    if(key==='schema_version'){if(x!==1)fail();}
    else if(['reader_enabled','writer_enabled','enabled'].includes(key)){if(typeof x!=='boolean')fail();}
-   else if(key==='export_destination'){if(!['mem','disabled'].includes(x))fail();}
+   else if(key==='export_destination'){if(!['mem','capacities','disabled'].includes(x))fail();}
    else if(!text(x)||x.includes('\0')||new TextEncoder().encode(x).length>16384)fail();
   }
  }

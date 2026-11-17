@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {productFixture,begin,save,identity,defer} from './fixtures/product-settings.mjs';
 const view=v=>v.product_settings;
+
+test('Capacities is an explicit saved preference and clearing it restores the Mem default',async()=>{
+ const f=productFixture();
+ let reference=await begin(f);
+ const saved=view(await save(f,reference,{export_destination:{action:'set',value:'capacities'}}));
+ assert.equal(saved.state,'verified');
+ assert.deepEqual(saved.current.export_destination,{origin:'declared',value:'capacities'});
+ reference=await begin(f);
+ const cleared=view(await save(f,reference,{export_destination:{action:'clear'}}));
+ assert.equal(cleared.state,'verified');
+ assert.deepEqual(cleared.current.export_destination,{origin:'default',value:'mem'});
+ assert.ok(f.calls.every(c=>c.action==='product-settings'));
+});
 test('single dirty declaration, exact retained packet, uncertainty and original status only',async()=>{
  const f=productFixture();f.state.onApply=()=>{throw Error('lost');};const reference=await begin(f),r=view(await save(f,reference));assert.equal(r.state,'unknown');
  assert.equal(r.current,null);assert.equal(r.retained.length,1);assert.deepEqual(f.calls[1].body.changes,{reader_enabled:{action:'set',value:false}});

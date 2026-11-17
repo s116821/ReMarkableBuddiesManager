@@ -39,7 +39,7 @@ def artifact(v):
             elif key in ('reader_enabled', 'writer_enabled', 'enabled'):
                 valid = type(field) is bool
             elif key == 'export_destination':
-                valid = field in ('mem', 'disabled')
+                valid = field in ('mem', 'capacities', 'disabled')
             else:
                 valid = isinstance(field, str) and '\0' not in field and len(field.encode('utf-8')) <= 16384
             if not valid:

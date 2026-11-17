@@ -43,7 +43,7 @@ def uuid(value):
 
 
 def field_value(name, value):
-    return isinstance(value, str) and value in ('mem', 'disabled') if name == 'export_destination' else isinstance(value, bool)
+    return isinstance(value, str) and value in ('mem', 'capacities', 'disabled') if name == 'export_destination' else isinstance(value, bool)
 
 
 def changes(value):
