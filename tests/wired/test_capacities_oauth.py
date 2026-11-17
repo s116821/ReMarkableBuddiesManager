@@ -170,6 +170,54 @@ class CapacitiesTransport(unittest.TestCase):
         self.assertTrue(exchange.possible)
         self.assertEqual(channel.sendall.call_count, 1)
 
+    def test_disconnect_attests_running_actor_before_one_exact_stdin_frame(self):
+        transport = Mock()
+        channel = transport.open_session.return_value
+        space = str(uuid4())
+        grant = {'space_id': space, 'expected_grant_sha256': 'd' * 64}
+        request = {'selector': 'disconnect', 'budget_ms': 60000, 'binding': BINDING,
+                   'executable_sha256': SHA, **grant}
+        self.assertEqual(oauth.request(json.dumps(request).encode()), request)
+        with self.assertRaises(ValueError):
+            oauth.request(json.dumps(dict(request, proof=PROOF)).encode())
+        receipt = {'contract_version': 1, 'status': 'revoked', **BINDING, 'space_id': space,
+                   'phase': 'revoked', 'grant_sha256': SHA, 'observed_operation_id': BINDING['operation_id']}
+        output = json.dumps(receipt).encode() + b'\n'
+        channel.recv.side_effect = [ATTESTATION, output, b'']
+        channel.recv_stderr.return_value = b''
+        channel.recv_exit_status.return_value = 0
+        sent = []
+        channel.sendall.side_effect = lambda body: sent.append(json.loads(body))
+        mutation = oauth.Exchange(None, SHA, Mock())
+        self.assertEqual(oauth.actor(transport, 'disconnect', BINDING, time.monotonic() + 60,
+                                     mutation, grant), receipt)
+        self.assertEqual(sent, [{'contract_version': 1, 'selector': 'disconnect', 'budget_ms': 30000,
+                                 'binding': BINDING, **grant}])
+        mutation.pre_send.assert_called_once()
+        self.assertTrue(mutation.possible)
+        with self.assertRaises(ValueError):
+            oauth.receipt(dict(receipt, observed_operation_id=str(uuid4())), 'disconnect', BINDING, space)
+        with self.assertRaises(ValueError):
+            oauth.receipt(dict(receipt, grant_sha256=None), 'disconnect', BINDING, space)
+        with self.assertRaises(ValueError):
+            oauth.receipt(dict(receipt, status='observed', grant_sha256=None), 'grant-status', BINDING, space)
+        unresolved = dict(receipt, status='unresolved', phase='local-disabled', grant_sha256=None)
+        self.assertEqual(oauth.receipt(unresolved, 'disconnect', BINDING, space), unresolved)
+
+    def test_changed_grant_selection_refuses_before_disconnect_actor(self):
+        space = str(uuid4())
+        value = {'selector': 'disconnect', 'binding': BINDING, 'space_id': space}
+        capture = dict(CAPTURE, connection={'space_id': space, 'grant_id': str(uuid4())})
+        mutation = oauth.Exchange(None, SHA, Mock())
+        with patch.object(oauth.shared, 'inspect', return_value={'boot_id': BINDING['boot_id']}), \
+             patch.object(oauth, 'installed_metadata', return_value=('same',)), \
+             patch.object(oauth, 'actor', return_value=capture) as call:
+            with self.assertRaises(oauth.shared.Refusal):
+                oauth.execute(Mock(), value, time.monotonic() + 60, lambda _: Mock(), mutation)
+        call.assert_called_once()
+        self.assertEqual(call.call_args.args[1], 'capture-connection')
+        self.assertFalse(mutation.possible)
+
     def test_status_frame_has_no_secret_or_substituted_original(self):
         body = {'selector': 'status', 'budget_ms': 12000, 'binding': BINDING, 'proof': PROOF}
         with self.assertRaises(ValueError):

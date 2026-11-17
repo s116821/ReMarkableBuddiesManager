@@ -1,5 +1,5 @@
 // Host-side consent only. The trusted tablet broker owns redemption and tokens.
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { performance } from 'node:perf_hooks';
 import * as oauth from 'oauth4webapi';
@@ -21,6 +21,9 @@ const CONSENT_MS = 300000;
 const REGISTRATION = null;
 
 const state = status => Object.freeze({ contract_version: 1, status });
+const connectionState = (status, connectionRef = null) => Object.freeze({contract_version: 1, status, connectionRef});
+const pendingRevocation = (report, operation = report.observed_operation_id) => report.phase === 'revocation-pending' &&
+  digest(report.grant_sha256) && uuid(report.observed_operation_id) && report.observed_operation_id === operation;
 const text = (value, max) => typeof value === 'string' && value.length > 0 &&
   value.length <= max && /^[\x21-\x7e]+$/.test(value);
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -166,6 +169,9 @@ export class CapacitiesConsent {
   #flow = null;
   #uncertain = null;
   #statusCheck = null;
+  #connectionTask = null;
+  #connection = null;
+  #disconnectUnknown = null;
   #disposed = false;
   #state;
 
@@ -212,13 +218,16 @@ export class CapacitiesConsent {
     this.#disposed = true;
     this.cancel();
     this.#statusCheck?.abort();
+    this.#connectionTask?.abort();
+    this.#connection = null;
   }
 
   async begin() {
     if (this.#disposed || this.#state.status === 'unconfigured' || this.#flow ||
-        this.#uncertain || this.#statusCheck) {
+        this.#uncertain || this.#statusCheck || this.#connectionTask || this.#disconnectUnknown) {
       return this.#state;
     }
+    this.#connection = null;
     const { clientId, issuer, lifetime, port, requestMs, readMs } = this.#policy;
     const flow = { clientId, abort: new AbortController(), deadline: performance.now() + lifetime,
       state: oauth.generateRandomState(), verifier: oauth.generateRandomCodeVerifier(),
@@ -312,6 +321,89 @@ export class CapacitiesConsent {
       this.#finish(flow, receiptStatus(receipt, flow.binding));
     } catch {
       this.#finish(flow, flow.dispatched ? 'reconcile-required' : 'selection-changed');
+    }
+  }
+
+  #connectionReady() {
+    return !this.#disposed && !this.#flow && !this.#uncertain && !this.#statusCheck && !this.#connectionTask;
+  }
+
+  async inspectConnection() {
+    if (!this.#connectionReady()) return connectionState('busy');
+    const controller = new AbortController();
+    this.#connectionTask = controller;
+    this.#connection = null;
+    try {
+      const original = this.#disconnectUnknown;
+      const read = phase(controller.signal, Infinity, this.#policy.readMs * (original ? 1 : 2));
+      if (original) {
+        const report = await this.#tablet.disconnectStatus(original, read);
+        if (!read.signal.aborted && report.status === 'observed') {
+          if (report.phase === 'revoked' && digest(report.grant_sha256)
+              && report.observed_operation_id === original.binding.operation_id) {
+            this.#disconnectUnknown = null;
+            return connectionState('revoked');
+          }
+          if (report.phase === 'local-disabled' && digest(report.grant_sha256)) {
+            this.#disconnectUnknown = null;
+            return connectionState('local-disabled');
+          }
+          if (pendingRevocation(report, original.binding.operation_id)) return connectionState('revocation-pending');
+        }
+        return connectionState('reconcile-required');
+      }
+      const snapshot = await this.#tablet.selectedConnection(randomUUID(), read);
+      if (read.signal.aborted) return connectionState('unavailable');
+      if (!snapshot) return connectionState('no-connection');
+      const {selected, report} = snapshot;
+      if (report.status !== 'observed') return connectionState('unavailable');
+      if (['active', 'pending-rotation'].includes(report.phase) && digest(report.grant_sha256)) {
+        const ref = randomBytes(16).toString('hex');
+        this.#connection = {ref, selected: Object.freeze({...selected, revision: report.grant_sha256})};
+        return connectionState('active', ref);
+      }
+      if (report.phase === 'local-disabled' || report.phase === 'revoked') return connectionState(report.phase);
+      if (pendingRevocation(report) && report.observed_operation_id !== selected.binding.grant_id) {
+        // Resume status checks for the operation retained on the tablet before this host opened.
+        this.#disconnectUnknown = Object.freeze({...selected,
+          binding: Object.freeze({...selected.binding, operation_id: report.observed_operation_id})});
+        return connectionState('revocation-pending');
+      }
+      return connectionState('reconcile-required');
+    } catch {
+      return connectionState(this.#disconnectUnknown ? 'reconcile-required' : 'unavailable');
+    } finally {
+      this.#connectionTask = null;
+    }
+  }
+
+  async disconnectConnection(ref) {
+    if (!this.#connectionReady() || this.#disconnectUnknown) return connectionState('busy');
+    const snapshot = this.#connection;
+    if (!snapshot || snapshot.ref !== ref) return connectionState('selection-changed');
+    this.#connection = null;
+    const {selected} = snapshot;
+    const controller = new AbortController();
+    this.#connectionTask = controller;
+    try {
+      const handoff = phase(controller.signal, Infinity, this.#policy.handoffMs);
+      const report = await this.#tablet.disconnectConnection(selected, handoff, () => {
+        this.#disconnectUnknown = selected;
+      });
+      if (handoff.signal.aborted || report.status === 'unresolved') {
+        if (!handoff.signal.aborted && this.#disconnectUnknown && pendingRevocation(report, selected.binding.operation_id)) {
+          return connectionState('revocation-pending');
+        }
+        return connectionState(this.#disconnectUnknown ? 'reconcile-required' : 'unavailable');
+      }
+      this.#disconnectUnknown = null;
+      if (report.status === 'local-disabled' || report.status === 'revoked') return connectionState(report.status);
+      if (report.status === 'not-dispatched') return connectionState('not-dispatched');
+      return connectionState('selection-changed');
+    } catch {
+      return connectionState(this.#disconnectUnknown ? 'reconcile-required' : 'unavailable');
+    } finally {
+      this.#connectionTask = null;
     }
   }
 

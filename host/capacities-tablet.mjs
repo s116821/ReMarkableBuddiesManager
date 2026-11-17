@@ -8,6 +8,9 @@ const IDS = ['operation_id', 'grant_id'];
 const ORIGINAL = [...CAPTURE, ...IDS];
 const BOOT = ['connection_id', 'boot_id'];
 const REPORT = ['contract_version', 'status'];
+const GRANT_REPORT = [...REPORT, ...ORIGINAL, 'space_id', 'phase', 'grant_sha256', 'observed_operation_id'];
+const GRANT_PHASES = ['absent', 'pending-exchange', 'staged', 'active', 'pending-rotation',
+  'local-disabled', 'revocation-pending', 'revoked', 'retired-unconfirmed'];
 const PROOF = ['code', 'verifier', 'client_id', 'redirect_uri', 'resource'];
 const keys = (value, fields) => Boolean(value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === fields.length && fields.every(key => Object.hasOwn(value, key)));
@@ -25,11 +28,35 @@ function proofValid(value) {
     && value.resource === 'https://api.capacities.io';
 }
 
-function captureFacts(report, expected) {
-  if (!keys(report, [...REPORT, ...CAPTURE]) || report.contract_version !== 1
+function captureFacts(report, expected, includeConnection = false) {
+  if (!keys(report, [...REPORT, ...CAPTURE, ...(includeConnection ? ['connection'] : [])]) || report.contract_version !== 1
       || report.status !== 'captured' || !match(report, expected, BOOT)
       || !uuid(report.tablet_id) || !digest(report.config_sha256)) refuse();
-  return Object.freeze(Object.fromEntries(CAPTURE.map(key => [key, report[key]])));
+  const facts = Object.fromEntries(CAPTURE.map(key => [key, report[key]]));
+  if (includeConnection) {
+    const connection = report.connection;
+    if (connection !== null && (!keys(connection, ['space_id', 'grant_id'])
+        || !uuid(connection.space_id) || !uuid(connection.grant_id))) refuse();
+    facts.connection = connection === null ? null : Object.freeze({...connection});
+  }
+  return Object.freeze(facts);
+}
+
+function grantReceipt(report, binding, space, disconnect) {
+  const statuses = disconnect ? ['refused', 'conflict', 'local-disabled', 'revoked', 'unresolved']
+    : ['observed', 'conflict', 'unresolved'];
+  if (!keys(report, GRANT_REPORT) || report.contract_version !== 1 || !match(report, binding, ORIGINAL)
+      || report.space_id !== space || !statuses.includes(report.status)
+      || (report.phase !== null && !GRANT_PHASES.includes(report.phase))
+      || (report.grant_sha256 !== null && !digest(report.grant_sha256))
+      || (report.observed_operation_id !== null && !uuid(report.observed_operation_id))
+      || (report.status === 'observed' && report.phase === null)
+      || (report.status === 'observed' && ['local-disabled', 'revocation-pending', 'revoked'].includes(report.phase)
+          && !digest(report.grant_sha256))
+      || (report.status === 'local-disabled' && (report.phase !== 'local-disabled' || !digest(report.grant_sha256)))
+      || (report.status === 'revoked' && (report.phase !== 'revoked'
+          || !digest(report.grant_sha256) || report.observed_operation_id !== binding.operation_id))) refuse();
+  return Object.freeze({...report});
 }
 
 function originalReceipt(report, binding) {
@@ -55,9 +82,10 @@ export class CapacitiesTablet {
     this.#beforeIO = beforeIO;
   }
 
-  async #owned(selector, binding, reference, { signal, deadline } = {}, write) {
+  async #owned(selector, binding, reference, { signal, deadline } = {}, write, grant) {
+    const disposition = selector === 'disconnect' ? 'operation_disposition' : 'secret_disposition';
     const unstarted = () => {
-      if (write) return {secret_disposition: 'not-sent'};
+      if (write) return {[disposition]: 'not-sent'};
       refuse();
     };
     if (signal?.aborted || !match(this.#observer.lastObservation, binding, BOOT)) return unstarted();
@@ -66,14 +94,13 @@ export class CapacitiesTablet {
     try {
       try { this.#beforeIO(); } catch { return unstarted(); }
       if (signal?.aborted || !this.#io.owns(token) || !match(this.#observer.lastObservation, binding, BOOT)) return unstarted();
-      const exchange = selector === 'exchange';
-      const budget_ms = Math.min(exchange ? EXCHANGE_MS : READ_MS,
-        Math.floor(deadline - performance.now()) - (exchange ? 2000 : 1000));
-      if (!Number.isSafeInteger(budget_ms) || budget_ms < (exchange ? 34000 : 1)) return unstarted();
-      const request = { selector, budget_ms, binding };
+      const budget_ms = Math.min(write ? EXCHANGE_MS : READ_MS,
+        Math.floor(deadline - performance.now()) - (write ? 2000 : 1000));
+      if (!Number.isSafeInteger(budget_ms) || budget_ms < (write ? 34000 : 1)) return unstarted();
+      const request = { selector, budget_ms, binding, ...grant };
       if (write) {
         write.claim();
-        request.proof = write.proof;
+        if (selector === 'exchange') request.proof = write.proof;
         request.executable_sha256 = write.executable_sha256;
       }
       let response;
@@ -82,7 +109,7 @@ export class CapacitiesTablet {
       } finally {
         delete request.proof;
       }
-      if (write && response?.secret_disposition === 'not-sent') return response;
+      if (write && response?.[disposition] === 'not-sent') return response;
       if (signal?.aborted || performance.now() >= deadline || !this.#io.owns(token) || response?.status !== 'observed'
           || !match(response.observation, binding, BOOT) || !match(this.#observer.lastObservation, binding, BOOT)) refuse();
       return response;
@@ -141,6 +168,40 @@ export class CapacitiesTablet {
       : originalReceipt(response.capacities_oauth, context.binding);
     if (this.#original === context && (report.status === 'committed' || report.status === 'not-dispatched')) this.#original = null;
     return report;
+  }
+
+  async selectedConnection(operation, options) {
+    if (this.#original?.possible || !uuid(operation)) refuse();
+    const observed = this.#observer.lastObservation;
+    if (!digest(observed?.connection_id) || !uuid(observed?.boot_id)) refuse();
+    const original = {connection_id: observed.connection_id, boot_id: observed.boot_id};
+    const response = await this.#owned('capture-connection', original, operation, options);
+    const facts = captureFacts(response.capacities_oauth, original, true);
+    if (!facts.connection) return null;
+    if (!digest(response.executable_sha256) || operation === facts.connection.grant_id) refuse();
+    const {connection, ...capture} = facts;
+    const selected = Object.freeze({
+      binding: Object.freeze({...capture, operation_id: operation, grant_id: connection.grant_id}),
+      space: connection.space_id,
+      executable: response.executable_sha256,
+    });
+    const report = await this.disconnectStatus(selected, options);
+    return {selected, report};
+  }
+
+  async disconnectStatus(selected, options) {
+    const {binding, space} = selected;
+    const response = await this.#owned('grant-status', binding, binding.operation_id, options, null, {space_id: space});
+    return grantReceipt(response.capacities_oauth, binding, space, false);
+  }
+
+  async disconnectConnection(selected, options, claim) {
+    const {binding, space, executable, revision} = selected;
+    if (this.#original?.possible || !digest(executable) || !digest(revision)) refuse();
+    const response = await this.#owned('disconnect', binding, binding.operation_id, options,
+      {executable_sha256: executable, claim}, {space_id: space, expected_grant_sha256: revision});
+    if (response.operation_disposition === 'not-sent') return {status: 'not-dispatched'};
+    return grantReceipt(response.capacities_oauth, binding, space, true);
   }
 
   async status(binding, options) {

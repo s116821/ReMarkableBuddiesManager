@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { performance } from 'node:perf_hooks';
+import { CapacitiesConsent } from '../host/capacities-consent.mjs';
 import { CapacitiesTablet } from '../host/capacities-tablet.mjs';
 import { MaintenanceIO } from '../host/maintenance-io.mjs';
 import { WiredObserver } from '../host/observer.mjs';
@@ -84,6 +85,73 @@ test('changed executable and expired large phase never send the secret lane', as
   assert.equal(await tablet.current(binding, option()), true);
   assert.equal((await tablet.handoff(binding, proof, option(34000))).status, 'not-dispatched');
   await tablet.capture(id(), option());
+});
+
+test('Disconnect claims the current snapshot once and checks the original after uncertainty', async () => {
+  const space_id = randomUUID(), grant_id = randomUUID();
+  const revision = '6'.repeat(64);
+  let phase = 'active', observed_operation_id = randomUUID(), grant_sha256 = revision;
+  const calls = [];
+  const observer = {
+    lastObservation: hardware,
+    async runCapacities(request) {
+      calls.push(structuredClone(request));
+      const common = {status: 'observed', observation: hardware};
+      if (request.selector === 'capture-connection') return {
+        ...common, executable_sha256: sha,
+        capacities_oauth: {contract_version: 1, status: 'captured', ...original, connection: {space_id, grant_id}},
+      };
+      assert.equal(request.space_id, space_id);
+      assert.equal(request.binding.grant_id, grant_id);
+      if (request.selector === 'disconnect') {
+        assert.equal(request.executable_sha256, sha);
+        assert.equal(request.expected_grant_sha256, revision);
+        assert.ok(request.budget_ms > 59000 && request.budget_ms <= 60000);
+        assert.equal(Object.hasOwn(request, 'proof'), false);
+        return {status: 'observation-unavailable', operation_disposition: 'possibly-sent'};
+      }
+      assert.equal(request.selector, 'grant-status');
+      return {...common, capacities_oauth: {contract_version: 1, ...request.binding,
+        status: 'observed', space_id, phase, grant_sha256, observed_operation_id}};
+    },
+  };
+  const broker = new CapacitiesConsent({tablet: new CapacitiesTablet({observer})});
+  assert.equal(broker.status().status, 'unconfigured');
+
+  const first = await broker.inspectConnection();
+  const newest = await broker.inspectConnection();
+  assert.equal(first.status, 'active');
+  assert.equal(newest.status, 'active');
+  assert.notEqual(first.connectionRef, newest.connectionRef);
+  const before = calls.length;
+  assert.equal((await broker.disconnectConnection(first.connectionRef)).status, 'selection-changed');
+  assert.equal(calls.length, before);
+
+  assert.equal((await broker.disconnectConnection(newest.connectionRef)).status, 'reconcile-required');
+  const mutation = calls.at(-1);
+  assert.deepEqual(mutation.binding, calls.at(-2).binding);
+  assert.equal((await broker.disconnectConnection(newest.connectionRef)).status, 'busy');
+  assert.equal((await broker.inspectConnection()).status, 'reconcile-required');
+  assert.equal(calls.at(-1).selector, 'grant-status');
+  assert.deepEqual(calls.at(-1).binding, mutation.binding);
+  phase = 'revocation-pending';
+  assert.equal((await broker.inspectConnection()).status, 'reconcile-required');
+  observed_operation_id = mutation.binding.operation_id;
+  assert.equal((await broker.inspectConnection()).status, 'revocation-pending');
+
+  const restarted = new CapacitiesConsent({tablet: new CapacitiesTablet({observer})});
+  assert.equal((await restarted.inspectConnection()).status, 'revocation-pending');
+  assert.equal((await restarted.inspectConnection()).status, 'revocation-pending');
+  assert.deepEqual(calls.at(-1).binding, mutation.binding);
+  restarted.dispose();
+
+  phase = 'revoked';
+  grant_sha256 = null;
+  assert.equal((await broker.inspectConnection()).status, 'reconcile-required');
+  grant_sha256 = revision;
+  assert.equal((await broker.inspectConnection()).status, 'revoked');
+  assert.equal(calls.filter(call => call.selector === 'disconnect').length, 1);
+  broker.dispose();
 });
 
 test('real host child readiness charges startup before the bounded stdin handoff', async t => {

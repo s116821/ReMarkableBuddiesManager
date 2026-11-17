@@ -24,6 +24,11 @@ DIGEST_OUTPUT = re.compile(rb'([a-f0-9]{64}) [ *]/opt/bin/reader-buddy\n')
 CAPTURE_FIELDS = 'tablet_id connection_id boot_id config_sha256'
 BINDING_FIELDS = CAPTURE_FIELDS + ' operation_id grant_id'
 BASE_FIELDS = 'contract_version status'
+CAPTURE_SELECTORS = ('capture', 'capture-connection')
+MUTATION_SELECTORS = ('exchange', 'disconnect')
+GRANT_SELECTORS = ('grant-status', 'disconnect')
+GRANT_PHASES = ('absent', 'pending-exchange', 'staged', 'active', 'pending-rotation',
+                'local-disabled', 'revocation-pending', 'revoked', 'retired-unconfirmed')
 ACTOR_MAX_MS = 30000
 EXCHANGE_MAX_MS = 60000
 READ_MAX_MS = 12000
@@ -44,24 +49,35 @@ def request(raw):
     if not isinstance(value, dict):
         raise ValueError('request refused')
     selector = value.get('selector')
-    if selector not in ('capture', 'exchange', 'status'):
+    if selector not in (*CAPTURE_SELECTORS, *MUTATION_SELECTORS, 'status', 'grant-status'):
         raise ValueError('request refused')
-    exchange = selector == 'exchange'
-    exact(value, 'selector budget_ms binding proof executable_sha256' if exchange else 'selector budget_ms binding')
-    if type(value['budget_ms']) is not int or not 1 <= value['budget_ms'] <= (EXCHANGE_MAX_MS if exchange else READ_MAX_MS):
+    mutation = selector in MUTATION_SELECTORS
+    fields = 'selector budget_ms binding'
+    if mutation:
+        fields += ' executable_sha256'
+    if selector == 'exchange':
+        fields += ' proof'
+    if selector in GRANT_SELECTORS:
+        fields += ' space_id'
+    if selector == 'disconnect':
+        fields += ' expected_grant_sha256'
+    exact(value, fields)
+    if type(value['budget_ms']) is not int or not 1 <= value['budget_ms'] <= (EXCHANGE_MAX_MS if mutation else READ_MAX_MS):
         raise ValueError('request refused')
     binding = value['binding']
-    exact(binding, 'connection_id boot_id' if selector == 'capture' else BINDING_FIELDS)
+    exact(binding, 'connection_id boot_id' if selector in CAPTURE_SELECTORS else BINDING_FIELDS)
     if not digest(binding['connection_id']) or not uuid(binding['boot_id']):
         raise ValueError('request refused')
-    if selector != 'capture' and (
+    if selector not in CAPTURE_SELECTORS and (
             not digest(binding['config_sha256'])
             or not all(uuid(binding[key]) for key in ('tablet_id', 'grant_id', 'operation_id'))
             or binding['operation_id'] == binding['grant_id']):
         raise ValueError('request refused')
-    if exchange:
-        if not digest(value['executable_sha256']):
-            raise ValueError('request refused')
+    if (mutation and not digest(value['executable_sha256'])
+            or selector in GRANT_SELECTORS and not uuid(value['space_id'])
+            or selector == 'disconnect' and not digest(value['expected_grant_sha256'])):
+        raise ValueError('request refused')
+    if selector == 'exchange':
         proof = value['proof']
         exact(proof, 'code verifier client_id redirect_uri resource')
         if (not text(proof['code'], 4096) or not text(proof['client_id'], 256)
@@ -73,19 +89,42 @@ def request(raw):
     return value
 
 
-def receipt(value, selector, binding):
+def receipt(value, selector, binding, space=None):
     if not isinstance(value, dict) or type(value.get('contract_version')) is not int or value['contract_version'] != 1:
         raise ValueError('report refused')
     status = value.get('status')
-    if selector == 'capture':
+    if selector in CAPTURE_SELECTORS:
         if status == 'unresolved':
             exact(value, BASE_FIELDS)
         elif status == 'captured':
-            exact(value, BASE_FIELDS + ' ' + CAPTURE_FIELDS)
+            extra = ' connection' if selector == 'capture-connection' else ''
+            exact(value, BASE_FIELDS + ' ' + CAPTURE_FIELDS + extra)
             if (not uuid(value['tablet_id']) or not digest(value['config_sha256'])
                     or any(value[key] != binding[key] for key in ('boot_id', 'connection_id'))):
                 raise ValueError('report refused')
+            connection = value.get('connection')
+            if connection is not None:
+                exact(connection, 'grant_id space_id')
+                if not uuid(connection['grant_id']) or not uuid(connection['space_id']):
+                    raise ValueError('report refused')
         else:
+            raise ValueError('report refused')
+        return value
+    if selector in GRANT_SELECTORS:
+        exact(value, BASE_FIELDS + ' ' + BINDING_FIELDS + ' space_id phase grant_sha256 observed_operation_id')
+        allowed = ('observed', 'unresolved', 'conflict') if selector == 'grant-status' else (
+            'refused', 'conflict', 'local-disabled', 'revoked', 'unresolved')
+        if (status not in allowed or space != value['space_id']
+                or any(value[key] != binding[key] for key in BINDING_FIELDS.split())
+                or value['phase'] not in (None, *GRANT_PHASES)
+                or value['grant_sha256'] is not None and not digest(value['grant_sha256'])
+                or value['observed_operation_id'] is not None and not uuid(value['observed_operation_id'])
+                or status == 'observed' and value['phase'] is None
+                or status == 'observed' and value['phase'] in ('local-disabled', 'revocation-pending', 'revoked')
+                and not digest(value['grant_sha256'])
+                or status == 'local-disabled' and (value['phase'] != 'local-disabled' or not digest(value['grant_sha256']))
+                or status == 'revoked' and (value['phase'] != 'revoked'
+                    or not digest(value['grant_sha256']) or value['observed_operation_id'] != binding['operation_id'])):
             raise ValueError('report refused')
         return value
     if status not in ('not-dispatched', 'staged', 'unresolved', 'committed'):
@@ -196,7 +235,7 @@ def confirm_executable(channel, expected, deadline):
             raise ValueError('actor refused')
 
 
-def actor(transport, selector, binding, deadline, exchange=None):
+def actor(transport, selector, binding, deadline, exchange=None, grant=None):
     actor_deadline = deadline - POSTFLIGHT_SECONDS
     admission_deadline = actor_deadline - ACTOR_MAX_MS / 1000 if exchange is not None else actor_deadline
     channel = transport.open_session(timeout=min(2, remaining(admission_deadline)))
@@ -211,17 +250,19 @@ def actor(transport, selector, binding, deadline, exchange=None):
             if not transport.is_active():
                 raise shared.Refusal('cable-lost')
         available = int(remaining(actor_deadline) * 1000)
-        if available < (ACTOR_MAX_MS if selector == 'exchange' else 1):
+        if available < (ACTOR_MAX_MS if exchange is not None else 1):
             raise shared.Refusal('timeout')
         message = {'contract_version': 1, 'selector': selector, 'binding': binding,
                    'budget_ms': min(ACTOR_MAX_MS, available)}
-        if exchange is not None:
+        if selector == 'exchange':
             message['proof'] = exchange.proof
+        if grant is not None:
+            message.update(grant)
         attempt.extend(json.dumps(message, separators=(',', ':'), ensure_ascii=True).encode('ascii'))
         if len(attempt) > MAX_REQUEST:
             raise ValueError('request refused')
         channel.settimeout(min(2, remaining(actor_deadline)))
-        if selector == 'exchange' and remaining(actor_deadline) < ACTOR_MAX_MS / 1000:
+        if exchange is not None and remaining(actor_deadline) < ACTOR_MAX_MS / 1000:
             raise shared.Refusal('timeout')
         if exchange is not None:
             exchange.possible = True
@@ -229,7 +270,7 @@ def actor(transport, selector, binding, deadline, exchange=None):
         channel.shutdown_write()
         if drain(channel, actor_deadline, output) != 0 or not output.endswith(b'\n') or output.count(b'\n') != 1:
             raise ValueError('report refused')
-        return receipt(parse(output, MAX_RESPONSE), selector, binding)
+        return receipt(parse(output, MAX_RESPONSE), selector, binding, grant and grant['space_id'])
     finally:
         attempt[:] = b'\x00' * len(attempt)
         output[:] = b'\x00' * len(output)
@@ -247,18 +288,26 @@ def execute(transport, value, deadline, open_sftp, exchange):
         sftp.get_channel().settimeout(min(2, remaining(deadline)))
         installed = installed_metadata(sftp)
         fingerprint = None
-        if selector == 'exchange':
+        if selector in MUTATION_SELECTORS:
             capture = {key: binding[key] for key in ('connection_id', 'boot_id')}
-            actual = actor(transport, 'capture', capture, min(deadline, time.monotonic() + 8))
+            capture_selector = 'capture' if selector == 'exchange' else 'capture-connection'
+            actual = actor(transport, capture_selector, capture, min(deadline, time.monotonic() + 8))
             if actual['status'] != 'captured' or any(actual[key] != binding[key] for key in CAPTURE_FIELDS.split()):
+                raise shared.Refusal('cable-lost')
+            if selector == 'disconnect' and actual.get('connection') != {
+                    'grant_id': binding['grant_id'], 'space_id': value['space_id']}:
                 raise shared.Refusal('cable-lost')
             if installed_metadata(sftp) != installed:
                 raise ValueError('actor changed')
-        elif selector == 'capture':
+        elif selector in CAPTURE_SELECTORS:
             fingerprint = executable_digest(transport, deadline)
             if installed_metadata(sftp) != installed:
                 raise ValueError('actor changed')
-        result = actor(transport, selector, binding, deadline, exchange)
+        if selector in GRANT_SELECTORS:
+            grant = {key: value[key] for key in ('space_id', 'expected_grant_sha256') if key in value}
+            result = actor(transport, selector, binding, deadline, exchange, grant)
+        else:
+            result = actor(transport, selector, binding, deadline, exchange)
         remaining(deadline)
         if installed_metadata(sftp) != installed or shared.inspect(transport) != before:
             raise shared.Refusal('cable-lost')
@@ -277,13 +326,14 @@ def main():
     exchange = None
 
     def disposition(settled):
-        if value is None or value['selector'] != 'exchange':
-            return None
-        return 'not-sent' if settled and (exchange is None or not exchange.possible) else 'possibly-sent'
+        if value is None or value['selector'] not in MUTATION_SELECTORS:
+            return {'secret_disposition': None}
+        field = 'secret_disposition' if value['selector'] == 'exchange' else 'operation_disposition'
+        return {field: 'not-sent' if settled and (exchange is None or not exchange.possible) else 'possibly-sent'}
 
     def fail(status, settled=False):
         return {'contract_version': 1, 'status': status, 'observation': None, 'capacities_oauth': None,
-                'executable_sha256': None, 'secret_disposition': disposition(settled)}
+                'executable_sha256': None, **disposition(settled)}
 
     def respond(value):
         nonlocal responded
@@ -325,8 +375,8 @@ def main():
             if hashlib.sha256(json.dumps(sample, sort_keys=True).encode()).hexdigest() != expected:
                 raise shared.Refusal('cable-lost')
 
-        if value['selector'] == 'exchange':
-            exchange = Exchange(value['proof'], value['executable_sha256'], pre_send)
+        if value['selector'] in MUTATION_SELECTORS:
+            exchange = Exchange(value.get('proof'), value['executable_sha256'], pre_send)
 
         def inspect(transport):
             return execute(transport, value, deadline, paramiko.SFTPClient.from_transport, exchange)
@@ -339,7 +389,7 @@ def main():
         fingerprint = observation.pop('_executable_sha256')
         remaining(deadline)
         respond({'contract_version': 1, 'status': 'observed', 'observation': observation, 'capacities_oauth': report,
-                 'executable_sha256': fingerprint, 'secret_disposition': disposition(True)})
+                 'executable_sha256': fingerprint, **disposition(True)})
     except shared.Refusal as error:
         respond(fail(error.status, settled=True))
     except Exception:

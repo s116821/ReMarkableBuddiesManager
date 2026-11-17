@@ -1,10 +1,12 @@
-import {parseCapacitiesState,type CapacitiesState,type CapacitiesStatus} from '../host/capacities-protocol.mjs';
+import {parseCapacitiesState,type CapacitiesConnectionState,type CapacitiesState,type CapacitiesStatus} from '../host/capacities-protocol.mjs';
 
 export interface CapacitiesAdapter {
   status(): Promise<CapacitiesState>;
   begin(): Promise<CapacitiesState>;
   cancel(): Promise<CapacitiesState>;
   reconcile(): Promise<CapacitiesState>;
+  inspectConnection?(): Promise<CapacitiesConnectionState>;
+  disconnect?(connectionRef: string): Promise<CapacitiesConnectionState>;
 }
 export interface PreparedCapacitiesBegin {
   begin(): Promise<CapacitiesState>;

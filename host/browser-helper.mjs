@@ -49,7 +49,7 @@ import { WiredObserver } from './observer.mjs';
 import { DriveAuth } from './drive-auth.mjs';
 import { CapacitiesConsent } from './capacities-consent.mjs';
 import { CapacitiesTablet } from './capacities-tablet.mjs';
-import { parseCapacitiesAction, parseCapacitiesState } from './capacities-protocol.mjs';
+import { CAPACITIES_CONNECTION_ACTIONS, parseCapacitiesAction, parseCapacitiesConnectionState, parseCapacitiesState, validCapacitiesConnectionRef } from './capacities-protocol.mjs';
 import { parsePersonalizationRequest } from './personalization.mjs';
 import { ManagerDownloads } from './manager-downloads.mjs';
 import { parseDownloadRequest } from './manager-download-protocol.mjs';
@@ -134,19 +134,30 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       let body = '', bytes = 0;
       try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 128) return refuse(413); body += chunk; } }
       catch { return refuse(400); }
-      let action, launchId;
+      let action, launchId, connectionRef;
       try {
         const request = JSON.parse(body);
         if (body !== JSON.stringify(request)) throw Error('Input refused');
-        action = parseCapacitiesAction(request.action);
+        action = CAPACITIES_CONNECTION_ACTIONS.includes(request.action) ? request.action : parseCapacitiesAction(request.action);
         const keys = Object.keys(request).sort().join();
-        if (action === 'cancel' || (['status', 'reconcile'].includes(action) && keys === 'action,launchId')) {
+        if (action === 'disconnect') {
+          if (keys !== 'action,connectionRef' || !validCapacitiesConnectionRef(request.connectionRef)) throw Error('Input refused');
+          connectionRef = request.connectionRef;
+        } else if (action === 'cancel' || (['status', 'reconcile'].includes(action) && keys === 'action,launchId')) {
           if (keys !== 'action,launchId' || typeof request.launchId !== 'string'
               || !/^[a-f0-9]{32}$/.test(request.launchId)) throw Error('Input refused');
           launchId = request.launchId;
         } else if (keys !== 'action') throw Error('Input refused');
       } catch { return refuse(400); }
       if (res.destroyed) return;
+      if (CAPACITIES_CONNECTION_ACTIONS.includes(action)) {
+        try {
+          const reply = action === 'disconnect' ? await capacities.disconnectConnection(connectionRef) : await capacities.inspectConnection();
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(parseCapacitiesConnectionState(reply)));
+        } catch { refuse(503); }
+        return;
+      }
       if (launchId && (!capacitiesLaunch || capacitiesLaunch.id !== launchId)) {
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify({contract_version: 1, status: 'selection-changed'}));

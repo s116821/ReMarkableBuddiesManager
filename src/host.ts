@@ -1,5 +1,5 @@
 import {portableJson} from '../host/portable-configuration-protocol.mjs';
-import {parseCapacitiesState,type CapacitiesAction} from '../host/capacities-protocol.mjs';
+import {parseCapacitiesConnectionState,parseCapacitiesState,type CapacitiesAction,type CapacitiesConnectionAction} from '../host/capacities-protocol.mjs';
 import type {CapacitiesAdapter,PreparedCapacitiesBegin} from './capacities-auth';
 import type {PortableAdapter} from './portable-configuration';
 import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
@@ -124,11 +124,14 @@ const browserDrive: DriveAdapter = {
 };
 export const unsupportedDrive: DriveAdapter = { status: async () => unavailableDrive(), begin: async () => ({ state: unavailableDrive(), authorizationUrl: null }),
   check: async () => unavailableDrive(), cancel: async () => unavailableDrive(), disconnect: async () => unavailableDrive(), revoke: async () => unavailableDrive() };
-async function capacitiesRequest(action: CapacitiesAction, launchId?: string): Promise<unknown> {
+async function capacitiesRequest(action: CapacitiesAction | CapacitiesConnectionAction, reference?: string): Promise<unknown> {
   if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('Capacities helper unavailable');
-  const timeout = action === 'begin' ? 26000 : action === 'reconcile' ? 14000 : 5000;
+  const timeout = action === 'disconnect' ? 64000 : action === 'inspect-connection' ? 28000 :
+    action === 'begin' ? 26000 : action === 'reconcile' ? 14000 : 5000;
+  const request = action === 'disconnect' ? {action,connectionRef:reference} :
+    reference ? {action,launchId:reference} : {action};
   const response = await fetch('/manager-capacities', {method:'POST',credentials:'same-origin',
-    headers:{'Content-Type':'application/json'},body:JSON.stringify(launchId ? {action,launchId} : {action}),
+    headers:{'Content-Type':'application/json'},body:JSON.stringify(request),
     signal:AbortSignal.timeout(timeout),redirect:'error',keepalive:action === 'cancel'});
   if (!response.ok || !response.body) throw Error('Capacities helper unavailable');
   const reader = response.body.getReader(), raw = new Uint8Array(1024);
@@ -169,6 +172,8 @@ function browserCapacitiesBridge() {
     begin: async () => { throw Error('A reserved sign-in window is required'); },
     cancel: () => ownedLaunch ? capacitiesHelper('cancel',ownedLaunch) : capacitiesHelper('status'),
     reconcile: () => capacitiesHelper('reconcile',ownedLaunch ?? undefined),
+    inspectConnection: async () => parseCapacitiesConnectionState(await capacitiesRequest('inspect-connection')),
+    disconnect: async ref => parseCapacitiesConnectionState(await capacitiesRequest('disconnect',ref)),
   };
   function prepareCapacitiesBegin(): PreparedCapacitiesBegin {
     const popup = window.open('about:blank','_blank');

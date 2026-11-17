@@ -95,17 +95,19 @@ export class WiredObserver {
     return this.run('saved-mode', request);
   }
   async runCapacities(request, { signal, deadline } = {}) {
-    const exchange = request?.selector === 'exchange';
+    const disconnect = request?.selector === 'disconnect';
+    const mutation = disconnect || request?.selector === 'exchange';
+    const dispositionField = disconnect ? 'operation_disposition' : 'secret_disposition';
     const refusal = (status, unstarted = false) => ({...result(status), capacities_oauth: null, executable_sha256: null,
-      secret_disposition: exchange ? (unstarted ? 'not-sent' : 'possibly-sent') : null});
-    const ceiling = exchange ? 60000 : 12000;
+      [dispositionField]: mutation ? (unstarted ? 'not-sent' : 'possibly-sent') : null});
+    const ceiling = mutation ? 60000 : 12000;
     if (signal?.aborted) return refusal('cancelled', true);
-    if (!['capture', 'exchange', 'status'].includes(request?.selector) ||
+    if (!['capture', 'capture-connection', 'exchange', 'status', 'grant-status', 'disconnect'].includes(request?.selector) ||
         !Number.isSafeInteger(request.budget_ms) || request.budget_ms < 1 ||
         request.budget_ms > ceiling) return refusal('observation-unavailable', true);
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host', true);
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured', true);
-    const stop = Math.min(deadline - (exchange ? 1000 : 0), performance.now() + request.budget_ms + 1000);
+    const stop = Math.min(deadline - (mutation ? 1000 : 0), performance.now() + request.budget_ms + 1000);
     if (!Number.isFinite(stop) || stop <= performance.now()) return refusal('timeout', true);
     this.cancel();
     const generation = this.generation;
@@ -148,7 +150,7 @@ export class WiredObserver {
             return;
           }
           const budget_ms = Math.min(request.budget_ms, Math.floor(stop - performance.now()) - 1000);
-          if (budget_ms < (exchange ? 34000 : 1)) {
+          if (budget_ms < (mutation ? 34000 : 1)) {
             expired = true;
             child.kill('SIGKILL');
             return;
@@ -186,12 +188,12 @@ export class WiredObserver {
           raw = Buffer.concat(chunks);
           if (raw[raw.length - 1] !== 10 || raw.indexOf(10) !== raw.length - 1) throw Error('Private response refused');
           const value = strictJson(raw);
-          if (Object.keys(value).sort().join() !== 'capacities_oauth,contract_version,executable_sha256,observation,secret_disposition,status') throw Error('Private response refused');
+          if (Object.keys(value).sort().join() !== `capacities_oauth,contract_version,executable_sha256,observation,${dispositionField},status`) throw Error('Private response refused');
           validateResult({contract_version: value.contract_version, status: value.status, observation: value.observation});
-          const disposition = value.secret_disposition;
-          if (exchange ? disposition !== 'possibly-sent' && (disposition !== 'not-sent' || value.status === 'observed')
+          const disposition = value[dispositionField];
+          if (mutation ? disposition !== 'possibly-sent' && (disposition !== 'not-sent' || value.status === 'observed')
               : disposition !== null) throw Error('Private dispatch identity refused');
-          const captured = request.selector === 'capture' && value.capacities_oauth?.status === 'captured';
+          const captured = ['capture', 'capture-connection'].includes(request.selector) && value.capacities_oauth?.status === 'captured';
           if (captured ? typeof value.executable_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.executable_sha256)
               : value.executable_sha256 !== null) throw Error('Private executable identity refused');
           if (value.status === 'observed') {

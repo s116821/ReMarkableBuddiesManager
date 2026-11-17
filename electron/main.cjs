@@ -84,7 +84,7 @@ app.whenReady().then(async () => {
   const driveAuth = new DriveAuth();
   const { CapacitiesConsent } = await import(pathToFileURL(path.join(hostRoot, 'capacities-consent.mjs')).href);
   const { CapacitiesTablet } = await import(pathToFileURL(path.join(hostRoot, 'capacities-tablet.mjs')).href);
-  const { CAPACITIES_ACTIONS, parseCapacitiesState } = await import(pathToFileURL(path.join(hostRoot, 'capacities-protocol.mjs')).href);
+  const { CAPACITIES_ACTIONS, parseCapacitiesConnectionState, parseCapacitiesState, validCapacitiesConnectionRef } = await import(pathToFileURL(path.join(hostRoot, 'capacities-protocol.mjs')).href);
   const capacities = new CapacitiesConsent({
     tablet: new CapacitiesTablet({observer: rawObserver, io, beforeIO: () => invalidatePeers(null)}),
     openAuthorization: async url => {
@@ -259,6 +259,14 @@ app.whenReady().then(async () => {
   for (const action of CAPACITIES_ACTIONS) ipcMain.handle(`manager:capacities:${action}`, async (event, ...args) => {
     if (!authorized(event, args)) throw Error('Capacities caller refused');
     return parseCapacitiesState(await capacities[action]());
+  });
+  ipcMain.handle('manager:capacities:inspect-connection', async (event, ...args) => {
+    if (!authorized(event, args)) throw Error('Capacities caller refused');
+    return parseCapacitiesConnectionState(await capacities.inspectConnection());
+  });
+  ipcMain.handle('manager:capacities:disconnect', async (event, ...args) => {
+    if (!authorized(event, []) || args.length !== 1 || !validCapacitiesConnectionRef(args[0])) throw Error('Capacities caller refused');
+    return parseCapacitiesConnectionState(await capacities.disconnectConnection(args[0]));
   });
   window.on('closed', () => { capacities.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());

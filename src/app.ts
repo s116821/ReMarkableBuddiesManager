@@ -9,6 +9,7 @@ import {LocalModeChoiceController} from './local-mode-choice';
 import type {LocalModeRetained} from '../host/local-mode-choice-protocol.mjs';
 import { ProductSettingsController,productRows } from './product-settings';
 import { CapacitiesController,capacitiesActive,capacitiesLabels,capacitiesMayBegin,capacitiesMayCheck } from './capacities-auth';
+import {parseCapacitiesConnectionState,type CapacitiesConnectionState} from '../host/capacities-protocol.mjs';
 import type { ProductKey,ProductRetained } from '../host/product-settings-protocol.mjs';
 import{HandwritingRecordsController,handwritingAttemptMessage}from'./handwriting-records';
 import type{HandwritingRequest,HandwritingRetained}from'../host/handwriting-records-protocol.mjs';
@@ -190,6 +191,8 @@ export class App implements OnDestroy {
   });
   readonly capacitiesMessage = computed(() => {
     const state = this.capacities();
+    const currentConnection = this.capacitiesConnectionMessage();
+    if (state.status === 'connected' && currentConnection) return currentConnection;
     if (state.status === 'connected' && !this.capacitiesCurrent()) {
       return 'A previous tablet connection was set up. Sign in on this tablet to set up access.';
     }
@@ -198,7 +201,36 @@ export class App implements OnDestroy {
     }
     return this.capacitiesLabels[state.status];
   });
-  readonly capacitiesLocked = computed(() => !!this.capacities().pending || capacitiesActive(this.capacities().status));
+  readonly capacitiesConnectionPending = signal<'inspect'|'disconnect'|null>(null);
+  private readonly capacitiesSelection = signal<{
+    tablet: Pick<import('./observation').TabletObservation,'connection_id'|'boot_id'>;
+    state: CapacitiesConnectionState;
+  } | null>(null);
+  readonly capacitiesSelectedConnection = computed(() => {
+    const tablet = this.connection().observation, saved = this.capacitiesSelection();
+    return saved && tablet && tablet.connection_id === saved.tablet.connection_id &&
+      tablet.boot_id === saved.tablet.boot_id ? saved.state : null;
+  });
+  readonly capacitiesConnectionMessage = computed(() => {
+    const pending = this.capacitiesConnectionPending();
+    if (pending) return pending === 'inspect' ? 'Checking saved Capacities access…' : 'Disconnecting Capacities…';
+    const status = this.capacitiesSelectedConnection()?.status;
+    if (!status) return null;
+    return {
+      busy: 'Another Capacities operation is pending.',
+      unavailable: 'Could not check saved Capacities access.',
+      'no-connection': 'No Capacities access is saved on this tablet.',
+      active: 'Capacities access is saved on this tablet.',
+      'local-disabled': 'Capacities access is disabled on this tablet. Removal at Capacities is unconfirmed.',
+      revoked: 'Capacities confirmed revocation of the checked access.',
+      'revocation-pending': 'Capacities access is disabled on this tablet. Check again to confirm removal at Capacities.',
+      'reconcile-required': 'The connection status is unconfirmed. Check saved access on the original tablet.',
+      'not-dispatched': 'Disconnect did not start. Check saved access before trying again.',
+      'selection-changed': 'The saved connection changed. Check saved access again.',
+    }[status];
+  });
+  readonly capacitiesLocked = computed(() => !!this.capacitiesConnectionPending() ||
+    !!this.capacities().pending || capacitiesActive(this.capacities().status));
   readonly canCancelCapacities = computed(() => this.capacities().pending !== 'cancel' &&
     (this.capacities().pending === 'begin' || this.capacities().ownsFlow));
   readonly canCheckCapacities = computed(() => capacitiesMayCheck(this.capacities().status));
@@ -594,6 +626,7 @@ export class App implements OnDestroy {
   }
   canConnectCapacities(){
     return this.capacitiesTabletReady() && !this.capacitiesLocked() &&
+      !['active','reconcile-required','revocation-pending'].includes(this.capacitiesSelectedConnection()?.status ?? '') &&
       (capacitiesMayBegin(this.capacities().status) ||
         (this.capacities().status === 'connected' && !this.capacitiesCurrent()));
   }
@@ -604,6 +637,7 @@ export class App implements OnDestroy {
   connectCapacities(){
     const tablet = this.connection().observation;
     if (!tablet || !this.canConnectCapacities()) return;
+    this.capacitiesSelection.set(null);
     this.capacitiesOriginal = {connection_id:tablet.connection_id,boot_id:tablet.boot_id};
     void this.capacitiesController.begin(() => this.pauseCapacities(tablet), !this.capacitiesCurrent());
   }
@@ -618,6 +652,46 @@ export class App implements OnDestroy {
     if (!tablet || !this.capacitiesOriginalReady()) return;
     this.capacitiesOriginal ??= {connection_id:tablet.connection_id,boot_id:tablet.boot_id};
     void this.capacitiesController.reconcile(() => this.pauseCapacities(tablet), this.host.hasCapacitiesLaunch?.() ?? true);
+  }
+  canInspectCapacitiesConnection(){
+    return !!this.host.capacitiesAuth?.inspectConnection && this.capacitiesTabletReady() &&
+      !this.capacitiesLocked() && !this.canCheckCapacities();
+  }
+  canDisconnectCapacities(){
+    return !!this.host.capacitiesAuth?.disconnect && this.canInspectCapacitiesConnection() &&
+      this.capacitiesSelectedConnection()?.status === 'active';
+  }
+  async inspectCapacitiesConnection(){
+    if (!this.canInspectCapacitiesConnection()) return;
+    await this.runCapacitiesConnection('inspect');
+  }
+  async disconnectCapacities(){
+    if (!this.canDisconnectCapacities()) return;
+    const ref = this.capacitiesSelectedConnection()?.connectionRef;
+    if (ref) await this.runCapacitiesConnection('disconnect', ref);
+  }
+  private async runCapacitiesConnection(action: 'inspect'|'disconnect', ref?: string){
+    const tablet = this.connection().observation, adapter = this.host.capacitiesAuth;
+    if (!tablet || !adapter) return;
+    const selected = {connection_id:tablet.connection_id,boot_id:tablet.boot_id};
+    this.capacitiesConnectionPending.set(action);
+    this.capacitiesSelection.set(null);
+    try {
+      if (!await this.pauseCapacities(tablet)) return;
+      if (action === 'disconnect') this.capacitiesConfirmed.set(null);
+      const state = parseCapacitiesConnectionState(await (ref ? adapter.disconnect?.(ref) : adapter.inspectConnection?.()));
+      if (this.connection().observation === tablet) {
+        this.capacitiesSelection.set({tablet:selected,state});
+        if (['no-connection','local-disabled','revoked'].includes(state.status)) this.capacitiesConfirmed.set(null);
+      }
+    } catch {
+      if (this.connection().observation === tablet) {
+        this.capacitiesSelection.set({tablet:selected,state:{contract_version:1,
+          status:action === 'disconnect' ? 'reconcile-required' : 'unavailable',connectionRef:null}});
+      }
+    } finally {
+      this.capacitiesConnectionPending.set(null);
+    }
   }
   async beginProduct(){if(this.productPeerBusy())return;if(this.archiveMaintenanceBusy3())return;
     const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.productSettings||this.settingsBusy())return;
