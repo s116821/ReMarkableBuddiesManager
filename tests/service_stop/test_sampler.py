@@ -475,7 +475,7 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
-  self.assertEqual(len(f.commands),59)
+  self.assertEqual(len(f.commands),52)
   self.assertLess(sum(len(logical_commands(c)) for c in f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
@@ -483,6 +483,92 @@ class SamplerTests(unittest.TestCase):
    f=AliasFiles();setattr(f,change,value)
    with self.subTest(change=change), self.assertRaises(ValueError):
     f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+ def test_ordinary_sibling_openings_keep_both_parent_checks_before_both_leaves(self):
+  unit='/etc/systemd/system/'+s.BUDDY;executable=s.APPS['ordinary-manual']
+  for fault in ('unit ancestry','executable ancestry','missing frame','oversize','status','stderr',None):
+   with self.subTest(fault=fault):
+    f=Files();sampler=f.sampler()
+    def run(transport,command,deadline,cap):
+     code,out,err=f.run(transport,command,deadline,cap)
+     if len(f.commands)!=1:return code,out,err
+     self.assertEqual(cap,8194)
+     scripts=[shlex.split(step)[-1] for step in logical_commands(command)]
+     self.assertEqual(len(scripts),2)
+     self.assertIn('/etc/systemd/system',scripts[0]);self.assertIn('/opt/bin',scripts[1])
+     self.assertNotIn(unit,command);self.assertNotIn(executable,command)
+     frames=out.split(b'\0')
+     if fault in ('unit ancestry','executable ancestry'):
+      i=int(fault=='executable ancestry')
+      frames[i]=frames[i].replace(b'0 0 41ed',b'0 0 41ff',1)
+     elif fault=='missing frame':frames.pop(1)
+     elif fault=='oversize':frames[1]=b'x'*4097
+     elif fault=='status':code=1
+     elif fault=='stderr':err=b'unexpected'
+     return code,b'\0'.join(frames),err
+    sampler.run=run
+    if fault:
+     with self.assertRaises(ValueError):sampler._ordinary_openings(unit,executable)
+     self.assertEqual(len(f.commands),1)
+    else:
+     sampler._ordinary_openings(unit,executable)
+     self.assertEqual(len(f.commands),2)
+     leaves=[shlex.split(shlex.split(step)[-1]) for step in logical_commands(f.commands[1])]
+     self.assertEqual([leaf[-1] for leaf in leaves],[unit,executable])
+     self.assertTrue(all(leaf[:5]==['test','!','-L',leaf[-1],'&&'] for leaf in leaves))
+ def test_ordinary_lease_parent_frame_is_fresh_independent_and_required(self):
+  for fault,expected_absence_stats in (('opening',0),('closing',1),(None,2)):
+   with self.subTest(fault=fault):
+    f=Files();original=f.meta;seen=0;sampler=f.sampler()
+    def metadata(path,follow=False):
+     nonlocal seen
+     value=original(path,follow)
+     if path=='/run':
+      seen+=1
+      if (fault,seen) in (('opening',1),('closing',2)):
+       value=value.replace(b'0 0 41ed',b'0 0 41ff',1)
+     return value
+    f.meta=metadata
+    if fault:
+     with self.assertRaises(ValueError):sampler.capture(f.profile,t.empty_raw)
+    else:
+     self.assertEqual(sampler.capture(f.profile,t.empty_raw)['lease_observation'],'absent-final-component')
+    [platform]=[c for c in f.commands if 'if=/etc/os-release' in c]
+    scripts=[shlex.split(step)[-1] for step in logical_commands(platform)]
+    self.assertEqual(len(scripts),3)
+    self.assertTrue(scripts[2].endswith(' -- /run'))
+    self.assertNotIn(s.LEASE_DIRECTORY,platform)
+    self.assertEqual(sum(s.LEASE_DIRECTORY in c for c in f.commands),expected_absence_stats)
+    self.assertEqual(seen,1 if fault=='opening' else 2)
+ def test_ordinary_closing_getunit_group_keeps_all_checks_and_independent_client(self):
+  for fault in ('unit','pid','owner','bus','frame','oversize','status','stderr',None):
+   with self.subTest(fault=fault):
+    f=Files();sampler=f.sampler();closing=[]
+    def run(transport,command,deadline,cap):
+     code,out,err=f.run(transport,command,deadline,cap)
+     steps=logical_commands(command)
+     if len(steps)!=4 or not command.startswith(s.hooks.BUS_PREFIX):return code,out,err
+     closing.append(command)
+     self.assertEqual(cap,4*4097)
+     for step,method in zip(steps,('GetUnit','GetConnectionUnixProcessID','GetNameOwner','GetId'),strict=True):
+      self.assertIn(method,step)
+     frames=out.split(b'\0')
+     altered={'unit':(0,'o','/wrong'),'pid':(1,'u',2),'owner':(2,'s',':1.1'),'bus':(3,'s','b'*32)}
+     if fault in altered:
+      index,kind,value=altered[fault];frames[index]=json.dumps(dict(type=kind,data=[value])).encode()
+     elif fault=='frame':frames.insert(3,b'extra')
+     elif fault=='oversize':frames[1]=b'x'*4097
+     elif fault=='status':code=1
+     elif fault=='stderr':err=b'unexpected'
+     return code,b'\0'.join(frames),err
+    sampler.run=run
+    if fault:
+     with self.assertRaises(s.TypedHookRefusal):sampler.bracket(f.profile,f.vector['observation'],t.empty_raw)
+     self.assertEqual(closing,[f.commands[-1]])
+    else:
+     sampler.bracket(f.profile,f.vector['observation'],t.empty_raw)
+     self.assertEqual(closing,[f.commands[-2]])
+     self.assertIn('CAPCLIENT1',f.commands[-1])
+    self.assertIsNone(sampler._hooks)
  def test_alias_batch_refuses_mismatched_literal_or_framing_without_target_leaf_read(self):
   for label in ('literal','missing frame','extra frame','oversize','nonzero','stderr'):
    with self.subTest(label=label):

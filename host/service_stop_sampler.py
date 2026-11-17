@@ -219,13 +219,20 @@ class _TypedHooks:
         [pid] = self.bus_replies((self.dbus_script('GetConnectionUnixProcessID','s',self.owner),))
         hooks.pid_one(*pid)
 
-    def unit(self, unit):
+    def unit_script(self, unit):
         if unit not in UNIT_OBJECTS or not hooks.owner_valid(self.owner):
             raise ValueError()
-        [reply] = self.bus_replies((self.call_script(self.owner,'/org/freedesktop/systemd1',
-                                      'org.freedesktop.systemd1.Manager','GetUnit','s',unit),))
+        return self.call_script(self.owner,'/org/freedesktop/systemd1',
+                                'org.freedesktop.systemd1.Manager','GetUnit','s',unit)
+
+    @staticmethod
+    def verify_unit(unit, reply):
         if hooks.scalar(*reply,'o') != UNIT_OBJECTS[unit]:
             raise ValueError()
+
+    def unit(self, unit):
+        [reply] = self.bus_replies((self.unit_script(unit),))
+        self.verify_unit(unit, reply)
 
     def read(self, unit):
         if unit not in self.units:
@@ -242,12 +249,18 @@ class _TypedHooks:
             result[prop] = observation
         return result
 
-    def finish(self):
-        for unit in self.units:
-            self.unit(unit)
-        pid, owner, bus = self.bus_replies((self.dbus_script('GetConnectionUnixProcessID','s',self.owner),
-                                            self.dbus_script('GetNameOwner','s','org.freedesktop.systemd1'),
-                                            self.dbus_script('GetId')))
+    def finish(self, ordinary=False):
+        closing = (self.dbus_script('GetConnectionUnixProcessID','s',self.owner),
+                   self.dbus_script('GetNameOwner','s','org.freedesktop.systemd1'),
+                   self.dbus_script('GetId'))
+        if ordinary:
+            if self.units != [BUDDY]:raise ValueError()
+            unit, pid, owner, bus = self.bus_replies((self.unit_script(BUDDY), *closing))
+            self.verify_unit(BUDDY, unit)
+        else:
+            for unit in self.units:
+                self.unit(unit)
+            pid, owner, bus = self.bus_replies(closing)
         hooks.pid_one(*pid)
         if hooks.bus_owner(*owner) != self.owner:
             raise ValueError()
@@ -264,7 +277,7 @@ class Sampler:
         self.transport,self.deadline,self.run=transport,deadline,run
         self._hooks = None
 
-    def _typed_group(self, operation, maximum):
+    def _typed_group(self, operation, maximum, *, ordinary=False):
         if self._hooks is not None:refuse()
         group = _TypedHooks(self,maximum)
         self._hooks = group
@@ -272,7 +285,7 @@ class Sampler:
             try:group.start()
             except Exception:raise TypedHookRefusal('typed hook observation refused') from None
             result = operation()
-            try:group.finish()
+            try:group.finish(ordinary=ordinary)
             except Exception:raise TypedHookRefusal('typed hook observation refused') from None
             return result
         finally:
@@ -337,13 +350,35 @@ class Sampler:
 
     def _protected_file(self,path,limit,private=False):
         parents=self.parents(path);before=self.stat(path)
+        self._validate_file(before,limit,private)
+        return before,parents
+
+    @staticmethod
+    def _validate_file(before,limit,private=False):
         f,nlink=before;mode=int(f['mode'])
         if f['uid']!='0' or f['gid']!='0' or mode&0o170000!=0o100000 or mode&0o022 or int(f['length'])>limit:refuse()
         if private and (mode&0o7777!=0o600 or nlink!=1 or int(f['length'])==0):refuse()
-        return before,parents
+
+    def _ordinary_openings(self, unit, executable):
+        paths=(unit,executable)
+        chains=tuple(self._parent_paths(path) for path in paths)
+        rows=self._read_frames(
+            *((' && '.join(self._stat_script(parent) for parent in chain),4096)
+              for chain in chains))
+        parents=tuple(self._validate_parents(chain,self._stat_rows(raw,len(chain)))
+                      for chain,raw in zip(chains,rows,strict=True))
+        # Neither leaf stat is admitted until both independent chains pass.
+        leaves=self._read_frames(*((self._stat_script(path),4096) for path in paths))
+        unit_stat, executable_stat=map(metadata,leaves)
+        self._validate_file(unit_stat,32768)
+        self._validate_file(executable_stat,134217728)
+        return (unit_stat,parents[0]),(executable_stat,parents[1])
 
     def file(self,path,limit=32768,contents=False,private=False):
-        before,parents=self._protected_file(path,limit,private)
+        return self._file_from_opening(path,self._protected_file(path,limit,private),limit,contents)
+
+    def _file_from_opening(self,path,opening,limit=32768,contents=False):
+        before,parents=opening
         f=before[0]
         tail=[self._stat_script(path),*(self._stat_script(p) for p,_ in parents)]
         if contents:
@@ -561,7 +596,10 @@ class Sampler:
                     argv=[argv0], sha256=sampled_sha256)
 
     def lease(self):
-        parents=self.parents(LEASE_DIRECTORY);directory=self.stat(LEASE_DIRECTORY,missing=True)
+        return self._lease_from_opening(self.parents(LEASE_DIRECTORY))
+
+    def _lease_from_opening(self,parents):
+        directory=self.stat(LEASE_DIRECTORY,missing=True)
         if directory is None:
             if self.parents(LEASE_DIRECTORY)!=parents or self.stat(LEASE_DIRECTORY,missing=True) is not None:refuse()
             return 'absent-final-component',None
@@ -667,31 +705,37 @@ class Sampler:
     def capture(self,profile,empty):
         if profile not in APPS:refuse()
         r=empty('review',None);r['buddy']=self.service(BUDDY)
+        ordinary=profile=='ordinary-manual'
         app=APPS[profile]
-        alias=self.ordinary_alias(app) if profile=='ordinary-manual' else None
+        alias=self.ordinary_alias(app) if ordinary else None
         executable=alias['literal'] if alias else app
         slots=dict(SLOTS,buddy_executable=executable)
         if alias:r['ordinary_alias']=alias
-        if profile=='ordinary-manual':slots['buddy_unit']='/etc/systemd/system/'+BUDDY
+        if ordinary:slots['buddy_unit']='/etc/systemd/system/'+BUDDY
         else:self.package_conflicts()
         r['artifacts']={k:None for k in slots}
-        for key in slots:
-            if profile=='ordinary-manual' and key!='buddy_unit':continue
-            cap=134217728 if key in ('buddy_executable','stock_executable','adapter','companion_executable') else 32768
-            evidence,content=self.file(slots[key],cap,contents=key=='recovery_profile')
-            r['artifacts'][key]=evidence
-            if key=='recovery_profile':r['recovery_profile_base64']=base64.b64encode(content).decode('ascii')
         def process():
             return self.process(r['buddy'],executable,r['artifacts']['buddy_executable'])
-        if profile=='ordinary-manual':
-            ordinary_opening=self._protected_file(executable,134217728)
+        if ordinary:
+            unit=slots['buddy_unit']
+            unit_opening,ordinary_opening=self._ordinary_openings(unit,executable)
+            r['artifacts']['buddy_unit'],_=self._file_from_opening(unit,unit_opening)
             r['process']=self._ordinary_process(r['buddy'],executable,app,ordinary_opening)
             r['artifacts']['buddy_executable']=dict(ordinary_opening[0][0],sha256=r['process']['sha256'])
         else:
+            for key in slots:
+                cap=134217728 if key in ('buddy_executable','stock_executable','adapter','companion_executable') else 32768
+                evidence,content=self.file(slots[key],cap,contents=key=='recovery_profile')
+                r['artifacts'][key]=evidence
+                if key=='recovery_profile':r['recovery_profile_base64']=base64.b64encode(content).decode('ascii')
             r['process']=process()
-        os_release,kernel=self._read_frames(
+        platform_reads=(
             (self._text_script('/etc/os-release',16384),16384),
             (self._text_script('/proc/sys/kernel/osrelease',256),256))
+        if ordinary:
+            lease_paths=self._parent_paths(LEASE_DIRECTORY)
+            platform_reads+=((' && '.join(self._stat_script(path) for path in lease_paths),4096),)
+        os_release,kernel,*lease_rows=self._read_frames(*platform_reads)
         os_release=os_release.decode('ascii').splitlines()
         versions=[x[len('IMG_VERSION='):] for x in os_release if x.startswith('IMG_VERSION=')]
         if len(versions)!=1:refuse()
@@ -700,7 +744,11 @@ class Sampler:
         kernel=kernel.decode('ascii').strip()
         if not re.fullmatch('[0-9.]+',firmware) or not kernel or any(ord(c)<32 or ord(c)>126 for c in kernel):refuse()
         r['platform']=dict(firmware=firmware,kernel=kernel)
-        r['lease_observation'],r['lease_base64']=self.lease()
+        if ordinary:
+            parents=self._validate_parents(lease_paths,self._stat_rows(lease_rows[0],len(lease_paths)))
+            r['lease_observation'],r['lease_base64']=self._lease_from_opening(parents)
+        else:
+            r['lease_observation'],r['lease_base64']=self.lease()
         if profile=='resident-installed':
             if r['lease_observation']!='occupied' or r['lease_base64'] is None:refuse()
             self.group(r['lease_base64'],r['process'])
@@ -711,7 +759,7 @@ class Sampler:
         if self.service(BUDDY)!=r['buddy']:refuse()
         closing_process=(self._ordinary_process(r['buddy'],executable,app,ordinary_opening,
                                                 sampled_sha256=r['process']['sha256'])
-                         if profile=='ordinary-manual' else process())
+                         if ordinary else process())
         if closing_process!=r['process']:refuse()
         if alias:
             paths=self._parent_paths(app)
@@ -732,4 +780,5 @@ class Sampler:
             second=self.capture(profile,empty)
             if digest!=canonical_digest(observation,profile,second):refuse()
             return second,digest
-        return self._typed_group(sample,18 if profile=='ordinary-manual' else 40)
+        ordinary=profile=='ordinary-manual'
+        return self._typed_group(sample,18 if ordinary else 40,ordinary=ordinary)
