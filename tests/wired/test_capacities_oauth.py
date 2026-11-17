@@ -39,9 +39,13 @@ class CapacitiesTransport(unittest.TestCase):
             original = Path(base) / 'original'
             replacement = Path(base) / 'replacement'
             shutil.copy2('/bin/cat', original)
-            shutil.copy2('/bin/false', replacement)
             original_bytes = original.read_bytes()
-            with subprocess.Popen([original], stdin=subprocess.PIPE,
+            self.assertEqual(original_bytes[:4], b'\x7fELF')
+            # Some runners ship multiple coreutils names as identical multicall
+            # ELF bytes. Build a distinct replacement and keep cat's argv[0].
+            replacement.write_bytes(original_bytes + b'\0capacities-replacement-fixture\n')
+            replacement.chmod(0o755)
+            with subprocess.Popen(['cat'], executable=original, stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE) as child:
                 try:
                     with self.assertRaises(OSError) as error:
