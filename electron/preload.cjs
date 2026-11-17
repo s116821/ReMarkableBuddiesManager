@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version: 1, kind: 'desktop', transport: 'wired-maintenance',
+  capacitiesAuth: Object.freeze(Object.fromEntries(['status', 'begin', 'cancel', 'reconcile'].map(action =>
+    [action, (...args) => args.length ? Promise.reject(new Error('Capacities arity refused')) : ipcRenderer.invoke(`manager:capacities:${action}`)]))),
   driveAuth: Object.freeze({ status: () => ipcRenderer.invoke('manager:drive:status'), begin: () => ipcRenderer.invoke('manager:drive:begin'),
     cancel: () => ipcRenderer.invoke('manager:drive:cancel'), check: () => ipcRenderer.invoke('manager:drive:check'),
     disconnect: () => ipcRenderer.invoke('manager:drive:disconnect'), revoke: id => ipcRenderer.invoke('manager:drive:revoke', id) }),

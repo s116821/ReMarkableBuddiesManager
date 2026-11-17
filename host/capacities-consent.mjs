@@ -12,6 +12,8 @@ export const CAPACITIES_REDIRECT = `http://${CALLBACK_HOST}:${CALLBACK_PORT}${CA
 const SCOPES = ['api:read', 'api:write', 'offline_access'];
 const MAX_METADATA = 32768;
 const REQUEST_MS = 10000;
+const TABLET_READ_MS = 13000;
+const TABLET_HANDOFF_MS = 62000;
 const CONSENT_MS = 300000;
 
 // A maintainer must record the verified REST client and registered redirect.
@@ -31,6 +33,7 @@ const require = condition => { if (!condition) throw new Error('Capacities conse
 function parameters(fixture) {
   if (!fixture) {
     return { issuer: ISSUER, port: CALLBACK_PORT, lifetime: CONSENT_MS, requestMs: REQUEST_MS,
+      readMs: TABLET_READ_MS, handoffMs: TABLET_HANDOFF_MS,
       clientId: REGISTRATION?.redirectUri === CAPACITIES_REDIRECT ? REGISTRATION.clientId : null };
   }
   // Constructor-only CI seam. Real broker construction accepts no endpoint or redirect policy.
@@ -41,7 +44,8 @@ function parameters(fixture) {
   const requestMs = fixture.requestMs ?? REQUEST_MS;
   require(Number.isSafeInteger(lifetime) && lifetime > 0 && lifetime <= CONSENT_MS &&
     Number.isSafeInteger(requestMs) && requestMs > 0 && requestMs <= REQUEST_MS);
-  return { issuer: issuer.origin, port: 0, lifetime, requestMs, clientId: fixture.clientId };
+  return { issuer: issuer.origin, port: 0, lifetime, requestMs, readMs: requestMs,
+    handoffMs: requestMs, clientId: fixture.clientId };
 }
 
 function bounded(work, signal) {
@@ -54,6 +58,13 @@ function bounded(work, signal) {
       return work();
     }).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
   });
+}
+
+function phase(abort, deadline, limit) {
+  const stop = Math.min(deadline, performance.now() + limit);
+  const remaining = Math.floor(stop - performance.now());
+  require(remaining >= 1);
+  return { deadline: stop, signal: AbortSignal.any([abort, AbortSignal.timeout(remaining)]) };
 }
 
 async function metadata(issuer, signal) {
@@ -208,7 +219,7 @@ export class CapacitiesConsent {
         this.#uncertain || this.#statusCheck) {
       return this.#state;
     }
-    const { clientId, issuer, lifetime, port, requestMs } = this.#policy;
+    const { clientId, issuer, lifetime, port, requestMs, readMs } = this.#policy;
     const flow = { clientId, abort: new AbortController(), deadline: performance.now() + lifetime,
       state: oauth.generateRandomState(), verifier: oauth.generateRandomCodeVerifier(),
       consumed: false, dispatched: false };
@@ -216,12 +227,13 @@ export class CapacitiesConsent {
     this.#state = state('starting');
     flow.timer = setTimeout(() => this.#finish(flow, flow.dispatched ? 'reconcile-required' : 'expired'), lifetime);
     flow.timer.unref();
-    const signal = AbortSignal.any([flow.abort.signal, AbortSignal.timeout(requestMs)]);
     try {
       const identities = Object.freeze({ operation_id: randomUUID(), grant_id: randomUUID() });
-      const observed = await bounded(() => this.#tablet.capture(identities, { signal }), signal);
+      const capture = phase(flow.abort.signal, flow.deadline, readMs);
+      const observed = await bounded(() => this.#tablet.capture(identities, capture), capture.signal);
       require(this.#live(flow));
       flow.binding = originalBinding(observed, identities);
+      const { signal } = phase(flow.abort.signal, flow.deadline, requestMs);
       flow.metadata = await bounded(() => metadata(issuer, signal), signal);
       const challenge = await oauth.calculatePKCECodeChallenge(flow.verifier);
       require(this.#live(flow));
@@ -285,17 +297,18 @@ export class CapacitiesConsent {
   }
 
   async #handoff(flow, code, verifier) {
-    const signal = AbortSignal.any([flow.abort.signal, AbortSignal.timeout(this.#policy.requestMs)]);
     try {
-      const current = await bounded(() => this.#tablet.current(flow.binding, { signal }), signal);
+      const read = phase(flow.abort.signal, flow.deadline, this.#policy.readMs);
+      const current = await bounded(() => this.#tablet.current(flow.binding, read), read.signal);
       require(this.#live(flow) && current === true);
       const proof = Object.freeze({ code, verifier, client_id: flow.clientId,
         redirect_uri: flow.redirect, resource: ISSUER });
+      const write = phase(flow.abort.signal, flow.deadline, this.#policy.handoffMs);
       const receipt = await bounded(() => {
         require(this.#live(flow));
         flow.dispatched = true;
-        return this.#tablet.handoff(flow.binding, proof, { signal });
-      }, signal);
+        return this.#tablet.handoff(flow.binding, proof, write);
+      }, write.signal);
       this.#finish(flow, receiptStatus(receipt, flow.binding));
     } catch {
       this.#finish(flow, flow.dispatched ? 'reconcile-required' : 'selection-changed');
@@ -307,11 +320,13 @@ export class CapacitiesConsent {
     const binding = this.#uncertain;
     const controller = new AbortController();
     this.#statusCheck = controller;
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(this.#policy.requestMs)]);
     try {
-      const receipt = await bounded(() => this.#tablet.status(binding, { signal }), signal);
-      if (signal.aborted) return this.#state;
-      const status = receiptStatus(receipt, binding);
+      const read = phase(controller.signal, Infinity, this.#policy.readMs);
+      const receipt = await bounded(() => this.#tablet.status(binding, read), read.signal);
+      if (read.signal.aborted) return this.#state;
+      const observed = receiptStatus(receipt, binding);
+      // A later read of an absent grant cannot settle a possibly sent stdin.
+      const status = observed === 'not-dispatched' ? 'reconcile-required' : observed;
       if (status !== 'staged' && status !== 'reconcile-required') this.#uncertain = null;
       this.#state = state(status);
     } catch {

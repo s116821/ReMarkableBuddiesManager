@@ -10,9 +10,11 @@ import { parseRuntimeIdentity } from './runtime-identity.mjs';
 import { parseOwnedReport } from './owned-report.mjs';
 import { parsePersonalizationRequest, parsePersonalizationResult } from './personalization.mjs';
 import { fileURLToPath } from 'node:url';
+import { performance } from 'node:perf_hooks';
 
 import { result, validateResult } from './observation-protocol.mjs';
 export { statuses, result, validateResult } from './observation-protocol.mjs';
+const CAPACITIES_READY = Buffer.from('capacities-oauth-ready-v1\n');
 
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
@@ -91,6 +93,124 @@ export class WiredObserver {
     const expected = this.lastObservation;
     if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return { ...result('observation-unavailable'), saved_mode: { status: 'unavailable', view: null } };
     return this.run('saved-mode', request);
+  }
+  async runCapacities(request, { signal, deadline } = {}) {
+    const exchange = request?.selector === 'exchange';
+    const refusal = (status, unstarted = false) => ({...result(status), capacities_oauth: null, executable_sha256: null,
+      secret_disposition: exchange ? (unstarted ? 'not-sent' : 'possibly-sent') : null});
+    const ceiling = exchange ? 60000 : 12000;
+    if (signal?.aborted) return refusal('cancelled', true);
+    if (!['capture', 'exchange', 'status'].includes(request?.selector) ||
+        !Number.isSafeInteger(request.budget_ms) || request.budget_ms < 1 ||
+        request.budget_ms > ceiling) return refusal('observation-unavailable', true);
+    if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host', true);
+    if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured', true);
+    const stop = Math.min(deadline - (exchange ? 1000 : 0), performance.now() + request.budget_ms + 1000);
+    if (!Number.isFinite(stop) || stop <= performance.now()) return refusal('timeout', true);
+    this.cancel();
+    const generation = this.generation;
+    const script = path.join(path.dirname(this.script), 'capacities_oauth_transport.py');
+    let child;
+    try {
+      child = spawn(this.python, [script], { stdio: ['pipe', 'pipe', 'ignore'],
+        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
+    } catch {
+      return refusal('observation-unavailable', true);
+    }
+    this.active = child;
+    return new Promise(resolve => {
+      const chunks = [];
+      let size = 0;
+      let expired = false;
+      let oversized = false;
+      let readySize = 0;
+      let ready = false;
+      let body;
+      const abort = () => {
+        if (this.active === child && this.generation === generation) this.cancel();
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      const timer = setTimeout(() => {
+        expired = true;
+        if (this.active === child && this.generation === generation) child.kill('SIGKILL');
+      }, Math.max(1, stop - performance.now()));
+      child.stdout.on('data', chunk => {
+        if (!ready) {
+          if (readySize + chunk.length > CAPACITIES_READY.length ||
+              !chunk.equals(CAPACITIES_READY.subarray(readySize, readySize + chunk.length))) {
+            child.kill('SIGKILL');
+            return;
+          }
+          readySize += chunk.length;
+          if (readySize !== CAPACITIES_READY.length) return;
+          if (signal?.aborted || this.generation !== generation) {
+            abort();
+            return;
+          }
+          const budget_ms = Math.min(request.budget_ms, Math.floor(stop - performance.now()) - 1000);
+          if (budget_ms < (exchange ? 34000 : 1)) {
+            expired = true;
+            child.kill('SIGKILL');
+            return;
+          }
+          body = Buffer.from(JSON.stringify({...request, budget_ms}), 'utf8');
+          if (body.length > 32768) {
+            oversized = true;
+            child.kill('SIGKILL');
+            return;
+          }
+          ready = true;
+          child.stdin.end(body, () => body.fill(0));
+          return;
+        }
+        size += chunk.length;
+        if (size > 8192) {
+          oversized = true;
+          chunk.fill(0);
+          child.kill('SIGKILL');
+        } else {
+          chunks.push(chunk);
+        }
+      });
+      child.stdin.on('error', () => {});
+      child.on('error', () => {});
+      child.once('close', code => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+        if (this.active === child) this.active = null;
+        let raw;
+        try {
+          if (generation !== this.generation || signal?.aborted) return resolve(refusal('cancelled'));
+          if (expired) return resolve(refusal('timeout'));
+          if (code !== 0 || oversized || !ready) return resolve(refusal('observation-unavailable'));
+          raw = Buffer.concat(chunks);
+          if (raw[raw.length - 1] !== 10 || raw.indexOf(10) !== raw.length - 1) throw Error('Private response refused');
+          const value = strictJson(raw);
+          if (Object.keys(value).sort().join() !== 'capacities_oauth,contract_version,executable_sha256,observation,secret_disposition,status') throw Error('Private response refused');
+          validateResult({contract_version: value.contract_version, status: value.status, observation: value.observation});
+          const disposition = value.secret_disposition;
+          if (exchange ? disposition !== 'possibly-sent' && (disposition !== 'not-sent' || value.status === 'observed')
+              : disposition !== null) throw Error('Private dispatch identity refused');
+          const captured = request.selector === 'capture' && value.capacities_oauth?.status === 'captured';
+          if (captured ? typeof value.executable_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.executable_sha256)
+              : value.executable_sha256 !== null) throw Error('Private executable identity refused');
+          if (value.status === 'observed') {
+            if (value.observation.connection_id !== request.binding.connection_id ||
+                value.observation.boot_id !== request.binding.boot_id || !value.capacities_oauth) throw Error('Private identity refused');
+          } else if (value.capacities_oauth !== null) throw Error('Private response refused');
+          return resolve(value);
+        } catch {
+          return resolve(refusal('observation-unavailable'));
+        } finally {
+          raw?.fill(0);
+          for (const chunk of chunks) chunk.fill(0);
+          body?.fill(0);
+        }
+      });
+      if (signal?.aborted) {
+        abort();
+      }
+    });
   }
   async run(action, request) {
     this.cancel();

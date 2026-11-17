@@ -82,6 +82,18 @@ app.whenReady().then(async () => {
   localMode=new LocalModeChoiceHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(localMode)});
   const { DriveAuth } = await import(pathToFileURL(path.join(hostRoot, 'drive-auth.mjs')).href);
   const driveAuth = new DriveAuth();
+  const { CapacitiesConsent } = await import(pathToFileURL(path.join(hostRoot, 'capacities-consent.mjs')).href);
+  const { CapacitiesTablet } = await import(pathToFileURL(path.join(hostRoot, 'capacities-tablet.mjs')).href);
+  const { CAPACITIES_ACTIONS, parseCapacitiesState } = await import(pathToFileURL(path.join(hostRoot, 'capacities-protocol.mjs')).href);
+  const capacities = new CapacitiesConsent({
+    tablet: new CapacitiesTablet({observer: rawObserver, io, beforeIO: () => invalidatePeers(null)}),
+    openAuthorization: async url => {
+      const target = new URL(url);
+      if (target.origin !== 'https://api.capacities.io' || target.pathname !== '/oauth/authorize'
+          || target.username || target.password) throw Error('Capacities sign-in refused');
+      await shell.openExternal(target.href);
+    },
+  });
   const { ManagerDownloads } = await import(pathToFileURL(path.join(hostRoot, 'manager-downloads.mjs')).href);
   const downloads = new ManagerDownloads();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -244,7 +256,11 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  for (const action of CAPACITIES_ACTIONS) ipcMain.handle(`manager:capacities:${action}`, async (event, ...args) => {
+    if (!authorized(event, args)) throw Error('Capacities caller refused');
+    return parseCapacitiesState(await capacities[action]());
+  });
+  window.on('closed', () => { capacities.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

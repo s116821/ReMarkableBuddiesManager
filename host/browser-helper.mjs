@@ -47,6 +47,9 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { WiredObserver } from './observer.mjs';
 import { DriveAuth } from './drive-auth.mjs';
+import { CapacitiesConsent } from './capacities-consent.mjs';
+import { CapacitiesTablet } from './capacities-tablet.mjs';
+import { parseCapacitiesAction, parseCapacitiesState } from './capacities-protocol.mjs';
 import { parsePersonalizationRequest } from './personalization.mjs';
 import { ManagerDownloads } from './manager-downloads.mjs';
 import { parseDownloadRequest } from './manager-download-protocol.mjs';
@@ -60,7 +63,7 @@ import {parseRestoreRequest,parseRestoreResult,parseNotebookRestoreResult,restor
 import {ConversationManagementHost} from './conversation-management.mjs';
 import {parseManagementRequest,parseManagementResult} from './conversation-management-protocol.mjs';
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
-export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
+export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads(), capacitiesFactory = options => new CapacitiesConsent(options) }) {
   const io=new MaintenanceIO();let portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
   const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
@@ -85,6 +88,20 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   notebook=new NotebookArchiveHost({observer:observer,io,beforeIO:()=>invalidatePeers(notebook)});
   handwriting=new HandwritingRecordsHost({observer:observer,io,beforeIO:()=>invalidatePeers(handwriting)});
   localMode=new LocalModeChoiceHost({observer:observer,io,beforeIO:()=>invalidatePeers(localMode)});
+  const capacitiesTablet = new CapacitiesTablet({observer, io, beforeIO: () => invalidatePeers(null)});
+  let capacitiesLaunch = null;
+  let capacitiesBeginResponse = null;
+  const capacities = capacitiesFactory({tablet: capacitiesTablet, openAuthorization: async url => {
+    const target = new URL(url);
+    if (target.origin !== 'https://api.capacities.io' || target.pathname !== '/oauth/authorize'
+        || target.username || target.password || capacitiesLaunch || !capacitiesBeginResponse
+        || capacitiesBeginResponse.destroyed || capacitiesBeginResponse.writableEnded) {
+      throw Error('Capacities sign-in unavailable');
+    }
+    // The renderer receives only a closed state DTO. A same-origin navigation
+    // consumes this URL once; OAuth parameters never cross its JSON boundary.
+    capacitiesLaunch = {id: randomBytes(16).toString('hex'), url: target.href};
+  }});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
@@ -95,6 +112,74 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
     const refuse = code => { res.writeHead(code).end(); };
     if (req.headers.host !== new URL(origin).host) return refuse(403);
     const url = new URL(req.url, origin);
+    if (url.pathname === '/manager-capacities-open') {
+      if (!/^\?launch=[a-f0-9]{32}$/.test(url.search) || req.method !== 'GET' || req.headers.cookie !== `manager_session=${token}`
+          || req.headers['sec-fetch-site'] !== 'same-origin'
+          || req.headers['sec-fetch-mode'] !== 'navigate'
+          || req.headers['sec-fetch-dest'] !== 'document') return refuse(403);
+      if (!capacitiesLaunch?.url || capacitiesLaunch.id !== url.searchParams.get('launch')) return refuse(409);
+      if (capacities.status().status !== 'awaiting-consent') {
+        capacitiesLaunch.url = null;
+        return refuse(409);
+      }
+      const target = capacitiesLaunch.url;
+      capacitiesLaunch.url = null;
+      res.writeHead(303, {Location: target, 'Referrer-Policy': 'no-referrer'}).end();
+      return;
+    }
+    if (url.pathname === '/manager-capacities') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin
+          || req.headers['content-type'] !== 'application/json'
+          || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      let body = '', bytes = 0;
+      try { for await (const chunk of req) { bytes += chunk.length; if (bytes > 128) return refuse(413); body += chunk; } }
+      catch { return refuse(400); }
+      let action, launchId;
+      try {
+        const request = JSON.parse(body);
+        if (body !== JSON.stringify(request)) throw Error('Input refused');
+        action = parseCapacitiesAction(request.action);
+        const keys = Object.keys(request).sort().join();
+        if (action === 'cancel' || (['status', 'reconcile'].includes(action) && keys === 'action,launchId')) {
+          if (keys !== 'action,launchId' || typeof request.launchId !== 'string'
+              || !/^[a-f0-9]{32}$/.test(request.launchId)) throw Error('Input refused');
+          launchId = request.launchId;
+        } else if (keys !== 'action') throw Error('Input refused');
+      } catch { return refuse(400); }
+      if (res.destroyed) return;
+      if (launchId && (!capacitiesLaunch || capacitiesLaunch.id !== launchId)) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({contract_version: 1, status: 'selection-changed'}));
+      }
+      if (action === 'begin' && ['starting', 'awaiting-consent', 'handing-off', 'staged', 'reconcile-required'].includes(capacities.status().status)) {
+        return refuse(409);
+      }
+      const interrupted = () => {
+        if (capacitiesBeginResponse === res) {
+          capacitiesBeginResponse = null;
+          capacitiesLaunch = null;
+          capacities.cancel();
+        }
+        res.removeListener('finish', finished);
+      };
+      const finished = () => {
+        if (capacitiesBeginResponse === res) capacitiesBeginResponse = null;
+        res.removeListener('close', interrupted);
+      };
+      if (action === 'begin') {
+        capacitiesLaunch = null;
+        capacitiesBeginResponse = res;
+        res.once('close', interrupted);
+        res.once('finish', finished);
+      }
+      try {
+        const output = parseCapacitiesState(await capacities[action]());
+        if (capacitiesLaunch && output.status !== 'awaiting-consent') capacitiesLaunch.url = null;
+        const response = action === 'begin' ? {state: output, launchId: capacitiesLaunch?.id ?? null} : output;
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(response));
+      } catch { refuse(503); }
+      return;
+    }
     if (url.pathname === '/manager-download') {
       if (url.search || req.method !== 'POST' || req.headers.origin !== origin || req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
       let body = '', bytes = 0;
@@ -348,5 +433,5 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   server.headersTimeout = 5000;
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
+  return { origin, server, close: async () => { capacities.dispose(); capacitiesLaunch = null; portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }

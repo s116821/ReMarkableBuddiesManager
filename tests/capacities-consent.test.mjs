@@ -178,9 +178,13 @@ test('validated denial and changed tablet bindings cannot transfer code', async 
 
 test('uncertain handoff keeps the original operation and reconciles without resending', async t => {
   let validReceipt = false;
+  let absent = false;
   const f = await setup(t, {
     handoff() { throw new Error('private transport detail'); },
-    status(original) { return committed(validReceipt ? original : { ...original, grant_id: randomUUID() }); }
+    status(original) {
+      return absent ? { contract_version: 1, ...original, status: 'not-dispatched' }
+        : committed(validReceipt ? original : { ...original, grant_id: randomUUID() });
+    }
   });
   await f.broker.begin();
   const response = await fetch(f.callback(), { signal: AbortSignal.timeout(3000) });
@@ -188,6 +192,10 @@ test('uncertain handoff keeps the original operation and reconciles without rese
   await eventually(f.broker, 'reconcile-required');
   assert.deepEqual(await f.broker.begin(), { contract_version: 1, status: 'reconcile-required' });
   assert.equal((await f.broker.reconcile()).status, 'reconcile-required');
+  absent = true;
+  assert.equal((await f.broker.reconcile()).status, 'reconcile-required');
+  assert.equal((await f.broker.begin()).status, 'reconcile-required');
+  absent = false;
   validReceipt = true;
   assert.equal((await f.broker.reconcile()).status, 'connected');
   assert.equal(f.operations.length, 1);

@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {verifyCapacitiesBrowser} from './fixtures/capacities-browser.mjs';
 
 const packaged = process.argv.includes('--packaged');
 const development = process.argv.includes('--development');
@@ -223,6 +224,8 @@ if (development) {
   console.log('Verified development browser generated Tailwind styles and states');
   process.exit(0);
 }
+
+if (!packaged) await verifyCapacitiesBrowser(root);
 
 const executablePath = packaged
   ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`)
