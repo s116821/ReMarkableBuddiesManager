@@ -38,16 +38,26 @@ class CapacitiesTransport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as base:
             original = Path(base) / 'original'
             replacement = Path(base) / 'replacement'
-            shutil.copy2('/bin/cat', original)
+            source = Path(base) / 'actor.c'
+            source.write_text('#include <unistd.h>\n'
+                              'int main(void) { char b[4096]; ssize_t n;\n'
+                              'if (write(1,"ready\\n",6)!=6) return 2;\n'
+                              'while ((n=read(0,b,sizeof b))>0) { ssize_t at=0;\n'
+                              'while (at<n) { ssize_t m=write(1,b+at,n-at);\n'
+                              'if(m<=0) return 3; at+=m; }} return n<0; }\n', encoding='ascii')
+            compiler = shutil.which('cc')
+            self.assertIsNotNone(compiler, 'Linux CI requires its existing native C compiler')
+            subprocess.run([compiler, '-O0', '-o', str(original), str(source)],
+                           check=True, capture_output=True, timeout=15)
             original_bytes = original.read_bytes()
             self.assertEqual(original_bytes[:4], b'\x7fELF')
-            # Some runners ship multiple coreutils names as identical multicall
-            # ELF bytes. Build a distinct replacement and keep cat's argv[0].
+            # Do not depend on coreutils multicall dispatch or distro wrappers.
             replacement.write_bytes(original_bytes + b'\0capacities-replacement-fixture\n')
             replacement.chmod(0o755)
-            with subprocess.Popen(['cat'], executable=original, stdin=subprocess.PIPE,
+            with subprocess.Popen([original], stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE) as child:
                 try:
+                    self.assertEqual(child.stdout.readline(), b'ready\n')
                     with self.assertRaises(OSError) as error:
                         original.open('r+b')
                     self.assertEqual(error.exception.errno, errno.ETXTBSY)
