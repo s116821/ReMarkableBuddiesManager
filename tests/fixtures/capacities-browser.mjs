@@ -33,13 +33,18 @@ export async function verifyCapacitiesBrowser(root) {
       const request = route.request(), url = new URL(request.url());
       if (url.origin === helper.origin) {
         if (url.pathname === '/manager-capacities-open') {
-          navigation.push(await request.allHeaders());
+          const headers = await request.allHeaders();
+          navigation.push(headers);
           // Playwright routes the first request in a redirect chain only. Read
           // the real helper's 303 without following it, verify its private
           // Location, then substitute the consent page at this local boundary.
-          const response = await route.fetch({maxRedirects: 0});
+          const response = await route.fetch({headers, maxRedirects: 0, timeout: 5000});
           try {
-            assert.equal(response.status(), 303);
+            assert.equal(response.status(), 303, JSON.stringify({
+              status: response.status(), cookiePresent: typeof headers.cookie === 'string',
+              fetchSite: headers['sec-fetch-site'], fetchMode: headers['sec-fetch-mode'],
+              fetchDest: headers['sec-fetch-dest'],
+            }));
             assert.equal(response.headers().location, consentUrl);
           } finally { await response.dispose(); }
           return route.fulfill({status: 200, contentType: 'text/html', body: '<!doctype html><title>Fixture consent</title><p>Fixture consent</p>'});
