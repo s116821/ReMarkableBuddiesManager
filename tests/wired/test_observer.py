@@ -285,6 +285,52 @@ class ObserverTests(unittest.TestCase):
         self.assertTrue(sock.close.called)
         transport.close.assert_called_once()
 
+    def test_matching_final_snapshot_requires_valid_settled_watcher(self):
+        for unsettled, expected in ((False, 'cable-lost'), (True, 'timeout')):
+            with self.subTest(unsettled=unsettled):
+                foreground = threading.get_ident()
+                final_snapshot = threading.Event()
+                watcher_snapshot = threading.Event()
+                watcher_closed = threading.Event()
+                release_watcher = threading.Event()
+                sock, transport, notices = Mock(), Mock(), Mock()
+                notices.close.side_effect = watcher_closed.set
+                reads = 0
+
+                def receive(_):
+                    if not final_snapshot.wait(5):
+                        raise socket.timeout()
+
+                def snapshot(_):
+                    nonlocal reads
+                    if threading.get_ident() != foreground:
+                        watcher_snapshot.set()
+                        if unsettled:
+                            release_watcher.wait(5)
+                            return {'generation': 1}
+                        return {'generation': 2}
+                    reads += 1
+                    if reads == 3:
+                        final_snapshot.set()
+                        boundary = watcher_snapshot if unsettled else watcher_closed
+                        self.assertTrue(boundary.wait(5))
+                    return {'generation': 1}
+
+                notices.recv.side_effect = receive
+                try:
+                    with patch.object(paramiko, 'Transport', return_value=transport), \
+                         patch.object(o, 'accept_key'), patch.object(o, 'read_key'), \
+                         self.assertRaises(o.Refusal) as refusal:
+                        o.observe({}, snapshot=snapshot, dial=lambda _: sock,
+                                  inspection=lambda _: {'model': 'stale'}, notices=notices)
+                    self.assertEqual(refusal.exception.status, expected)
+                    self.assertEqual(reads, 3)
+                    self.assertTrue(sock.close.called)
+                    transport.close.assert_called_once()
+                finally:
+                    release_watcher.set()
+                    self.assertTrue(watcher_closed.wait(5))
+
 
 
 class InspectionIntegrationTests(unittest.TestCase):

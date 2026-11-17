@@ -34,6 +34,10 @@ app.whenReady().then(async () => {
   const {ModelCredentialHost}=await import(pathToFileURL(path.join(hostRoot,'model-credential.mjs')).href);
   const {parseModelCredentialRequest,parseModelCredentialResult,modelCredentialContext}=await import(pathToFileURL(path.join(hostRoot,'model-credential-protocol.mjs')).href);
   const {StorageInitializationHost}=await import(pathToFileURL(path.join(hostRoot,'storage-initialization.mjs')).href);
+  const {NotebookArchiveHost}=await import(pathToFileURL(path.join(hostRoot,'notebook-archive.mjs')).href);
+  const {parseArchiveRequest:parseNotebookRequest,parseArchiveResult:parseNotebookResult}=await import(pathToFileURL(path.join(hostRoot,'notebook-archive-protocol.mjs')).href);
+  const {ServiceStopHost}=await import(pathToFileURL(path.join(hostRoot,'service-stop.mjs')).href);
+  const {parseServiceStopRequest,parseServiceStopResult}=await import(pathToFileURL(path.join(hostRoot,'service-stop-protocol.mjs')).href);
   const {parseStorageInitializationRequest,parseStorageInitializationResult}=await import(pathToFileURL(path.join(hostRoot,'storage-initialization-protocol.mjs')).href);
   const {OwnedDataV3Host}=await import(pathToFileURL(path.join(hostRoot,'owned-data-v3.mjs')).href);
   const {parseOwnedV3Request,parseOwnedV3Result}=await import(pathToFileURL(path.join(hostRoot,'owned-data-v3-protocol.mjs')).href);
@@ -45,8 +49,6 @@ app.whenReady().then(async () => {
   const {parseCleanupRequest,parseCleanupResult}=await import(pathToFileURL(path.join(hostRoot,'source-cache-cleanup-protocol.mjs')).href);
   const {HandwritingRecordsHost}=await import(pathToFileURL(path.join(hostRoot,'handwriting-records.mjs')).href);
   const {parseHandwritingRequest,parseHandwritingResult}=await import(pathToFileURL(path.join(hostRoot,'handwriting-records-protocol.mjs')).href);
-  const {NotebookArchiveHost}=await import(pathToFileURL(path.join(hostRoot,'notebook-archive.mjs')).href);
-  const {parseArchiveRequest:parseNotebookRequest,parseArchiveResult:parseNotebookResult}=await import(pathToFileURL(path.join(hostRoot,'notebook-archive-protocol.mjs')).href);
   const {SelectedArchiveHost}=await import(pathToFileURL(path.join(hostRoot,'selected-archive.mjs')).href);
   const {parseArchiveRequest,parseArchiveResult}=await import(pathToFileURL(path.join(hostRoot,'selected-archive-protocol.mjs')).href);
   const {OrdinaryRestoreHost}=await import(pathToFileURL(path.join(hostRoot,'ordinary-restore.mjs')).href);
@@ -55,8 +57,8 @@ app.whenReady().then(async () => {
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
-  const io=new MaintenanceIO();let portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let portable,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -70,6 +72,7 @@ app.whenReady().then(async () => {
   sourceCache=new SourceCacheInventoryHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(sourceCache)});
   ownedV3=new OwnedDataV3Host({observer:rawObserver,io,beforeIO:()=>invalidatePeers(ownedV3)});
   storageInitialization=new StorageInitializationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(storageInitialization)});
+  serviceStop=new ServiceStopHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(serviceStop)});
   cacheCleanup=new SourceCacheCleanupHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(cacheCleanup)});
   conversations=new ConversationInventoryHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(conversations)});
   management=new ConversationManagementHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(management)});
@@ -165,6 +168,11 @@ app.whenReady().then(async () => {
     if(!authorized(event,[])||args.length!==1)throw Error('Storage setup caller refused');
     let request=parseStorageInitializationRequest(args[0]);args.length=0;
     try{const context=request,pending=storageInitialization.request(request);request=null;const value=parseStorageInitializationResult(await pending,context,validateResult);return storageInitialization.assertCurrent(value);}finally{request=null;}
+  });
+  ipcMain.handle('manager:serviceStop',async(event,...args)=>{
+    if(!authorized(event,[])||args.length!==1)throw Error('Service stop caller refused');
+    let request=parseServiceStopRequest(args[0]);args.length=0;
+    try{const context=request,pending=serviceStop.request(request);request=null;const value=parseServiceStopResult(await pending,context,validateResult);return serviceStop.assertCurrent(value);}finally{request=null;}
   });
   ipcMain.handle('manager:inspectOwnedV3',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Stored data inspection caller refused');

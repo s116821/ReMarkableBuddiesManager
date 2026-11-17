@@ -1,0 +1,40 @@
+// Synthetic ordinary/resident source-shape facts. Never enrolled by production.
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';import {emptyServiceStopRaw} from '../../host/service-stop-private.mjs';import {tablet} from './service-stop.mjs';
+const keys=JSON.parse(readFileSync(new URL('../../host/service-stop-properties.json',import.meta.url),'utf8'));
+const vendor=JSON.parse(readFileSync(new URL('../../host/service-stop-vendor-policy.json',import.meta.url),'utf8'));
+const pins={native_profile:'f49f297717cc09cf21fad47e52d47a4faad0c84f4fed4f98ca69ddb41b96b146',adapter:'8fc60498eb404f5a833d4b4ec4c99b76080f146012c76eb1ea7cb55d44b2b62c',companion_executable:'1caf6493cce2132af89a9377679c19005bef1c5b0e658f704f95b4fdbd07138c',companion_unit:'076675399604b9fdbee7f267900bd4490de88d32ab1cc49a32d8d45a75bcac8f',companion_dropin:'4d4345a6299448ade99878ddeeb894dd9a1a90de230bc3371a5e44237da7a795'};
+const B='reader-buddy.service',H='reader-buddy-stock-recovery.service',S='xochitl.service';
+const file=(sha)=>({device:'1',inode:'2',uid:'0',gid:'0',mode:String(0o100755),length:'128',mtime_ns:'1',ctime_ns:'1',sha256:sha});
+function snapshot(id){return {hooks:Object.fromEntries(keys.hooks.map(property=>[property,{property,observation:'observed-empty',type_verified:true,reason:'typed-empty'}])),state:{Id:id,LoadState:'loaded',ActiveState:'inactive',SubState:'dead',MainPID:'0',ControlPID:'0',ExecMainPID:'0',ExecMainStartTimestampMonotonic:'0',InvocationID:'',Job:'',ControlGroup:''},policy:{...Object.fromEntries(keys.policy.map(k=>[k,''])),Type:'simple',NeedDaemonReload:'no',KillMode:'control-group',Delegate:'no',Restart:'no',DefaultDependencies:'yes',SendSIGKILL:'yes',WatchdogUSec:'0',TimeoutStartUSec:'1min 30s',TimeoutStopUSec:'1min 30s'},stop_extra:{...Object.fromEntries(keys.stop_extra.map(k=>[k,''])),Names:id,User:'root',Group:'root',KillSignal:'15',FinalKillSignal:'9',RefuseManualStop:'no',CanStop:'yes'}};}
+const hash=n=>n.toString(16).padStart(2,'0').repeat(32),bytes=s=>[...Buffer.from(s,'hex')];const encode=v=>Buffer.from(JSON.stringify(v)).toString('base64');
+export function stopProfileFixture(profile='ordinary-manual'){
+ const o={...structuredClone(tablet),model:'reMarkable 2',firmware:'3.28.0.172',firmware_conflict:false},r=emptyServiceStopRaw('review',null);r.platform={firmware:o.firmware,kernel:'5.4.70-v1.6.3-rm11x'};r.buddy=snapshot(B);Object.assign(r.buddy.state,{ActiveState:'active',SubState:'running',MainPID:'20',ExecMainPID:'20',ExecMainStartTimestampMonotonic:'30',InvocationID:'a'.repeat(32),ControlGroup:'/system.slice/'+B});r.buddy.policy.FragmentPath='/etc/systemd/system/'+B;
+ r.artifacts=Object.fromEntries(['buddy_unit','buddy_executable','recovery_profile','native_profile','adapter','helper_unit','stock_executable','stock_unit','stock_dropin','companion_executable','companion_unit','companion_dropin'].map(k=>[k,null]));r.artifacts.buddy_unit=file('434d00dc6b62096b782dc85d417338a8283269f913f954af897a85cbc8ba64a6');r.artifacts.buddy_executable=file(hash(1));r.process={pid:'20',start_ticks:'40',uid:'0',gid:'0',executable:'/opt/bin/reader-buddy',argv:['/opt/bin/reader-buddy'],sha256:hash(1)};Object.assign(r.buddy.policy,{Type:'simple',Restart:'on-failure'});Object.assign(r.buddy.stop_extra,{WorkingDirectory:'/home/root',RestartUSec:'5s',EnvironmentFiles:'/home/root/.config/reader-buddy/environment (ignore_errors=no)'});r.lease_observation='absent-final-component';
+ if(profile==='resident-installed'){
+  let n=2;for(const k of Object.keys(r.artifacts))r.artifacts[k]=file(pins[k]??hash(n++));r.process.executable='/home/root/.local/lib/remarkable-buddies/reader-buddy';r.process.argv=[r.process.executable];r.process.sha256=r.artifacts.buddy_executable.sha256;r.buddy.policy.FragmentPath='/usr/lib/systemd/system/'+B;
+  Object.assign(r.buddy.policy,{Type:'notify',Restart:'no',OnSuccess:H,OnFailure:H,OnSuccessJobMode:'fail',OnFailureJobMode:'fail',WatchdogUSec:'2min',Conflicts:'shutdown.target'});
+  r.helper=snapshot(H);Object.assign(r.helper.policy,{Type:'oneshot',FragmentPath:'/usr/lib/systemd/system/'+H,TimeoutStartUSec:'2min 10s',Conflicts:B+' shutdown.target',After:B});r.stock=snapshot(S);r.companion=snapshot('rm-sync.service');r.vendor_policy={stock:structuredClone(vendor.stock),companion:structuredClone(vendor.companion)};r.companion_group='original-absent';
+  for(const name of ['stock','companion'])for(const [k,v] of Object.entries(vendor[name]))if(keys.policy.includes(k))r[name].policy[k]=v;
+  const map={native_profile:'native_profile_sha256',adapter:'adapter_sha256',buddy_executable:'app_sha256',buddy_unit:'buddy_unit_sha256',helper_unit:'helper_unit_sha256',stock_executable:'stock_executable_sha256',stock_unit:'stock_unit_sha256',stock_dropin:'stock_dropin_sha256'};
+  const p={version:6,companion:'rm2-3.28.0.172-v1',source_mode:'resident-installed-output-v1',...r.platform,...Object.fromEntries(Object.entries(map).map(([slot,key])=>[key,bytes(r.artifacts[slot].sha256)])),buddy_policy:r.buddy.policy,helper_policy:r.helper.policy,stock_policy:r.stock.policy};
+  const id={device:1,inode:2,uid:0,mode:0o40755},g={mount_path:'/sys/fs/cgroup/unified',unit:B,context:{boot:o.boot_id,mount_namespace:{...id,mode:0o100444,inode:6},cgroup_namespace:{...id,mode:0o100444,inode:7},mount_record:'1 2 0:1 / /sys/fs/cgroup/unified rw - cgroup2 cgroup rw',mount:id,slice:{...id,inode:3}},group:{...id,inode:5},parent:{pid:20,start_ticks:40}};
+  const original=structuredClone(r.companion.state);Object.assign(original,{ActiveState:'active',SubState:'running',MainPID:'22',ExecMainPID:'22',ExecMainStartTimestampMonotonic:'32',InvocationID:'c'.repeat(32),ControlGroup:'/system.slice/rm-sync.service'});
+  const companion=JSON.stringify({version:1,snapshot:Object.entries({...original,...r.companion.policy}).map(([k,v])=>`${k}=${v}\n`).join(''),group:{...g,unit:'rm-sync.service',group:{...id,inode:8},parent:{pid:22,start_ticks:42}}});
+  const l={version:3,companion,activation:'00000000-0000-4000-8000-000000000001',group:g,buddy_invocation:r.buddy.state.InvocationID,buddy_start_micros:30,stock:{process:{pid:21,start_ticks:41},invocation:'b'.repeat(32),executable_sha256:bytes(r.artifacts.stock_executable.sha256),unit_sha256:bytes(r.artifacts.stock_unit.sha256),dropin_sha256:bytes(r.artifacts.stock_dropin.sha256)},profile_sha256:bytes(r.artifacts.native_profile.sha256),adapter_sha256:bytes(r.artifacts.adapter.sha256),recovery_profile_sha256:bytes(r.artifacts.recovery_profile.sha256)};
+  r.recovery_profile_base64=encode(p);const profileBytes=Buffer.from(r.recovery_profile_base64,'base64');r.artifacts.recovery_profile.sha256=createHash('sha256').update(profileBytes).digest('hex');r.artifacts.recovery_profile.length=String(profileBytes.length);l.recovery_profile_sha256=bytes(r.artifacts.recovery_profile.sha256);r.lease_base64=encode(l);r.lease_observation='occupied';
+ }
+ const tuple={profile,model:o.model,platform:{...r.platform},artifacts:Object.fromEntries(Object.entries(r.artifacts).filter(([,f])=>f).map(([k,f])=>[k,f.sha256])),buddy_policy:structuredClone(r.buddy.policy),buddy_extra:structuredClone(r.buddy.stop_extra),helper_policy:structuredClone(r.helper?.policy??null),stock_policy:structuredClone(r.stock?.policy??null),companion_policy:structuredClone(r.companion?.policy??null),vendor_policy:structuredClone(r.vendor_policy)};
+ return {observation:o,raw:r,tuple};
+}
+
+export function ordinaryAliasFixture(){
+ const fixture=stopProfileFixture();
+ const target='/home/root/.local/lib/reader-buddy/ordinary/reader-buddy';
+ fixture.tuple.ordinary_alias_target=target;
+ fixture.raw.process.executable=target;
+ fixture.raw.ordinary_alias={device:'1',inode:'4',uid:'0',gid:'0',mode:String(0o120777),
+   length:String(target.length),mtime_ns:'1',ctime_ns:'1',links:'1',literal:target,
+   link_parents_sha256:'a'.repeat(64),target_parents_sha256:'b'.repeat(64)};
+ return fixture;
+}
