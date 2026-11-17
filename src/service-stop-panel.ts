@@ -37,7 +37,7 @@ export class ServiceStopPanel implements OnDestroy{
  canReview(){const t=this.tablet();return !!t&&this.allowed()&&!this.state().busy&&this.state().retained.length<8&&!this.state().retained.some(r=>r.connection_id===t.connection_id&&r.outcome==='unknown');}
  private async run(action:'review'|'confirm'|'check',r?:ServiceStopRetained){
   const t=this.tablet();if(!t||!this.allowed()||this.state().busy||this.loading||action==='review'&&!this.canReview())return;
-  const g=++this.generation,deadline=performance.now()+14000;let timer:ReturnType<typeof setTimeout>|undefined;this.loading=true;this.state.update(s=>({...s,busy:true}));this.busy.emit(true);
+  const g=++this.generation,deadline=performance.now()+32000;let timer:ReturnType<typeof setTimeout>|undefined;this.loading=true;this.state.update(s=>({...s,busy:true}));this.busy.emit(true);
   try{const {ServiceStopController}=await Promise.race([import('./service-stop'),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Buddy stop wait expired')),Math.max(1,deadline-performance.now()));})]);clearTimeout(timer);if(g!==this.generation)return;if(performance.now()>=deadline)throw Error('Buddy stop wait expired');
    this.controller??=new ServiceStopController(s=>{this.state.set(s);this.busy.emit(s.busy);});
    if(action!=='confirm')this.starting.emit();

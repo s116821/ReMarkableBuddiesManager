@@ -212,7 +212,7 @@ export function currentHost(): ManagerHost {
     },
     serviceStop: async (request: import('../host/service-stop-protocol.mjs').ServiceStopRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Service stop helper unavailable');
-      const pending=fetch('/manager-service-stop',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      const pending=fetch('/manager-service-stop',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(32000)});request=null;const response=await pending;
       if(!response.ok||!response.body)throw Error('Service stop unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Service stop response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/service-stop-protocol.mjs').ServiceStopResult;

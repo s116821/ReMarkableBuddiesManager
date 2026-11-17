@@ -18,9 +18,12 @@ export { statuses, result, validateResult } from './observation-protocol.mjs';
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
-    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs = 13000 } = {}) {
+    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs } = {}) {
     this.config = config; this.python = python; this.script = script; this.platform = platform;
-    this.active = null; this.generation = 0; this.timeoutMs = timeoutMs;
+    this.active = null; this.generation = 0; this.timeoutMs = timeoutMs ?? 13000;
+    // Stop performs fresh custody checks and retains its own finite supervision cap.
+    // Explicit shorter harness limits still apply; sibling operation budgets do not change.
+    this.serviceStopTimeoutMs = Math.min(timeoutMs ?? 31000, 31000);
   }
   cancel() { this.generation++; this.active?.kill('SIGKILL'); return result('cancelled'); }
   async observe() {
@@ -120,7 +123,7 @@ export class WiredObserver {
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
     const refusal = status => serviceStop ? {...result(status),service_stop_raw:emptyServiceStopRaw(request.selector)} : cachePrivate ? {...result(status),[portable?'portable_configuration_raw':storageInitialization?'storage_initialization_raw':ownedV3?'owned_data_v3_raw':handwriting?'handwriting_raw':(selected||notebook)?'archive_raw':restore?'ordinary_restore_raw':management?'conversation_management_raw':conversation?'conversation_inventory_raw':cacheCleanup?'source_cache_cleanup_raw':'source_cache_inventory_raw']:{status:'unavailable',stdout_base64:null}} : modelCredential ? {...result(status),model_credential_raw:{status:'unavailable',stdout_base64:null}} : credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : localMode ? {...result(status),local_mode_raw:{status:'unavailable',stdout_base64:null}} : product ? {...result(status),product_settings_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
-    if((localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>12000))return refusal('observation-unavailable');
+    if((localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>(serviceStop?30000:12000)))return refusal('observation-unavailable');
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
@@ -134,7 +137,7 @@ export class WiredObserver {
       child.once('spawn', () => { launched = true; });
       if (personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
-      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
+      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, serviceStop?Math.min(this.serviceStopTimeoutMs,request.budget_ms+1000):(localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
       child.stdout.on('data', data => {
         if((modelCredential||cachePrivate||localMode)&&(oversized||expired||generation!==this.generation||outputBytes+data.length>(serviceStop?262144:portable?196608:storageInitialization?24576:ownedV3?49152:handwriting?360448:management?49152:(restore||selected||notebook)?24576:cachePrivate&&!cacheCleanup?16384:24576))){data.fill(0);oversized=true;child.kill('SIGKILL');return;}
         chunks.push(data); outputBytes += data.length;

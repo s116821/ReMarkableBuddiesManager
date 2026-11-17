@@ -58,7 +58,7 @@ def request(raw):
     v = parse(raw, MAX_REQUEST)
     exact(v, 'connection_id boot_id selector budget_ms expected')
     if (v['selector'] not in ('review', 'stop', 'inspect') or not digest(v['connection_id']) or not uuid(v['boot_id'])
-            or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 12000):
+            or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 30000):
         raise ValueError('input refused')
     if v['selector'] == 'stop':
         typed = TYPED_PUBLIC_STOP_OWNER is not None and v['expected'].get('profile') == 'ordinary-manual' if isinstance(v['expected'], dict) else False
