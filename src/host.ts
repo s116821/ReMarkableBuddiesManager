@@ -1,4 +1,6 @@
 import {portableJson} from '../host/portable-configuration-protocol.mjs';
+import {parseCapacitiesConnectionState,parseCapacitiesState,type CapacitiesAction,type CapacitiesConnectionAction} from '../host/capacities-protocol.mjs';
+import type {CapacitiesAdapter,PreparedCapacitiesBegin} from './capacities-auth';
 import type {PortableAdapter} from './portable-configuration';
 import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
 import type {ArchiveRequest as NotebookRequest,ArchiveResult as NotebookResult} from '../host/notebook-archive-protocol.mjs';
@@ -81,6 +83,9 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly credentialReference?:CredentialReferenceAdapter['credentialReference'];
   readonly modelSettings?: ModelSettingsAdapter['modelSettings'];
   readonly productSettings?: ProductSettingsAdapter['productSettings'];
+  readonly capacitiesAuth?: CapacitiesAdapter;
+  readonly prepareCapacitiesBegin?: () => PreparedCapacitiesBegin;
+  readonly hasCapacitiesLaunch?: () => boolean;
   readonly basicSettings?: BasicSettingsAdapter['basicSettings'];
   readonly memoryForget?: ForgetAdapter['memoryForget'];
   readonly inspectMemory?: MemoryInspectionAdapter['inspectMemory'];
@@ -119,8 +124,88 @@ const browserDrive: DriveAdapter = {
 };
 export const unsupportedDrive: DriveAdapter = { status: async () => unavailableDrive(), begin: async () => ({ state: unavailableDrive(), authorizationUrl: null }),
   check: async () => unavailableDrive(), cancel: async () => unavailableDrive(), disconnect: async () => unavailableDrive(), revoke: async () => unavailableDrive() };
+async function capacitiesRequest(action: CapacitiesAction | CapacitiesConnectionAction, reference?: string): Promise<unknown> {
+  if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('Capacities helper unavailable');
+  const timeout = action === 'disconnect' ? 64000 : action === 'inspect-connection' ? 28000 :
+    action === 'begin' ? 26000 : action === 'reconcile' ? 14000 : 5000;
+  const request = action === 'disconnect' ? {action,connectionRef:reference} :
+    reference ? {action,launchId:reference} : {action};
+  const response = await fetch('/manager-capacities', {method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify(request),
+    signal:AbortSignal.timeout(timeout),redirect:'error',keepalive:action === 'cancel'});
+  if (!response.ok || !response.body) throw Error('Capacities helper unavailable');
+  const reader = response.body.getReader(), raw = new Uint8Array(1024);
+  let size = 0, ended = false;
+  try {
+    for (;;) {
+      const item = await reader.read();
+      if (item.done) { ended = true; break; }
+      if (size + item.value.length > raw.length) throw Error('Capacities response refused');
+      raw.set(item.value,size);
+      size += item.value.length;
+    }
+    return portableJson(raw.subarray(0,size),raw.length);
+  } finally {
+    if (!ended) await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+async function capacitiesHelper(action: Exclude<CapacitiesAction,'begin'>, launchId?: string) {
+  return parseCapacitiesState(await capacitiesRequest(action,launchId));
+}
+function capacitiesLaunch(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).sort().join() !== 'launchId,state') throw Error('Capacities launch refused');
+  const launch = value as {state:unknown,launchId:unknown};
+  const state = parseCapacitiesState(launch.state);
+  if (state.status === 'awaiting-consent') {
+    if (typeof launch.launchId !== 'string' || !/^[a-f0-9]{32}$/.test(launch.launchId)) throw Error('Capacities launch refused');
+    return {state,launchId:launch.launchId};
+  }
+  if (launch.launchId !== null) throw Error('Capacities launch refused');
+  return {state,launchId:null};
+}
+function browserCapacitiesBridge() {
+  let ownedLaunch: string | null = null;
+  const capacitiesAuth: CapacitiesAdapter = {
+    status: () => capacitiesHelper('status',ownedLaunch ?? undefined),
+    begin: async () => { throw Error('A reserved sign-in window is required'); },
+    cancel: () => ownedLaunch ? capacitiesHelper('cancel',ownedLaunch) : capacitiesHelper('status'),
+    reconcile: () => capacitiesHelper('reconcile',ownedLaunch ?? undefined),
+    inspectConnection: async () => parseCapacitiesConnectionState(await capacitiesRequest('inspect-connection')),
+    disconnect: async ref => parseCapacitiesConnectionState(await capacitiesRequest('disconnect',ref)),
+  };
+  function prepareCapacitiesBegin(): PreparedCapacitiesBegin {
+    const popup = window.open('about:blank','_blank');
+    if (!popup) throw Error('Sign-in window unavailable');
+    try { popup.opener = null; } catch { popup.close(); throw Error('Sign-in window unavailable'); }
+    let closed = false, navigated = false;
+    return {
+      async begin() {
+        if (closed || popup.closed) throw Error('Sign-in window unavailable');
+        const {state,launchId} = capacitiesLaunch(await capacitiesRequest('begin'));
+        ownedLaunch = launchId;
+        if (!launchId) return state;
+        if (closed || popup.closed) return capacitiesHelper('cancel',launchId);
+        try {
+          popup.location.replace(location.origin + '/manager-capacities-open?launch=' + launchId);
+          navigated = true;
+          return state;
+        } catch {
+          return capacitiesHelper('cancel',launchId);
+        }
+      },
+      close() {
+        closed = true;
+        if (!navigated && !popup.closed) popup.close();
+      },
+    };
+  }
+  return {capacitiesAuth,prepareCapacitiesBegin,hasCapacitiesLaunch:() => ownedLaunch !== null};
+}
 export function currentHost(): ManagerHost {
-  return window.managerHost ?? Object.freeze({ downloads: { request: async (q: import('../host/manager-download-protocol.mjs').DownloadRequest) => {
+  if (window.managerHost) return window.managerHost;
+  return Object.freeze({ downloads: { request: async (q: import('../host/manager-download-protocol.mjs').DownloadRequest) => {
       if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Download host unavailable');
       const response = await fetch('/manager-download', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q), signal: AbortSignal.timeout(10000) });
       if (!response.ok || !response.body) throw new Error('Download host unavailable');
@@ -128,7 +213,8 @@ export function currentHost(): ManagerHost {
       try { for (;;) { const result = await reader.read(); if (result.done) break; bytes += result.value.byteLength; if (bytes > 2048) throw new Error('Download response refused'); chunks.push(result.value); } } finally { await reader.cancel().catch(() => {}); }
       const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
-    } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    } }, driveAuth: browserDrive, ...browserCapacitiesBridge(),
+    contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
     portableConfiguration: async (request:import('../host/portable-configuration-protocol.mjs').PortableRequest|null)=>{
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Portable preferences helper unavailable');
       const pending=fetch('/manager-portable-configuration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;

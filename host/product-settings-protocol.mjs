@@ -7,7 +7,7 @@ export const productDigest=v=>typeof v==='string'&&v.length===64&&/^[a-f0-9]{64}
 export const productUuid=v=>typeof v==='string'&&v.length===36&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 export const PRODUCT_KEYS=Object.freeze(['export_destination','reader_enabled','writer_enabled']);
 const defaults={export_destination:'mem',reader_enabled:true,writer_enabled:true};
-const value=(k,v)=>k==='export_destination'?['mem','disabled'].includes(v):typeof v==='boolean';
+const value=(k,v)=>k==='export_destination'?['mem','capacities','disabled'].includes(v):typeof v==='boolean';
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function parseProductFields(v){
  if(keys(v)!==PRODUCT_KEYS.join())refuse();

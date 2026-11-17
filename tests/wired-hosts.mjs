@@ -88,11 +88,29 @@ try {
     assert.equal(await page.evaluate(() => window.managerHost.basicSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.researchSettings({action:'retained',path:'/unapproved'}).then(()=>'accepted',()=>'refused')),'refused');
     assert.equal(await page.evaluate(() => window.managerHost.researchSettings({},{}).then(()=>'accepted',()=>'refused')),'refused');
-    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'contract_version', 'conversationManagement', 'credentialReference', 'downloads', 'driveAuth', 'handwritingRecords', 'inspectConversations', 'inspectMemory', 'inspectOwned', 'inspectOwnedV3', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'inspectSourceCache', 'kind', 'localModeChoice', 'memoryForget', 'memoryQuery', 'memorySettings', 'modelCredential', 'modelSettings', 'notebookArchive', 'notebookRestore', 'observe', 'ordinaryExport', 'ordinaryRestore', 'personalization', 'portableConfiguration', 'productSettings', 'researchSettings', 'selectedArchive', 'sourceCacheCleanup', 'storageInitialization', 'transport']);
+    assert.deepEqual(host.keys.sort(), ['basicSettings', 'cancel', 'capacitiesAuth', 'contract_version', 'conversationManagement', 'credentialReference', 'downloads', 'driveAuth', 'handwritingRecords', 'inspectConversations', 'inspectMemory', 'inspectOwned', 'inspectOwnedV3', 'inspectRuntime', 'inspectSavedConfiguration', 'inspectSavedMode', 'inspectSourceCache', 'kind', 'localModeChoice', 'memoryForget', 'memoryQuery', 'memorySettings', 'modelCredential', 'modelSettings', 'notebookArchive', 'notebookRestore', 'observe', 'ordinaryExport', 'ordinaryRestore', 'personalization', 'portableConfiguration', 'productSettings', 'researchSettings', 'selectedArchive', 'sourceCacheCleanup', 'storageInitialization', 'transport']);
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.memoryQuery({}, {}).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSavedMode({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
     assert.equal(await page.evaluate(() => window.managerHost.inspectSavedMode({}, {}).then(() => 'accepted', () => 'refused')), 'refused');
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.managerHost.capacitiesAuth).sort()),
+      ['begin', 'cancel', 'disconnect', 'inspectConnection', 'reconcile', 'status']);
+    assert.deepEqual(await page.evaluate(() => window.managerHost.capacitiesAuth.status()),
+      { contract_version: 1, status: 'unconfigured' });
+    const invalidCapacities = await page.evaluate(async () => {
+      const auth = window.managerHost.capacitiesAuth;
+      const outcome = promise => promise.then(() => 'accepted', () => 'refused');
+      return Promise.all([
+        outcome(auth.begin({ path: '/unapproved' })),
+        outcome(auth.inspectConnection({ grant_id: 'unapproved' })),
+        outcome(auth.disconnect()),
+        outcome(auth.disconnect('a'.repeat(32) + '\n')),
+        outcome(auth.disconnect('a'.repeat(32), {})),
+      ]);
+    });
+    assert.deepEqual(invalidCapacities, Array(5).fill('refused'));
+    assert.deepEqual(await page.evaluate(() => window.managerHost.capacitiesAuth.disconnect('a'.repeat(32))),
+      { contract_version: 1, status: 'selection-changed', connectionRef: null });
     assert.deepEqual(await page.evaluate(() => Object.keys(window.managerHost.driveAuth).sort()), ['begin', 'cancel', 'check', 'disconnect', 'revoke', 'status']);
     assert.equal(await page.evaluate(() => window.managerHost.driveAuth.revoke({ path: '/unapproved' }).then(() => 'accepted', () => 'refused')), 'refused');
   } finally { await app.close(); }

@@ -22,6 +22,33 @@
         </div>
       }
     </div>
+    <div class="mt-4" aria-labelledby="capacities-auth-title">
+      <h3 id="capacities-auth-title">Capacities connection</h3>
+      <p class="text-sm text-muted" role="status" data-testid="capacities-auth-status">{{ app.capacitiesMessage() }}</p>
+      @if (app.capacities().status !== 'connected') {
+        @if (app.capacitiesConnectionMessage(); as message) {
+          <p class="text-sm" role="status" data-testid="capacities-connection-status">{{ message }}</p>
+        }
+      }
+      @if (app.capacities().notice; as notice) {
+        <p class="text-sm" role="status">{{ notice }}</p>
+      }
+      <div class="flex flex-wrap gap-2 my-3">
+        @if (app.canCancelCapacities()) {
+          <button class="ui-button ui-button-secondary" type="button" (click)="app.cancelCapacities()" data-testid="capacities-cancel">Cancel Capacities sign-in</button>
+        } @else if (app.canCheckCapacities()) {
+          <button class="ui-button ui-button-secondary" type="button" (click)="app.checkCapacities()" [disabled]="app.capacitiesLocked() || !app.capacitiesOriginalReady()" data-testid="capacities-check">Check original connection</button>
+        } @else if (!app.capacitiesCurrent() && !app.capacitiesLocked()) {
+          <button class="ui-button ui-button-secondary" type="button" (click)="app.connectCapacities()" [disabled]="!app.canConnectCapacities()" data-testid="capacities-connect">Connect to Capacities</button>
+        }
+        @if (app.host.capacitiesAuth?.inspectConnection && !app.canCheckCapacities()) {
+          <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectCapacitiesConnection()" [disabled]="!app.canInspectCapacitiesConnection()" data-testid="capacities-inspect">Check saved Capacities access</button>
+        }
+        @if (app.capacitiesSelectedConnection()?.status === 'active') {
+          <button class="ui-button ui-button-secondary" type="button" (click)="app.disconnectCapacities()" [disabled]="!app.canDisconnectCapacities()" data-testid="capacities-disconnect">Disconnect Capacities</button>
+        }
+      </div>
+    </div>
     @for (record of app.product().retained; track record.reference; let i = $index) {
       <article class="ui-panel my-3" data-testid="product-settings-retained">
         <h3>Unconfirmed save {{ i + 1 }}</h3>

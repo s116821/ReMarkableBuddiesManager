@@ -8,6 +8,8 @@ import {OwnedV3Controller,ownedV3Rows,exactCount} from './owned-data-v3';
 import {LocalModeChoiceController} from './local-mode-choice';
 import type {LocalModeRetained} from '../host/local-mode-choice-protocol.mjs';
 import { ProductSettingsController,productRows } from './product-settings';
+import { CapacitiesController,capacitiesActive,capacitiesLabels,capacitiesMayBegin,capacitiesMayCheck } from './capacities-auth';
+import {parseCapacitiesConnectionState,type CapacitiesConnectionState} from '../host/capacities-protocol.mjs';
 import type { ProductKey,ProductRetained } from '../host/product-settings-protocol.mjs';
 import{HandwritingRecordsController,handwritingAttemptMessage}from'./handwriting-records';
 import type{HandwritingRequest,HandwritingRetained}from'../host/handwriting-records-protocol.mjs';
@@ -172,6 +174,67 @@ export class App implements OnDestroy {
     this.navigate(row.destination, row.item);
   }
   readonly host = currentHost();
+  private readonly capacitiesController = new CapacitiesController(this.host.capacitiesAuth,
+    (state,confirmed) => {
+      if (confirmed && (this.host.hasCapacitiesLaunch?.() ?? true)) {
+        this.capacitiesConfirmed.set(this.capacitiesOriginal);
+      }
+      this.capacities.set(state);
+    }, this.host.prepareCapacitiesBegin);
+  readonly capacities = signal(this.capacitiesController.state);
+  readonly capacitiesLabels = capacitiesLabels;
+  private readonly capacitiesConfirmed = signal<Pick<import('./observation').TabletObservation,'connection_id'|'boot_id'> | null>(null);
+  readonly capacitiesCurrent = computed(() => {
+    const tablet = this.connection().observation, confirmed = this.capacitiesConfirmed();
+    return this.capacities().status === 'connected' && !!tablet && !!confirmed &&
+      tablet.connection_id === confirmed.connection_id && tablet.boot_id === confirmed.boot_id;
+  });
+  readonly capacitiesMessage = computed(() => {
+    const state = this.capacities();
+    const currentConnection = this.capacitiesConnectionMessage();
+    if (state.status === 'connected' && currentConnection) return currentConnection;
+    if (state.status === 'connected' && !this.capacitiesCurrent()) {
+      return 'A previous tablet connection was set up. Sign in on this tablet to set up access.';
+    }
+    if (capacitiesActive(state.status) && !state.pending && !state.ownsFlow) {
+      return 'A Capacities sign-in is still pending in Manager.';
+    }
+    return this.capacitiesLabels[state.status];
+  });
+  readonly capacitiesConnectionPending = signal<'inspect'|'disconnect'|null>(null);
+  private readonly capacitiesSelection = signal<{
+    tablet: Pick<import('./observation').TabletObservation,'connection_id'|'boot_id'>;
+    state: CapacitiesConnectionState;
+  } | null>(null);
+  readonly capacitiesSelectedConnection = computed(() => {
+    const tablet = this.connection().observation, saved = this.capacitiesSelection();
+    return saved && tablet && tablet.connection_id === saved.tablet.connection_id &&
+      tablet.boot_id === saved.tablet.boot_id ? saved.state : null;
+  });
+  readonly capacitiesConnectionMessage = computed(() => {
+    const pending = this.capacitiesConnectionPending();
+    if (pending) return pending === 'inspect' ? 'Checking saved Capacities access…' : 'Disconnecting Capacities…';
+    const status = this.capacitiesSelectedConnection()?.status;
+    if (!status) return null;
+    return {
+      busy: 'Another Capacities operation is pending.',
+      unavailable: 'Could not check saved Capacities access.',
+      'no-connection': 'No Capacities access is saved on this tablet.',
+      active: 'Capacities access is saved on this tablet.',
+      'local-disabled': 'Capacities access is disabled on this tablet. Removal at Capacities is unconfirmed.',
+      revoked: 'Capacities confirmed revocation of the checked access.',
+      'revocation-pending': 'Capacities access is disabled on this tablet. Check again to confirm removal at Capacities.',
+      'reconcile-required': 'The connection status is unconfirmed. Check saved access on the original tablet.',
+      'not-dispatched': 'Disconnect did not start. Check saved access before trying again.',
+      'selection-changed': 'The saved connection changed. Check saved access again.',
+    }[status];
+  });
+  readonly capacitiesLocked = computed(() => !!this.capacitiesConnectionPending() ||
+    !!this.capacities().pending || capacitiesActive(this.capacities().status));
+  readonly canCancelCapacities = computed(() => this.capacities().pending !== 'cancel' &&
+    (this.capacities().pending === 'begin' || this.capacities().ownsFlow));
+  readonly canCheckCapacities = computed(() => capacitiesMayCheck(this.capacities().status));
+  private capacitiesOriginal: Pick<import('./observation').TabletObservation,'connection_id'|'boot_id'> | null = null;
   readonly drive = signal(unsupportedDriveState());
   readonly driveConsent = signal<string | null>(null);
   private readonly driveController = new DriveController(this.host.driveAuth ?? unsupportedDrive, (state, url) => { this.drive.set(state); this.driveConsent.set(url); });
@@ -233,7 +296,7 @@ export class App implements OnDestroy {
   restoreState(family:RestoreFamily){return family==='notebook'?this.notebookRestore():this.ordinaryRestore();}
   private restoreControllerFor(family:RestoreFamily){return family==='notebook'?this.notebookRestoreController:this.restoreController;}
   private restoreCapability(family:RestoreFamily){return family==='notebook'?this.host.notebookRestore:this.host.ordinaryRestore;}
-  settingsBusy(){return this.portable().busy||this.localModeChoice().busy||this.product().busy;}
+  settingsBusy(){return this.portable().busy||this.localModeChoice().busy||this.product().busy||this.capacitiesLocked();}
   restoresBusy(){return this.notebookRestore().busy||this.ordinaryRestore().busy;}
   private clearRestores(){this.notebookRestoreController.clear();this.restoreController.clear();}
   private readonly managementController=new ConversationManagementController(state=>this.conversationManagement.set(state),()=>{document.querySelectorAll<HTMLSelectElement>('#conversation-management-choice').forEach(field=>{field.value='';});});
@@ -317,11 +380,16 @@ export class App implements OnDestroy {
   private readonly managerReleases = new ReleaseController(null, state => this.managerRelease.set(state), undefined, 'manager');
   readonly managerRelease = signal(this.managerReleases.state);
   private readonly clearFileOnHidden=()=>{if(document.visibilityState==='hidden'){this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.clearSharedArchivePeers2();this.fileCredentialController.clear();}};
-  private readonly clearModelOnPageHide=()=>{this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();};
-  constructor() { if(this.host.portableConfiguration)void this.portableController.retained({portableConfiguration:q=>this.host.portableConfiguration!(q)}); if(this.host.notebookRestore)void this.notebookRestoreController.retained(this.host); if(this.host.notebookArchive)void this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)}); if(this.host.storageInitialization)void this.storageInitializationController.retained(this.storageInitializationAdapter()); if(this.host.localModeChoice)void this.localModeController.retained({localModeChoice:q=>this.host.localModeChoice!(q)}); if(this.host.handwritingRecords)void this.handwritingController.retained({handwritingRecords:q=>this.host.handwritingRecords!(q)}); if(this.host.selectedArchive)void this.selectedController.retained({selectedArchive:q=>this.host.selectedArchive!(q)}); if(this.host.ordinaryRestore)void this.restoreController.retained({ordinaryRestore:q=>this.host.ordinaryRestore!(q)}); if(this.host.modelCredential)void this.fileCredentialController.retained({modelCredential:q=>this.host.modelCredential!(q)}); if(this.host.credentialReference)void this.credentialController.retained({credentialReference:q=>this.host.credentialReference!(q)}); if(this.host.memorySettings)void this.memorySettingsController.retained({memorySettings:q=>this.host.memorySettings!(q)}); if(this.host.researchSettings)void this.researchController.retained({researchSettings:q=>this.host.researchSettings!(q)}); window.addEventListener('pagehide',this.clearModelOnPageHide); document.addEventListener('visibilitychange',this.clearFileOnHidden); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.productSettings)void this.productController.retained({productSettings:q=>this.host.productSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
+  private readonly clearModelOnPageHide=()=>{this.capacitiesController.pageHidden();this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();};
+  constructor() {
+    void this.capacitiesController.refresh();
+    if(this.host.portableConfiguration)void this.portableController.retained({portableConfiguration:q=>this.host.portableConfiguration!(q)}); if(this.host.notebookRestore)void this.notebookRestoreController.retained(this.host); if(this.host.notebookArchive)void this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)}); if(this.host.storageInitialization)void this.storageInitializationController.retained(this.storageInitializationAdapter()); if(this.host.localModeChoice)void this.localModeController.retained({localModeChoice:q=>this.host.localModeChoice!(q)}); if(this.host.handwritingRecords)void this.handwritingController.retained({handwritingRecords:q=>this.host.handwritingRecords!(q)}); if(this.host.selectedArchive)void this.selectedController.retained({selectedArchive:q=>this.host.selectedArchive!(q)}); if(this.host.ordinaryRestore)void this.restoreController.retained({ordinaryRestore:q=>this.host.ordinaryRestore!(q)}); if(this.host.modelCredential)void this.fileCredentialController.retained({modelCredential:q=>this.host.modelCredential!(q)}); if(this.host.credentialReference)void this.credentialController.retained({credentialReference:q=>this.host.credentialReference!(q)}); if(this.host.memorySettings)void this.memorySettingsController.retained({memorySettings:q=>this.host.memorySettings!(q)}); if(this.host.researchSettings)void this.researchController.retained({researchSettings:q=>this.host.researchSettings!(q)}); window.addEventListener('pagehide',this.clearModelOnPageHide); document.addEventListener('visibilitychange',this.clearFileOnHidden); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.productSettings)void this.productController.retained({productSettings:q=>this.host.productSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
-  connectTablet() { void this.connectionController.connect(); }
-  disconnectTablet() { this.connectionController.disconnect(); }
+  connectTablet() { if (!this.capacitiesLocked()) void this.connectionController.connect(); }
+  disconnectTablet() {
+    if (this.canCancelCapacities()) void this.capacitiesController.cancel();
+    this.connectionController.disconnect();
+  }
   editMemory(event: Event) { this.memoryText.set((event.target as HTMLTextAreaElement).value); }
   async searchMemory() {if(this.archiveMaintenanceBusy2())return;
     this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.clearSharedArchivePeers1(); this.forgetController.clear(); this.memoryInspectionController.clear();
@@ -549,7 +617,82 @@ export class App implements OnDestroy {
   modelTarget(record:ModelRetained){const tablet=this.connection().observation;return tablet?.connection_id===record.connection_id&&tablet.boot_id===record.boot_id;}
   async checkModel(record:ModelRetained){if(this.archiveMaintenanceBusy1())return;this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();const tablet=this.connection().observation;if(tablet&&this.host.modelSettings){this.exportController.clear();this.clearSharedArchivePeers3();await this.modelController.status({modelSettings:q=>this.host.modelSettings!(q)},record,tablet);}}
   async stopModel(){if(this.archiveMaintenanceBusy1())return;if(this.host.modelSettings)await this.modelController.stop({modelSettings:q=>this.host.modelSettings!(q)},()=>this.connectionController.pause());}
-  productPeerBusy(){return this.localModeChoice().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.forget().busy||this.research().busy||this.memorySettings().busy||this.credential().busy||this.fileCredential().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy||this.conversationInventory().busy||this.conversationManagement().busy||this.restoresBusy()||this.archiveBusy()||this.handwritingRecords().busy;}
+  private productMaintenanceBusy(){return this.localModeChoice().busy||this.basic().busy||this.model().busy||this.archiveExport().busy||this.forget().busy||this.research().busy||this.memorySettings().busy||this.credential().busy||this.fileCredential().busy||(this.cacheInventory().busy||(this.ownedV3().busy||this.storageInitialization().busy))||this.cacheCleanup().busy||this.conversationInventory().busy||this.conversationManagement().busy||this.restoresBusy()||this.archiveBusy()||this.handwritingRecords().busy;}
+  productPeerBusy(){return this.capacitiesLocked()||this.productMaintenanceBusy();}
+  capacitiesTabletReady(){
+    return !!this.host.capacitiesAuth && !!this.connection().observation && this.profile().savedConfigurationProbe
+      && !this.portable().busy && !this.product().busy && !this.productMaintenanceBusy()
+      && !this.savedConfiguration().busy && !this.savedMode().busy && !this.memory().busy && !this.memoryInspection().busy;
+  }
+  canConnectCapacities(){
+    return this.capacitiesTabletReady() && !this.capacitiesLocked() &&
+      !['active','reconcile-required','revocation-pending'].includes(this.capacitiesSelectedConnection()?.status ?? '') &&
+      (capacitiesMayBegin(this.capacities().status) ||
+        (this.capacities().status === 'connected' && !this.capacitiesCurrent()));
+  }
+  private async pauseCapacities(tablet: import('./observation').TabletObservation){
+    await this.connectionController.pauseObservation();
+    return this.connection().observation === tablet && this.capacitiesTabletReady();
+  }
+  connectCapacities(){
+    const tablet = this.connection().observation;
+    if (!tablet || !this.canConnectCapacities()) return;
+    this.capacitiesSelection.set(null);
+    this.capacitiesOriginal = {connection_id:tablet.connection_id,boot_id:tablet.boot_id};
+    void this.capacitiesController.begin(() => this.pauseCapacities(tablet), !this.capacitiesCurrent());
+  }
+  cancelCapacities(){ void this.capacitiesController.cancel(); }
+  capacitiesOriginalReady(){
+    const tablet = this.connection().observation, original = this.capacitiesOriginal;
+    return this.capacitiesTabletReady() && !!tablet && (!original ||
+      (tablet.connection_id === original.connection_id && tablet.boot_id === original.boot_id));
+  }
+  checkCapacities(){
+    const tablet = this.connection().observation;
+    if (!tablet || !this.capacitiesOriginalReady()) return;
+    this.capacitiesOriginal ??= {connection_id:tablet.connection_id,boot_id:tablet.boot_id};
+    void this.capacitiesController.reconcile(() => this.pauseCapacities(tablet), this.host.hasCapacitiesLaunch?.() ?? true);
+  }
+  canInspectCapacitiesConnection(){
+    return !!this.host.capacitiesAuth?.inspectConnection && this.capacitiesTabletReady() &&
+      !this.capacitiesLocked() && !this.canCheckCapacities();
+  }
+  canDisconnectCapacities(){
+    return !!this.host.capacitiesAuth?.disconnect && this.canInspectCapacitiesConnection() &&
+      this.capacitiesSelectedConnection()?.status === 'active';
+  }
+  async inspectCapacitiesConnection(){
+    if (!this.canInspectCapacitiesConnection()) return;
+    await this.runCapacitiesConnection('inspect');
+  }
+  async disconnectCapacities(){
+    if (!this.canDisconnectCapacities()) return;
+    const ref = this.capacitiesSelectedConnection()?.connectionRef;
+    if (ref) await this.runCapacitiesConnection('disconnect', ref);
+  }
+  private async runCapacitiesConnection(action: 'inspect'|'disconnect', ref?: string){
+    const tablet = this.connection().observation, adapter = this.host.capacitiesAuth;
+    if (!tablet || !adapter) return;
+    const selected = {connection_id:tablet.connection_id,boot_id:tablet.boot_id};
+    this.capacitiesConnectionPending.set(action);
+    this.capacitiesSelection.set(null);
+    try {
+      if (!await this.pauseCapacities(tablet)) return;
+      if (action === 'disconnect') this.capacitiesConfirmed.set(null);
+      const state = parseCapacitiesConnectionState(await (ref ? adapter.disconnect?.(ref) : adapter.inspectConnection?.()));
+      if (this.connection().observation === tablet) {
+        this.capacitiesSelection.set({tablet:selected,state});
+        if (['no-connection','local-disabled','revoked'].includes(state.status)) this.capacitiesConfirmed.set(null);
+      }
+    } catch {
+      if (this.connection().observation === tablet) {
+        this.capacitiesSelection.set({tablet:selected,state:{contract_version:1,
+          status:action === 'disconnect' ? 'reconcile-required' : 'unavailable',connectionRef:null}});
+      }
+    } finally {
+      this.capacitiesConnectionPending.set(null);
+    }
+  }
   async beginProduct(){if(this.productPeerBusy())return;if(this.archiveMaintenanceBusy3())return;
     const tablet=this.connection().observation;if(!tablet||!this.profile().savedConfigurationProbe||!this.host.productSettings||this.settingsBusy())return;
     this.localModeController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();this.basicController.clear();this.forgetController.clear();this.savedConfigurationController.clear();
@@ -673,5 +816,5 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.clearPortable(); this.stopLocalModeOnLifecycle(); document.removeEventListener('visibilitychange',this.clearFileOnHidden); window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.cleanupController.dispose();this.handwritingController.dispose();this.notebookController.dispose();this.selectedController.dispose();this.restoreController.dispose();this.notebookRestoreController.dispose();this.managementController.dispose();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.clearSharedArchivePeers1(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.capacitiesController.dispose(); this.clearPortable(); this.stopLocalModeOnLifecycle(); document.removeEventListener('visibilitychange',this.clearFileOnHidden); window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.cleanupController.dispose();this.handwritingController.dispose();this.notebookController.dispose();this.selectedController.dispose();this.restoreController.dispose();this.notebookRestoreController.dispose();this.managementController.dispose();this.conversationController.clear();this.storageInitializationController.clear();this.ownedV3Controller.clear();this.cacheController.clear();this.fileCredentialController.clear();this.credentialController.clear();this.memorySettingsController.clear();this.researchController.clear();this.clearSharedArchivePeers1(); this.forgetController.clear(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
 }

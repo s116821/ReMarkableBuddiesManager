@@ -328,21 +328,18 @@ def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspe
                     notices.recv(65536)
                 except socket.timeout:
                     pass
-                except OSError:
-                    invalid.append('cable-lost')
-                    sock.close()
-                    return
                 if done.is_set():
                     return
-                try:
-                    if snapshot(config) != baseline:
-                        raise Refusal('cable-lost')
-                except Exception:
-                    invalid.append('cable-lost')
-                    sock.close()
-                    return
+                if snapshot(config) != baseline:
+                    raise Refusal('cable-lost')
+        except Exception:
+            invalid.append('cable-lost')
+            sock.close()
         finally:
-            notices.close()
+            try:
+                notices.close()
+            except Exception:
+                invalid.append('cable-lost')
 
     watcher = threading.Thread(target=watch, daemon=True)
     watcher.start()
@@ -355,8 +352,6 @@ def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspe
         result = inspection(transport)
         if invalid or snapshot(config) != baseline:
             raise Refusal('cable-lost')
-        result['connection_id'] = hashlib.sha256(json.dumps(baseline, sort_keys=True).encode()).hexdigest()
-        return result
     except Exception:
         if invalid:
             raise Refusal('cable-lost') from None
@@ -366,6 +361,15 @@ def observe(config, snapshot=wired_snapshot, dial=bound_socket, inspection=inspe
         transport.close()
         sock.close()
         watcher.join(timeout=1.5)
+    # Check settlement before reading the latch. A watcher still running here
+    # could invalidate the connection after the final snapshot.
+    settled = not watcher.is_alive()
+    if invalid:
+        raise Refusal('cable-lost')
+    if not settled:
+        raise Refusal('timeout')
+    result['connection_id'] = hashlib.sha256(json.dumps(baseline, sort_keys=True).encode()).hexdigest()
+    return result
 
 
 def main():

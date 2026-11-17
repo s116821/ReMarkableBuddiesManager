@@ -1,6 +1,6 @@
 import type { ObservationResult } from '../src/observation';
 export type ProductKey='export_destination'|'reader_enabled'|'writer_enabled';
-export type ProductFields=Record<ProductKey,{origin:'default'|'declared';value:'mem'|'disabled'|boolean}>;
+export type ProductFields=Record<ProductKey,{origin:'default'|'declared';value:'mem'|'capacities'|'disabled'|boolean}>;
 export type ProductChanges=Partial<Record<ProductKey,{action:'clear'}|{action:'set';value:string|boolean}>>;
 export type ProductOperation='inspect'|'prepare'|'apply'|'status';
 export type ProductReport={operation:ProductOperation;status:'ok'|'invalid-input'|'unsupported'|'unavailable'|'busy'|'conflict'|'failed';outcome:'read-only'|'prepared'|'no-change'|'verified'|'desired-file-observed'|'unresolved'|'not-dispatched'|'unknown';disk_readback_verified:boolean;runtime_activation:'unverified'|'restart-required'};

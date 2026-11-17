@@ -57,6 +57,17 @@ class Notice:
 
 
 class Transport(unittest.TestCase):
+    def test_explicit_capacities_prepare_keeps_private_config_out_of_packet(self):
+        value = request_for('prepare')
+        body = json.loads(base64.b64decode(value['input_base64']))
+        body['changes'] = {'export_destination': {'action': 'set', 'value': 'capacities'}}
+        value['input_base64'] = base64.b64encode(json.dumps(body).encode()).decode()
+        self.assertEqual(q.request(json.dumps(value).encode()), value)
+        body['changes']['export_destination']['grant_id'] = BOOT
+        value['input_base64'] = base64.b64encode(json.dumps(body).encode()).decode()
+        with self.assertRaises(ValueError):
+            q.request(json.dumps(value).encode())
+
     def channel(self, raw, code=0):
         channel = Mock()
         channel.recv_ready.side_effect = [True, False, False]
