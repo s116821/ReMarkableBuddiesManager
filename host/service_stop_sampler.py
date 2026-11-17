@@ -60,24 +60,39 @@ def canonical_digest(observation, profile, raw):
     return hashlib.sha256(json.dumps(v,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
 
 
-def run_fixed(transport, command, deadline, cap=32768):
+def run_fixed(transport, command, deadline, cap=32768, *, diagnostic=None):
     """One fixed command, empty stdin, shared remaining deadline and bounded drains."""
     remaining = deadline-time.monotonic()
+    if diagnostic is not None:
+        diagnostic[:] = ('channel-open', 'error')
     if remaining <= 0:
+        if diagnostic is not None:
+            diagnostic[:] = ('channel-open', 'phase-timeout')
         raise shared.Refusal('timeout')
     channel = transport.open_session(timeout=min(2,remaining))
     output, error = bytearray(), bytearray()
     try:
+        if diagnostic is not None:
+            diagnostic[:] = ('channel-exec', 'error')
         channel.settimeout(min(2,remaining))
         channel.exec_command(command)
+        if diagnostic is not None:
+            diagnostic[:] = ('channel-shutdown', 'error')
         channel.shutdown_write()
-        command_deadline = min(deadline,time.monotonic()+8)
+        drain_deadline = time.monotonic()+8
+        command_deadline = min(deadline,drain_deadline)
+        if diagnostic is not None:
+            diagnostic[:] = ('reply-drain', 'error')
         # Available status and temporarily empty buffers do not establish EOF.
         # Drain each stream fairly until an actual empty read, then require status.
         channel.settimeout(0.0)
         stdout_done = stderr_done = False
         while True:
             if time.monotonic() >= command_deadline:
+                if diagnostic is not None:
+                    stage = 'exit-status' if stdout_done and stderr_done else 'reply-drain'
+                    limit = 'phase-timeout' if deadline <= drain_deadline else 'command-timeout'
+                    diagnostic[:] = (stage, limit)
                 raise shared.Refusal('timeout')
             progressed = False
             if not stdout_done:
@@ -89,7 +104,10 @@ def run_fixed(transport, command, deadline, cap=32768):
                     stdout_done = not data
                     output.extend(data)
                     progressed = True
-                    if len(output)>cap:refuse()
+                    if len(output)>cap:
+                        if diagnostic is not None:
+                            diagnostic[:] = ('reply-drain', 'stdout-limit')
+                        refuse()
             if not stderr_done:
                 try:
                     data = channel.recv_stderr(4096)
@@ -99,12 +117,22 @@ def run_fixed(transport, command, deadline, cap=32768):
                     stderr_done = not data
                     error.extend(data)
                     progressed = True
-                    if len(error)>8192:refuse()
+                    if len(error)>8192:
+                        if diagnostic is not None:
+                            diagnostic[:] = ('reply-drain', 'stderr-limit')
+                        refuse()
             if stdout_done and stderr_done and channel.exit_status_ready():break
             if not progressed:
                 time.sleep(min(.005,max(0,command_deadline-time.monotonic())))
+        if diagnostic is not None:
+            diagnostic[:] = ('exit-status', 'error')
         code=channel.recv_exit_status()
-        if time.monotonic()>=deadline:raise shared.Refusal('timeout')
+        if time.monotonic()>=deadline:
+            if diagnostic is not None:
+                diagnostic[:] = ('exit-status', 'phase-timeout')
+            raise shared.Refusal('timeout')
+        if diagnostic is not None:
+            diagnostic[:] = ('channel-close', 'error')
         return code,bytes(output),bytes(error)
     finally:
         output[:]=b'\0'*len(output);error[:]=b'\0'*len(error)

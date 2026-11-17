@@ -15,8 +15,21 @@ import { fileURLToPath } from 'node:url';
 import { result, validateResult } from './observation-protocol.mjs';
 export { statuses, result, validateResult } from './observation-protocol.mjs';
 
+const STOP_DIAGNOSTIC_MAX = 128;
+const STOP_DIAGNOSTIC = /^STOP1 ([a-z-]+) ([a-z-]+)\r?\n$/;
+const STOP_CAUSES = new Map([
+  ['setup', ['error']], ['initial-inspection', ['error']], ['sample', ['error']],
+  ['owner-preparation', ['error']], ['channel-open', ['error', 'phase-timeout']],
+  ['channel-exec', ['error']], ['channel-shutdown', ['error']],
+  ['reply-drain', ['error', 'phase-timeout', 'command-timeout', 'stdout-limit', 'stderr-limit']],
+  ['exit-status', ['error', 'phase-timeout', 'command-timeout']], ['channel-close', ['error']],
+  ['ack', ['error', 'accepted', 'missing-status', 'nonzero-exit', 'stderr', 'empty-reply', 'incomplete-reply', 'receipt-refused']],
+  ['final-inspection', ['error']],
+]);
+
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
+  #stopDiagnosticRun;
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
     script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs } = {}) {
     this.config = config; this.python = python; this.script = script; this.platform = platform;
@@ -108,6 +121,13 @@ export class WiredObserver {
     const cacheCleanup=action==='source-cache-cleanup';
     const conversation=action==='conversation-inventory';
     const serviceStop=action==='service-stop';
+    const typedStop = serviceStop && request?.selector === 'stop' &&
+      request.expected?.profile === 'ordinary-manual' && typeof request.expected.invocation === 'string';
+    const stopRun = typedStop ? Symbol('typed stop diagnostic') : null;
+    if (typedStop) {
+      this.#stopDiagnosticRun = stopRun;
+      this.serviceStopDiagnostic = null;
+    }
     const storageInitialization=action==='storage-initialization';
     const ownedV3=action==='owned-data-v3';
     const cachePrivate=serviceStop||portable||storageInitialization||ownedV3||cacheCleanup||action==='source-cache-inventory'||conversation||management||restore||selected||notebook||handwriting;
@@ -132,10 +152,25 @@ export class WiredObserver {
       const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config };
       // Windows COM adapter inventory needs the host user's temp directory.
       if (this.platform === 'win32' && process.env.TEMP) env.TEMP = process.env.TEMP;
-      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 'pipe' : 'ignore', 'pipe', 'ignore'], env });
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 'pipe' : 'ignore', 'pipe', typedStop ? 'pipe' : 'ignore'], env });
       this.active = child;
       child.once('spawn', () => { launched = true; });
       if (personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      const stopBytes = typedStop ? Buffer.alloc(STOP_DIAGNOSTIC_MAX) : null;
+      let stopLength = 0, discardStopMarker = false, childError = false;
+      if (typedStop) {
+        const discard = () => { discardStopMarker = true; stopBytes.fill(0); };
+        child.stderr.on('error', discard);
+        child.stderr.on('data', data => {
+          try {
+            if (discardStopMarker || stopLength + data.length > stopBytes.length) discard();
+            else {
+              data.copy(stopBytes, stopLength);
+              stopLength += data.length;
+            }
+          } finally { data.fill(0); }
+        });
+      }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
       const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, serviceStop?Math.min(this.serviceStopTimeoutMs,request.budget_ms+1000):(localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
       child.stdout.on('data', data => {
@@ -143,16 +178,34 @@ export class WiredObserver {
         chunks.push(data); outputBytes += data.length;
         if (outputBytes > (serviceStop ? 262144 : portable ? 196608 : storageInitialization ? 24576 : ownedV3 ? 49152 : handwriting ? 360448 : management ? 49152 : (restore||selected||notebook) ? 24576 : cachePrivate&&!cacheCleanup ? 16384 : localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 24576 : configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
-      const finish = async code => {
+      const finish = async (code, closed = false) => {
         clearTimeout(timer);
         if (this.active === child) this.active = null;
+        const recordStop = (boundary, childStatus = null) => {
+          if (!typedStop || !closed) return;
+          try {
+            if (this.#stopDiagnosticRun !== stopRun) return;
+            const bytes = stopBytes.subarray(0, stopLength);
+            const marker = !discardStopMarker && bytes.every(byte => byte <= 0x7f)
+              ? STOP_DIAGNOSTIC.exec(bytes.toString('ascii')) : null;
+            const valid = marker?.[0].length === stopLength && STOP_CAUSES.get(marker[1])?.includes(marker[2]);
+            this.serviceStopDiagnostic = Object.freeze({
+              boundary, childStatus, stage: valid ? marker[1] : null, cause: valid ? marker[2] : null,
+            });
+          } catch {
+            // Private evidence cannot change the child's validated result.
+          } finally { stopBytes.fill(0); }
+        };
         try {
-        if (generation !== this.generation) return resolve(refusal('cancelled'));
-        if (expired) return resolve(refusal('timeout'));
-        if (code !== 0 || oversized) return resolve(refusal('observation-unavailable'));
+        if (generation !== this.generation) { recordStop('cancelled'); return resolve(refusal('cancelled')); }
+        if (expired) { recordStop('timeout'); return resolve(refusal('timeout')); }
+        if (code !== 0 || oversized || childError) {
+          recordStop(oversized ? 'stdout-limit' : childError ? 'child-error' : 'child-exit');
+          return resolve(refusal('observation-unavailable'));
+        }
           const input=Buffer.concat(chunks);let value;try{if(portable)portableJson(input,196608);if(storageInitialization||ownedV3||product||localMode){const text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);if(text.charCodeAt(0)===0xfeff)throw Error('Private response refused');strictJson(input);}if(modelCredential||cachePrivate||localMode)strictJson(input);value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(input));}finally{if(modelCredential||cachePrivate||localMode)input.fill(0);}
           if (action === 'observe') return resolve(validateResult(value));
-          if(serviceStop){if(Object.keys(value).sort().join()!=='contract_version,observation,service_stop_raw,status')throw Error('Service stop envelope refused');validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});parseServiceStopRaw(value.service_stop_raw,request.selector);if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Service stop identity refused');return resolve(value);}
+          if(serviceStop){if(Object.keys(value).sort().join()!=='contract_version,observation,service_stop_raw,status')throw Error('Service stop envelope refused');validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});parseServiceStopRaw(value.service_stop_raw,request.selector);if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Service stop identity refused');recordStop('reported', value.status);return resolve(value);}
           if (configuration) {
             const reduced=reduceSavedConfigurationResult(value,request,validateResult);
             return resolve(generation===this.generation?reduced:refusal('cancelled'));
@@ -209,10 +262,10 @@ export class WiredObserver {
             } else if (i.report !== null) throw new Error('Invalid inspection');
           }
           resolve(value);
-        } catch { resolve(refusal('observation-unavailable')); }finally{if(modelCredential||cachePrivate||localMode){for(const chunk of chunks)chunk.fill(0);chunks.length=0;}}
+        } catch { recordStop('parse-refused'); resolve(refusal('observation-unavailable')); }finally{if(modelCredential||cachePrivate||localMode){for(const chunk of chunks)chunk.fill(0);chunks.length=0;}}
       };
-      child.once('error', () => finish(-1));
-      child.once('close', finish);
+      child.once('error', () => { childError = true; finish(-1); });
+      child.once('close', code => finish(code, true));
     });
   }
 }

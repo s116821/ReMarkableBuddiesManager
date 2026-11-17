@@ -69,22 +69,25 @@ class TypedPublicStop(unittest.TestCase):
             t.typed_public_stop(self.sampler,self.value,self.facts,11,self.owner)
 
     def test_fixed_child_marks_possible_before_one_send_and_keeps_refusal_unknown(self):
-        for valid in (True,False):
-            sent = []
-            def run(transport,command,deadline,cap):
+        for code, response, cause in ((0, None, 'accepted'), (-1, None, 'missing-status'),
+                                      (0, b'', 'empty-reply'), (0, b'partial', 'incomplete-reply'),
+                                      (0, b'not-a-receipt\n', 'receipt-refused')):
+            sent, diagnostic = [], []
+            def run(transport,command,deadline,cap,*,diagnostic):
                 self.assertEqual(sent,['possible'])
                 self.assertEqual((deadline,cap),(11,512))
                 sent.append('exec')
-                return 0,self.response(command) if valid else b'',b''
+                return code,self.response(command) if response is None else response,b''
             with patch.object(t,'QUALIFIED_PROFILES',('ordinary-manual',)), \
                  patch.object(t,'TYPED_PUBLIC_STOP_OWNER',self.owner), \
                  patch.object(t,'Sampler',return_value=self.sampler), \
                  patch.object(t,'run_fixed',side_effect=run), \
                  patch.object(t.shared,'inspect',side_effect=lambda _: {'boot_id':self.boot}), \
                  patch.object(t.time,'monotonic',return_value=10):
-                result = t.execute(Mock(),self.value,11,lambda:sent.append('possible'))
+                result = t.execute(Mock(),self.value,11,lambda:sent.append('possible'),diagnostic=diagnostic)
             self.assertEqual(sent,['possible','exec'])
-            self.assertEqual(result['_service_stop_raw']['command'], 'request-accepted' if valid else 'unknown')
+            self.assertEqual(diagnostic,['ack',cause])
+            self.assertEqual(result['_service_stop_raw']['command'], 'request-accepted' if cause == 'accepted' else 'unknown')
 
 
 if __name__ == '__main__':

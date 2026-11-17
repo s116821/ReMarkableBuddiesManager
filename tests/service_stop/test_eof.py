@@ -93,7 +93,7 @@ class ScheduledChannel:
 
 
 class ReceiveCompletion(unittest.TestCase):
-    def run_channel(self, stdout, stderr, cap=32768, status_at=0.0):
+    def run_channel(self, stdout, stderr, cap=32768, status_at=0.0, *, deadline=100.05, diagnostic=None):
         clock = Clock()
         channel = ScheduledChannel(clock, stdout, stderr, status_at)
         connection = Mock()
@@ -101,7 +101,7 @@ class ReceiveCompletion(unittest.TestCase):
         with patch.object(sampler.time, 'monotonic', clock.monotonic), \
                 patch.object(sampler.time, 'sleep', clock.sleep):
             try:
-                result = sampler.run_fixed(connection, 'fixed-read-only-fixture', 100.05, cap)
+                result = sampler.run_fixed(connection, 'fixed-read-only-fixture', deadline, cap, diagnostic=diagnostic)
                 return result, channel
             finally:
                 self.assertTrue(channel.closed)
@@ -135,6 +135,13 @@ class ReceiveCompletion(unittest.TestCase):
                 with self.assertRaises(shared.Refusal) as raised:
                     self.run_channel(stdout, stderr)
                 self.assertEqual(raised.exception.status, 'timeout')
+
+    def test_typed_diagnostic_distinguishes_eight_second_drain_and_exit_status(self):
+        for stdout, stage in ([(0, b'partial')], 'reply-drain'), ([(0, None)], 'exit-status'):
+            diagnostic = []
+            with self.subTest(stage=stage), self.assertRaises(shared.Refusal):
+                self.run_channel(stdout, [(0, None)], status_at=9, deadline=130, diagnostic=diagnostic)
+            self.assertEqual(diagnostic, [stage, 'command-timeout'])
 
     def test_complete_both_eofs_wait_for_status(self):
         result, channel = self.run_channel(
