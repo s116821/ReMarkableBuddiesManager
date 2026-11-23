@@ -1,7 +1,7 @@
 @if (app.isView('settings', 'reader')) {
 <section class="ui-panel my-6" aria-labelledby="product-settings-title">
     <h2 id="product-settings-title">Reader, Writer and export</h2>
-    <p class="text-sm text-muted">Choose which tools are enabled and where Writer exports. Restart Buddy to use saved changes. Set up your Mem account and destination separately.</p>
+    <p class="text-sm text-muted">For Capacities exports, save Capacities as the export backend and connect your account below. Restart Buddy to apply changes.</p>
     <div class="flex flex-wrap gap-2 my-3">
       <button class="ui-button ui-button-secondary" type="button" (click)="app.beginProduct()" [disabled]="!app.host.productSettings || !app.profile().savedConfigurationProbe || app.product().busy || app.productPeerBusy()">Edit Reader & Writer</button>
       <button class="ui-button ui-button-primary" type="button" (click)="app.saveProduct()" [disabled]="!app.productCanSave()">Save Reader & Writer</button>
