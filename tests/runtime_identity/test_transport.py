@@ -15,6 +15,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'host'));sys.path.insert(0,str(ROOT/'tests/wired'))
 import runtime_identity_transport as r
 import wired_observer as o
+from personalization_transport import LAUNCHER_QUERY, RESIDENT, STANDALONE
 from test_observer import Peer, Files
 import paramiko
 BOOT='11111111-1111-1111-1111-111111111111'
@@ -23,20 +24,59 @@ class Notice:
     def recv(self,_):time.sleep(.01);raise socket.timeout()
     def close(self):pass
 class VersionPeer(Peer):
-    def __init__(self,line,code=0,mode='normal'):super().__init__();self.line,self.code,self.mode,self.stats=line,code,mode,0
-    def check_channel_exec_request(self,channel,command):
-        if command.decode()==o.COMMAND:return super().check_channel_exec_request(channel,command)
-        self.commands.append(command.decode())
-        if command.decode()!=r.COMMAND:return False
-        def send():channel.sendall(self.line);channel.send_stderr(b'PRIVATE_STDERR_SENTINEL');channel.send_exit_status(self.code);channel.shutdown_write()
-        threading.Thread(target=send,daemon=True).start();return True
+    def __init__(self, line, code=0, mode='normal', unit=None):
+        super().__init__()
+        self.line, self.code, self.mode, self.unit = line, code, mode, unit
+        self.stats, self.launcher_reads = 0, 0
+        self.checked_paths = []
+
+    def check_channel_exec_request(self, channel, command):
+        command = command.decode()
+        self.commands.append(command)
+        stdout, stderr, code = b'', b'', 0
+        if command == o.COMMAND:
+            state = b'loaded' if self.unit else b'not-found'
+            stdout = b'armv7l\nLoadState=' + state + b'\nActiveState=inactive\nSubState=dead\n'
+        elif command == LAUNCHER_QUERY:
+            self.launcher_reads += 1
+            unit = STANDALONE if self.mode == 'rebound' and self.launcher_reads > 1 else self.unit
+            if unit:
+                stdout = f'{{ path={unit} ; argv[]={unit} --resident ; ignore_errors=no }}\n'.encode()
+        elif command == version_command(self.unit or STANDALONE):
+            stdout, stderr, code = self.line, b'PRIVATE_STDERR_SENTINEL', self.code
+        else:
+            return False
+
+        def send():
+            channel.sendall(stdout)
+            if stderr:
+                channel.send_stderr(stderr)
+            channel.send_exit_status(code)
+            channel.shutdown_write()
+
+        threading.Thread(target=send, daemon=True).start()
+        return True
+
+
+def version_command(path):
+    return f'/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin {path} --version'
+
+
+RESIDENT_PARENTS = ('/home', '/home/root', '/home/root/.local', '/home/root/.local/lib',
+                    '/home/root/.local/lib/remarkable-buddies')
+
+
 class BinaryFiles(Files):
     def stat(self,path):
-        if path in ['/opt','/opt/bin']:
+        if path in ('/opt', '/opt/bin', *RESIDENT_PARENTS):
+            self.peer.checked_paths.append(path)
             v=paramiko.SFTPAttributes();v.st_mode=stat.S_IFDIR|0o755;v.st_uid=0;v.st_gid=0;v.st_size=4096;v.st_mtime=1
-            if self.peer.mode=='unsafe-parent':v.st_mode|=0o002
+            if self.peer.mode=='unsafe-parent' and path in ('/opt/bin', '/home/root/.local/lib'):
+                v.st_mode |= 0o002
             return v
-        if path!=r.BINARY:return super().stat(path)
+        if path not in (STANDALONE, RESIDENT):
+            return super().stat(path)
+        self.peer.checked_paths.append(path)
         self.peer.stats+=1
         if self.peer.mode=='missing':return paramiko.SFTP_NO_SUCH_FILE
         v=paramiko.SFTPAttributes();v.st_mode=stat.S_IFREG|0o755;v.st_uid=0;v.st_gid=0;v.st_size=100;v.st_mtime=1
@@ -60,11 +100,28 @@ class Identity(unittest.TestCase):
         transport.open_session.assert_not_called()
     @unittest.skipUnless(sys.platform=='linux','Owned POSIX socket/private-key fixture; no native Windows claim')
     def test_actual_ssh_positive_missing_unsafe_malformed_unsupported_and_changed_binary(self):
-        cases=[(b'remarkable-reader-buddy dev.v0.2.0-73-g6254092\n',0,'normal','reported'),(b'remarkable-reader-buddy dev.unknown\n',0,'normal','reported'),(b'reader-buddy 0.1.4-dev-synthetic\n',0,'normal','reported'),(b'PRIVATE_STDOUT_SENTINEL',0,'normal','unsupported'),(b'',2,'normal','unsupported'),(b'',0,'missing','missing'),(b'',0,'unsafe','unsafe'),(b'',0,'unsafe-parent','unsafe'),(b'reader-buddy 0.1.4\n',0,'changed',None)]
-        for line,code,mode,expected in cases:
-            with self.subTest(mode=mode,status=expected),tempfile.TemporaryDirectory() as folder:
+        release = b'reader-buddy 0.1.4\n'
+        cases = [
+            (None, b'remarkable-reader-buddy dev.v0.2.0-73-g6254092\n', 0, 'normal', 'reported'),
+            (None, b'remarkable-reader-buddy dev.unknown\n', 0, 'normal', 'reported'),
+            (None, b'reader-buddy 0.1.4-dev-synthetic\n', 0, 'normal', 'reported'),
+            (STANDALONE, release, 0, 'normal', 'reported'),
+            (RESIDENT, release, 0, 'normal', 'reported'),
+            (None, b'PRIVATE_STDOUT_SENTINEL', 0, 'normal', 'unsupported'),
+            (None, b'', 2, 'normal', 'unsupported'),
+            (None, b'', 0, 'missing', 'missing'),
+            (RESIDENT, b'', 0, 'missing', 'missing'),
+            (None, b'', 0, 'unsafe', 'unsafe'),
+            (None, b'', 0, 'unsafe-parent', 'unsafe'),
+            (RESIDENT, b'', 0, 'unsafe-parent', 'unsafe'),
+            (None, release, 0, 'changed', None),
+            (RESIDENT, release, 0, 'rebound', None),
+            ('/usr/local/bin/unknown', release, 0, 'unknown-unit', None),
+        ]
+        for unit, line, code, mode, expected in cases:
+            with self.subTest(unit=unit,mode=mode,status=expected),tempfile.TemporaryDirectory() as folder:
                 key=paramiko.RSAKey.generate(2048);p=Path(folder)/'identity';key.write_private_key_file(str(p));p.chmod(0o600)
-                hostkey=paramiko.RSAKey.generate(2048);client,server=socket.socketpair();peer=VersionPeer(line,code,mode)
+                hostkey=paramiko.RSAKey.generate(2048);client,server=socket.socketpair();peer=VersionPeer(line,code,mode,unit)
                 transport=paramiko.Transport(server);transport.add_server_key(hostkey);transport.set_subsystem_handler('sftp',paramiko.SFTPServer,BinaryFiles);transport.start_server(event=threading.Event(),server=peer)
                 try:
                     def read():return o.observe({'host_key_sha256':o.fingerprint(hostkey),'identity_file':str(p)},snapshot=lambda _:BASE,dial=lambda _:client,notices=Notice(),expected_connection=IDENTITY,inspection=lambda t:r.inspect_runtime(t,BOOT))
@@ -72,6 +129,16 @@ class Identity(unittest.TestCase):
                         with self.assertRaises(o.Refusal):read()
                     else:
                         result=read();self.assertEqual(result['_runtime_identity']['status'],expected);self.assertIsNone(result['_runtime_identity']['running_version']);self.assertFalse(result['_runtime_identity']['installation_eligible']);self.assertNotIn('PRIVATE_',json.dumps(result))
-                    self.assertEqual(peer.commands,[o.COMMAND,o.COMMAND] if mode in ('missing','unsafe','unsafe-parent') else [o.COMMAND,r.COMMAND] if mode=='changed' else [o.COMMAND,r.COMMAND,o.COMMAND])
+                    expected_commands = [o.COMMAND, LAUNCHER_QUERY]
+                    if mode not in ('missing', 'unsafe', 'unsafe-parent', 'unknown-unit'):
+                        expected_commands.append(version_command(unit or STANDALONE))
+                    if mode not in ('changed', 'unknown-unit'):
+                        expected_commands.extend((o.COMMAND, LAUNCHER_QUERY))
+                    self.assertEqual(peer.commands, expected_commands)
+                    if unit == RESIDENT and mode == 'normal':
+                        self.assertEqual(peer.checked_paths, [*RESIDENT_PARENTS, RESIDENT] * 2)
+                        self.assertEqual(result['_runtime_identity']['binary_version'], '0.1.4')
+                    if unit:
+                        self.assertNotIn(STANDALONE if unit != STANDALONE else RESIDENT, peer.checked_paths)
                 finally:transport.close();server.close();client.close()
 if __name__=='__main__':unittest.main()
