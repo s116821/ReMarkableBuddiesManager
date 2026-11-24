@@ -52,7 +52,8 @@ class PreferencePeer(Peer):
                 state = 'loaded' if self.launcher else 'not-found'
                 output = f'armv7l\nLoadState={state}\nActiveState=active\nSubState=running\n'
             elif self.launcher:
-                output = (f'{{ path={self.launcher} ; argv[]={self.launcher} ; ignore_errors=no ; '
+                argv = f'{self.launcher} --trigger-corner LR' if self.launcher == LEGACY else self.launcher
+                output = (f'{{ path={self.launcher} ; argv[]={argv} ; ignore_errors=no ; '
                           'start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }\n')
             else:
                 output = ''
@@ -107,12 +108,13 @@ class Transport(unittest.TestCase):
             with self.assertRaises(o.Refusal): p.execute(transport, self.request(), progress)
         transport.open_session.assert_not_called(); self.assertFalse(progress['dispatched'])
     def test_launcher_probe_errors_and_ambiguous_units_refuse(self):
-        record = lambda path, argv: f'{{ path={path} ; argv[]={argv} ; ignore_errors=no }}'.encode()
+        def record(path, argv):
+            return f'{{ path={path} ; argv[]={argv} ; ignore_errors=no }}'.encode()
         for code, raw in [
             (1, record(PACKAGED, PACKAGED)),
             (0, b''),
             (0, record(PACKAGED, LEGACY)),
-            (0, record(PACKAGED, f'{PACKAGED} --other-mode')),
+            (0, record(PACKAGED, f'{LEGACY} --trigger-corner LR')),
             (0, record(PACKAGED, PACKAGED) + b'\n' + record(LEGACY, LEGACY)),
         ]:
             with self.subTest(code=code, raw=raw):

@@ -14,7 +14,10 @@ STANDALONE = '/opt/bin/reader-buddy'
 RESIDENT = '/home/root/.local/lib/remarkable-buddies/reader-buddy'
 LAUNCHER_QUERY = 'systemctl show --no-pager --property=ExecStart --value reader-buddy.service'
 # Match one direct ExecStart record. Neither its arguments nor its metadata are executed.
-LAUNCHER = re.compile(rb'\{ path=([^\s;]+) ; argv\[\]=([^\s;]+) ; [^{}\r\n]+ \}')
+LAUNCHER = re.compile(
+    rb'\{ path=([^\s;]+) ; argv\[\]=([^\s;]+)(?: [^{}\r\n]*?)?'
+    rb' ; ignore_errors=(?:yes|no)(?: ; [^{}\r\n]+)? \}'
+)
 
 
 def parse(raw):
