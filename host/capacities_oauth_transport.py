@@ -10,17 +10,10 @@ import time
 
 import wired_observer as shared
 from model_credential_transport import digest, exact, parse, uuid
+from personalization_transport import COMMAND_PREFIX, select_executable
 from runtime_identity_transport import metadata
 
-ENVIRONMENT = ('/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin '
-               'REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json ')
-COMMAND = ENVIRONMENT + '/opt/bin/reader-buddy --capacities-oauth'
-EXCHANGE_COMMAND = (ENVIRONMENT + 'REMARKABLE_BUDDIES_CAPACITIES_ATTEST=1 '
-                    '/opt/bin/reader-buddy --capacities-oauth')
 ATTEST_PREFIX = b'capacities-actor-exe-v1 '
-DIGEST_COMMAND = ('/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C '
-                  'sha256sum -- /opt/bin/reader-buddy')
-DIGEST_OUTPUT = re.compile(rb'([a-f0-9]{64}) [ *]/opt/bin/reader-buddy\n')
 CAPTURE_FIELDS = 'tablet_id connection_id boot_id config_sha256'
 BINDING_FIELDS = CAPTURE_FIELDS + ' operation_id grant_id'
 BASE_FIELDS = 'contract_version status'
@@ -181,17 +174,17 @@ def drain(channel, deadline, output, maximum=MAX_RESPONSE, diagnostics=MAX_DIAGN
             time.sleep(min(.01, remaining(deadline)))
 
 
-def executable_digest(transport, deadline):
+def executable_digest(transport, executable, deadline):
     deadline = min(deadline - POSTFLIGHT_SECONDS, time.monotonic() + 8)
     channel = transport.open_session(timeout=min(2, remaining(deadline)))
     try:
         channel.settimeout(min(2, remaining(deadline)))
-        channel.exec_command(DIGEST_COMMAND)
+        channel.exec_command(f'/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C sha256sum -- {executable}')
         channel.shutdown_write()
         output = bytearray()
         if drain(channel, deadline, output, maximum=128, diagnostics=0) != 0:
             raise ValueError('executable read refused')
-        witness = DIGEST_OUTPUT.fullmatch(output)
+        witness = re.fullmatch(rb'([a-f0-9]{64}) [ *]' + re.escape(executable.encode('ascii')) + rb'\n', output)
         if not witness:
             raise ValueError('executable read refused')
         return witness[1].decode('ascii')
@@ -199,10 +192,10 @@ def executable_digest(transport, deadline):
         channel.close()
 
 
-def installed_metadata(sftp):
-    sampled = metadata(sftp)
+def installed_metadata(sftp, executable):
+    sampled = metadata(sftp, executable)
     # Reuse the existing metadata gate. Its last row is the executable leaf
-    # (mode, uid, gid, size, mtime) after the two protected parents.
+    # (mode, uid, gid, size, mtime) after the protected ancestors.
     if sampled is None or not 1 <= sampled[-1][3] <= MAX_EXECUTABLE:
         raise ValueError('actor unavailable')
     return sampled
@@ -235,17 +228,24 @@ def confirm_executable(channel, expected, deadline):
             raise ValueError('actor refused')
 
 
-def actor(transport, selector, binding, deadline, exchange=None, grant=None):
+def admission_deadline(deadline, mutation):
+    return deadline - POSTFLIGHT_SECONDS - (ACTOR_MAX_MS / 1000 if mutation else 0)
+
+
+def actor(transport, selector, binding, deadline, exchange=None, grant=None, *, executable, check_installation=None):
     actor_deadline = deadline - POSTFLIGHT_SECONDS
-    admission_deadline = actor_deadline - ACTOR_MAX_MS / 1000 if exchange is not None else actor_deadline
-    channel = transport.open_session(timeout=min(2, remaining(admission_deadline)))
+    admission = admission_deadline(deadline, exchange is not None)
+    channel = transport.open_session(timeout=min(2, remaining(admission)))
     attempt = bytearray()
     output = bytearray()
     try:
-        channel.settimeout(min(2, remaining(admission_deadline)))
-        channel.exec_command(EXCHANGE_COMMAND if exchange is not None else COMMAND)
+        channel.settimeout(min(2, remaining(admission)))
+        attestation = ' REMARKABLE_BUDDIES_CAPACITIES_ATTEST=1' if exchange is not None else ''
+        channel.exec_command(f'{COMMAND_PREFIX}{attestation} {executable} --capacities-oauth')
         if exchange is not None:
-            confirm_executable(channel, exchange.executable_sha256, admission_deadline)
+            confirm_executable(channel, exchange.executable_sha256, admission)
+            if check_installation is not None:
+                check_installation()
             exchange.pre_send()
             if not transport.is_active():
                 raise shared.Refusal('cable-lost')
@@ -283,33 +283,47 @@ def execute(transport, value, deadline, open_sftp, exchange):
     before = shared.inspect(transport)
     if before['boot_id'] != binding['boot_id']:
         raise shared.Refusal('cable-lost')
+    admission = admission_deadline(deadline, selector in MUTATION_SELECTORS)
+    executable = select_executable(transport, before['service']['LoadState'], deadline=admission)
+    remaining(admission)
     sftp = open_sftp(transport)
     try:
-        sftp.get_channel().settimeout(min(2, remaining(deadline)))
-        installed = installed_metadata(sftp)
+        def sample_metadata(until):
+            sftp.get_channel().settimeout(min(2, remaining(until)))
+            sampled = installed_metadata(sftp, executable)
+            remaining(until)
+            return sampled
+
+        installed = sample_metadata(admission)
+
+        def check_installation():
+            if sample_metadata(admission) != installed:
+                raise ValueError('actor changed')
+
         fingerprint = None
         if selector in MUTATION_SELECTORS:
             capture = {key: binding[key] for key in ('connection_id', 'boot_id')}
             capture_selector = 'capture' if selector == 'exchange' else 'capture-connection'
-            actual = actor(transport, capture_selector, capture, min(deadline, time.monotonic() + 8))
+            actual = actor(transport, capture_selector, capture, min(deadline, time.monotonic() + 8),
+                           executable=executable)
             if actual['status'] != 'captured' or any(actual[key] != binding[key] for key in CAPTURE_FIELDS.split()):
                 raise shared.Refusal('cable-lost')
             if selector == 'disconnect' and actual.get('connection') != {
                     'grant_id': binding['grant_id'], 'space_id': value['space_id']}:
                 raise shared.Refusal('cable-lost')
-            if installed_metadata(sftp) != installed:
-                raise ValueError('actor changed')
+            check_installation()
         elif selector in CAPTURE_SELECTORS:
-            fingerprint = executable_digest(transport, deadline)
-            if installed_metadata(sftp) != installed:
-                raise ValueError('actor changed')
+            fingerprint = executable_digest(transport, executable, deadline)
+            check_installation()
         if selector in GRANT_SELECTORS:
             grant = {key: value[key] for key in ('space_id', 'expected_grant_sha256') if key in value}
-            result = actor(transport, selector, binding, deadline, exchange, grant)
+            result = actor(transport, selector, binding, deadline, exchange, grant,
+                           executable=executable, check_installation=check_installation)
         else:
-            result = actor(transport, selector, binding, deadline, exchange)
+            result = actor(transport, selector, binding, deadline, exchange, executable=executable,
+                           check_installation=check_installation)
         remaining(deadline)
-        if installed_metadata(sftp) != installed or shared.inspect(transport) != before:
+        if sample_metadata(deadline) != installed or shared.inspect(transport) != before:
             raise shared.Refusal('cable-lost')
         remaining(deadline)
         before['_capacities_oauth'] = result
@@ -324,6 +338,7 @@ def main():
     lock, responded = threading.Lock(), False
     value = None
     exchange = None
+    stdout = sys.stdout.buffer
 
     def disposition(settled):
         if value is None or value['selector'] not in MUTATION_SELECTORS:
@@ -340,13 +355,15 @@ def main():
         with lock:
             if not responded:
                 responded = True
-                print(json.dumps(value), flush=True)
+                stdout.write(json.dumps(value, ensure_ascii=True).encode('ascii') + b'\n')
+                stdout.flush()
 
     try:
         # The host recalculates the child budget only after this fixed ready
         # line. Anchoring just before the line charges transit and scheduling.
         started = time.monotonic()
-        print('capacities-oauth-ready-v1', flush=True)
+        stdout.write(b'capacities-oauth-ready-v1\n')
+        stdout.flush()
         value = request(sys.stdin.buffer.read(MAX_REQUEST + 1))
         if sys.platform not in ('linux', 'win32'):
             raise shared.Refusal('unsupported-host')

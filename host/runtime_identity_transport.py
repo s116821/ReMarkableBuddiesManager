@@ -7,8 +7,14 @@ import sys
 import threading
 import time
 import wired_observer as shared
+from personalization_transport import RESIDENT, STANDALONE
 
-BINARY = '/opt/bin/reader-buddy'
+BINARY = STANDALONE
+EXECUTABLE_PARENTS = {
+    STANDALONE: ('/opt', '/opt/bin'),
+    RESIDENT: ('/home', '/home/root', '/home/root/.local', '/home/root/.local/lib',
+               '/home/root/.local/lib/remarkable-buddies'),
+}
 COMMAND = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin /opt/bin/reader-buddy --version'
 LINE = re.compile(rb'(?:reader-buddy|remarkable-reader-buddy) ((?:v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?(?:\+[0-9A-Za-z][0-9A-Za-z.-]*)?|dev\.(?:unknown|v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+-g[0-9a-f]{7,40})?(?:-dirty)?|[0-9a-f]{7,40}(?:-dirty)?)))\r?\n')
 
@@ -18,14 +24,16 @@ def report(status, version=None):
             'package_owner':'unknown','provenance':'unknown','installation_eligible':False}
 
 
-def metadata(sftp):
+def metadata(sftp, executable=BINARY):
+    if executable not in EXECUTABLE_PARENTS:
+        raise ValueError('unsupported executable')
     parents=[]
-    for path in ['/opt','/opt/bin']:
+    for path in EXECUTABLE_PARENTS[executable]:
         parent=sftp.lstat(path)
         if not stat.S_ISDIR(parent.st_mode) or parent.st_uid!=0 or parent.st_mode&0o022: raise ValueError('unsafe executable parent')
         parents.append(tuple(getattr(parent,k,None) for k in ['st_mode','st_uid','st_gid','st_size','st_mtime']))
     try:
-        info = sftp.lstat(BINARY)
+        info = sftp.lstat(executable)
     except FileNotFoundError:
         return None
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or not info.st_mode & stat.S_IXUSR or info.st_mode & 0o022 or not isinstance(info.st_size,int) or info.st_size <= 0:
