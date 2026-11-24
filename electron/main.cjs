@@ -33,6 +33,8 @@ app.whenReady().then(async () => {
   const rawObserver = new WiredObserver({ script: path.join(hostRoot, 'wired_observer.py') });
   const {ModelCredentialHost}=await import(pathToFileURL(path.join(hostRoot,'model-credential.mjs')).href);
   const {parseModelCredentialRequest,parseModelCredentialResult,modelCredentialContext}=await import(pathToFileURL(path.join(hostRoot,'model-credential-protocol.mjs')).href);
+  const { FirstConfigurationHost } = await import(pathToFileURL(path.join(hostRoot, 'first-configuration.mjs')).href);
+  const { parseFirstConfigRequest } = await import(pathToFileURL(path.join(hostRoot, 'first-configuration-protocol.mjs')).href);
   const {StorageInitializationHost}=await import(pathToFileURL(path.join(hostRoot,'storage-initialization.mjs')).href);
   const {parseStorageInitializationRequest,parseStorageInitializationResult}=await import(pathToFileURL(path.join(hostRoot,'storage-initialization-protocol.mjs')).href);
   const {OwnedDataV3Host}=await import(pathToFileURL(path.join(hostRoot,'owned-data-v3.mjs')).href);
@@ -55,8 +57,8 @@ app.whenReady().then(async () => {
   const {parseManagementRequest,parseManagementResult}=await import(pathToFileURL(path.join(hostRoot,'conversation-management-protocol.mjs')).href);
   const {PortableConfigurationHost}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration.mjs')).href);
   const {parsePortableRequest,portableContext,parsePortableResult}=await import(pathToFileURL(path.join(hostRoot,'portable-configuration-protocol.mjs')).href);
-  const io=new MaintenanceIO();let portable,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let portable,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [portable,notebookRestore,notebook,storageInitialization,firstConfiguration,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer: rawObserver,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(basic)});
@@ -75,6 +77,7 @@ app.whenReady().then(async () => {
   management=new ConversationManagementHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(management)});
   restore=new OrdinaryRestoreHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(restore)});
   notebookRestore=new OrdinaryRestoreHost({family:'notebook',observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebookRestore)});
+  firstConfiguration = new FirstConfigurationHost({observer: rawObserver, io, beforeIO: () => invalidatePeers(firstConfiguration)});
   const observer = forget.wrap();
   selected=new SelectedArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(selected)});
   notebook=new NotebookArchiveHost({observer:rawObserver,io,beforeIO:()=>invalidatePeers(notebook)});
@@ -106,7 +109,22 @@ app.whenReady().then(async () => {
     if (!authorized(event, []) || args.length !== 1) throw new Error('Memory query caller refused');
     return observer.memoryQuery(args[0]);
   });
-  window.webContents.on('did-start-navigation', event => { if(event.isMainFrame && !event.isSameDocument) observer.cancel(); });
+  let configurationDocument = Symbol('desktop setup document');
+  window.webContents.on('did-start-navigation', event => {
+    if (!event.isMainFrame || event.isSameDocument) return;
+    const original = configurationDocument;
+    configurationDocument = Symbol('desktop setup document');
+    void firstConfiguration.invalidate(original);
+    observer.cancel();
+  });
+  ipcMain.handle('manager:firstConfiguration', async (event, ...args) => {
+    if (args.length !== 1 || !authorized(event, [])) throw Error('First configuration caller refused');
+    const document = configurationDocument;
+    const callerCurrent = () => !window.isDestroyed() && document === configurationDocument && authorized(event, []);
+    const request = parseFirstConfigRequest(args[0]);
+    const value = await firstConfiguration.request(request, {document, callerCurrent});
+    return firstConfiguration.deliver(value, request, callerCurrent);
+  });
   ipcMain.handle('manager:portableConfiguration',async(event,...args)=>{
     if(!authorized(event,[])||args.length!==1)throw Error('Portable preferences caller refused');
     let q=parsePortableRequest(args[0]);const context=portableContext(q),pending=portable.request(q);q=null;const value=parsePortableResult(await pending,context,validateResult);return portable.assertCurrent(value);
@@ -244,7 +262,7 @@ app.whenReady().then(async () => {
     }
     return { state: result.state, authorizationUrl: null };
   });
-  window.on('closed', () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
+  window.on('closed', () => { void firstConfiguration.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); });
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url === GUIDE) void shell.openExternal(GUIDE);

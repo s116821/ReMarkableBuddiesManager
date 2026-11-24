@@ -63,6 +63,47 @@ def request(raw):
     return v
 
 
+def exchange_no_input(transport, command, deadline, output, max_response, submitted=lambda: None, require_eof=False):
+    def remaining():
+        value = deadline - time.monotonic()
+        if value <= 0:
+            raise shared.Refusal('timeout')
+        return value
+    channel = transport.open_session(timeout=min(2, remaining()))
+    try:
+        channel.settimeout(min(2, remaining()))
+        remaining()
+        submitted()
+        channel.exec_command(command)
+        try:
+            channel.shutdown_write()
+        except (OSError, EOFError):
+            pass
+        discarded = 0
+        command_deadline = min(deadline, time.monotonic() + 8)
+        while True:
+            if time.monotonic() >= command_deadline:
+                raise shared.Refusal('timeout')
+            while channel.recv_ready():
+                remaining()
+                output.extend(channel.recv(4096))
+                if len(output) > max_response:
+                    raise ValueError('oversized response')
+            while channel.recv_stderr_ready():
+                remaining()
+                discarded += len(channel.recv_stderr(4096))
+                if discarded > 8192:
+                    raise ValueError('oversized diagnostics')
+            if require_eof and channel.closed and not channel.eof_received:
+                raise ValueError('command output EOF missing')
+            if ((not require_eof or channel.eof_received) and channel.exit_status_ready()
+                    and not channel.recv_ready() and not channel.recv_stderr_ready()):
+                return channel.recv_exit_status()
+            time.sleep(.01)
+    finally:
+        channel.close()
+
+
 def execute(transport, v, deadline=None):
     if deadline is None:
         deadline = time.monotonic() + v['budget_ms'] / 1000
@@ -76,33 +117,9 @@ def execute(transport, v, deadline=None):
     remaining()
     if before['boot_id'] != v['boot_id']:
         raise shared.Refusal('cable-lost')
-    channel = transport.open_session(timeout=min(2, remaining()))
     output = bytearray()
     try:
-        channel.settimeout(min(2, remaining()))
-        remaining()
-        channel.exec_command(PREFIX + v['selector'])
-        try:
-            channel.shutdown_write()
-        except (OSError, EOFError):
-            pass
-        discarded = 0
-        command_deadline = min(deadline, time.monotonic() + 8)
-        while True:
-            if time.monotonic() >= command_deadline:
-                raise shared.Refusal('timeout')
-            while channel.recv_ready():
-                output.extend(channel.recv(4096))
-                if len(output) > MAX_RESPONSE:
-                    raise ValueError('oversized response')
-            while channel.recv_stderr_ready():
-                discarded += len(channel.recv_stderr(4096))
-                if discarded > 8192:
-                    raise ValueError('oversized diagnostics')
-            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
-                break
-            time.sleep(.01)
-        code = channel.recv_exit_status()
+        code = exchange_no_input(transport, PREFIX + v['selector'], deadline, output, MAX_RESPONSE)
         one_line = output.endswith(b'\n') and output.count(b'\n') == 1
         report = parse(output, MAX_RESPONSE) if code == 0 and one_line else None
         if report is not None:
@@ -117,7 +134,6 @@ def execute(transport, v, deadline=None):
     finally:
         output[:] = b'\x00' * len(output)
         output.clear()
-        channel.close()
 
 
 def main():
