@@ -92,8 +92,6 @@ async function verifyTabletDrive(page, peer, host) {
   assert.equal(pending.applies, 1);
   assert.equal(pending.originals.length, 1);
 
-  // Retain the old document's reply bodies before Chromium can discard them.
-  await peer.replies();
   await page.reload();
   await readTabletFor(page, 'drive');
   await expect(check).toBeEnabled();
@@ -135,27 +133,30 @@ async function verifyTabletDrive(page, peer, host) {
   console.log(host + ': Tablet connection confirmation, original readback and navigation with synthetic peers');
 }
 
-function captureTabletDriveReplies(page, url) {
-  const reads = [];
-  const ignored = Symbol('no successful response');
-  const track = request => {
-    if (request.url() !== url) return;
-    // Register at request start so the drain also owns replies whose headers
-    // have not arrived. Store a settled result immediately to retain failures.
-    const read = request.response().then(response => response?.ok() ? response.json() : ignored);
-    reads.push(Promise.allSettled([read]).then(([result]) => result));
+function captureTabletDriveReplies(server) {
+  const bodies = [];
+  const track = (request, response) => {
+    if (request.method !== 'POST' || request.url !== '/manager-tablet-drive') return;
+    // Observe the actual helper response. The browser deliberately reloads
+    // during recovery and Chromium can discard the previous document's bodies.
+    const chunks = [];
+    for (const method of ['write', 'end']) {
+      const send = response[method];
+      response[method] = function (...args) {
+        const [chunk, encoding] = args;
+        if (typeof chunk === 'string') chunks.push(Buffer.from(chunk, typeof encoding === 'string' ? encoding : 'utf8'));
+        else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
+        return send.apply(this, args);
+      };
+    }
+    response.once('finish', () => {
+      if (response.statusCode >= 200 && response.statusCode < 300) bodies.push(Buffer.concat(chunks));
+    });
   };
-  page.on('request', track);
+  server.prependListener('request', track);
   return {
-    async replies() {
-      let results;
-      do { results = await Promise.all(reads); } while (results.length !== reads.length);
-      return results.flatMap(result => {
-        if (result.status === 'rejected') throw result.reason;
-        return result.value === ignored ? [] : [result.value];
-      });
-    },
-    detach: () => page.off('request', track)
+    replies: () => bodies.map(body => JSON.parse(body.toString('utf8'))),
+    detach: () => server.off('request', track)
   };
 }
 
@@ -177,7 +178,7 @@ try {
   await verify(page, async v => { value = v; }, 'browser');
   value = connected();
   await page.reload();
-  const capture = captureTabletDriveReplies(page, helper.origin + '/manager-tablet-drive');
+  const capture = captureTabletDriveReplies(helper.server);
   try {
     await verifyTabletDrive(page, {...browserTablet, replies: capture.replies}, 'browser');
   } finally { capture.detach(); }
