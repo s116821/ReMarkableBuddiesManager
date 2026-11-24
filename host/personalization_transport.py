@@ -71,13 +71,21 @@ def reply(channel, limit, seconds):
             time.sleep(.01)
 
 
-def select_executable(transport, load_state, *, without_arguments=False):
-    channel = transport.open_session(timeout=2)
+def select_executable(transport, load_state, *, without_arguments=False, deadline=None):
+    def timeout():
+        if deadline is None:
+            return 2
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise shared.Refusal('timeout')
+        return min(2, left)
+
+    channel = transport.open_session(timeout=timeout())
     try:
-        channel.settimeout(2)
+        channel.settimeout(timeout())
         channel.exec_command(LAUNCHER_QUERY)
         channel.shutdown_write()
-        code, output = reply(channel, 4096, 2)
+        code, output = reply(channel, 4096, timeout())
     finally:
         channel.close()
     if code == 0 and load_state == 'not-found' and not output.strip():
