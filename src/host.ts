@@ -1,3 +1,6 @@
+import { FIRST_CONFIG_RESULT_BYTES, parseFirstConfigResult } from '../host/first-configuration-protocol.mjs';
+import type { FirstConfigRequest } from '../host/first-configuration-protocol.mjs';
+import type { FirstConfigAdapter } from './first-configuration';
 import {portableJson} from '../host/portable-configuration-protocol.mjs';
 import {parseCapacitiesConnectionState,parseCapacitiesState,type CapacitiesAction,type CapacitiesConnectionAction} from '../host/capacities-protocol.mjs';
 import type {CapacitiesAdapter,PreparedCapacitiesBegin} from './capacities-auth';
@@ -76,6 +79,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly conversationManagement?:ManagementAdapter['conversationManagement'];
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
+  readonly firstConfiguration?: FirstConfigAdapter;
   readonly storageInitialization?:StorageInitializationAdapter['storageInitialization'];
   readonly inspectOwnedV3?:OwnedV3Adapter['inspectOwnedV3'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
@@ -286,6 +290,30 @@ export function currentHost(): ManagerHost {
       if(!response.ok||!response.body)throw Error('Conversation inventory unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
       let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Conversation inventory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
       const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ConversationResult;
+    },
+    firstConfiguration: async (request: FirstConfigRequest) => {
+      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('First configuration helper unavailable');
+      const response = await fetch('/manager-first-configuration', {
+        method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(request), signal: AbortSignal.timeout(14000),
+      });
+      if (!response.ok || !response.body) throw Error('First configuration unavailable');
+      const reader = response.body.getReader();
+      const raw = new Uint8Array(FIRST_CONFIG_RESULT_BYTES);
+      let size = 0, complete = false;
+      try {
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) { complete = true; break; }
+          if (size + chunk.value.byteLength > raw.byteLength) throw Error('First configuration response refused');
+          raw.set(chunk.value, size);
+          size += chunk.value.byteLength;
+        }
+        return parseFirstConfigResult(parseRestoreJson(raw.subarray(0, size)), request);
+      } finally {
+        if (!complete) await reader.cancel().catch(() => {});
+        reader.releaseLock();
+      }
     },
     storageInitialization: async (request: import('../host/storage-initialization-protocol.mjs').StorageInitializationRequest|null) => {
       if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Storage preparation helper unavailable');
