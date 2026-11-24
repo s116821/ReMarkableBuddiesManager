@@ -224,6 +224,7 @@ jobs:
       - if: runner.os == 'Windows'
         shell: bash
         run: |
+          python -B -m unittest discover -s tests/first_configuration -k stdout -v
           npm run test:hosts
           npm run test:navigation-hosts
           npm run test:package

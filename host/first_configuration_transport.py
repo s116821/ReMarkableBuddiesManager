@@ -114,6 +114,7 @@ def main():
     timer = None
     lock = threading.Lock()
     possible, responded = False, False
+    stdout = sys.stdout.buffer
 
     def submitted():
         nonlocal possible
@@ -128,12 +129,15 @@ def main():
             if responded:
                 return
             responded = True
-            print(json.dumps({'dispatch': 'possible' if possible else 'not-dispatched',
-                              'observation': observation, 'report': report, 'executable_sha256': executable_sha256}), flush=True)
+            frame = {'dispatch': 'possible' if possible else 'not-dispatched',
+                     'observation': observation, 'report': report, 'executable_sha256': executable_sha256}
+            stdout.write(json.dumps(frame, ensure_ascii=True).encode('ascii') + b'\n')
+            stdout.flush()
 
     try:
-        sys.stdout.write('READY\n')
-        sys.stdout.flush()
+        # The child pipe uses LF bytes on every host, independent of text newline translation.
+        stdout.write(b'READY\n')
+        stdout.flush()
         value = request(sys.stdin.buffer.read(transport_common.MAX_REQUEST + 1))
         deadline = time.monotonic() + value['budget_ms'] / 1000
         if sys.platform not in ('linux', 'win32'):

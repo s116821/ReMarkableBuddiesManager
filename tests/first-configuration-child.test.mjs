@@ -28,6 +28,7 @@ test('first configuration consumes only closed joined child frames and stops the
   };
   for (const [mode, raw, expected] of [
     ['valid', JSON.stringify(good) + '\n', 'created'],
+    ['CRLF result', JSON.stringify(good) + '\r\n', undefined],
     ['foreign boot', JSON.stringify({...good, observation: {...tablet, boot_id: invocation(90)}}) + '\n', undefined],
     ['duplicate', (JSON.stringify(good) + '\n').replace('"state":"created"', '"state":"created","state":"created"'), undefined],
     ['trailing frame', JSON.stringify(good) + '\n{}\n', undefined],

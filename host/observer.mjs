@@ -41,7 +41,7 @@ export class WiredObserver {
     if (raw === null) return refusal;
     try {
       if (!raw.length || raw.length > 8192 || raw[0] !== 123 ||
-          raw.at(-1) !== 10 || raw.indexOf(10) !== raw.length - 1) return refusal;
+          raw.at(-1) !== 10 || raw.indexOf(10) !== raw.length - 1 || raw.includes(13)) return refusal;
       const value = strictJson(raw);
       if (Object.keys(value ?? {}).sort().join() !== 'dispatch,executable_sha256,observation,report') return refusal;
       if (value.dispatch === 'not-dispatched' && value.observation === null &&

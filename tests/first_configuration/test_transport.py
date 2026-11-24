@@ -33,6 +33,26 @@ def frame(selector, expected=None, service=SERVICE):
 
 
 class FirstConfigurationTransport(unittest.TestCase):
+    def test_child_stdout_uses_lf_bytes_even_with_windows_text_translation(self):
+        script = Path(config.__file__).resolve()
+        translated = (
+            'import runpy, sys; sys.stdout.reconfigure(newline="\\r\\n"); '
+            'sys.path.insert(0, sys.argv[1]); runpy.run_path(sys.argv[2], run_name="__main__")'
+        )
+        for args in ([str(script)], ['-c', translated, str(script.parent), str(script)]):
+            with self.subTest(args=args):
+                # Invalid input exercises the real readiness and response paths before any connection.
+                child = subprocess.run([sys.executable, '-B', *args], input=b'{}',
+                                       capture_output=True, timeout=10, check=True)
+                self.assertEqual(child.stderr, b'')
+                self.assertNotIn(b'\r', child.stdout)
+                ready, frame_bytes, tail = child.stdout.split(b'\n')
+                self.assertEqual((ready, tail), (b'READY', b''))
+                self.assertEqual(json.loads(frame_bytes), {
+                    'dispatch': 'not-dispatched', 'observation': None, 'report': None,
+                    'executable_sha256': None,
+                })
+
     def test_request_only_accepts_closed_fixed_selectors(self):
         for request in [frame('check-initial'), frame('create-initial'), frame('check-existing-default'),
                         frame('create-existing-default', EXECUTABLE)]:
