@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {mkdtemp, rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -184,6 +185,21 @@ try {
   await exerciseUncertainSaves(page,
     patch => app.evaluate((_electron, values) => { Object.assign(globalThis.firstConfigurationState, values); }, patch),
     transport);
+  if (packaged) {
+    const resources = await app.evaluate(() => process.resourcesPath);
+    const python = process.env.MANAGER_WIRED_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
+    const child = spawnSync(python, ['-B', path.join(resources, 'host', 'first_configuration_transport.py')],
+      {input: '{}', timeout: 10000});
+    assert.ifError(child.error);
+    assert.equal(child.status, 0, child.stderr.toString());
+    assert.equal(child.stderr.length, 0);
+    assert.equal(child.stdout.includes(13), false);
+    const [ready, frame, tail, ...extra] = child.stdout.toString('utf8').split('\n');
+    assert.deepEqual([ready, tail, extra], ['READY', '', []]);
+    assert.deepEqual(JSON.parse(frame), {
+      dispatch: 'not-dispatched', observation: null, report: null, executable_sha256: null,
+    });
+  }
   console.log('Electron setup passed through actual preload and IPC with a synthetic Buddy transport.');
 } finally {
   if (app) await app.close();
