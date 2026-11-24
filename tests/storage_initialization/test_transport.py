@@ -308,7 +308,8 @@ class FirstConfigurationTransport(unittest.TestCase):
         return transport, channel
 
     def run_first(self, transport, channel, service=None):
-        value = dict(REQUEST, selector='create-initial', service=self.SERVICE)
+        value = dict(REQUEST, selector='create-initial', service=self.SERVICE,
+                     expected_executable_sha256=None)
         sample = {'boot_id': BOOT, 'service': self.SERVICE if service is None else service}
         submitted = Mock()
         with patch.object(first.shared, 'inspect', side_effect=lambda _: dict(sample)), \
@@ -318,10 +319,12 @@ class FirstConfigurationTransport(unittest.TestCase):
     def test_exit_status_before_explicit_eof_keeps_waiting(self):
         transport, channel = self.sequence()
         observation = self.run_first(transport, channel)
-        self.assertEqual(channel.commands, [first.PREFIX+'create-initial'])
+        self.assertEqual(channel.commands, [
+            f'{first.COMMAND_PREFIX} /opt/bin/reader-buddy --configuration-operation create-initial'
+        ])
         self.assertEqual(channel.polls, 2)
         self.assertEqual(channel.exit_reads, 1)
-        self.assertEqual(observation['_first_config']['state'], 'created')
+        self.assertEqual(observation['_first_config'], (json.loads(self.REPLY), None))
 
     def test_valid_json_followed_by_late_tail_is_refused_after_eof(self):
         transport, channel = self.sequence(tail=b'{}\n')
@@ -342,7 +345,8 @@ class FirstConfigurationTransport(unittest.TestCase):
             self.run_first(transport, channel, dict(self.SERVICE, ActiveState='active'))
         transport.open_session.assert_not_called()
         self.assertEqual(channel.commands, [])
-        value = dict(REQUEST, selector='check-initial', service=self.SERVICE)
+        value = dict(REQUEST, selector='check-initial', service=self.SERVICE,
+                     expected_executable_sha256=None)
         self.assertEqual(first.request(json.dumps(value).encode()), value)
         for altered in [dict(value, selector='inspect'), dict(value, source='/foreign'),
                         dict(value, service=dict(self.SERVICE, SubState='running'))]:
