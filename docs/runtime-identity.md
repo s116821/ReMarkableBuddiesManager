@@ -1,24 +1,21 @@
 # Reported Buddy binary version
 
-Read tablet state, then Read binary version in either the local browser/helper or
-Electron app. The host invokes only the known `/opt/bin/reader-buddy --version`
-using its maintained CLI. Current accepted Rust6254092 parses this option before
-configuration, Store, provider or native runtime startup. This capability never
-calls Vellum wrappers, installs packages, starts/stops a service or edits the tablet.
+In the browser or Electron app, read the tablet state, then select **Read binary version**.
+Manager asks the selected Buddy executable for its version over USB. The command works
+with Buddy stopped and completes before provider or notebook startup.
 
-A successful result is **self-reported and unverified**. It tells you what that
-known binary printed, not what a currently running process loaded or which trusted
-package owns it. Running version, package ownership/source/signature/payload and
-SDK/firmware compatibility remain unknown. Matching SemVer does not establish
-package equivalence or make a release eligible; existing installation stays disabled.
+For a loaded service, Manager reads its direct executable path. It recognizes
+`/home/root/.local/lib/remarkable-buddies/reader-buddy` for resident installations
+and `/opt/bin/reader-buddy` for standalone installations. If the service is absent
+and its launcher record is empty, Manager checks the standalone path.
 
-Existing protected host setup, USB/interface/source route, peer-key-before-auth
-and change watchers are reused. The current connection fingerprint is checked
-before dial/auth; boot is checked before the command. Root-owned regular executable
-and known `/opt`/`/opt/bin` directory metadata must be safe (no symlinks or group/world
-write) and stable across the read. The fixed command accepts no caller path, command,
-credential or environment values. Missing/unsafe/unsupported binaries refuse;
-there is no fallback search or alternate executable.
+Manager verifies the same tablet, protected parent directories, executable metadata
+and service selection across the read. It passes only `--version` to the selected
+executable. If that file is missing, unsafe or changes during the read, the version
+is unavailable.
+
+**Binary version** is the executable's self-report. The version of a running process,
+package ownership, signature and update eligibility require separate verification.
 
 One supported `reader-buddy`/`remarkable-reader-buddy` version line with a bounded
 96-byte ASCII version token is accepted. Alongside release-shaped tokens, the pinned
