@@ -310,7 +310,7 @@ async function verifyRestore(page, snapshot, setup) {
   await readTabletFor(page,setup ? 'setup' : 'cloud');
   if (setup) {
     await button('Review first configuration').click();
-    await expect(button('Create default configuration')).toBeEnabled();
+    await expect(button('Save default configuration')).toBeEnabled();
   }
   const selectDownloaded = async () => {
     await showPanel(page,'cloud');
@@ -324,7 +324,7 @@ async function verifyRestore(page, snapshot, setup) {
     await expect(preview).toBeDisabled();
     assert.deepEqual((await snapshot()).staged, []);
     await showPanel(page,'setup');
-    await button('Create default configuration').click();
+    await button('Save default configuration').click();
     await expect(page.getByTestId('first-configuration-status')).toContainText('created and verified');
     assert.deepEqual(setup.state.calls.map(call => call.request.selector), ['check-initial', 'create-initial']);
     // Leaving Cloud backups clears its private selection; explicitly select and verify a fresh download.
@@ -475,7 +475,7 @@ async function verifyPackagedBrowser(executablePath, env) {
       });
       await expect(page.getByTestId('first-configuration-status')).toHaveText(
         'First configuration requires a qualified Buddy installation and quiescent wired tablet.');
-      await expect(button('Create default configuration')).toHaveCount(0);
+      await expect(button('Save default configuration')).toHaveCount(0);
       await showPanel(page,'tablet');
       await button('Disconnect').click();
       await expect(page.getByTestId('tablet-model')).toHaveCount(0);

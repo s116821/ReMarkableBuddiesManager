@@ -1,5 +1,5 @@
 import {portableJson} from './portable-configuration-protocol.mjs';
-import {parseFirstConfigProducerReport, sameTarget} from './first-configuration-protocol.mjs';
+import {digest, parseFirstConfigProducerReport, sameTarget} from './first-configuration-protocol.mjs';
 import {strictJson} from './strict-json.mjs';
 import { parseSavedConfigurationRequest, reduceSavedConfigurationResult } from './saved-configuration.mjs';
 import { parseMemoryInspectionRequest, reduceMemoryInspectionResult } from './memory-inspection.mjs';
@@ -39,17 +39,20 @@ export class WiredObserver {
 
   async runFirstConfiguration(request, ownership) {
     const child = await this.#runJoinedChild('first_configuration_transport.py', request, ownership);
-    const refusal = {dispatch: child.dispatch, observation: null, report: null};
+    const refusal = {dispatch: child.dispatch, observation: null, report: null, executable_sha256: null};
     const raw = child.stdout;
     if (raw === null) return refusal;
     try {
       if (!raw.length || raw.length > 8192 || raw[0] !== 123 ||
-          raw.at(-1) !== 10 || raw.indexOf(10) !== raw.length - 1) return refusal;
+          raw.at(-1) !== 10 || raw.indexOf(10) !== raw.length - 1 || raw.includes(13)) return refusal;
       const value = strictJson(raw);
-      if (Object.keys(value ?? {}).sort().join() !== 'dispatch,observation,report') return refusal;
-      if (value.dispatch === 'not-dispatched' && value.observation === null && value.report === null) return value;
+      if (Object.keys(value ?? {}).sort().join() !== 'dispatch,executable_sha256,observation,report') return refusal;
+      if (value.dispatch === 'not-dispatched' && value.observation === null &&
+          value.report === null && value.executable_sha256 === null) return value;
       if (value.dispatch !== 'possible' || !value.observation || !value.report ||
-          !sameTarget(value.observation, request)) return refusal;
+          !sameTarget(value.observation, request) ||
+          (request.selector.endsWith('existing-default') ? !digest(value.executable_sha256) : value.executable_sha256 !== null) ||
+          (request.expected_executable_sha256 && value.executable_sha256 !== request.expected_executable_sha256)) return refusal;
       validateResult(result('observed', value.observation));
       parseFirstConfigProducerReport(value.report, request.selector);
       return value;
@@ -91,7 +94,9 @@ export class WiredObserver {
       child.kill('SIGKILL');
     };
     this.active = child;
-    const stage = this.#stage = {stop, joined: joined.promise};
+    const stage = this.#stage = {script, stop, joined: joined.promise};
+    const firstSave = script === 'first_configuration_transport.py';
+    const stdoutLimit = firstSave ? 8192 : 24576;
     const timer = setTimeout(stop, allowance);
     const closed = new Promise(resolve => child.once('close', resolve));
     child.once('spawn', () => { launched = true; });
@@ -102,7 +107,7 @@ export class WiredObserver {
     let prefix = Buffer.alloc(0), diagnostics = 0;
     child.stdout.on('data', chunk => {
       size += chunk.length;
-      if (stopped || size > 24576 + readiness.length) { chunk.fill(0); stop(); return; }
+      if (stopped || size > stdoutLimit + readiness.length) { chunk.fill(0); stop(); return; }
       chunks.push(chunk);
       if (prefix.length === readiness.length) return;
       prefix = Buffer.concat([prefix, chunk.subarray(0, readiness.length - prefix.length)]);
@@ -169,6 +174,7 @@ export class WiredObserver {
     }
   }
   async observe() {
+    if (this.#stage?.script === 'first_configuration_transport.py') return result('observation-unavailable');
     const value = await this.run('observe');
     this.lastObservation = value.status === 'observed' ? value.observation : null;
     return value;
@@ -240,7 +246,8 @@ export class WiredObserver {
   }
   async run(action, request) {
     const stage = this.#stage;
-    this.cancel();
+    const firstConfigurationBusy = stage?.script === 'first_configuration_transport.py';
+    if (!firstConfigurationBusy) this.cancel();
     const generation = this.generation;
     const sharedPreferences=action==='shared-preferences';
     const portable=action==='portable-configuration'||sharedPreferences;
@@ -268,6 +275,7 @@ export class WiredObserver {
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
     const refusal = status => cachePrivate ? {...result(status),[portable?'portable_configuration_raw':storageInitialization?'storage_initialization_raw':ownedV3?'owned_data_v3_raw':handwriting?'handwriting_raw':(selected||notebook)?'archive_raw':restore?'ordinary_restore_raw':management?'conversation_management_raw':conversation?'conversation_inventory_raw':cacheCleanup?'source_cache_cleanup_raw':'source_cache_inventory_raw']:{status:'unavailable',stdout_base64:null}} : modelCredential ? {...result(status),model_credential_raw:{status:'unavailable',stdout_base64:null}} : credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : localMode ? {...result(status),local_mode_raw:{status:'unavailable',stdout_base64:null}} : product ? {...result(status),product_settings_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
+    if (firstConfigurationBusy) return refusal('observation-unavailable');
     const budgeted = localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate;
     const maxBudget = provisioning ? 45000 : 12000;
     if(budgeted&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>maxBudget))return refusal('observation-unavailable');

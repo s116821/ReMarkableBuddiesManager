@@ -11,7 +11,7 @@ import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
 import type {ArchiveRequest as NotebookRequest,ArchiveResult as NotebookResult} from '../host/notebook-archive-protocol.mjs';
 import {parseArchiveJson as parseNotebookJson} from '../host/notebook-archive-protocol.mjs';
 import type {StorageInitializationAdapter} from './storage-initialization';
-import type {FirstConfigRequest, FirstConfigResult} from '../host/first-configuration-protocol.mjs';
+import {FIRST_CONFIG_RESULT_BYTES, parseFirstConfigResult, type FirstConfigRequest, type FirstConfigResult} from '../host/first-configuration-protocol.mjs';
 import type {OwnedV3Adapter} from './owned-data-v3';
 import type {LocalModeAdapter} from './local-mode-choice';
 import type {LocalModeResult} from '../host/local-mode-choice-protocol.mjs';
@@ -261,7 +261,13 @@ export function currentHost(): ManagerHost {
       '/manager-notebook-archive', 'Archive operation', parseNotebookJson),
     ordinaryRestore: maintenanceBridge<RestoreRequest, RestoreResult>('/manager-ordinary-restore', 'Tablet maintenance', parseRestoreJson),
     notebookRestore: maintenanceBridge<RestoreRequest, RestoreResult>('/manager-notebook-restore', 'Tablet maintenance', parseRestoreJson),
-    firstConfiguration: maintenanceBridge<FirstConfigRequest, FirstConfigResult>('/manager-first-configuration', 'Tablet maintenance', parseRestoreJson),
+    firstConfiguration: async (request: FirstConfigRequest) => {
+      if (!isLoopbackHelper()) throw Error('First configuration helper unavailable');
+      const response = await postHelper('/manager-first-configuration', request);
+      if (!response.ok || !response.body) throw Error('First configuration unavailable');
+      const raw = await boundedBody(response.body, FIRST_CONFIG_RESULT_BYTES, 'First configuration response refused');
+      return parseFirstConfigResult(parseRestoreJson(raw), request);
+    },
     conversationManagement: maintenanceBridge<import('../host/conversation-management-protocol.mjs').ManagementRequest, ManagementResult>(
       '/manager-conversation-management', 'Conversation management', parseManagementJson),
     sourceCacheCleanup: maintenanceBridge<import('../host/source-cache-cleanup-protocol.mjs').CleanupRequest, CleanupResult>(

@@ -48,12 +48,17 @@ export class FirstConfigurationHost {
   #admit(sample) {
     // This is a private registration seam. An observed service state or binary
     // version cannot supply package ownership, supported selectors or quiescence.
+    const service = sample?.service;
+    if (service?.ActiveState !== 'inactive' || service.SubState !== 'dead') return null;
     const proof = this.observer.firstConfigurationAdmission?.(sample);
-    if (proof?.configuration_protocol !== 1 || !digest(proof.package_sha256) ||
-        !uuid(proof.quiescence_id) || !isDeepStrictEqual(sample, proof.target) ||
-        !['loaded', 'not-found'].includes(sample.service.LoadState) ||
-        sample.service.ActiveState !== 'inactive' || sample.service.SubState !== 'dead') return null;
-    return {package_sha256: proof.package_sha256, quiescence_id: proof.quiescence_id};
+    if (proof) {
+      if (proof.configuration_protocol !== 1 || !digest(proof.package_sha256) ||
+          !uuid(proof.quiescence_id) || !isDeepStrictEqual(sample, proof.target) ||
+          !['loaded', 'not-found'].includes(service.LoadState)) return null;
+      return {kind: 'initial', package_sha256: proof.package_sha256, quiescence_id: proof.quiescence_id};
+    }
+    // The physical backend must independently qualify and bind the resident launcher.
+    return service.LoadState === 'loaded' ? {kind: 'existing-default'} : null;
   }
 
   #live(attempt) {
@@ -155,6 +160,7 @@ export class FirstConfigurationHost {
     ledger.add(request.invocation);
     const active = {request, sample: captured, admission, document, callerCurrent, token, epoch: ++this.#epoch,
       deadline: Math.min(this.now() + this.budgetMs, create ? review.expires : Infinity),
+      expectedExecutable: create ? review.executable : null,
       controller: new AbortController(), joined: null};
     this.#active = active;
     this.#review = null;
@@ -171,7 +177,7 @@ export class FirstConfigurationHost {
     const current = () => this.#live(active);
     const timer = setTimeout(() => controller.abort(), Math.max(0, active.deadline - this.now()));
     const create = request.action === 'create';
-    const selector = create ? 'create-initial' : 'check-initial';
+    const selector = `${create ? 'create' : 'check'}-${admission.kind}`;
     let original;
     try {
       if (!current()) return this.#value(request, 'invalidated');
@@ -183,7 +189,8 @@ export class FirstConfigurationHost {
         this.#originals.set(original.reference, original);
       }
       const reply = await this.observer.runFirstConfiguration({selector, connection_id: request.connection_id,
-        boot_id: request.boot_id, service: sample.service}, {
+        boot_id: request.boot_id, service: sample.service,
+        expected_executable_sha256: active.expectedExecutable}, {
         signal: controller.signal, current, remainingMs: () => Math.floor(active.deadline - this.now()),
       });
       if (reply?.dispatch === 'not-dispatched' && reply.observation === null && reply.report === null) {
@@ -196,6 +203,12 @@ export class FirstConfigurationHost {
       if (!current() || reply?.dispatch !== 'possible' || !isDeepStrictEqual(reply.observation, sample) || !reply.report) {
         return this.#value(request, original ? 'unknown' : 'unavailable');
       }
+      const executable = reply.executable_sha256 ?? null;
+      if ((admission.kind === 'existing-default' && !digest(executable)) ||
+          (admission.kind === 'initial' && executable !== null) ||
+          (create && executable !== active.expectedExecutable)) {
+        return this.#value(request, original ? 'unknown' : 'unavailable');
+      }
       const state = parseFirstConfigProducerReport(reply.report, selector);
       if (original) {
         original.outcome = state;
@@ -204,7 +217,7 @@ export class FirstConfigurationHost {
       if (request.action === 'review' && state === 'missing') {
         const reference = this.reference();
         if (!digest(reference) || this.#originals.has(reference)) return this.#value(request, 'unavailable');
-        const review = this.#review = {reference, document, sample, admission, expires: this.now() + 120000, attempt: active};
+        const review = this.#review = {reference, document, sample, admission, executable, expires: this.now() + 120000, attempt: active};
         return this.#value(request, 'ready', state, review, active);
       }
       return this.#value(request, 'checked', state, null, active);

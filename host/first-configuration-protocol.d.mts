@@ -1,3 +1,4 @@
+export const FIRST_CONFIG_RESULT_BYTES: number;
 export type FirstConfigTarget = {connection_id: string; boot_id: string};
 type Invocation = FirstConfigTarget & {invocation: string};
 export type FirstConfigRequest =

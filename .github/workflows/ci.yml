@@ -133,6 +133,7 @@ jobs:
           python -m unittest discover -s tests/wired -v
           python -m unittest discover -s tests/drive -v
           python -m unittest discover -s tests/personalization -v
+          python -m unittest discover -s tests/first_configuration -v
           python -m unittest discover -s tests/runtime_identity -v
           python -m unittest discover -s tests/memory_query -v
           python -m unittest discover -s tests/saved_mode -v

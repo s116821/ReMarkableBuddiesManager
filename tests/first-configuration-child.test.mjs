@@ -14,8 +14,8 @@ test('first configuration consumes only closed joined child frames and stops the
   const record = path.join(folder, 'requests');
   const script = path.join(folder, 'first_configuration_transport.py');
   const observer = new WiredObserver({config, python: process.execPath, script: path.join(folder, 'wired_observer.py')});
-  const request = {...target(), service: tablet.service, selector: 'create-initial'};
-  const good = {dispatch: 'possible', observation: tablet, report: producer('create-initial', 'created')};
+  const request = {...target(), service: tablet.service, selector: 'create-initial', expected_executable_sha256: null};
+  const good = {dispatch: 'possible', observation: tablet, report: producer('create-initial', 'created'), executable_sha256: null};
   const install = async raw => {
     await writeFile(script, [
       'const fs=require("node:fs"); let body=""; process.stdout.write("READY\\n");',
@@ -28,10 +28,11 @@ test('first configuration consumes only closed joined child frames and stops the
   };
   for (const [mode, raw, expected] of [
     ['valid', JSON.stringify(good) + '\n', 'created'],
+    ['CRLF result', JSON.stringify(good) + '\r\n', undefined],
     ['foreign boot', JSON.stringify({...good, observation: {...tablet, boot_id: invocation(90)}}) + '\n', undefined],
     ['duplicate', (JSON.stringify(good) + '\n').replace('"state":"created"', '"state":"created","state":"created"'), undefined],
     ['trailing frame', JSON.stringify(good) + '\n{}\n', undefined],
-    ['pre-dispatch proof', JSON.stringify({dispatch: 'not-dispatched', observation: null, report: null}) + '\n', undefined],
+    ['pre-dispatch proof', JSON.stringify({dispatch: 'not-dispatched', observation: null, report: null, executable_sha256: null}) + '\n', undefined],
   ]) {
     await install(raw);
     const state = await observer.runFirstConfiguration(request, {
@@ -60,7 +61,7 @@ test('first configuration consumes only closed joined child frames and stops the
   assert.equal(after.report.state, 'created');
   for (const line of (await readFile(record, 'utf8')).trim().split('\n')) {
     const input = JSON.parse(line);
-    assert.deepEqual(Object.keys(input).sort(), ['boot_id', 'budget_ms', 'connection_id', 'selector', 'service']);
+    assert.deepEqual(Object.keys(input).sort(), ['boot_id', 'budget_ms', 'connection_id', 'expected_executable_sha256', 'selector', 'service']);
     assert.equal(input.selector, 'create-initial');
     assert.ok(input.budget_ms > 0 && input.budget_ms <= 12000);
   }

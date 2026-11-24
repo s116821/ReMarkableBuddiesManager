@@ -37,10 +37,13 @@ The authenticated helper has one fixed `/manager-personalization` route, a
 HttpOnly session guards. Electron exposes one narrow main-frame method. Requests
 carry fixed operation, opaque connection/boot identity, and only the actual
 allowed revision/text/enabled fields. No caller-defined path/command/environment
-or service action is accepted. Host transport selects only the known config path
-and `/opt/bin/reader-buddy --personalization-operation inspect|set|disable|clear`;
-text travels as encoded JSON through child/SSH stdin, never shell interpolation
-or argv. Existing host trust, bound USB interface/source route, credential custody
+or service action is accepted. Before dispatch, the host reads the Reader service's
+launcher and selects a known executable: `/home/root/.local/lib/remarkable-buddies/reader-buddy`
+for the installed RM2 package or `/opt/bin/reader-buddy` for standalone installs.
+A standalone CLI can also be used when there is no Reader unit or launcher.
+The host runs the fixed personalization operation against the usual config path.
+Service launch arguments stay with the service. Personalization text travels as
+encoded JSON through child/SSH stdin. Existing host trust, bound USB interface/source route, credential custody
 and change notifications remain required. Connection fingerprint must match before
 dial/auth; boot must match before the command, with observation/route brackets
 and timeout/cap afterward. The public transport label is now wired-maintenance,
@@ -52,11 +55,20 @@ Stderr is discarded/capped and diagnostics are sanitized. Server-side last-inspe
 revision and exact set/disable/clear readback are checked before a verified UI result.
 No actual physical tablet mutation was executed to qualify this increment.
 
+### Save the first configuration
+
+Connect over USB, stop Buddy and read tablet state in Manager. Open **Tablet → Setup → First configuration**. **Check current configuration** reads the current state. To save missing defaults, select **Review first configuration**, then **Save default configuration**. Buddy checks the existing local Store and saves a default file only when it can preserve the existing data. Once a valid file is present, open **Personalization**, read the saved revision and edit the preference.
+
+An unconfirmed save can be followed by **Check current configuration**. The check reads the current file and leaves the original result unconfirmed. Manager does not retry the original save. Clean and replacement setup retain their separate empty-root checks.
+
+For an existing installation, the wired host requires the known resident launcher and confirms the stock configuration sources have no config path override. It checks that its executable digest matches the reviewed executable before saving. The digest binds the check and save to the same observed bytes. Package signature verification remains part of package installation.
+
 Public focused checks:
 
 ```text
-node --test tests/personalization*.test.mjs
+node --test tests/personalization*.test.mjs tests/first-configuration*.test.mjs
 python -m unittest discover -s tests/personalization -v
+python -m unittest discover -s tests/first_configuration -v
 npm run test:personalization-hosts
 npm run test:personalization-hosts -- --packaged
 ```

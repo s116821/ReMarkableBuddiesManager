@@ -58,6 +58,7 @@ export function parseFirstConfigResult(value, request) {
 export function parseFirstConfigProducerReport(value, selector) {
   if (keys(value) !== 'operation,report_version,state' || value.report_version !== 1 ||
       value.operation !== selector ||
-      !(selector === 'check-initial' ? currentStates : originalStates).includes(value.state)) fail();
+      !['check-initial', 'check-existing-default', 'create-initial', 'create-existing-default'].includes(selector) ||
+      !(selector.startsWith('check-') ? currentStates : originalStates).includes(value.state)) fail();
   return value.state;
 }

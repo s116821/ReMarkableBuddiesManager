@@ -295,18 +295,27 @@ export class App implements OnDestroy {
   private readonly firstConfigurationController = new FirstConfigurationController(state => this.firstConfiguration.set(state));
   readonly firstConfiguration = signal(this.firstConfigurationController.state);
   readonly firstConfigurationBlocks = computed(() => this.firstConfiguration().current === 'missing' || this.firstConfiguration().current === 'blocked');
-  canRunFirstConfiguration() { return !!this.host.firstConfiguration && !!this.connection().observation && this.profile().inspection && !this.storageInitializationPeerBusy() && !this.firstConfiguration().busy; }
+  canRunFirstConfiguration() {
+    const tablet = this.connection().observation;
+    return !!this.host.firstConfiguration && !!tablet && this.profile().inspection &&
+      tablet.service.ActiveState === 'inactive' && tablet.service.SubState === 'dead' &&
+      !this.storageInitializationPeerBusy() && !this.personalization().busy && !this.firstConfiguration().busy;
+  }
+
   firstConfigurationUnknown() { return this.firstConfiguration().status === 'unknown' || this.firstConfiguration().retained.some(row => row.connection_id === this.connection().observation?.connection_id && row.outcome === 'unknown'); }
   runFirstConfiguration(action: 'review' | 'create' | 'check') {
-    const invoke = this.host.firstConfiguration, tablet = this.connection().observation;
-    if (invoke && tablet && this.canRunFirstConfiguration() && (action === 'check' || !this.firstConfigurationUnknown())) void this.firstConfigurationController.run(action, tablet, invoke, this.pauseFirstConfiguration);
-  }
-  stopFirstConfiguration() { void this.firstConfigurationController.stop(); }
-  readonly pauseFirstConfiguration = async () => {
     const tablet = this.connection().observation;
-    await this.connectionController.pauseObservation();
-    return !!tablet && this.connection().observation === tablet && this.profile().inspection;
-  };
+    const invoke = this.host.firstConfiguration;
+    if (!tablet || !invoke || !this.canRunFirstConfiguration() || (action !== 'check' && this.firstConfigurationUnknown())) return;
+    void this.firstConfigurationController.run(action, tablet, invoke, async () => {
+      await this.connectionController.pauseObservation();
+      if (this.connection().observation !== tablet || !this.profile().inspection) return false;
+      this.personalizationController.clear();
+      return true;
+    });
+  }
+
+  stopFirstConfiguration() { void this.firstConfigurationController.stop(); }
   private readonly ownedV3Controller=new OwnedV3Controller(state=>this.ownedV3.set(state));
   readonly ownedV3=signal(this.ownedV3Controller.state);
   readonly ownedV3Rows=computed(()=>ownedV3Rows(this.ownedV3().view));
@@ -418,7 +427,7 @@ export class App implements OnDestroy {
   private readonly clearModelOnPageHide=()=>{this.firstConfigurationController.discard();this.cloudBackupController.clear();this.stopLocalModeOnLifecycle();this.localModeController.clear();this.productController.clear();this.exportController.clear();this.cleanupController.clear();this.handwritingController.clear();this.clearArchivePeers();this.modelController.clear();};
   constructor() { if (this.host.firstConfiguration) void this.firstConfigurationController.retained(this.host.firstConfiguration); this.refreshIsolatedRootOriginals(); if (this.host.sharedPreferences) void this.sharedPreferenceController.run(this.host.sharedPreferences, {action: 'retained'}); if(this.host.portableConfiguration)void this.portableController.retained({portableConfiguration:q=>this.host.portableConfiguration!(q)}); if(this.host.notebookRestore)void this.notebookRestoreController.retained(this.host); if(this.host.notebookArchive)void this.notebookController.retained({notebookArchive:q=>this.host.notebookArchive!(q)}); if(this.host.storageInitialization)void this.storageInitializationController.retained(this.storageInitializationAdapter()); if(this.host.localModeChoice)void this.localModeController.retained({localModeChoice:q=>this.host.localModeChoice!(q)}); if(this.host.handwritingRecords)void this.handwritingController.retained({handwritingRecords:q=>this.host.handwritingRecords!(q)}); if(this.host.selectedArchive)void this.selectedController.retained({selectedArchive:q=>this.host.selectedArchive!(q)}); if(this.host.ordinaryRestore)void this.restoreController.retained({ordinaryRestore:q=>this.host.ordinaryRestore!(q)}); if(this.host.modelCredential)void this.fileCredentialController.retained({modelCredential:q=>this.host.modelCredential!(q)}); if(this.host.credentialReference)void this.credentialController.retained({credentialReference:q=>this.host.credentialReference!(q)}); if(this.host.memorySettings)void this.memorySettingsController.retained({memorySettings:q=>this.host.memorySettings!(q)}); if(this.host.researchSettings)void this.researchController.retained({researchSettings:q=>this.host.researchSettings!(q)}); window.addEventListener('pagehide',this.clearModelOnPageHide); document.addEventListener('visibilitychange',this.clearFileOnHidden); if(this.host.ordinaryExport)void this.exportController.retained({ordinaryExport:q=>this.host.ordinaryExport!(q)}); if(this.host.modelSettings)void this.modelController.retained({modelSettings:q=>this.host.modelSettings!(q)}); if(this.host.productSettings)void this.productController.retained({productSettings:q=>this.host.productSettings!(q)}); if(this.host.basicSettings)void this.basicController.retained({basicSettings:q=>this.host.basicSettings!(q)}); if (this.host.memoryForget) void this.forgetController.run({ memoryForget: request => this.host.memoryForget!(request) }, { action:'status' }); this.releases.start(); this.managerReleases.start(); void this.driveController.load(); void this.downloadController.request({action: 'status'}); }
   private preferenceStorage(): Storage | null { try { return window.localStorage; } catch { return null; } }
-  connectTablet() { void this.connectionController.connect(); }
+  connectTablet() { if (!this.firstConfiguration().busy) void this.connectionController.connect(); }
   disconnectTablet() { this.connectionController.disconnect(); }
   editMemory(event: Event) { this.memoryText.set((event.target as HTMLTextAreaElement).value); }
   async searchMemory() {if(this.archiveMaintenanceBusy2())return;
@@ -913,7 +922,7 @@ export class App implements OnDestroy {
     if (this.isolatedRoot().busy || this.connection().observation !== tablet || !this.profile().runtimeIdentityProbe) return;
     await this.runtimeController.inspect({ inspectRuntime: () => this.host.inspectRuntime!() }, tablet);
   }
-  async personalize(operation: PersonalizationOperation) {if(this.archiveMaintenanceBusy2())return;
+  async personalize(operation: PersonalizationOperation) {if(this.firstConfiguration().busy||this.archiveMaintenanceBusy2())return;
     this.clearInspectionPeers();
     const tablet = this.connection().observation;
     if (!tablet || !this.profile().personalizationProbe || !this.host.personalization || this.personalization().busy) return;

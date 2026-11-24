@@ -60,7 +60,7 @@ async function firstConfigurationUI(page, first) {
   await readFreshTabletState(page);
   await page.getByRole('heading', {name: 'Prepare Buddy storage', exact: true}).scrollIntoViewIfNeeded();
   const review = page.getByRole('button', {name: 'Review first configuration', exact: true});
-  const create = page.getByRole('button', {name: 'Create default configuration', exact: true});
+  const create = page.getByRole('button', {name: 'Save default configuration', exact: true});
   const status = page.getByTestId('first-configuration-status');
   await expect(review).toBeEnabled();
   await review.click();

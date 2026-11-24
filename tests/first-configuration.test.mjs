@@ -38,7 +38,7 @@ test('first configuration requires private installation admission and a separate
   assert.equal((await f.run(bind('check', 5))).current, 'present');
   assert.deepEqual(f.state.calls.map(call => call.request.selector), ['check-initial', 'create-initial', 'check-initial']);
   for (const {request} of f.state.calls) {
-    assert.deepEqual(Object.keys(request).sort(), ['boot_id', 'connection_id', 'selector', 'service']);
+    assert.deepEqual(Object.keys(request).sort(), ['boot_id', 'connection_id', 'expected_executable_sha256', 'selector', 'service']);
   }
 });
 
@@ -157,6 +157,7 @@ test('actual controller discards a queued confirmation and retains uncertainty a
   await Promise.all([create, stopping]);
   assert.equal(controller.state.busy, false);
   assert.equal(controller.state.status, 'unknown');
+  assert.equal(controller.state.current, null);
   f.state.hold = null;
   await controller.run('check', tablet, f.run, pause);
   assert.equal(controller.state.current, 'present');
@@ -185,18 +186,20 @@ test('the shared browser maintenance bridge preserves bounds, parsers and stream
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => ({ok, body: {getReader: () => reader}}));
   const host = currentHost();
   const first = {action: 'retained'};
-  await assert.rejects(host.firstConfiguration(first), {message: 'Tablet maintenance helper unavailable'});
+  await assert.rejects(host.firstConfiguration(first), {message: 'First configuration helper unavailable'});
   environment.location.hostname = '127.0.0.1';
   environment.location.protocol = 'https:';
-  await assert.rejects(host.firstConfiguration(first), {message: 'Tablet maintenance helper unavailable'});
+  await assert.rejects(host.firstConfiguration(first), {message: 'First configuration helper unavailable'});
   assert.equal(fetchMock.mock.callCount(), 0);
   environment.location.protocol = 'http:';
 
   const frame = size => {
     chunks = [encoder.encode('{"value":1}'), encoder.encode(' '.repeat(size - 11))];
   };
-  frame(8192);
-  assert.deepEqual(await host.firstConfiguration(first), {value: 1});
+  const payload = {version: 1, state: 'none', invocation: null, reference: null, current: null, retained: []};
+  const body = JSON.stringify(payload);
+  chunks = [encoder.encode(body), encoder.encode(' '.repeat(8192 - body.length))];
+  assert.deepEqual(await host.firstConfiguration(first), payload);
   assert.deepEqual(fetchMock.mock.calls[0].arguments, ['/manager-first-configuration', {
     method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
     body: '{"action":"retained"}', signal,
@@ -255,4 +258,36 @@ test('the shared browser maintenance bridge preserves bounds, parsers and stream
   await assert.rejects(host.localModeChoice({}), {message: 'Local-only helper unavailable'});
   await assert.rejects(host.downloads.request({action: 'status'}), {message: 'Download host unavailable'});
   assert.deepEqual([cancelled, released], [8, 11]);
+  await assert.rejects(host.firstConfiguration(first), /unavailable/i);
+  ok = true;
+  chunks = [encoder.encode(body), encoder.encode(' '.repeat(8193 - body.length))];
+  await assert.rejects(host.firstConfiguration(first), /response refused/i);
+  assert.deepEqual([cancelled, released], [9, 12]);
+});
+
+test('existing configuration requires the observed resident executable through confirmation and never falls back', async () => {
+  const f = open();
+  f.state.existing = true;
+  f.observer.lastObservation.service.LoadState = 'loaded';
+  const review = await f.run(bind('review', 1));
+  assert.equal(review.state, 'ready');
+  assert.equal(f.state.calls[0].request.selector, 'check-existing-default');
+  const original = f.state.executable;
+  f.state.executable = 'e'.repeat(64);
+  const refused = await f.run(bind('create', 2, review.reference));
+  assert.equal(refused.state, 'unavailable');
+  assert.equal(f.state.exists, false);
+  assert.equal(f.state.calls[1].request.expected_executable_sha256, original);
+  const reviewedAgain = await f.run(bind('review', 3));
+  f.state.lost = true;
+  assert.equal((await f.run(bind('create', 4, reviewedAgain.reference))).state, 'unknown');
+  f.state.lost = false;
+  const readback = await f.run(bind('check', 5));
+  assert.equal(readback.current, 'present');
+  assert.equal(readback.retained[0].outcome, 'unknown');
+  assert.equal((await f.run(bind('create', 6, reviewedAgain.reference))).state, 'unknown');
+  assert.deepEqual(f.state.calls.map(({request}) => request.selector), [
+    'check-existing-default', 'create-existing-default', 'check-existing-default',
+    'create-existing-default', 'check-existing-default',
+  ]);
 });
