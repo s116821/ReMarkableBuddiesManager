@@ -37,10 +37,13 @@ The authenticated helper has one fixed `/manager-personalization` route, a
 HttpOnly session guards. Electron exposes one narrow main-frame method. Requests
 carry fixed operation, opaque connection/boot identity, and only the actual
 allowed revision/text/enabled fields. No caller-defined path/command/environment
-or service action is accepted. Host transport selects only the known config path
-and `/opt/bin/reader-buddy --personalization-operation inspect|set|disable|clear`;
-text travels as encoded JSON through child/SSH stdin, never shell interpolation
-or argv. Existing host trust, bound USB interface/source route, credential custody
+or service action is accepted. Before dispatch, the host reads the Reader service's
+launcher and selects a known executable: `/home/root/.local/lib/remarkable-buddies/reader-buddy`
+for the installed RM2 package or `/opt/bin/reader-buddy` for standalone installs.
+A standalone CLI can also be used when there is no Reader unit or launcher.
+The host runs the fixed personalization operation against the usual config path.
+Service launch arguments stay with the service. Personalization text travels as
+encoded JSON through child/SSH stdin. Existing host trust, bound USB interface/source route, credential custody
 and change notifications remain required. Connection fingerprint must match before
 dial/auth; boot must match before the command, with observation/route brackets
 and timeout/cap afterward. The public transport label is now wired-maintenance,
