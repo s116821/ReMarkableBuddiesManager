@@ -61,7 +61,7 @@ Connect over USB, stop Buddy and read tablet state in Manager. Open **Tablet →
 
 An unconfirmed save can be followed by **Check current configuration**. The check reads the current file and leaves the original result unconfirmed. Manager does not retry the original save. Clean and replacement setup retain their separate empty-root checks.
 
-For an existing installation, the wired host requires the known resident launcher and checks that its executable digest matches the reviewed executable before saving. The digest binds the check and save to the same observed bytes. Package signature verification remains part of package installation.
+For an existing installation, the wired host requires the known resident launcher and confirms the stock configuration sources have no config path override. It checks that its executable digest matches the reviewed executable before saving. The digest binds the check and save to the same observed bytes. Package signature verification remains part of package installation.
 
 Public focused checks:
 

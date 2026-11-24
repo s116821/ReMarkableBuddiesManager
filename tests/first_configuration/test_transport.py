@@ -1,7 +1,10 @@
 """Fixed command and readback tests with synthetic wired observations."""
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from unittest.mock import Mock, patch
@@ -49,6 +52,61 @@ class FirstConfigurationTransport(unittest.TestCase):
                 config.resident_identity(transport, SERVICE, time.monotonic() + 1)
             transport.open_session.return_value.exec_command.assert_called_once_with(personalization.LAUNCHER_QUERY)
 
+    def test_unqualified_service_config_source_refuses_before_hash_or_selector(self):
+        transport = Mock()
+        with (patch.object(config, 'select_executable', return_value=RESIDENT),
+              patch.object(config.transport_common, 'exchange_no_input', return_value=2) as exchange,
+              self.assertRaises(wired.Refusal)):
+            config.resident_identity(transport, SERVICE, time.monotonic() + 1)
+        self.assertEqual(exchange.call_count, 1)
+        command = exchange.call_args.args[1]
+        self.assertIn('EnvironmentFiles', command)
+        self.assertIn('DropInPaths', command)
+        self.assertIn('REMARKABLE_BUDDIES_CONFIG', command)
+        self.assertNotIn('--configuration-operation', command)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'The fixed tablet profile uses a POSIX shell')
+    def test_profile_checks_actual_shell_without_exporting_environment_values(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env_file = Path(folder) / 'environment'
+            systemctl = Path(folder) / 'systemctl'
+            systemctl.write_text("""#!/bin/sh
+case "$1" in
+  show) printf '%s\\n' "$FIXTURE_PROPERTIES";;
+  show-environment) printf '%s\\n' "$FIXTURE_MANAGER_ENV";;
+  *) exit 2;;
+esac
+""")
+            systemctl.chmod(0o700)
+            profile = config.RESIDENT_CONFIG_CHECK.replace('/home/root/.config/reader-buddy/environment', str(env_file))
+            properties = (
+                'Environment=\n'
+                'DropInPaths=\n'
+                'NeedDaemonReload=no\n'
+                'PassEnvironment=\n'
+                'FragmentPath=/usr/lib/systemd/system/reader-buddy.service\n'
+                f'EnvironmentFiles={env_file} (ignore_errors=no)'
+            )
+            default_file = 'PRIVATE_TOKEN=fixture-value\n'
+            for name, unit, manager, file, accepted in [
+                ('stock', properties, '', default_file, True),
+                ('drop-in', properties.replace('DropInPaths=', 'DropInPaths=/foreign.conf'), '', default_file, False),
+                ('direct override', properties.replace('Environment=', 'Environment=REMARKABLE_BUDDIES_CONFIG=/foreign'),
+                 '', default_file, False),
+                ('second environment file', properties + '\nEnvironmentFiles=/foreign (ignore_errors=no)',
+                 '', default_file, False),
+                ('manager override', properties, 'REMARKABLE_BUDDIES_CONFIG=/foreign', default_file, False),
+                ('file override', properties, '', default_file + 'REMARKABLE_BUDDIES_CONFIG=/foreign\n', False),
+            ]:
+                with self.subTest(name=name):
+                    env_file.write_text(file)
+                    result = subprocess.run(['/bin/sh', '-c', profile], env={
+                        'PATH': folder + os.pathsep + os.defpath, 'LC_ALL': 'C',
+                        'FIXTURE_PROPERTIES': unit, 'FIXTURE_MANAGER_ENV': manager,
+                    }, capture_output=True, timeout=2, check=False)
+                    self.assertEqual(result.returncode == 0, accepted)
+                    self.assertEqual(result.stdout + result.stderr, b'')
+
     def exercise(self, selector, *, hashes=(EXECUTABLE, EXECUTABLE), expected=None, report=None, reply_error=False):
         transport, submitted = Mock(), Mock()
         selectors = []
@@ -58,6 +116,9 @@ class FirstConfigurationTransport(unittest.TestCase):
         def exchange(peer, command, _, output, limit, on_submit=None, *, require_eof):
             self.assertIs(peer, transport)
             self.assertTrue(require_eof)
+            if command == config.RESIDENT_CONFIG_PROFILE:
+                self.assertIsNone(on_submit)
+                return 0
             if '--configuration-operation' not in command:
                 self.assertEqual(command, f'/usr/bin/env -i PATH=/usr/bin:/bin sha256sum {RESIDENT}')
                 output.extend(f'{next(identity)}  {RESIDENT}'.encode() + b'\n')

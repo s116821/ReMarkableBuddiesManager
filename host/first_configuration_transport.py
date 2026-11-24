@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shlex
 import sys
 import threading
 import time
@@ -20,10 +21,35 @@ STATES = {
 }
 
 
+# Match the installed resident unit's configuration sources. Keep environment
+# values on the tablet, including when a custom unit or file must be refused.
+RESIDENT_CONFIG_CHECK = r"""
+properties=$(systemctl show --all --no-pager --property=DropInPaths --property=Environment --property=EnvironmentFiles --property=FragmentPath --property=NeedDaemonReload --property=PassEnvironment reader-buddy.service) || exit 2
+[ "$(printf '%s\n' "$properties" | sort)" = 'DropInPaths=
+Environment=
+EnvironmentFiles=/home/root/.config/reader-buddy/environment (ignore_errors=no)
+FragmentPath=/usr/lib/systemd/system/reader-buddy.service
+NeedDaemonReload=no
+PassEnvironment=' ] || exit 2
+manager_environment=$(systemctl show-environment) || exit 2
+printf '%s\n' "$manager_environment" | grep -Fq 'REMARKABLE_BUDDIES_CONFIG'
+[ "$?" -eq 1 ] || exit 2
+file=/home/root/.config/reader-buddy/environment
+[ -f "$file" ] && [ ! -L "$file" ] && [ "$(wc -c < "$file")" -le 65536 ] || exit 2
+grep -Fq 'REMARKABLE_BUDDIES_CONFIG' "$file"
+[ "$?" -eq 1 ]
+""".strip()
+RESIDENT_CONFIG_PROFILE = '/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /bin/sh -c ' + shlex.quote(RESIDENT_CONFIG_CHECK)
+
+
 def resident_identity(transport, service, deadline):
     if select_executable(transport, service['LoadState'], without_arguments=True) != RESIDENT:
         raise shared.Refusal('observation-unavailable')
     output = bytearray()
+    code = transport_common.exchange_no_input(
+        transport, RESIDENT_CONFIG_PROFILE, deadline, output, 512, require_eof=True)
+    if code or output:
+        raise shared.Refusal('observation-unavailable')
     code = transport_common.exchange_no_input(
         transport, f'/usr/bin/env -i PATH=/usr/bin:/bin sha256sum {RESIDENT}',
         deadline, output, 512, require_eof=True)
