@@ -55,11 +55,20 @@ Stderr is discarded/capped and diagnostics are sanitized. Server-side last-inspe
 revision and exact set/disable/clear readback are checked before a verified UI result.
 No actual physical tablet mutation was executed to qualify this increment.
 
+### Save the first configuration
+
+Connect over USB, stop Buddy and read tablet state in Manager. Open **Tablet → Setup → First configuration**. **Check current configuration** reads the current state. To save missing defaults, select **Review first configuration**, then **Save default configuration**. Buddy checks the existing local Store and saves a default file only when it can preserve the existing data. Once a valid file is present, open **Personalization**, read the saved revision and edit the preference.
+
+An unconfirmed save can be followed by **Check current configuration**. The check reads the current file and leaves the original result unconfirmed. Manager does not retry the original save. Clean and replacement setup retain their separate empty-root checks.
+
+For an existing installation, the wired host requires the known resident launcher and confirms the stock configuration sources have no config path override. It checks that its executable digest matches the reviewed executable before saving. The digest binds the check and save to the same observed bytes. Package signature verification remains part of package installation.
+
 Public focused checks:
 
 ```text
-node --test tests/personalization*.test.mjs
+node --test tests/personalization*.test.mjs tests/first-configuration*.test.mjs
 python -m unittest discover -s tests/personalization -v
+python -m unittest discover -s tests/first_configuration -v
 npm run test:personalization-hosts
 npm run test:personalization-hosts -- --packaged
 ```

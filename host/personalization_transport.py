@@ -15,7 +15,7 @@ RESIDENT = '/home/root/.local/lib/remarkable-buddies/reader-buddy'
 LAUNCHER_QUERY = 'systemctl show --no-pager --property=ExecStart --value reader-buddy.service'
 # Match one direct ExecStart record. Neither its arguments nor its metadata are executed.
 LAUNCHER = re.compile(
-    rb'\{ path=([^\s;]+) ; argv\[\]=([^\s;]+)(?: [^{}\r\n]*?)?'
+    rb'\{ path=([^\s;]+) ; argv\[\]=([^\s;]+)( [^{}\r\n]*?)?'
     rb' ; ignore_errors=(?:yes|no)(?: ; [^{}\r\n]+)? \}'
 )
 
@@ -71,7 +71,7 @@ def reply(channel, limit, seconds):
             time.sleep(.01)
 
 
-def select_executable(transport, load_state):
+def select_executable(transport, load_state, *, without_arguments=False):
     channel = transport.open_session(timeout=2)
     try:
         channel.settimeout(2)
@@ -84,7 +84,7 @@ def select_executable(transport, load_state):
         # A standalone install can expose the CLI without installing a unit.
         return STANDALONE
     match = LAUNCHER.fullmatch(output.strip()) if code == 0 and load_state == 'loaded' else None
-    if match and match[1] == match[2]:
+    if match and match[1] == match[2] and (not without_arguments or match[3] is None):
         for executable in (STANDALONE, RESIDENT):
             if match[1] == executable.encode('ascii'):
                 return executable
