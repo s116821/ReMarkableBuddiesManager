@@ -8,8 +8,13 @@ import time
 import wired_observer as shared
 
 MAX_IO = 131072
-COMMAND = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json /opt/bin/reader-buddy --personalization-operation '
+COMMAND_PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json'
 OPERATIONS = {'inspect', 'set', 'disable', 'clear'}
+STANDALONE = '/opt/bin/reader-buddy'
+RESIDENT = '/home/root/.local/lib/remarkable-buddies/reader-buddy'
+LAUNCHER_QUERY = 'systemctl show --no-pager --property=ExecStart --value reader-buddy.service'
+# Match one direct ExecStart record. Neither its arguments nor its metadata are executed.
+LAUNCHER = re.compile(rb'\{ path=([^\s;]+) ; argv\[\]=([^\s;]+) ; [^{}\r\n]+ \}')
 
 
 def parse(raw):
@@ -43,6 +48,46 @@ def request(raw):
     return v
 
 
+def reply(channel, limit, seconds):
+    output, discarded = bytearray(), 0
+    deadline = time.monotonic() + seconds
+    while True:
+        if time.monotonic() > deadline:
+            raise shared.Refusal('timeout')
+        if channel.recv_ready():
+            output.extend(channel.recv(4096))
+            if len(output) > limit:
+                raise ValueError('oversized response')
+        if channel.recv_stderr_ready():
+            discarded += len(channel.recv_stderr(4096))
+            if discarded > limit:
+                raise ValueError('oversized diagnostics')
+        if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+            return channel.recv_exit_status(), output
+        if not channel.recv_ready() and not channel.recv_stderr_ready():
+            time.sleep(.01)
+
+
+def select_executable(transport, load_state):
+    channel = transport.open_session(timeout=2)
+    try:
+        channel.settimeout(2)
+        channel.exec_command(LAUNCHER_QUERY)
+        channel.shutdown_write()
+        code, output = reply(channel, 4096, 2)
+    finally:
+        channel.close()
+    if code == 0 and load_state == 'not-found' and not output.strip():
+        # A standalone install can expose the CLI without installing a unit.
+        return STANDALONE
+    match = LAUNCHER.fullmatch(output.strip()) if code == 0 and load_state == 'loaded' else None
+    if match and match[1] == match[2]:
+        for executable in (STANDALONE, RESIDENT):
+            if match[1] == executable.encode('ascii'):
+                return executable
+    raise shared.Refusal('observation-unavailable')
+
+
 def execute(transport, v, progress):
     before = shared.inspect(transport)
     if before['boot_id'] != v['boot_id']:
@@ -53,32 +98,17 @@ def execute(transport, v, progress):
     raw = json.dumps(body, ensure_ascii=True, separators=(',', ':')).encode()
     if len(raw) > MAX_IO:
         raise ValueError('invalid request')
+    executable = select_executable(transport, before['service']['LoadState'])
     channel = transport.open_session(timeout=2)
     try:
         channel.settimeout(2)
         # Dispatch might reach the peer even if exec_command fails to acknowledge.
         progress['dispatched'] = True
-        channel.exec_command(COMMAND + operation)
+        channel.exec_command(f'{COMMAND_PREFIX} {executable} --personalization-operation {operation}')
         if operation != 'inspect':
             channel.sendall(raw)
         channel.shutdown_write()
-        output, discarded = bytearray(), 0
-        deadline = time.monotonic() + 8
-        while True:
-            if time.monotonic() > deadline:
-                raise shared.Refusal('timeout')
-            while channel.recv_ready():
-                output.extend(channel.recv(4096))
-                if len(output) > MAX_IO:
-                    raise ValueError('oversized response')
-            while channel.recv_stderr_ready():
-                discarded += len(channel.recv_stderr(4096))
-                if discarded > MAX_IO:
-                    raise ValueError('oversized diagnostics')
-            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
-                break
-            time.sleep(.01)
-        code = channel.recv_exit_status()
+        code, output = reply(channel, MAX_IO, 8)
         report = parse(output) if code == 0 else None
         status = 'reported' if report is not None else 'unsupported' if code in (2, 126, 127) else 'unavailable'
         if shared.inspect(transport) != before:
