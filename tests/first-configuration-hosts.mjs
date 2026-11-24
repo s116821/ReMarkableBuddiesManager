@@ -56,6 +56,7 @@ async function exerciseUncertainSaves(page, configure, transport) {
   const check = page.getByRole('button', {name: 'Check current configuration', exact: true});
   const save = page.getByRole('button', {name: 'Save default configuration', exact: true});
   const stop = page.getByRole('button', {name: 'Stop configuration wait', exact: true});
+  const storage = page.getByRole('button', {name: 'Review storage setup', exact: true});
   const current = page.getByTestId('first-configuration-current');
   const original = page.getByTestId('first-configuration-original');
   for (const mode of ['lost', 'stopped']) {
@@ -69,18 +70,21 @@ async function exerciseUncertainSaves(page, configure, transport) {
     const before = (await transport()).calls.length;
     await review.click();
     await expect(current).toHaveText('No saved configuration is present.');
+    await expect(storage).toBeDisabled();
     await expect(save).toBeEnabled();
     if (mode === 'lost') await configure({lost: true});
     await save.click();
     if (mode === 'stopped') {
       await expect.poll(async () => (await transport()).exists).toBe(true);
       await expect(current).toHaveCount(0);
+      await expect(storage).toBeDisabled();
       await stop.click();
     }
     await expect(page.getByTestId('first-configuration-status')).toContainText('Configuration creation was not confirmed.');
     await expect(current).toHaveCount(0);
     await expect(original).toBeVisible();
     await expect(review).toBeDisabled();
+    await expect(storage).toBeDisabled();
     await expect(save).toHaveCount(0);
     assert.deepEqual((await transport()).calls.slice(before), ['check-existing-default', 'create-existing-default']);
 
@@ -89,6 +93,7 @@ async function exerciseUncertainSaves(page, configure, transport) {
     await expect(current).toHaveText('A valid saved configuration is present.');
     await expect(original).toBeVisible();
     await expect(review).toBeDisabled();
+    await expect(storage).toBeEnabled();
     assert.deepEqual((await transport()).calls.slice(before), [
       'check-existing-default', 'create-existing-default', 'check-existing-default',
     ]);

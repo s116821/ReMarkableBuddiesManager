@@ -294,7 +294,11 @@ export class App implements OnDestroy {
   readonly storageInitialization=signal(this.storageInitializationController.state);
   private readonly firstConfigurationController = new FirstConfigurationController(state => this.firstConfiguration.set(state));
   readonly firstConfiguration = signal(this.firstConfigurationController.state);
-  readonly firstConfigurationBlocks = computed(() => this.firstConfiguration().current === 'missing' || this.firstConfiguration().current === 'blocked');
+  readonly firstConfigurationBlocks = computed(() => {
+    const {busy, current, status} = this.firstConfiguration();
+    return busy || current === 'missing' || current === 'blocked' || status === 'blocked' ||
+      (current === null && this.firstConfigurationUnknown());
+  });
   canRunFirstConfiguration() {
     const tablet = this.connection().observation;
     return !!this.host.firstConfiguration && !!tablet && this.profile().inspection &&
