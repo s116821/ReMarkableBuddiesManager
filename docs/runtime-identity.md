@@ -9,10 +9,10 @@ For a loaded service, Manager reads its direct executable path. It recognizes
 and `/opt/bin/reader-buddy` for standalone installations. If the service is absent
 and its launcher record is empty, Manager checks the standalone path.
 
-Manager verifies the same tablet, protected parent directories, executable metadata
-and service selection across the read. It passes only `--version` to the selected
-executable. If that file is missing, unsafe or changes during the read, the version
-is unavailable.
+Manager passes only `--version` to the selected executable. It withholds the
+version if the file is missing or unsafe, or if its before-and-after checks
+detect a change in the tablet, service selection, parent directories or
+executable metadata.
 
 **Binary version** is the executable's self-report. The version of a running process,
 package ownership, signature and update eligibility require separate verification.
