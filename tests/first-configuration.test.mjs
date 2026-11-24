@@ -157,6 +157,7 @@ test('actual controller discards a queued confirmation and retains uncertainty a
   await Promise.all([create, stopping]);
   assert.equal(controller.state.busy, false);
   assert.equal(controller.state.status, 'unknown');
+  assert.equal(controller.state.current, null);
   f.state.hold = null;
   await controller.run('check', tablet, f.run, pause);
   assert.equal(controller.state.current, 'present');

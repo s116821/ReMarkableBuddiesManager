@@ -5,7 +5,7 @@ import path from 'node:path';
 import {chromium, _electron as electron, expect} from '@playwright/test';
 import {startHelper} from '../host/browser-helper.mjs';
 import {firstConfigurationFixture, personalizationAfterFirstSave, tablet} from './fixtures/first-configuration.mjs';
-import {readTabletFor} from './fixtures/navigation.mjs';
+import {disconnectFor, readTabletFor} from './fixtures/navigation.mjs';
 
 const packaged = process.argv.includes('--packaged');
 const docRoot = path.resolve('dist/manager/browser');
@@ -50,10 +50,54 @@ async function exercise(page, calls) {
   await expect(field).toHaveValue('Use short sentences.\nKeep examples 🦊');
 }
 
+async function exerciseUncertainSaves(page, configure, transport) {
+  const review = page.getByRole('button', {name: 'Review first configuration', exact: true});
+  const check = page.getByRole('button', {name: 'Check current configuration', exact: true});
+  const save = page.getByRole('button', {name: 'Save default configuration', exact: true});
+  const stop = page.getByRole('button', {name: 'Stop configuration wait', exact: true});
+  const current = page.getByTestId('first-configuration-current');
+  const original = page.getByTestId('first-configuration-original');
+  for (const mode of ['lost', 'stopped']) {
+    // Each simulated tablet has its own retained operation history.
+    await disconnectFor(page, 'tablet');
+    await configure({
+      connectionId: (mode === 'lost' ? '1' : '2').repeat(64), exists: false,
+      lost: false, holdCreateUntilStop: mode === 'stopped',
+    });
+    await readTabletFor(page);
+    const before = (await transport()).calls.length;
+    await review.click();
+    await expect(current).toHaveText('No saved configuration is present.');
+    await expect(save).toBeEnabled();
+    if (mode === 'lost') await configure({lost: true});
+    await save.click();
+    if (mode === 'stopped') {
+      await expect.poll(async () => (await transport()).exists).toBe(true);
+      await expect(current).toHaveCount(0);
+      await stop.click();
+    }
+    await expect(page.getByTestId('first-configuration-status')).toContainText('Configuration creation was not confirmed.');
+    await expect(current).toHaveCount(0);
+    await expect(original).toBeVisible();
+    await expect(review).toBeDisabled();
+    await expect(save).toHaveCount(0);
+    assert.deepEqual((await transport()).calls.slice(before), ['check-existing-default', 'create-existing-default']);
+
+    await configure({lost: false});
+    await check.click();
+    await expect(current).toHaveText('A valid saved configuration is present.');
+    await expect(original).toBeVisible();
+    await expect(review).toBeDisabled();
+    assert.deepEqual((await transport()).calls.slice(before), [
+      'check-existing-default', 'create-existing-default', 'check-existing-default',
+    ]);
+  }
+}
+
 const wire = firstConfigurationFixture({
   lastObservation: null,
   async observe() {
-    this.lastObservation = structuredClone(observed);
+    this.lastObservation = {...observed, connection_id: wire.state.connectionId ?? observed.connection_id};
     return {contract_version: 1, status: 'observed', observation: this.lastObservation};
   },
   cancel() { return {contract_version: 1, status: 'cancelled', observation: null}; },
@@ -82,6 +126,8 @@ try {
     assert.equal(response.status(), expected);
   }
   await exercise(page, () => wire.state.calls.map(({request}) => request.selector));
+  await exerciseUncertainSaves(page, patch => Object.assign(wire.state, patch),
+    () => ({exists: wire.state.exists, calls: wire.state.calls.map(({request}) => request.selector)}));
   console.log('Browser setup passed through the actual helper with a synthetic Buddy transport.');
 } finally {
   await browser.close();
@@ -110,9 +156,10 @@ try {
     const {firstConfigurationFixture, personalizationAfterFirstSave} = require(path.join(fixture.root, 'tests/fixtures/first-configuration.mjs'));
     const wire = firstConfigurationFixture();
     wire.state.existing = true;
-    globalThis.firstConfigurationCalls = wire.state.calls;
+    globalThis.firstConfigurationState = wire.state;
     WiredObserver.prototype.observe = async function () {
-      this.lastObservation = structuredClone(fixture.observed);
+      this.lastObservation = {...fixture.observed,
+        connection_id: wire.state.connectionId ?? fixture.observed.connection_id};
       return {contract_version: 1, status: 'observed', observation: this.lastObservation};
     };
     WiredObserver.prototype.runFirstConfiguration = wire.observer.runFirstConfiguration;
@@ -129,7 +176,14 @@ try {
     return Promise.all(badCalls.map(call => call().then(() => false, () => true)));
   });
   assert.deepEqual(refused, [true, true]);
-  await exercise(page, () => app.evaluate(() => globalThis.firstConfigurationCalls.map(({request}) => request.selector)));
+  const transport = () => app.evaluate(() => {
+    const state = globalThis.firstConfigurationState;
+    return {exists: state.exists, calls: state.calls.map(({request}) => request.selector)};
+  });
+  await exercise(page, async () => (await transport()).calls);
+  await exerciseUncertainSaves(page,
+    patch => app.evaluate((_electron, values) => { Object.assign(globalThis.firstConfigurationState, values); }, patch),
+    transport);
   console.log('Electron setup passed through actual preload and IPC with a synthetic Buddy transport.');
 } finally {
   if (app) await app.close();

@@ -7,7 +7,7 @@ export const producer = (operation, state) => ({operation, report_version: 1, st
 export const noDispatch = {dispatch: 'not-dispatched', observation: null, report: null, executable_sha256: null};
 
 export function firstConfigurationFixture(observer = {lastObservation: structuredClone(tablet)}) {
-  const state = {available: true, existing: false, executable: 'd'.repeat(64), exists: false, lost: false, calls: [], hold: null};
+  const state = {available: true, existing: false, executable: 'd'.repeat(64), exists: false, lost: false, holdCreateUntilStop: false, calls: [], hold: null};
   const admit = function (sample) {
     if (state.existing) return null;
     if (!state.available) return {};
@@ -23,7 +23,12 @@ export function firstConfigurationFixture(observer = {lastObservation: structure
     const existing = request.selector.endsWith('existing-default');
     if (existing && create && request.expected_executable_sha256 !== state.executable) return noDispatch;
     const outcome = state.exists ? 'present' : create ? 'created' : 'missing';
-    if (create) state.exists = true;
+    if (create) {
+      state.exists = true;
+      if (state.holdCreateUntilStop && !owner.signal.aborted) {
+        await new Promise(resolve => owner.signal.addEventListener('abort', resolve, {once: true}));
+      }
+    }
     return {dispatch: 'possible', observation: sample, report: state.lost ? null : producer(request.selector, outcome), executable_sha256: existing ? state.executable : null};
   };
   Object.assign(observer, {firstConfigurationAdmission: admit, runFirstConfiguration: run});

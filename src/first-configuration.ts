@@ -90,6 +90,8 @@ export class FirstConfigurationController {
       const remaining = deadline - performance.now();
       if (remaining < 1) throw Error('Configuration request expired');
       active.sent = true;
+      // The reviewed file state expires once Create may reach Buddy.
+      if (action === 'create') this.update({current: null});
       const value = await this.call(invoke, request, remaining);
       if (this.active !== active || active.stopping) return;
       const retainedReview = action === 'create' && value.state === 'busy' ? this.review : null;
@@ -130,7 +132,8 @@ export class FirstConfigurationController {
     this.active = null;
     const status = result?.state ?? (active.sent && request.action === 'create' ? 'unknown' : 'invalidated');
     this.update(generation === this.generation
-      ? {busy: false, status, reference: null, retained: result?.retained ?? this.state.retained}
+      ? {busy: false, status, reference: null, retained: result?.retained ?? this.state.retained,
+        current: status === 'created' || status === 'present' ? 'present' : this.state.current}
       : {busy: false});
   }
 
