@@ -1,3 +1,5 @@
+import { FirstConfigurationController } from './first-configuration';
+import { FirstConfigurationPanel } from './first-configuration-panel';
 import {PortableController} from './portable-configuration';
 import type {PortableRetained,PortableOrigins} from '../host/portable-configuration-protocol.mjs';
 import {NotebookArchiveController,archiveAttemptMessage as notebookAttemptMessage} from './notebook-archive';
@@ -61,7 +63,7 @@ import { destinations, initialLocation, resolveLocation, type Destination } from
 import { INSTALL_BLOCKERS, ReleaseController } from './releases';
 
 @Component({
-  selector: 'app-root', standalone: true, imports: [TaskViews, ServiceStopPanel], templateUrl: './app.html',
+  selector: 'app-root', standalone: true, imports: [TaskViews, FirstConfigurationPanel, ServiceStopPanel], templateUrl: './app.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App implements OnDestroy {
@@ -140,6 +142,7 @@ export class App implements OnDestroy {
     });
   }
   private clearPrivateView() {
+    if (this.isView('tablet') && !this.firstConfiguration().busy) this.firstConfigurationController.discard();
     // Leaving a private editor invalidates idle drafts, never an in-flight write.
     // Controller clearing retains original uncertain operations and their receipts.
     if (this.isView('settings', 'model')) {
@@ -188,7 +191,10 @@ export class App implements OnDestroy {
   readonly serviceStopState=signal<ServiceStopUiState>({status:'Buddy stop not reviewed',busy:false,view:null,retained:[]});
   readonly serviceStopAdapter={serviceStop:(q:import('../host/service-stop-protocol.mjs').ServiceStopRequest)=>this.host.serviceStop!(q)};
   readonly pauseServiceStop=async()=>{const t=this.connection().observation;await this.connectionController.pauseObservation();return !!t&&this.connection().observation===t&&this.profile().inspection;};
-  prepareServiceStop(){this.prepareServiceStopPeers();}
+  prepareServiceStop() {
+    if (!this.firstConfiguration().busy) this.firstConfigurationController.discard();
+    this.prepareServiceStopPeers();
+  }
   private prepareServiceStopPeers(){this.storageInitializationController.clear();this.ownedV3Controller.clear();this.clearHistorySettings();this.#clearPeersI();this.cacheController.clear();this.savedModeController.clear();this.memoryInspectionController.clear();this.memoryController.clear();this.ownedController.clear();this.runtimeController.clear();this.personalizationController.clear();}
 
   readonly drive = signal(unsupportedDriveState());
@@ -252,7 +258,7 @@ export class App implements OnDestroy {
   restoreState(family:RestoreFamily){return family==='notebook'?this.notebookRestore():this.ordinaryRestore();}
   private restoreControllerFor(family:RestoreFamily){return family==='notebook'?this.notebookRestoreController:this.restoreController;}
   private restoreCapability(family:RestoreFamily){return family==='notebook'?this.host.notebookRestore:this.host.ordinaryRestore;}
-  settingsBusy(){return this.portable().busy||this.localModeChoice().busy||this.product().busy;}
+  settingsBusy(){return this.firstConfiguration().busy||this.portable().busy||this.localModeChoice().busy||this.product().busy;}
   restoresBusy(){return this.notebookRestore().busy||this.ordinaryRestore().busy;}
   private clearRestores(){this.notebookRestoreController.clear();this.restoreController.clear();}
   private readonly managementController=new ConversationManagementController(state=>this.conversationManagement.set(state),()=>{document.querySelectorAll<HTMLSelectElement>('#conversation-management-choice').forEach(field=>{field.value='';});});
@@ -305,7 +311,50 @@ export class App implements OnDestroy {
   readonly runtimeIdentity = signal(this.runtimeController.state);
   private readonly researchController=new ResearchSettingsController(state=>this.research.set(state),()=>{if(typeof document!=='undefined'){const input=document.getElementById('research-choice') as HTMLSelectElement|null;if(input)input.value='keep';}});
   readonly research=signal(this.researchController.state);
-  private readonly connectionController = new ConnectionController(this.host, state => { this.savedConfigurationController.clear(); this.#clearPeersA(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); this.connection.set(state); });
+  private readonly firstConfigurationController = new FirstConfigurationController(state => this.firstConfiguration.set(state));
+  readonly firstConfiguration = signal(this.firstConfigurationController.state);
+
+  canRunFirstConfiguration() {
+    const tablet = this.connection().observation;
+    return !!this.host.firstConfiguration && !!tablet && this.profile().inspection &&
+      tablet.service.ActiveState === 'inactive' && tablet.service.SubState === 'dead' &&
+      !this.storageInitializationPeerBusy() && !this.personalization().busy && !this.firstConfiguration().busy;
+  }
+
+  firstConfigurationUnknown() {
+    return this.firstConfiguration().status === 'unknown' ||
+      this.firstConfiguration().retained.some(row => row.connection_id === this.connection().observation?.connection_id && row.outcome === 'unknown');
+  }
+
+  runFirstConfiguration(action: 'review' | 'create' | 'check') {
+    const tablet = this.connection().observation;
+    const invoke = this.host.firstConfiguration;
+    if (!tablet || !invoke || !this.canRunFirstConfiguration() || (action !== 'check' && this.firstConfigurationUnknown())) return;
+    void this.firstConfigurationController.run(action, tablet, invoke, async () => {
+      await this.connectionController.pauseObservation();
+      if (this.connection().observation !== tablet || !this.profile().inspection || this.serviceStopBusy()) return false;
+      this.serviceStopEpoch.update(epoch => epoch + 1);
+      this.personalizationController.clear();
+      return true;
+    });
+  }
+
+  stopFirstConfiguration() { void this.firstConfigurationController.stop(); }
+  private readonly connectionController = new ConnectionController(this.host, state => {
+    this.firstConfigurationController.discard();
+    this.savedConfigurationController.clear();
+    this.#clearPeersA();
+    this.memoryInspectionController.clear();
+    this.savedModeController.clear();
+    this.memoryController.clear();
+    this.ownedController.clear();
+    this.personalizationController.clear();
+    this.runtimeController.clear();
+    this.connection.set(state);
+    if (state.status === 'observed' && this.host.firstConfiguration) {
+      void this.firstConfigurationController.retained(this.host.firstConfiguration);
+    }
+  });
   readonly connection = signal(this.connectionController.state);
   readonly profile = computed(() => resolveDeviceProfile(this.connection()));
   readonly storageCategories = [
@@ -703,7 +752,7 @@ export class App implements OnDestroy {
   checkManagerDownload() { void this.downloadController.request({action:'status'}); }
   refreshManager() { void this.managerReleases.refresh(); }
   chooseOfficial() { this.releases.chooseOfficial(); }
-  ngOnDestroy() { this.stopLocalModeOnLifecycle(); document.removeEventListener('visibilitychange',this.clearFileOnHidden); window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.cleanupController.dispose();this.handwritingController.dispose();this.notebookController.dispose();this.selectedController.dispose();this.restoreController.dispose();this.notebookRestoreController.dispose();this.managementController.dispose();this.conversationController.clear();this.clearStorageCredentials();this.clearBasicSettings(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
+  ngOnDestroy() { this.firstConfigurationController.discard(); this.stopLocalModeOnLifecycle(); document.removeEventListener('visibilitychange',this.clearFileOnHidden); window.removeEventListener('pagehide',this.clearModelOnPageHide); this.savedConfigurationController.clear(); this.downloadController.dispose(); this.driveController.dispose(); this.releases.dispose(); this.managerReleases.dispose(); this.connectionController.dispose(); this.exportController.clear();this.cleanupController.dispose();this.handwritingController.dispose();this.notebookController.dispose();this.selectedController.dispose();this.restoreController.dispose();this.notebookRestoreController.dispose();this.managementController.dispose();this.conversationController.clear();this.clearStorageCredentials();this.clearBasicSettings(); this.memoryInspectionController.clear(); this.savedModeController.clear(); this.memoryController.clear(); this.ownedController.clear(); this.personalizationController.clear(); this.runtimeController.clear(); }
   busyModeInk(){return this.settingsBusy()||this.handwritingRecords().busy;}
   busyModeBasic(){return this.settingsBusy()||this.basic().busy;}
   busyHistory(){return ((this.busyModeInk())||this.archiveBusy())||this.restoresBusy();}
