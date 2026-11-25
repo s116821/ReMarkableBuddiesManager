@@ -570,6 +570,9 @@
     @if (app.drive().account; as account) { <p class="break-words" data-testid="drive-account">{{ account.label }}</p> }
     @if (app.drive().checkedAt) { <p class="text-xs text-muted">Last checked: {{ app.drive().checkedAt }}</p> }
     @if (app.drive().status === 'cached') { <p class="ui-warning">These account details were saved earlier. Check the connection before relying on them.</p> }
+    @if (app.drive().status === 'authorization-failed' && app.drive().account && app.drive().error === 'authorization-required') {
+      <p class="ui-warning">Google requires a new sign-in. Choose Sign in to Google Drive to reconnect.</p>
+    }
     @if (app.drive().status === 'unconfigured' || app.drive().status === 'unavailable') { <p class="text-sm text-muted">Check the Google Drive setup in the project guide. Sign-in details stay on this computer.</p> }
     <div class="mt-4 flex flex-wrap gap-3">
       <button class="ui-button ui-button-primary" type="button" (click)="app.signInDrive()" [disabled]="['unconfigured', 'unavailable', 'connecting', 'checking', 'revoking'].includes(app.drive().status)">Sign in to Google Drive</button>

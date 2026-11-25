@@ -390,8 +390,10 @@ export class DriveAuth {
   }
   async check() {
     this.stop(); const generation = this.generation; let baseline;
+    let failure = 'authorization-required';
     try {
       baseline = this.snapshot(); require(baseline.config && baseline.saved, 'authorization-required');
+      failure = 'authorization-failed';
       const abort = new AbortController(); this.work = abort; this.state = publicState('checking');
       const oauth = this.oauth(baseline.config, undefined, abort.signal); oauth.setCredentials(baseline.saved.tokens);
       let credentials = baseline.saved.tokens;
@@ -406,6 +408,11 @@ export class DriveAuth {
           const refreshed = await oauth.refreshAccessToken();
           require(text(refreshToken), 'authorization-required');
           credentials = { ...refreshed.credentials, refresh_token: refreshToken };
+        } catch (error) {
+          if (error?.response?.status === 400 && error.response.data?.error === 'invalid_grant') {
+            failure = 'authorization-required';
+          }
+          throw error;
         } finally {
           oauth.off('tokens', captureRefreshToken);
         }
@@ -416,7 +423,7 @@ export class DriveAuth {
       require(committed.committed && typeof committed.digest === 'string', 'storage-unavailable');
       this.freshDigest = committed.digest; this.publish('connected', observed.account, Date.now(), { clientRecord: baseline.clientRecord, grantRecord: { digest: committed.digest } });
       this.#recordFreshRead(baseline.clientRecord.digest, committed.digest, observed.tokens.expiry_date);
-    } catch { if (generation === this.generation) this.state = publicState('authorization-failed', baseline?.saved?.account ?? null, baseline?.saved ? new Date(baseline.saved.checkedAt).toISOString() : null, 'authorization-required'); }
+    } catch { if (generation === this.generation) this.state = publicState('authorization-failed', baseline?.saved?.account ?? null, baseline?.saved ? new Date(baseline.saved.checkedAt).toISOString() : null, failure); }
     finally { if (generation === this.generation) this.work = null; }
     return this.state;
   }
