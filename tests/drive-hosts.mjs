@@ -27,8 +27,24 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   const consent = page.getByRole('link', { name: 'Continue sign-in with Google' });
   assert.equal(await consent.count(), 1); assert.match(await consent.getAttribute('href'), /^https:\/\/accounts.google.com\/o\/oauth2\/v2\/auth/);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click(); await status.filter({ hasText: 'cancelled' }).waitFor();
-  await publish(connected()); await sign.click(); await status.filter({ hasText: 'Google Drive connected' }).waitFor();
+  const saved = connected();
+  await publish(saved); await sign.click(); await status.filter({ hasText: 'Google Drive connected' }).waitFor();
   assert.equal(await page.getByTestId('drive-account').textContent(), 'fixture@example.invalid');
+  const check = page.getByRole('button', { name: 'Check connection', exact: true });
+  const reconnect = page.getByText('Google requires a new sign-in. Choose Sign in to Google Drive to reconnect.', { exact: true });
+  const failedCheck = { ...saved, status: 'authorization-failed', authorizationId: null };
+  await publish({ ...failedCheck, error: 'authorization-required' });
+  await check.click();
+  await reconnect.waitFor();
+  await page.getByText(`Last checked: ${saved.checkedAt}`, { exact: true }).waitFor();
+  assert.equal(await sign.isEnabled(), true);
+  await publish({ ...failedCheck, error: 'authorization-failed' });
+  await check.click();
+  await reconnect.waitFor({ state: 'hidden' });
+  await status.filter({ hasText: 'Sign-in or account check failed' }).waitFor();
+  await publish(saved);
+  await check.click();
+  await status.filter({ hasText: 'Google Drive connected' }).waitFor();
   await page.getByText('Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.', { exact: true }).waitFor();
   for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
   await page.locator('#drive-title').scrollIntoViewIfNeeded(); await capture();
