@@ -19,7 +19,7 @@ async function fixture(t, options = {}) {
     // Native custody has its own real NTFS fixtures; protocol tests use a plain in-memory store below.
     await rm(root, { recursive: true });
   } else if (!options.store) { await chmod(root, 0o700); await writeFile(path.join(root, 'client.json'), JSON.stringify(config), { mode: 0o600 }); }
-  const state = { requests: [], refreshRequests: [], scope: DRIVE_SCOPE, account: 'fixture-account',
+  const state = { requests: [], refreshRequests: [], scope: DRIVE_SCOPE, clientId: CLIENT, account: 'fixture-account',
     label: 'fixture@example.invalid', tokens: 0, gate: null };
   const server = createServer(async (req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1'); let body = ''; for await (const chunk of req) body += chunk;
@@ -29,7 +29,7 @@ async function fixture(t, options = {}) {
       const fields = new URLSearchParams(body); state.tokens++;
       const signingIn = fields.get('grant_type') === 'authorization_code';
       if (signingIn) {
-        assert.equal(fields.get('client_id'), CLIENT); assert.equal(fields.get('code'), 'synthetic-code');
+        assert.equal(fields.get('client_id'), state.clientId); assert.equal(fields.get('code'), 'synthetic-code');
         assert.equal(createHash('sha256').update(fields.get('code_verifier')).digest('base64url'), state.challenge);
       } else state.refreshRequests.push(fields.get('refresh_token'));
       if (!signingIn && state.refreshFailure) {
@@ -43,7 +43,7 @@ async function fixture(t, options = {}) {
       const refreshToken = signingIn ? signInRefreshToken : state.refreshToken;
       res.end(JSON.stringify({ access_token: 'synthetic-access-token', refresh_token: refreshToken,
         expires_in: 3600, token_type: 'Bearer', scope: state.scope }));
-    } else if (u.pathname === '/tokeninfo') res.end(JSON.stringify({ aud: state.audience ?? CLIENT, scope: state.scope, expires_in: 3600 }));
+    } else if (u.pathname === '/tokeninfo') res.end(JSON.stringify({ aud: state.audience ?? state.clientId, scope: state.scope, expires_in: 3600 }));
     else if (u.pathname === '/about') {
       await state.beforeAbout?.();
       res.end(JSON.stringify({ user: { permissionId: state.account, emailAddress: state.label } }));
@@ -115,12 +115,33 @@ test('a distributed desktop client signs in two fresh profiles to their own Driv
   assert.deepEqual(await readdir(second.root), ['grant.json']);
   const signal = new AbortController().signal;
   const guard = await first.openReadGuard({clientDigest: first.client().digest, grantDigest: firstGrant.digest, signal});
+  const replacement = '1234567890-replacement.apps.googleusercontent.com';
   try {
     await guard.check({signal, timeoutMs: 5000});
-    await writeFile(registrationFile, '1234567890-replacement.apps.googleusercontent.com\n');
+    await writeFile(registrationFile, replacement + '\n');
     await assert.rejects(guard.check({signal, timeoutMs: 5000}));
     assert.deepEqual(first.grant(), firstGrant);
   } finally { await guard.close(); }
+  assert.equal(a.auth.status().status, 'disconnected');
+  assert.equal(a.auth.status().error, 'authorization-required');
+  const originalRequests = a.state.requests.length;
+  assert.equal((await a.auth.check()).error, 'authorization-required');
+  assert.equal((await a.auth.beginTabletAuthorization()).authorizationUrl, null);
+  await a.begin();
+  a.auth.cancel();
+  assert.deepEqual(first.grant(), firstGrant);
+  assert.equal(a.state.requests.length, originalRequests);
+  a.state.clientId = replacement;
+  a.state.signInRefreshToken = 'synthetic-new-client-refresh';
+  await a.signIn();
+  assert.equal(first.grant().value.clientId, replacement);
+  assert.equal(a.auth.status().account.label, a.state.label);
+  assert.equal(second.grant().value.clientId, CLIENT);
+  const otherRequests = b.state.requests.length;
+  assert.equal(b.auth.disconnect().status, 'disconnected');
+  assert.equal(second.grant().value, null);
+  assert.equal(b.state.requests.length, otherRequests);
+  assert.equal(first.grant().value.clientId, replacement);
 });
 
 test('separate tablet consent preserves the host grant and supplies one private V1 credential', async t => {

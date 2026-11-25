@@ -10,23 +10,25 @@ export const GOOGLE_ENDPOINTS = Object.freeze({ authorization: 'https://accounts
 const endpointKeys = Object.keys(GOOGLE_ENDPOINTS).sort().join();
 const require = (ok, code = 'authorization-failed') => { if (!ok) throw new Error(code); };
 const text = (v, maximum = 16384) => typeof v === 'string' && v.length > 0 && v.length <= maximum && /^[\x21-\x7e]+$/.test(v);
+const desktopClientId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{10,180}\.apps\.googleusercontent\.com$/.test(value);
 function registration(record) {
   if (record.value === null) return null;
   const v = record.value;
   require(v && Object.keys(v).sort().join() === 'clientId,clientSecret,schema,type' && v.schema === 1 && v.type === 'google-desktop' &&
-    typeof v.clientId === 'string' && /^[A-Za-z0-9_-]{10,180}\.apps\.googleusercontent\.com$/.test(v.clientId) &&
+    desktopClientId(v.clientId) &&
     (v.clientSecret === null || text(v.clientSecret, 1024)), 'configuration-unavailable');
   return v;
 }
 function grant(record, config) {
   if (record.value === null) return null;
   const v = record.value;
-  require(v && Object.keys(v).sort().join() === 'account,checkedAt,clientId,schema,tokens' && v.schema === 1 && v.clientId === config.clientId &&
+  require(v && Object.keys(v).sort().join() === 'account,checkedAt,clientId,schema,tokens' && v.schema === 1 && desktopClientId(v.clientId) &&
     v.account && Object.keys(v.account).sort().join() === 'label,permissionId' && text(v.account.permissionId, 200) &&
     typeof v.account.label === 'string' && v.account.label.length <= 320 && !/[\x00-\x1f\x7f]/.test(v.account.label) &&
     Number.isSafeInteger(v.checkedAt) && v.checkedAt > 0, 'credentials-unavailable');
   tokens(v.tokens, false);
-  return v;
+  // Keep a previous client's grant on disk until fresh consent or an explicit disconnect.
+  return v.clientId === config.clientId ? v : null;
 }
 function tokens(v, fresh = true) {
   require(v && Object.keys(v).sort().join() === 'access_token,expiry_date,refresh_token,scope,token_type' &&
@@ -68,7 +70,7 @@ export class DriveAuth {
     try {
       const snapshot = this.snapshot(); const { config, saved, grantRecord } = snapshot;
       if (!config) return this.state = publicState('unconfigured');
-      if (!saved) return this.state = publicState('disconnected');
+      if (!saved) return this.state = publicState('disconnected', null, null, grantRecord.value ? 'authorization-required' : null);
       if (this.freshDigest === grantRecord.digest && this.state.status === 'connected' && saved.tokens.expiry_date > Date.now()) return this.state;
       return this.publish('cached', saved.account, saved.checkedAt, snapshot);
     } catch { return this.state = publicState('unavailable', null, null, 'storage-unavailable'); }

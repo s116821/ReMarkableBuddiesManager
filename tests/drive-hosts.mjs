@@ -44,8 +44,15 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   await reconnect.waitFor();
   await page.getByText(`Last checked: ${saved.checkedAt}`, { exact: true }).waitFor();
   assert.equal(await sign.isEnabled(), true);
-  await publish({ ...failedCheck, error: 'authorization-failed' });
+  await publish({ ...state('disconnected'), error: 'authorization-required' });
   await check.click();
+  await expect(page.getByText('Manager’s Google registration changed.', {exact: false})).toBeVisible();
+  await expect(sign).toBeEnabled();
+  await expect(check).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Remove Google access…', exact: true})).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Disconnect this Manager', exact: true})).toBeEnabled();
+  await publish({ ...failedCheck, error: 'authorization-failed' });
+  await sign.click();
   await reconnect.waitFor({ state: 'hidden' });
   await status.filter({ hasText: 'Sign-in or account check failed' }).waitFor();
   await publish(saved);

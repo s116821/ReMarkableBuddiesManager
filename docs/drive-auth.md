@@ -36,6 +36,10 @@ unless a protected private registration is available. The project still needs
 an approved production registration and a live sign-in with the released app.
 [Google's desktop app guide](https://developers.google.com/identity/protocols/oauth2/native-app)
 
+If an update changes that client ID, Manager offers a new sign-in. Only a
+grant issued for the current registration can access Drive. Manager keeps the
+previous grant until the user completes consent or explicitly disconnects.
+
 The existing helper runtime requires an absolute Python interpreter path in
 `MANAGER_DRIVE_PYTHON` or `MANAGER_WIRED_PYTHON`. By default, grants live in
 `ReMarkableBuddiesManager/drive-auth` under Windows LOCALAPPDATA or Linux's
