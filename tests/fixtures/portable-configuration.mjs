@@ -9,7 +9,10 @@ export const selected=Buffer.from(JSON.stringify(artifact)).toString('base64');
 export const originalOrigins={personalization:'absent',product_settings:'absent',research_policy:'absent'};
 export const report=(operation,outcome,data,status='ok')=>({report_version:1,operation,status,outcome,disk_readback_verified:operation==='apply'&&status==='ok',runtime_activation:'unverified',data});
 export function portableFixture(options={}){
- const f=modelFixture(),run=f.observer.run;let sequence=0,revision=0;
+ return addPortableFixture(modelFixture(),options);
+}
+export function addPortableFixture(f,options={}){
+ const run=f.observer.run;let sequence=0,revision=0;
  const state={hash:'7'.repeat(64),prepared:new Map(),onInspect:null,onPrepare:null,onApply:null,onStatus:null,onExport:null,noop:false,mode:'normal',packets:[],pending:new Map()};
  f.observer.run=async function(action,q){
   if(action!=='portable-configuration')return run.call(this,action,q);this.cancel();const raw=q.input_base64===null?null:Buffer.from(q.input_base64,'base64'),body=raw===null?null:JSON.parse(raw);f.calls.push({action,selector:q.selector,body,bytes:raw,budget_ms:q.budget_ms});state.packets.push({...q});let value;

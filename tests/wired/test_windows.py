@@ -1,14 +1,17 @@
 import ctypes
 import importlib.util
+import json
 import os
 from pathlib import Path
 import socket
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
 import unittest
-from unittest.mock import Mock, patch
+from types import SimpleNamespace
+from unittest.mock import Mock, call, patch
 
 HOST = Path(__file__).resolve().parents[2] / 'host'
 sys.path.insert(0, str(HOST))
@@ -25,7 +28,89 @@ ROUTE = {'index': 7, 'luid': 1234, 'source': '10.11.99.2', 'next_hop': '0.0.0.0'
     'prefix': '10.11.99.0', 'prefix_length': 24, 'metric': 10, 'protocol': 2, 'loopback': False}
 
 
+def inventory_query(rows):
+    calls = []
+    class Dispatch:
+        def __init__(self, kind, value=None): self.kind, self.value = kind, value
+        def GetIDsOfNames(self, name): return name
+        def QueryInterface(self, interface):
+            assert interface == 'enum'
+            return self
+        def Next(self, count):
+            assert count == 1
+            return (Dispatch('row', self.value.pop(0)),) if self.value else ()
+        def Invoke(self, name, locale, flags, result, *args):
+            calls.append((self.kind, name, args))
+            assert locale == 0 and result is True
+            if self.kind == 'locator' and name == 'ConnectServer':
+                assert args == ('.', r'root\StandardCimv2', '', '', '', '', 128)
+                return Dispatch('services')
+            if self.kind == 'services' and name == 'ExecQuery':
+                assert args == ('SELECT ' + ','.join(ADAPTER) + ' FROM MSFT_NetAdapter', 'WQL', 48)
+                return Dispatch('objects', [dict(row) for row in rows])
+            if self.kind == 'objects' and name == '_NewEnum': return Dispatch('iterator', self.value)
+            if self.kind == 'row' and name == 'Properties_': return Dispatch('properties', self.value)
+            if self.kind == 'properties' and name == 'Item':
+                assert args[1] == 0
+                return Dispatch('property', self.value[args[0]])
+            if self.kind == 'property' and name == 'Value': return self.value
+            raise AssertionError('Unexpected COM operation')
+    def create(*args):
+        assert args == ('WbemScripting.SWbemLocator', None, 1, 'dispatch')
+        calls.append(('create',))
+        return Dispatch('locator')
+    module = SimpleNamespace(CoCreateInstance=create, CLSCTX_INPROC_SERVER=1, IID_IDispatch='dispatch',
+        IID_IEnumVARIANT='enum', DISPATCH_METHOD=1, DISPATCH_PROPERTYGET=2)
+    namespace = {'__name__': 'fixture'}
+    with patch.dict(sys.modules, pythoncom=module):
+        exec(compile(w.INVENTORY, '<fixed-inventory>', 'exec'), namespace)
+    return namespace['query'], calls
+
+
 class WindowsFixtures(unittest.TestCase):
+    def test_com_inventory_fresh_exact_query_and_lossless_types(self):
+        row = dict(ADAPTER, NetLuid=str(2**64 - 1), PnPDeviceID=None, PermanentAddress=None)
+        query, calls = inventory_query([row])
+        first = json.loads(query(CONFIG['interface_guid']))
+        self.assertEqual(first, dict(row, NetLuid=2**64 - 1))
+        self.assertIs(first['Virtual'], False); self.assertIs(first['HardwareInterface'], True)
+        row['NetLuid'] = '9007199254740993'
+        self.assertEqual(json.loads(query(CONFIG['interface_guid']))['NetLuid'], 9007199254740993)
+        self.assertEqual(calls.count(('create',)), 2)
+
+    def test_com_inventory_missing_ambiguous_malformed_and_oversize_refuse(self):
+        good = dict(ADAPTER, NetLuid='1234')
+        for rows in ([], [good, good], [dict(good, InterfaceGuid=None)]):
+            query, _ = inventory_query(rows)
+            with self.assertRaises(ValueError): query(CONFIG['interface_guid'])
+        for name, value in [('NetLuid', str(2**64)), ('NetLuid', '-1'), ('NetLuid', '01'),
+                            ('NetLuid', 1.0), ('NetLuid', True), ('Virtual', 0), ('HardwareInterface', 'true'),
+                            ('InterfaceIndex', True), ('MediaConnectState', -1), ('InterfaceOperationalStatus', 2**32),
+                            ('PermanentAddress', 'x' * 65536)]:
+            query, _ = inventory_query([dict(good, **{name: value})])
+            with self.subTest(name=name), self.assertRaises(ValueError): query(CONFIG['interface_guid'])
+        query, calls = inventory_query([good])
+        with self.assertRaises(ValueError): query("bad' query")
+        self.assertEqual(calls, [])
+
+    def test_inventory_child_has_fixed_source_environment_input_and_no_fallback(self):
+        good = subprocess.CompletedProcess([], 0, json.dumps(ADAPTER).encode('ascii'), b'')
+        with patch.object(w.subprocess, 'CREATE_NO_WINDOW', 0, create=True), patch.object(w.subprocess, 'run', return_value=good) as run:
+            self.assertEqual(w.inventory(CONFIG), ADAPTER)
+            args, options = run.call_args
+            self.assertEqual(args[0], [sys.executable, '-I', '-B', '-c', w.INVENTORY])
+            self.assertEqual(options['env']['MANAGER_INTERFACE_GUID'], CONFIG['interface_guid'])
+            self.assertNotIn(CONFIG['interface_guid'], args[0][-1])
+            self.assertEqual(options['timeout'], 3); self.assertTrue(options['check']); self.assertTrue(options['capture_output'])
+        for stdout, stderr in [(b'{}' * w.LIMIT, b''), (b'{}', b'warning'), (b'not-json', b'')]:
+            with patch.object(w.subprocess, 'CREATE_NO_WINDOW', 0, create=True), patch.object(w.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout, stderr)) as run:
+                with self.assertRaises((o.Refusal, ValueError)): w.inventory(CONFIG)
+                run.assert_called_once()
+        for failure in (subprocess.TimeoutExpired('fixed', 3), subprocess.CalledProcessError(1, 'fixed')):
+            with patch.object(w.subprocess, 'CREATE_NO_WINDOW', 0, create=True), patch.object(w.subprocess, 'run', side_effect=failure) as run:
+                with self.assertRaises(type(failure)): w.inventory(CONFIG)
+                run.assert_called_once()
+
     def test_snapshot_refuses_wireless_ambiguous_identity_down_and_gateway(self):
         good = w.validate_snapshot(CONFIG, ADAPTER, ANCESTRY, ROUTE, ROUTE)
         for field, value in [('Virtual', True), ('HardwareInterface', False), ('MediaConnectState', 2),
@@ -41,14 +126,24 @@ class WindowsFixtures(unittest.TestCase):
             with self.assertRaises(o.Refusal): w.validate_snapshot(CONFIG, ADAPTER, nodes, ROUTE, ROUTE)
         self.assertNotEqual(good, w.validate_snapshot(CONFIG, ADAPTER, [(9, *ANCESTRY[0][1:]), ANCESTRY[1]], ROUTE, ROUTE))
 
-    def test_socket_requires_network_order_set_host_order_get_before_source_connect(self):
-        sock = Mock(); sock.getsockopt.return_value = 7
+    def test_socket_verifies_interface_and_tcp_options_before_connect(self):
+        sock = Mock()
+        sock.getsockopt.side_effect = [7, 1]
         sock.getsockname.return_value = ('10.11.99.2', 99); sock.getpeername.return_value = ('10.11.99.1', 22)
         with patch.object(w.socket, 'socket', return_value=sock):
             self.assertIs(w.bound_socket(CONFIG, {'index': 7}), sock)
-        sock.setsockopt.assert_called_once_with(socket.IPPROTO_IP, 31, socket.htonl(7))
-        names = [call[0] for call in sock.method_calls]
-        self.assertLess(names.index('getsockopt'), names.index('bind')); self.assertLess(names.index('bind'), names.index('connect'))
+        self.assertEqual(sock.method_calls, [
+            call.settimeout(3),
+            call.setsockopt(socket.IPPROTO_IP, 31, socket.htonl(7)),
+            call.getsockopt(socket.IPPROTO_IP, 31),
+            call.bind(('10.11.99.2', 0)),
+            call.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),
+            call.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY),
+            call.connect(('10.11.99.1', 22)),
+            call.getsockname(),
+            call.getpeername(),
+        ])
+        sock.getsockopt.side_effect = None
         for readback in (0, 8, socket.htonl(7)):
             sock.reset_mock(); sock.getsockopt.return_value = readback
             with patch.object(w.socket, 'socket', return_value=sock), self.assertRaises(o.Refusal): w.bound_socket(CONFIG, {'index': 7})
@@ -56,6 +151,25 @@ class WindowsFixtures(unittest.TestCase):
         sock.reset_mock(); sock.setsockopt.side_effect = OSError('unsupported')
         with patch.object(w.socket, 'socket', return_value=sock), self.assertRaises(o.Refusal) as failure: w.bound_socket(CONFIG, {'index': 7})
         self.assertEqual(failure.exception.status, 'unsupported-host'); sock.connect.assert_not_called()
+
+    def test_socket_closes_before_connect_on_invalid_tcp_option(self):
+        for case, set_result, get_result, status in (
+            ('set error', OSError('unsupported'), 1, 'unsupported-host'),
+            ('get error', None, OSError('unsupported'), 'unsupported-host'),
+            ('disabled', None, 0, 'disconnected'),
+            ('unexpected readback', None, 2, 'disconnected'),
+        ):
+            with self.subTest(case=case):
+                sock = Mock()
+                sock.setsockopt.side_effect = [None, set_result]
+                sock.getsockopt.side_effect = [7, get_result]
+                with patch.object(w.socket, 'socket', return_value=sock), self.assertRaises(o.Refusal) as failure:
+                    w.bound_socket(CONFIG, {'index': 7})
+                self.assertEqual(failure.exception.status, status)
+                sock.bind.assert_called_once_with(('10.11.99.2', 0))
+                self.assertEqual(sock.setsockopt.call_args, call(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1))
+                sock.connect.assert_not_called()
+                sock.close.assert_called_once()
 
     def test_notification_latched_readd_closes_owned_socket(self):
         n = w.Notifications.__new__(w.Notifications)
@@ -109,6 +223,33 @@ class WindowsFixtures(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == 'win32', 'actual Windows APIs')
 class WindowsNative(unittest.TestCase):
+    def test_actual_inventory_child_timeout_reaps_process_without_device_contact(self):
+        children = []
+        real_popen = subprocess.Popen
+        def start(*args, **kwargs):
+            child = real_popen(*args, **kwargs); children.append(child); return child
+        with patch.object(w, 'INVENTORY', 'import time; time.sleep(60)'), patch.object(subprocess, 'Popen', side_effect=start):
+            with self.assertRaises(subprocess.TimeoutExpired): w.inventory(CONFIG)
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+
+    def test_actual_inventory_matches_same_provider_nine_fields_without_device_contact(self):
+        fields = ','.join(ADAPTER)
+        script = "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter | Select-Object " + fields + ') | ConvertTo-Json -Compress'
+        powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+        done = subprocess.run([str(powershell), '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+            capture_output=True, check=True, timeout=3, creationflags=subprocess.CREATE_NO_WINDOW)
+        self.assertEqual(done.stderr, b'')
+        rows = json.loads(done.stdout.decode('utf-8-sig'))
+        if isinstance(rows, dict): rows = [rows]
+        self.assertGreater(len(rows), 0)
+        for row in rows:
+            selected = row['InterfaceGuid'].strip('{}').lower()
+            observed = w.inventory({'interface_guid': selected})
+            # Failure messages contain only field names, never adapter identifiers.
+            for name in ADAPTER:
+                self.assertTrue(type(observed[name]) is type(row[name]) and observed[name] == row[name], name)
+
     def test_actual_interface_option_roundtrip_without_tablet_connection(self):
         # The real OS loopback index, not a hardcoded fixture index.
         windows = w.Windows()
@@ -122,6 +263,8 @@ class WindowsNative(unittest.TestCase):
             sock.setsockopt(socket.IPPROTO_IP, 31, socket.htonl(index))
             self.assertEqual(sock.getsockopt(socket.IPPROTO_IP, 31), index)
             sock.bind(('127.0.0.1', 0))
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self.assertEqual(sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY), 1)
             self.assertEqual(sock.getsockname()[0], '127.0.0.1')
         finally: sock.close()
 

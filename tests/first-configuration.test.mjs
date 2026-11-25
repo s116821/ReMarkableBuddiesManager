@@ -45,6 +45,10 @@ test('first configuration requires private installation admission and a separate
 test('admitted invocation UUIDs are single use, late Cancel cannot affect a successor, and Busy stays unconsumed', async () => {
   const f = open();
   const original = bind('check', 1), successor = bind('check', 2);
+  assert.equal(f.io.reserve('resident-package', 'pending-package'), true);
+  assert.equal((await f.run(original)).state, 'busy');
+  assert.equal(f.state.calls.length, 0);
+  f.io.settle('resident-package', 'pending-package');
   const busy = f.io.acquire('peer', 'peer', 'check');
   assert.equal((await f.run(original)).state, 'busy');
   f.io.release(busy);
