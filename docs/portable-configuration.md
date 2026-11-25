@@ -5,7 +5,8 @@ an import preview and a separate confirmation. The V1 file includes only declare
 Reader/Writer options, personalization and research policy. It can contain private
 personalization text. Choose a private download location and check the resulting
 file/permissions yourself; handing bytes to the browser save flow does not verify
-that a durable file was saved. There is no hidden tablet or host artifact spool.
+that a durable file was saved. Manual file import creates no hidden tablet or
+host artifact spool.
 
 Import keeps omitted destination settings and children. Supported explicit empty
 values remain saved declarations; they do not erase other settings. The preview
@@ -30,6 +31,40 @@ identify the historical publisher or prove runtime adoption. Failure/different
 bytes do not prove rollback. A fresh deliberate review is a distinct operation and
 does not settle old uncertainty. Host exit loses these private recovery references;
 no persistent recovery journal or automatic retry is added.
+
+## Preferences from a verified backup
+
+Packaged Manager builds do not yet enable backup downloads or preferences review.
+Drive sign-in alone does not enable them. This section describes the development
+flow; real Drive and installed-tablet qualification remain unfinished.
+
+When this flow is enabled, select a backup revision and download it. After
+verification, read the destination tablet's state and choose
+**Review backup preferences**. Manager shows the same reduced settings preview in
+the preferences panel. Review it, then choose **Confirm preferences import**.
+A preview or No-change result does not apply settings. The backup may come from
+a different device; the preview belongs to the connected destination and boot.
+
+The host reads only the portable preferences member from the verified backup.
+It retires the private download stage before offering a preview. If cleanup
+cannot be confirmed, no preview is offered and the original download reports
+that uncertainty. Backup bytes, credentials and local paths stay out of the
+preferences view. This action does not restore archived data or native pages,
+initialize a replacement tablet, or activate Buddy's running settings.
+
+Review consumes that verified download. Another preview or a separate data
+operation needs a fresh selection and download. If Manager explicitly offers a
+retry after Busy, the original download is still available; otherwise select it
+again. There is no automatic retry after a lost response. The preview expires
+with the original selection, no later than the normal two-minute preview limit.
+
+While review is pending or ready, Stop, a new selection, a changed tablet or
+Drive connection, or navigation cancels that original preview. Once Confirm
+may have started an import, releasing the backup view does not discard its
+recovery record. Use **Check original preference file** for that original import,
+as described above; a later preview does not settle an earlier uncertain result.
+
+## Manual commands and validation
 
 Only explicit export returns file bytes to the save flow. Ordinary UI state,
 previews and retained diagnostics exclude artifact, intent, text, paths and hashes.

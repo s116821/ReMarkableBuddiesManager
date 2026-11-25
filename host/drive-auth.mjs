@@ -10,23 +10,25 @@ export const GOOGLE_ENDPOINTS = Object.freeze({ authorization: 'https://accounts
 const endpointKeys = Object.keys(GOOGLE_ENDPOINTS).sort().join();
 const require = (ok, code = 'authorization-failed') => { if (!ok) throw new Error(code); };
 const text = (v, maximum = 16384) => typeof v === 'string' && v.length > 0 && v.length <= maximum && /^[\x21-\x7e]+$/.test(v);
+const desktopClientId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{10,180}\.apps\.googleusercontent\.com$/.test(value);
 function registration(record) {
   if (record.value === null) return null;
   const v = record.value;
   require(v && Object.keys(v).sort().join() === 'clientId,clientSecret,schema,type' && v.schema === 1 && v.type === 'google-desktop' &&
-    typeof v.clientId === 'string' && /^[A-Za-z0-9_-]{10,180}\.apps\.googleusercontent\.com$/.test(v.clientId) &&
+    desktopClientId(v.clientId) &&
     (v.clientSecret === null || text(v.clientSecret, 1024)), 'configuration-unavailable');
   return v;
 }
 function grant(record, config) {
   if (record.value === null) return null;
   const v = record.value;
-  require(v && Object.keys(v).sort().join() === 'account,checkedAt,clientId,schema,tokens' && v.schema === 1 && v.clientId === config.clientId &&
+  require(v && Object.keys(v).sort().join() === 'account,checkedAt,clientId,schema,tokens' && v.schema === 1 && desktopClientId(v.clientId) &&
     v.account && Object.keys(v.account).sort().join() === 'label,permissionId' && text(v.account.permissionId, 200) &&
     typeof v.account.label === 'string' && v.account.label.length <= 320 && !/[\x00-\x1f\x7f]/.test(v.account.label) &&
     Number.isSafeInteger(v.checkedAt) && v.checkedAt > 0, 'credentials-unavailable');
   tokens(v.tokens, false);
-  return v;
+  // Keep a previous client's grant on disk until fresh consent or an explicit disconnect.
+  return v.clientId === config.clientId ? v : null;
 }
 function tokens(v, fresh = true) {
   require(v && Object.keys(v).sort().join() === 'access_token,expiry_date,refresh_token,scope,token_type' &&
@@ -37,9 +39,18 @@ function tokens(v, fresh = true) {
 }
 const publicState = (status, account = null, checkedAt = null, error = null) => Object.freeze({ contract_version: 1, status,
   account: account ? { label: account.label } : null, checkedAt, error, authorizationId: null, backupReady: false });
+const registrationError = (snapshot, fallback = null) =>
+  snapshot && !snapshot.saved && snapshot.grantRecord.value ? 'registration-changed' : fallback;
 
 export class DriveAuth {
-  constructor({ store = new DriveStore(), endpoints = GOOGLE_ENDPOINTS, ttlMs = 300000, requestMs = 15000 } = {}) {
+  #readFactory;
+  #freshRead = null;
+  #disposed = false;
+  #guardClosures = new Set();
+  #disposal;
+  #tabletGrant = null;
+  #tabletPhase = 'none';
+  constructor({ store = new DriveStore(), endpoints = GOOGLE_ENDPOINTS, ttlMs = 300000, requestMs = 15000, backupReadFactory = null } = {}) {
     require(Object.keys(endpoints).sort().join() === endpointKeys, 'configuration-unavailable');
     // Constructor-only trusted test seam. Product callers never receive endpoints/client/path arguments.
     if (endpoints !== GOOGLE_ENDPOINTS) {
@@ -48,6 +59,8 @@ export class DriveAuth {
     }
     this.store = store; this.endpoints = Object.freeze({ ...endpoints }); this.ttlMs = ttlMs; this.requestMs = requestMs;
     this.generation = 0; this.flow = null; this.work = null; this.state = publicState('unconfigured'); this.freshDigest = null;
+    require(backupReadFactory === null || typeof backupReadFactory === 'function', 'configuration-unavailable');
+    this.#readFactory = backupReadFactory;
   }
   snapshot() {
     const clientRecord = this.store.client(); const config = registration(clientRecord);
@@ -59,7 +72,7 @@ export class DriveAuth {
     try {
       const snapshot = this.snapshot(); const { config, saved, grantRecord } = snapshot;
       if (!config) return this.state = publicState('unconfigured');
-      if (!saved) return this.state = publicState('disconnected');
+      if (!saved) return this.state = publicState('disconnected', null, null, registrationError(snapshot));
       if (this.freshDigest === grantRecord.digest && this.state.status === 'connected' && saved.tokens.expiry_date > Date.now()) return this.state;
       return this.publish('cached', saved.account, saved.checkedAt, snapshot);
     } catch { return this.state = publicState('unavailable', null, null, 'storage-unavailable'); }
@@ -70,12 +83,165 @@ export class DriveAuth {
     }
     return this.state = Object.freeze({ ...publicState(status, account, new Date(checkedAt).toISOString()), authorizationId: this.authorization.id });
   }
+  #recordFreshRead(clientDigest, grantDigest, expiry) {
+    if (!this.#readFactory || this.#disposed) return;
+    const original = { clientDigest, grantDigest, expiry, generation: this.generation, controller: new AbortController() };
+    original.timer = setTimeout(() => {
+      if (this.#freshRead === original) this.#invalidateRead();
+    }, Math.max(1, expiry - Date.now()));
+    original.timer.unref();
+    this.#freshRead = original;
+  }
+  #invalidateRead() {
+    const original = this.#freshRead;
+    this.#freshRead = null;
+    if (original) {
+      clearTimeout(original.timer);
+      original.controller.abort();
+    }
+  }
+  #readCurrent(original) {
+    return !!original && this.#freshRead === original && !this.#disposed && !this.flow && !this.work &&
+      this.generation === original.generation && this.state.status === 'connected' && original.expiry > Date.now();
+  }
+  #readSnapshot(original) {
+    if (!this.#readCurrent(original)) return null;
+    try {
+      const snapshot = this.snapshot();
+      require(snapshot.config && snapshot.saved && snapshot.clientRecord.digest === original.clientDigest &&
+        snapshot.grantRecord.digest === original.grantDigest && snapshot.saved.tokens.expiry_date === original.expiry &&
+        original.expiry > Date.now());
+      return snapshot;
+    } catch {
+      if (this.#freshRead === original) this.#invalidateRead();
+      return null;
+    }
+  }
+  // Host-only. The factory is trusted composition, and can decline namespace
+  // qualification for the exact protected registration and grant it receives.
+  openBackupRead(signal) {
+    if (this.#disposed || signal.aborted) return { status: 'invalidated' };
+    if (!this.#readFactory) return { status: 'unqualified' };
+    const original = this.#freshRead, snapshot = this.#readSnapshot(original);
+    if (!snapshot) return { status: 'unavailable' };
+    const authority = AbortSignal.any([signal, original.controller.signal]);
+    const persistent = typeof this.store.openReadGuard === 'function';
+    let guardPromise = null;
+    const memoryCurrent = () => !authority.aborted && this.#readCurrent(original);
+    const current = () => memoryCurrent() && (persistent || !!this.#readSnapshot(original));
+    const invalidate = () => { if (this.#freshRead === original) this.#invalidateRead(); };
+    let closing;
+    const closeGuard = () => {
+      if (guardPromise && !closing) {
+        closing = guardPromise.then(guard => guard?.close());
+        this.#guardClosures.add(closing);
+        const settled = () => this.#guardClosures.delete(closing);
+        void closing.then(settled, settled);
+      }
+      return closing;
+    };
+    const validate = async (query, active) => {
+      require(!active.aborted && current());
+      if (guardPromise) {
+        try {
+          const guard = await guardPromise;
+          require(guard && !guard.signal.aborted);
+          await guard.check({signal: active, timeoutMs: query.timeoutMs});
+        } catch {
+          invalidate();
+          await closeGuard();
+          throw new Error('authorization-failed');
+        }
+      }
+      require(!active.aborted && current());
+    };
+    try {
+      const binding = this.#readFactory({
+        registration: structuredClone(snapshot.config), grant: structuredClone(snapshot.saved),
+        clientDigest: original.clientDigest, grantDigest: original.grantDigest, signal: authority,
+      });
+      if (!current()) return { status: 'invalidated' };
+      if (binding === null) return { status: 'unqualified' };
+      if (!['list', 'readMetadata', 'readMarker'].every(method => typeof binding?.[method] === 'function')) {
+        return { status: 'unavailable' };
+      }
+      if (persistent) {
+        guardPromise = Promise.resolve(this.store.openReadGuard({clientDigest: original.clientDigest,
+          grantDigest: original.grantDigest, signal: authority})).then(guard => {
+          guard.signal.addEventListener('abort', invalidate, {once: true});
+          if (guard.signal.aborted) invalidate();
+          return guard;
+        }).catch(() => { invalidate(); return null; });
+        authority.addEventListener('abort', () => { void closeGuard(); }, {once: true});
+        if (authority.aborted) void closeGuard();
+      }
+      const bind = method => async query => {
+        // The reader handles its own request deadline. The protected grant
+        // signal also cancels a transport that is still waiting on the provider.
+        const active = AbortSignal.any([authority, query.signal]);
+        try {
+          await validate(query, active);
+          return await binding[method]({ ...query, signal: active });
+        } finally {
+          try { await validate(query, active); }
+          finally { if (authority.aborted) await closeGuard(); }
+        }
+      };
+      const guarded = {
+        isCurrent: current, list: bind('list'), readMetadata: bind('readMetadata'), readMarker: bind('readMarker'),
+        checkCurrent: query => validate(query, AbortSignal.any([authority, query.signal])),
+      };
+      // Optional private download capabilities use this exact capture. A
+      // metadata-only adapter cannot silently acquire a replacement grant.
+      if (['listObject', 'readObjectMetadata', 'streamObject'].every(method => typeof binding[method] === 'function')) {
+        guarded.listObject = bind('listObject');
+        guarded.readObjectMetadata = bind('readObjectMetadata');
+        guarded.streamObject = async function* (query) {
+          const controller = new AbortController();
+          const active = AbortSignal.any([authority, query.signal, controller.signal]);
+          let iterator, completed = false;
+          try {
+            await validate(query, active);
+            const source = await binding.streamObject({...query, signal: active});
+            // Take custody before checking a late factory result, so an abort
+            // while opening the response still closes and joins that response.
+            iterator = source?.[Symbol.asyncIterator]?.();
+            require(iterator && typeof iterator.next === 'function' && typeof iterator.return === 'function');
+            for (;;) {
+              await validate(query, active);
+              const item = await iterator.next();
+              await validate(query, active);
+              if (item.done) { completed = true; return; }
+              yield item.value;
+            }
+          } finally {
+            // Abort before return(): a producer can be waiting for its abort
+            // while its return promise joins the outstanding request.
+            controller.abort();
+            try {
+              if (typeof iterator?.return === 'function') await iterator.return();
+              if (completed) await validate(query, AbortSignal.any([authority, query.signal]));
+            } finally {
+              if (authority.aborted || query.signal.aborted) await closeGuard();
+            }
+          }
+        };
+      }
+      return { status: 'qualified', signal: authority, binding: Object.freeze(guarded) };
+    } catch { return { status: authority.aborted ? 'invalidated' : 'unavailable' }; }
+  }
   stop() {
-    this.generation++; this.work?.abort(); this.work = null;
+    this.generation++; this.#invalidateRead(); this.#clearTablet(); this.work?.abort(); this.work = null;
     if (this.flow) { clearTimeout(this.flow.timer); this.flow.abort.abort(); this.flow.server?.closeAllConnections(); this.flow.server?.close(); }
     this.flow = null;
   }
-  cancel() { const pending = Boolean(this.flow || this.work); this.stop(); if (pending) this.state = publicState('cancelled'); return this.state; }
+  cancel() {
+    const tablet = Boolean(this.#tabletGrant || this.flow?.purpose === 'tablet');
+    const pending = Boolean(this.flow || this.work || tablet);
+    const error = registrationError(this.flow);
+    this.stop(); if (tablet) this.#tabletPhase = 'cancelled';
+    if (pending) this.state = publicState('cancelled', null, null, error); return this.state;
+  }
   ownsAuthorizationUrl(url) { return Boolean(this.flow && this.flow.url === url); }
   oauth(config, redirectUri, signal) {
     const client = new OAuth2Client({ clientId: config.clientId, clientSecret: config.clientSecret ?? undefined, redirectUri,
@@ -91,14 +257,18 @@ export class DriveAuth {
     };
     return client;
   }
-  async begin() {
+  begin() { return this.#begin('host'); }
+  // Host-only until the verified tablet workflow supplies its public composition.
+  beginTabletAuthorization() { return this.#begin('tablet'); }
+  async #begin(purpose) {
     this.stop(); const generation = this.generation;
     try {
-      const baseline = this.snapshot(); require(baseline.config, 'configuration-unavailable');
+      const baseline = this.snapshot(); require(!this.#disposed && baseline.config, 'configuration-unavailable');
+      if (purpose === 'tablet') { require(baseline.saved, 'configuration-unavailable'); this.#tabletPhase = 'connecting'; }
       const abort = new AbortController(); const oauth = this.oauth(baseline.config, undefined, abort.signal);
       const pkce = await oauth.generateCodeVerifierAsync();
       require(generation === this.generation, 'cancelled');
-      const flow = { ...baseline, generation, abort, oauth, verifier: pkce.codeVerifier, state: randomBytes(32).toString('hex'), consumed: false };
+      const flow = { ...baseline, purpose, generation, abort, oauth, verifier: pkce.codeVerifier, state: randomBytes(32).toString('hex'), consumed: false };
       flow.server = createServer((req, res) => this.callback(flow, req, res));
       flow.server.requestTimeout = 3000; flow.server.headersTimeout = 3000; flow.server.maxHeadersCount = 32;
       await new Promise((resolve, reject) => { flow.server.once('error', reject); flow.server.listen(0, '127.0.0.1', resolve); });
@@ -108,10 +278,10 @@ export class DriveAuth {
       flow.url = flow.oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent select_account', scope: DRIVE_SCOPE,
         state: flow.state, code_challenge: pkce.codeChallenge, code_challenge_method: 'S256' });
       require(flow.url.length <= 4096);
-      flow.timer = setTimeout(() => { if (this.flow === flow) { this.stop(); this.state = publicState('expired'); } }, this.ttlMs);
+      flow.timer = setTimeout(() => { if (this.flow === flow) { this.stop(); if (purpose === 'tablet') this.#tabletPhase = 'expired'; this.state = publicState('expired', null, null, registrationError(flow)); } }, this.ttlMs);
       flow.timer.unref(); this.flow = flow; this.state = publicState('connecting');
       return { state: this.state, authorizationUrl: flow.url };
-    } catch (error) { if (generation === this.generation) this.state = publicState('unavailable', null, null, ['configuration-unavailable', 'cancelled'].includes(error.message) ? error.message : 'storage-unavailable');
+    } catch (error) { if (generation === this.generation) { if (purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('unavailable', null, null, ['configuration-unavailable', 'cancelled'].includes(error.message) ? error.message : 'storage-unavailable'); }
       return { state: this.state, authorizationUrl: null }; }
   }
   callback(flow, req, res) {
@@ -129,7 +299,7 @@ export class DriveAuth {
       require(!u.searchParams.has('iss') || u.searchParams.get('iss') === 'https://accounts.google.com');
       require(u.searchParams.has('error') !== u.searchParams.has('code'));
       if (u.searchParams.has('error')) {
-        flow.consumed = true; finish(200); this.stop(); this.state = publicState('denied'); return;
+        flow.consumed = true; finish(200); this.stop(); if (flow.purpose === 'tablet') this.#tabletPhase = 'denied'; this.state = publicState('denied', null, null, registrationError(flow)); return;
       }
       const code = u.searchParams.get('code'); require(text(code, 4096));
       flow.consumed = true; finish(200); flow.server.close();
@@ -158,15 +328,70 @@ export class DriveAuth {
     const committed = this.store.save(value, flow.clientRecord.digest, flow.grantRecord.digest);
     require(committed.committed && typeof committed.digest === 'string', 'storage-unavailable');
     this.freshDigest = committed.digest; this.publish('connected', value.account, value.checkedAt, { clientRecord: flow.clientRecord, grantRecord: { digest: committed.digest } });
+    this.#recordFreshRead(flow.clientRecord.digest, committed.digest, value.tokens.expiry_date);
   }
   async exchange(flow, code) {
     try {
       const response = await flow.oauth.getToken({ code, codeVerifier: flow.verifier, redirect_uri: flow.redirect });
       require(this.current(flow), 'cancelled'); require(text(response.tokens.refresh_token), 'authorization-required');
-      const observed = await this.account(flow.oauth, response.tokens, flow.config.clientId);
-      this.save(flow, observed);
-    } catch { if (this.current(flow)) this.state = publicState('authorization-failed', flow.saved?.account ?? null, flow.saved ? new Date(flow.saved.checkedAt).toISOString() : null, 'authorization-failed'); }
+      const observed = await this.account(flow.oauth, response.tokens, flow.config.clientId,
+        flow.purpose === 'tablet' ? flow.saved.account : null);
+      if (flow.purpose === 'tablet') this.#saveTablet(flow, observed);
+      else this.save(flow, observed);
+    } catch { if (this.current(flow)) { if (flow.purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('authorization-failed', flow.saved?.account ?? null, flow.saved ? new Date(flow.saved.checkedAt).toISOString() : null, registrationError(flow, 'authorization-failed')); } }
     finally { if (this.flow === flow) { clearTimeout(flow.timer); this.flow = null; } flow.server.close(); }
+  }
+  #clearTablet(phase = 'none') {
+    if (this.#tabletGrant) clearTimeout(this.#tabletGrant.timer);
+    this.#tabletGrant = null; this.#tabletPhase = phase;
+  }
+  #saveTablet(flow, observed) {
+    require(this.current(flow), 'cancelled');
+    const current = this.snapshot();
+    require(current.config && current.saved && current.clientRecord.digest === flow.clientRecord.digest &&
+      current.grantRecord.digest === flow.grantRecord.digest && observed.tokens.scope === DRIVE_SCOPE &&
+      observed.tokens.refresh_token !== current.saved.tokens.refresh_token);
+    const pending = { reference: randomBytes(32).toString('hex'), generation: flow.generation,
+      clientDigest: flow.clientRecord.digest, grantDigest: flow.grantRecord.digest,
+      config: structuredClone(flow.config), observed: structuredClone(observed),
+      expires: Math.min(Date.now() + Math.min(this.ttlMs, 300000), observed.tokens.expiry_date) };
+    pending.timer = setTimeout(() => { if (this.#tabletGrant === pending) this.#clearTablet('expired'); }, Math.max(1, pending.expires - Date.now()));
+    pending.timer.unref(); this.#tabletGrant = pending; this.#tabletPhase = 'ready';
+    // The host grant has not been refreshed or replaced by this second consent.
+    this.publish('cached', current.saved.account, current.saved.checkedAt, current);
+  }
+  #currentTablet() {
+    const pending = this.#tabletGrant;
+    if (!pending) return null;
+    if (Date.now() >= pending.expires) { this.#clearTablet('expired'); return null; }
+    try {
+      require(!this.#disposed && !this.flow && !this.work && pending.generation === this.generation);
+      const current = this.snapshot();
+      if (Date.now() >= pending.expires) { this.#clearTablet('expired'); return null; }
+      require(current.config && current.saved && current.clientRecord.digest === pending.clientDigest &&
+        current.grantRecord.digest === pending.grantDigest);
+      return pending;
+    } catch { this.#clearTablet('unavailable'); return null; }
+  }
+  tabletAuthorizationStatus() {
+    const pending = this.#currentTablet();
+    return Object.freeze({ status: this.#tabletPhase, reference: pending?.reference ?? null,
+      account: pending ? Object.freeze({ label: pending.observed.account.label }) : null });
+  }
+  // Private one-use data, never a renderer/IPC result. The eventual writer owns
+  // USB target/mode admission and must not equate this take with installation.
+  takeTabletAuthorization(reference, collection) {
+    const pending = this.#currentTablet();
+    if (!pending || pending.reference !== reference) return null;
+    require(typeof collection === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(collection) &&
+      collection !== '00000000-0000-0000-0000-000000000000');
+    const { config, observed } = pending;
+    const credential = { credential_version: 1, client_id: config.clientId, client_secret: config.clientSecret,
+      access_token: observed.tokens.access_token, refresh_token: observed.tokens.refresh_token,
+      expires_at: Math.floor(observed.tokens.expiry_date / 1000), scopes: [DRIVE_SCOPE],
+      account_permission_id: observed.account.permissionId, collection };
+    this.#clearTablet('consumed');
+    return credential;
   }
   async check() {
     this.stop(); const generation = this.generation; let baseline;
@@ -202,6 +427,7 @@ export class DriveAuth {
       const committed = this.store.save({ schema: 1, clientId: baseline.config.clientId, ...observed, checkedAt: Date.now() }, baseline.clientRecord.digest, baseline.grantRecord.digest);
       require(committed.committed && typeof committed.digest === 'string', 'storage-unavailable');
       this.freshDigest = committed.digest; this.publish('connected', observed.account, Date.now(), { clientRecord: baseline.clientRecord, grantRecord: { digest: committed.digest } });
+      this.#recordFreshRead(baseline.clientRecord.digest, committed.digest, observed.tokens.expiry_date);
     } catch { if (generation === this.generation) this.state = publicState('authorization-failed', baseline?.saved?.account ?? null, baseline?.saved ? new Date(baseline.saved.checkedAt).toISOString() : null, failure); }
     finally { if (generation === this.generation) this.work = null; }
     return this.state;
@@ -226,5 +452,12 @@ export class DriveAuth {
     finally { if (generation === this.generation) this.work = null; }
     return this.state;
   }
-  dispose() { this.stop(); }
+  dispose() {
+    if (!this.#disposal) {
+      this.#disposal = Promise.resolve().then(async () => { await Promise.allSettled(this.#guardClosures); });
+      this.#disposed = true;
+      this.stop();
+    }
+    return this.#disposal;
+  }
 }

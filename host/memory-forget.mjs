@@ -1,7 +1,7 @@
 import { MaintenanceIO } from './maintenance-io.mjs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { parseForgetRequest, parseForgetReport, parseForgetResult } from './memory-forget-protocol.mjs';
-import { validateResult } from './observation-protocol.mjs';
+import { result, validateResult } from './observation-protocol.mjs';
 const terminal = new Set(['none','invalidated','unsupported','unavailable','busy','not-dispatched','acknowledged']);
 const external = new Set(['run','observe','cancel','inspectOwned','inspectRuntime','personalization','memoryQuery','inspectMemory','inspectSavedMode','inspectSavedConfiguration']);
 const sameTarget = (a,b) => a && b && a.connection_id===b.connection_id && a.boot_id===b.boot_id;
@@ -15,7 +15,17 @@ export class MemoryForgetHost {
     return new Proxy(this.observer,{get:(target,name)=>{
       const v=Reflect.get(target,name,target);
       if(typeof v!=='function') return v;
-      return (...args)=>{ if(external.has(name)){this.invalidate();this.beforeIO();this.io.revoke();} return Reflect.apply(v,target,args); };
+      return (...args) => {
+        if (external.has(name)) {
+          this.invalidate();
+          this.beforeIO();
+          if (!this.io.revoke()) {
+            if (name === 'cancel') return result('cancelled');
+            throw Error('Maintenance operation is draining');
+          }
+        }
+        return Reflect.apply(v, target, args);
+      };
     }});
   }
   invalidate() {

@@ -1,0 +1,35 @@
+# cargo-about checks the locked default-feature runtime graph for this target.
+# Buddy's repository license text is bound below without inventing a grant.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+    "NCSA",
+]
+targets = ["x86_64-pc-windows-msvc"]
+ignore-dev-dependencies = true
+ignore-build-dependencies = true
+ignore-transitive-dependencies = false
+
+# The Git SDK stays in the report even though its Cargo package is unpublished.
+[remarkable-open-sdk]
+accepted = ["GPL-3.0-only"]
+
+# Cargo-about includes the root package despite its absent Cargo license field.
+# This reference preserves that exact repository text; it does not choose an
+# SPDX GPL version qualifier or replace the separately copied license/notices.
+[remarkable-reader-buddy]
+accepted = ["LicenseRef-Buddy-Repository"]
+
+[remarkable-reader-buddy.clarify]
+license = "LicenseRef-Buddy-Repository"
+
+[[remarkable-reader-buddy.clarify.files]]
+path = "LICENSE"
+license = "LicenseRef-Buddy-Repository"
+checksum = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"

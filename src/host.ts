@@ -1,21 +1,28 @@
-import { FIRST_CONFIG_RESULT_BYTES, parseFirstConfigResult } from '../host/first-configuration-protocol.mjs';
-import type { FirstConfigRequest } from '../host/first-configuration-protocol.mjs';
-import type { FirstConfigAdapter } from './first-configuration';
+import type {SharedPreferenceAdapter} from './shared-preferences';
+import type {TabletDriveSetupAdapter} from './tablet-drive-setup';
+import {parseTabletDriveSetupResult, type TabletDriveSetupRequest} from '../host/tablet-drive-setup-protocol.mjs';
+import {BACKUP_PREFERENCES_RESPONSE_BYTES, ISOLATED_BACKUP_RESPONSE_BYTES, parseIsolatedBackupJson,
+  parseIsolatedBackupBridgeRequest, parseIsolatedBackupBridgeResult,
+  type IsolatedBackupBridgeRequest, type IsolatedBackupBridgeResult} from '../host/isolated-backup-protocol.mjs';
+import {FRAME_LIMIT, type SharedPreferenceRequest, type SharedPreferenceResult} from '../host/shared-preferences-protocol.mjs';
 import {portableJson} from '../host/portable-configuration-protocol.mjs';
 import type {PortableAdapter} from './portable-configuration';
 import type {PortableResult} from '../host/portable-configuration-protocol.mjs';
 import type {ArchiveRequest as NotebookRequest,ArchiveResult as NotebookResult} from '../host/notebook-archive-protocol.mjs';
 import {parseArchiveJson as parseNotebookJson} from '../host/notebook-archive-protocol.mjs';
 import type {StorageInitializationAdapter} from './storage-initialization';
+import {FIRST_CONFIG_RESULT_BYTES, parseFirstConfigResult, type FirstConfigRequest, type FirstConfigResult} from '../host/first-configuration-protocol.mjs';
 import type {OwnedV3Adapter} from './owned-data-v3';
 import type {LocalModeAdapter} from './local-mode-choice';
 import type {LocalModeResult} from '../host/local-mode-choice-protocol.mjs';
+import type {IsolatedRootRequest,IsolatedRootResult} from '../host/isolated-root-protocol.mjs';
+import {strictJson as strictIsolatedRootJson} from '../host/strict-json.mjs';
 import type{HandwritingRequest,HandwritingResult}from'../host/handwriting-records-protocol.mjs';
 import{parseHandwritingJson}from'../host/handwriting-records-protocol.mjs';
 import type {ArchiveRequest,ArchiveResult} from '../host/selected-archive-protocol.mjs';
 import {parseArchiveJson} from '../host/selected-archive-protocol.mjs';
 import type {RestoreAdapter} from './ordinary-restore';
-import type {RestoreResult} from '../host/ordinary-restore-protocol.mjs';
+import type {RestoreRequest, RestoreResult} from '../host/ordinary-restore-protocol.mjs';
 import {parseRestoreJson} from '../host/ordinary-restore-protocol.mjs';
 import type {ManagementAdapter} from './conversation-management';
 import type {ManagementResult} from '../host/conversation-management-protocol.mjs';
@@ -55,16 +62,90 @@ import type { DriveAdapter } from './drive-auth';
 import { parseDriveState, parseDriveBegin, unavailableDrive } from '../host/drive-protocol.mjs';
 import type { InspectionAdapter, InspectionResult } from './owned-data';
 import type { ObservationAdapter, ObservationResult } from './observation';
-const restoreBridge=(route:'/manager-ordinary-restore'|'/manager-notebook-restore')=>async (request: import('../host/ordinary-restore-protocol.mjs').RestoreRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Ordinary restore helper unavailable');
-      const pending=fetch(route,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Ordinary restore unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Ordinary restore response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseRestoreJson(raw) as RestoreResult;
-    };
+function isLoopbackHelper() {
+  return location.hostname === '127.0.0.1' && location.protocol === 'http:';
+}
+
+function postHelper(route: string, request: unknown, timeout = 14000) {
+  return fetch(route, {method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request), signal: AbortSignal.timeout(timeout)});
+}
+
+type BridgeParser = (raw: Uint8Array<ArrayBuffer>) => unknown;
+type ReaderCleanup = 'incomplete' | 'always' | 'always-and-release';
+
+const maintenanceJson: BridgeParser = raw =>
+  JSON.parse(new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(raw));
+const legacyJson: BridgeParser = raw =>
+  JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(raw));
+
+async function boundedBody(body: NonNullable<Response['body']>, limit: number, refused: string, cleanup: ReaderCleanup = 'incomplete') {
+  const reader = body.getReader(), chunks: Uint8Array[] = [];
+  let bytes = 0, complete = false;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) { complete = true; break; }
+      bytes += part.value.byteLength;
+      if (bytes > limit) throw Error(refused);
+      chunks.push(part.value);
+    }
+  } finally {
+    if (!complete || cleanup !== 'incomplete') await reader.cancel().catch(() => {});
+    if (cleanup !== 'always') reader.releaseLock();
+  }
+  const raw = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
+  return raw;
+}
+
+function maintenanceBridge<Q, R>(
+  route: string, operation: string, parse: BridgeParser = maintenanceJson, limit = 8192, responseLabel = operation,
+) {
+  return async (request: Q | null): Promise<R> => {
+    if (!isLoopbackHelper()) throw Error(operation + ' helper unavailable');
+    const pending = postHelper(route, request);
+    request = null;
+    const response = await pending;
+    if (!response.ok || !response.body) throw Error(operation + ' unavailable');
+    return parse(await boundedBody(response.body, limit, responseLabel + ' response refused')) as R;
+  };
+}
+
+interface LegacyBridgeOptions {
+  parse?: BridgeParser;
+  timeout?: number;
+  clearAfterPost?: boolean;
+  helperFailure?: boolean;
+  releaseLock?: boolean;
+  responseLabel?: string;
+  gate?: string;
+}
+
+// These original readers cancel even at EOF. Retain their per-route lock
+// release and request clearing instead of using the maintenance cleanup.
+function legacyBridge<Q, R>(
+  route: string, operation: string, limit = 8192,
+  {parse = legacyJson, timeout, clearAfterPost, helperFailure, releaseLock, responseLabel = operation,
+    gate = operation + ' helper unavailable'}: LegacyBridgeOptions = {},
+) {
+  return async (request: Q | null): Promise<R> => {
+    if (!isLoopbackHelper()) throw Error(gate);
+    const pending = postHelper(route, request, timeout);
+    if (clearAfterPost) request = null;
+    const response = await pending;
+    if (!response.ok || !response.body) throw Error(helperFailure ? gate : operation + ' unavailable');
+    return parse(await boundedBody(response.body, limit, responseLabel + ' response refused',
+      releaseLock ? 'always-and-release' : 'always')) as R;
+  };
+}
 
 export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
+  readonly isolatedRoot?:(request:IsolatedRootRequest)=>Promise<IsolatedRootResult>;
+  readonly isolatedBackup?:(request:IsolatedBackupBridgeRequest)=>Promise<IsolatedBackupBridgeResult>;
   readonly localModeChoice?:LocalModeAdapter['localModeChoice'];
+  readonly sharedPreferences?: SharedPreferenceAdapter;
   readonly portableConfiguration?:PortableAdapter['portableConfiguration'];
   readonly ordinaryExport?:OrdinaryExportAdapter['ordinaryExport'];
   readonly researchSettings?:ResearchSettingsAdapter['researchSettings'];
@@ -77,7 +158,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly conversationManagement?:ManagementAdapter['conversationManagement'];
   readonly sourceCacheCleanup?:CleanupAdapter['sourceCacheCleanup'];
   readonly inspectConversations?:ConversationAdapter['inspectConversations'];
-  readonly firstConfiguration?: FirstConfigAdapter;
+  readonly firstConfiguration?:(request: FirstConfigRequest)=>Promise<FirstConfigResult>;
   readonly storageInitialization?:StorageInitializationAdapter['storageInitialization'];
   readonly inspectOwnedV3?:OwnedV3Adapter['inspectOwnedV3'];
   readonly inspectSourceCache?:SourceCacheAdapter['inspectSourceCache'];
@@ -93,6 +174,7 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
   readonly memoryQuery?: MemoryAdapter['memoryQuery'];
   readonly downloads?: DownloadAdapter;
   readonly driveAuth?: DriveAdapter;
+  readonly tabletDriveSetup?: TabletDriveSetupAdapter;
   readonly inspectRuntime?: RuntimeAdapter['inspectRuntime'];
   readonly personalization?: PersonalizationAdapter['personalization'];
   readonly contract_version: 1;
@@ -101,18 +183,16 @@ export interface ManagerHost extends ObservationAdapter, InspectionAdapter {
 }
 declare global { interface Window { managerHost?: ManagerHost } }
 async function helper(action: 'observe' | 'cancel' | 'inspect-owned' | 'inspect-runtime'): Promise<ObservationResult | InspectionResult | RuntimeResult> {
-  if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') return { contract_version: 1, status: 'unconfigured', observation: null };
+  if (!isLoopbackHelper()) return { contract_version: 1, status: 'unconfigured', observation: null };
   try {
-    const response = await fetch('/manager-host', { method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }), signal: AbortSignal.timeout(14000) });
+    const response = await postHelper('/manager-host', { action });
     if (!response.ok) throw new Error('Helper unavailable');
     return await response.json() as ObservationResult;
   } catch { return { contract_version: 1, status: 'unconfigured', observation: null }; }
 }
 async function driveHelper(action: string, authorizationId?: string) {
-  if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Drive helper unavailable');
-  const response = await fetch('/manager-drive', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(action === 'revoke' ? { action, authorizationId } : { action }), signal: AbortSignal.timeout(60000) });
+  if (!isLoopbackHelper()) throw new Error('Drive helper unavailable');
+  const response = await postHelper('/manager-drive', action === 'revoke' ? { action, authorizationId } : { action }, 60000);
   if (!response.ok) throw new Error('Drive helper unavailable');
   const value: unknown = await response.json(); return action === 'begin' ? parseDriveBegin(value) : parseDriveState(value);
 }
@@ -124,222 +204,118 @@ const browserDrive: DriveAdapter = {
 export const unsupportedDrive: DriveAdapter = { status: async () => unavailableDrive(), begin: async () => ({ state: unavailableDrive(), authorizationUrl: null }),
   check: async () => unavailableDrive(), cancel: async () => unavailableDrive(), disconnect: async () => unavailableDrive(), revoke: async () => unavailableDrive() };
 export function currentHost(): ManagerHost {
-  return window.managerHost ?? Object.freeze({ downloads: { request: async (q: import('../host/manager-download-protocol.mjs').DownloadRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Download host unavailable');
-      const response = await fetch('/manager-download', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(q), signal: AbortSignal.timeout(10000) });
-      if (!response.ok || !response.body) throw new Error('Download host unavailable');
-      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
-      try { for (;;) { const result = await reader.read(); if (result.done) break; bytes += result.value.byteLength; if (bytes > 2048) throw new Error('Download response refused'); chunks.push(result.value); } } finally { await reader.cancel().catch(() => {}); }
-      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
-    } }, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+  return window.managerHost ?? Object.freeze({
+    tabletDriveSetup: async (request: TabletDriveSetupRequest) => {
+      if (!isLoopbackHelper()) throw Error('Tablet Drive helper unavailable');
+      const read = legacyBridge<TabletDriveSetupRequest, unknown>('/manager-tablet-drive', 'Tablet Drive', 8192,
+        {timeout: 20000, helperFailure: true, responseLabel: 'Tablet Drive', gate: 'Tablet Drive helper unavailable'});
+      return parseTabletDriveSetupResult(await read(request), request);
+    },
+    downloads: {request: legacyBridge<import('../host/manager-download-protocol.mjs').DownloadRequest, unknown>(
+      '/manager-download', 'Download host', 2048, {timeout: 10000, helperFailure: true, responseLabel: 'Download', gate: 'Download host unavailable'})}, driveAuth: browserDrive, contract_version: 1 as const, kind: 'browser' as const, transport: 'not-configured' as const,
+    sharedPreferences: async (request: SharedPreferenceRequest | null) => {
+      if (!isLoopbackHelper()) throw Error('Shared preferences helper unavailable');
+      const pending = postHelper('/manager-shared-preferences', request);
+      request = null;
+      const response = await pending;
+      if (!response.ok || !response.body) throw Error('Shared preferences unavailable');
+      const reader = response.body.getReader(), chunks: Uint8Array[] = [];
+      let size = 0, complete = false;
+      try {
+        for (;;) {
+          const part = await reader.read();
+          if (part.done) { complete = true; break; }
+          chunks.push(part.value);
+          size += part.value.length;
+          if (size > FRAME_LIMIT) throw Error('Shared response refused');
+        }
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+        try { return portableJson(bytes, FRAME_LIMIT) as SharedPreferenceResult; }
+        finally { bytes.fill(0); }
+      } finally {
+        if (!complete) await reader.cancel().catch(() => {});
+        reader.releaseLock();
+        for (const chunk of chunks) chunk.fill(0);
+      }
+    },
     portableConfiguration: async (request:import('../host/portable-configuration-protocol.mjs').PortableRequest|null)=>{
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Portable preferences helper unavailable');
-      const pending=fetch('/manager-portable-configuration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
+      if(!isLoopbackHelper())throw Error('Portable preferences helper unavailable');
+      const pending=postHelper('/manager-portable-configuration', request);request=null;const response=await pending;
       if(!response.ok||!response.body)throw Error('Portable preferences unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0,complete=false;
       try{for(;;){const item=await reader.read();if(item.done){complete=true;break;}bytes+=item.value.byteLength;if(bytes>196608){item.value.fill(0);throw Error('Portable response refused');}chunks.push(item.value);}const raw=new Uint8Array(bytes);let at=0;for(const chunk of chunks){raw.set(chunk,at);at+=chunk.length;}try{return portableJson(raw,196608) as PortableResult;}finally{raw.fill(0);}}
       finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
     },
-    ordinaryExport: async (request: import('../host/ordinary-export-protocol.mjs').ExportRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Ordinary export helper unavailable');
-      const pending=fetch('/manager-ordinary-export',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Ordinary export unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Export response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ExportResult;
-    },
-    researchSettings: async (request: import('../host/research-settings-protocol.mjs').ResearchSettingsRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Research settings helper unavailable');
-      const pending=fetch('/manager-research-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Research settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Research response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ResearchSettingsResult;
-    },
-    memorySettings: async (request: import('../host/memory-settings-protocol.mjs').MemorySettingsRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Memory settings helper unavailable');
-      const pending=fetch('/manager-memory-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Memory settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Memory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as MemorySettingsResult;
-    },
-    handwritingRecords: async (request: HandwritingRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Archive operation helper unavailable');
-      const pending=fetch('/manager-handwriting-records',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Archive operation unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>270336)throw Error('Archive operation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseHandwritingJson(raw) as HandwritingResult;
-    },
-    selectedArchive: async (request: ArchiveRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Archive operation helper unavailable');
-      const pending=fetch('/manager-selected-archive',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Archive operation unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Archive operation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseArchiveJson(raw) as ArchiveResult;
-    },
-    notebookArchive: async (request: NotebookRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Archive operation helper unavailable');
-      const pending=fetch('/manager-notebook-archive',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Archive operation unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Archive operation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseNotebookJson(raw) as NotebookResult;
-    },
-    ordinaryRestore: restoreBridge('/manager-ordinary-restore'),
-    notebookRestore: restoreBridge('/manager-notebook-restore'),
-    conversationManagement: async (request: import('../host/conversation-management-protocol.mjs').ManagementRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Conversation management helper unavailable');
-      const pending=fetch('/manager-conversation-management',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Conversation management unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Conversation management response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return parseManagementJson(raw) as ManagementResult;
-    },
-    sourceCacheCleanup: async (request: import('../host/source-cache-cleanup-protocol.mjs').CleanupRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Cache cleanup helper unavailable');
-      const pending=fetch('/manager-source-cache-cleanup',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Cache cleanup unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Cache cleanup response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as CleanupResult;
-    },
-    inspectConversations: async (request: import('../host/conversation-inventory-protocol.mjs').ConversationRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Conversation inventory helper unavailable');
-      const pending=fetch('/manager-conversation-inventory',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Conversation inventory unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Conversation inventory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ConversationResult;
-    },
+    ordinaryExport: legacyBridge<import('../host/ordinary-export-protocol.mjs').ExportRequest, ExportResult>(
+      '/manager-ordinary-export', 'Ordinary export', 8192, {parse: maintenanceJson, clearAfterPost: true, responseLabel: 'Export'}),
+    researchSettings: maintenanceBridge<import('../host/research-settings-protocol.mjs').ResearchSettingsRequest, ResearchSettingsResult>(
+      '/manager-research-settings', 'Research settings', undefined, undefined, 'Research'),
+    memorySettings: maintenanceBridge<import('../host/memory-settings-protocol.mjs').MemorySettingsRequest, MemorySettingsResult>(
+      '/manager-memory-settings', 'Memory settings', undefined, undefined, 'Memory'),
+    handwritingRecords: maintenanceBridge<HandwritingRequest, HandwritingResult>(
+      '/manager-handwriting-records', 'Archive operation', parseHandwritingJson, 270336),
+    selectedArchive: maintenanceBridge<ArchiveRequest, ArchiveResult>(
+      '/manager-selected-archive', 'Archive operation', parseArchiveJson),
+    notebookArchive: maintenanceBridge<NotebookRequest, NotebookResult>(
+      '/manager-notebook-archive', 'Archive operation', parseNotebookJson),
+    ordinaryRestore: maintenanceBridge<RestoreRequest, RestoreResult>('/manager-ordinary-restore', 'Tablet maintenance', parseRestoreJson),
+    notebookRestore: maintenanceBridge<RestoreRequest, RestoreResult>('/manager-notebook-restore', 'Tablet maintenance', parseRestoreJson),
     firstConfiguration: async (request: FirstConfigRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw Error('First configuration helper unavailable');
-      const response = await fetch('/manager-first-configuration', {
-        method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(request), signal: AbortSignal.timeout(14000),
-      });
+      if (!isLoopbackHelper()) throw Error('First configuration helper unavailable');
+      const response = await postHelper('/manager-first-configuration', request);
       if (!response.ok || !response.body) throw Error('First configuration unavailable');
-      const reader = response.body.getReader();
-      const raw = new Uint8Array(FIRST_CONFIG_RESULT_BYTES);
-      let size = 0, complete = false;
-      try {
-        for (;;) {
-          const chunk = await reader.read();
-          if (chunk.done) { complete = true; break; }
-          if (size + chunk.value.byteLength > raw.byteLength) throw Error('First configuration response refused');
-          raw.set(chunk.value, size);
-          size += chunk.value.byteLength;
-        }
-        return parseFirstConfigResult(parseRestoreJson(raw.subarray(0, size)), request);
-      } finally {
-        if (!complete) await reader.cancel().catch(() => {});
-        reader.releaseLock();
-      }
+      const raw = await boundedBody(response.body, FIRST_CONFIG_RESULT_BYTES, 'First configuration response refused');
+      return parseFirstConfigResult(parseRestoreJson(raw), request);
     },
-    storageInitialization: async (request: import('../host/storage-initialization-protocol.mjs').StorageInitializationRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Storage preparation helper unavailable');
-      const pending=fetch('/manager-storage-initialization',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Storage preparation unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Storage preparation response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/storage-initialization-protocol.mjs').StorageInitializationResult;
+    conversationManagement: maintenanceBridge<import('../host/conversation-management-protocol.mjs').ManagementRequest, ManagementResult>(
+      '/manager-conversation-management', 'Conversation management', parseManagementJson),
+    sourceCacheCleanup: maintenanceBridge<import('../host/source-cache-cleanup-protocol.mjs').CleanupRequest, CleanupResult>(
+      '/manager-source-cache-cleanup', 'Cache cleanup'),
+    inspectConversations: maintenanceBridge<import('../host/conversation-inventory-protocol.mjs').ConversationRequest, ConversationResult>(
+      '/manager-conversation-inventory', 'Conversation inventory'),
+    storageInitialization: maintenanceBridge<import('../host/storage-initialization-protocol.mjs').StorageInitializationRequest, import('../host/storage-initialization-protocol.mjs').StorageInitializationResult>(
+      '/manager-storage-initialization', 'Storage preparation'),
+    inspectOwnedV3: maintenanceBridge<import('../host/owned-data-v3-protocol.mjs').OwnedV3Request, import('../host/owned-data-v3-protocol.mjs').OwnedV3Result>(
+      '/manager-owned-data-v3', 'Stored data inspection', undefined, 16384),
+    inspectSourceCache: maintenanceBridge<import('../host/source-cache-inventory-protocol.mjs').SourceCacheRequest, SourceCacheResult>(
+      '/manager-source-cache-inventory', 'Source cache inventory'),
+    modelCredential: maintenanceBridge<import('../host/model-credential-protocol.mjs').ModelCredentialRequest, ModelCredentialResult>(
+      '/manager-model-credential', 'Model credential'),
+    credentialReference: maintenanceBridge<import('../host/credential-reference-protocol.mjs').CredentialReferenceRequest, CredentialReferenceResult>(
+      '/manager-credential-reference', 'Credential reference'),
+    modelSettings: legacyBridge<import('../host/model-settings-protocol.mjs').ModelSettingsRequest, ModelSettingsResult>(
+      '/manager-model-settings', 'Model settings', 8192, {parse: maintenanceJson, clearAfterPost: true, responseLabel: 'Model'}),
+    isolatedBackup: async (input:IsolatedBackupBridgeRequest) => {
+      if (!isLoopbackHelper()) throw Error('Backup inspection helper unavailable');
+      const request = parseIsolatedBackupBridgeRequest(input);
+      const limit = request.action.startsWith('preview-') ? BACKUP_PREFERENCES_RESPONSE_BYTES : ISOLATED_BACKUP_RESPONSE_BYTES;
+      const response = await postHelper('/manager-isolated-backup', request);
+      if (!response.ok || !response.body) throw Error('Backup inspection helper unavailable');
+      const raw = await boundedBody(response.body, limit, 'Backup inspection response refused');
+      return parseIsolatedBackupBridgeResult(parseIsolatedBackupJson(raw, limit), request);
     },
-    inspectOwnedV3: async (request: import('../host/owned-data-v3-protocol.mjs').OwnedV3Request|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Stored data inspection helper unavailable');
-      const pending=fetch('/manager-owned-data-v3',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Stored data inspection unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>16384)throw Error('Stored data inspection response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as import('../host/owned-data-v3-protocol.mjs').OwnedV3Result;
-    },
-    inspectSourceCache: async (request: import('../host/source-cache-inventory-protocol.mjs').SourceCacheRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Source cache inventory helper unavailable');
-      const pending=fetch('/manager-source-cache-inventory',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Source cache inventory unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Source cache inventory response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as SourceCacheResult;
-    },
-    modelCredential: async (request: import('../host/model-credential-protocol.mjs').ModelCredentialRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Model credential helper unavailable');
-      const pending=fetch('/manager-model-credential',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Model credential unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model credential response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelCredentialResult;
-    },
-    credentialReference: async (request: import('../host/credential-reference-protocol.mjs').CredentialReferenceRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Credential reference helper unavailable');
-      const pending=fetch('/manager-credential-reference',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Credential reference unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      let complete=false;try{for(;;){const value=await reader.read();if(value.done){complete=true;break;}bytes+=value.value.byteLength;if(bytes>8192)throw Error('Credential reference response refused');chunks.push(value.value);}}finally{if(!complete)await reader.cancel().catch(()=>{});reader.releaseLock();}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as CredentialReferenceResult;
-    },
-    modelSettings: async (request: import('../host/model-settings-protocol.mjs').ModelSettingsRequest|null) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Model settings helper unavailable');
-      const pending=fetch('/manager-model-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});request=null;const response=await pending;
-      if(!response.ok||!response.body)throw Error('Model settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Model response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(raw)) as ModelSettingsResult;
-    },
-    localModeChoice: async (request: import('../host/local-mode-choice-protocol.mjs').LocalModeRequest) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Local-only helper unavailable');
-      const response=await fetch('/manager-local-mode-choice',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
-      if(!response.ok||!response.body)throw Error('Local-only helper unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      try{for(;;){const part=await reader.read();if(part.done)break;bytes+=part.value.byteLength;if(bytes>8192)throw Error('Local-only response refused');chunks.push(part.value);}}finally{await reader.cancel().catch(()=>{});}
-      const raw=new Uint8Array(bytes);let offset=0;for(const part of chunks){raw.set(part,offset);offset+=part.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as LocalModeResult;
-    },
-    productSettings: async (request: import('../host/product-settings-protocol.mjs').ProductSettingsRequest) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Product settings helper unavailable');
-      const response=await fetch('/manager-product-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
-      if(!response.ok||!response.body)throw Error('Product settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Product settings response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as ProductSettingsResult;
-    },
-    basicSettings: async (request: import('../host/basic-settings-protocol.mjs').BasicSettingsRequest) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Basic settings helper unavailable');
-      const response=await fetch('/manager-basic-settings',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
-      if(!response.ok||!response.body)throw Error('Basic settings unavailable');const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>8192)throw Error('Basic settings response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as BasicSettingsResult;
-    },
-    memoryForget: async (request: import('../host/memory-forget-protocol.mjs').ForgetRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Memory forget helper unavailable');
-      const response = await fetch('/manager-memory-forget', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
-      if (!response.ok || !response.body) throw new Error('Memory forget unavailable');
-      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
-      try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 65536) throw new Error('Memory forget response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
-      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as ForgetResult;
-    },
-    inspectMemory: async (request: import('../host/memory-inspection.mjs').MemoryInspectionRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Memory inspection helper unavailable');
-      const response = await fetch('/manager-memory-inspection', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
-      if (!response.ok || !response.body) throw new Error('Memory inspection unavailable');
-      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
-      try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 270336) throw new Error('Memory inspection response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
-      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as MemoryInspectionResult;
-    },
-    inspectSavedConfiguration: async (request: import('../host/saved-configuration.mjs').SavedConfigurationRequest) => {
-      if(location.hostname!=='127.0.0.1'||location.protocol!=='http:')throw Error('Saved configuration helper unavailable');
-      const response=await fetch('/manager-saved-configuration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(14000)});
-      if(!response.ok||!response.body)throw Error('Saved configuration unavailable');
-      const reader=response.body.getReader(),chunks:Uint8Array[]=[];let bytes=0;
-      try{for(;;){const value=await reader.read();if(value.done)break;bytes+=value.value.byteLength;if(bytes>32768)throw Error('Saved configuration response refused');chunks.push(value.value);}}finally{await reader.cancel().catch(()=>{});}
-      const raw=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){raw.set(chunk,offset);offset+=chunk.byteLength;}
-      return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw)) as SavedConfigurationResult;
-    },
-    inspectSavedMode: async (request: import('../host/saved-mode.mjs').SavedModeRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Saved mode helper unavailable');
-      const response = await fetch('/manager-saved-mode', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
-      if (!response.ok || !response.body) throw new Error('Saved mode unavailable');
-      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
-      try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 16384) throw new Error('Saved mode response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
-      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as SavedModeResult;
-    },
-    memoryQuery: async (request: import('../host/memory-query.mjs').MemoryRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Memory query helper unavailable');
-      const response = await fetch('/manager-memory-query', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
-      if (!response.ok || !response.body) throw new Error('Memory query unavailable');
-      const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0;
-      try { for (;;) { const value = await reader.read(); if (value.done) break; bytes += value.value.byteLength; if (bytes > 139264) throw new Error('Memory query response refused'); chunks.push(value.value); } } finally { await reader.cancel().catch(() => {}); }
-      const raw = new Uint8Array(bytes); let offset = 0; for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
-      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as MemoryResult;
-    },
+    isolatedRoot: legacyBridge<IsolatedRootRequest, IsolatedRootResult>(
+      '/manager-isolated-root', 'Isolated backup', 8192, {parse: strictIsolatedRootJson, timeout: 46000, helperFailure: true, releaseLock: true}),
+    localModeChoice: legacyBridge<import('../host/local-mode-choice-protocol.mjs').LocalModeRequest, LocalModeResult>(
+      '/manager-local-mode-choice', 'Local-only', 8192, {helperFailure: true}),
+    productSettings: legacyBridge<import('../host/product-settings-protocol.mjs').ProductSettingsRequest, ProductSettingsResult>(
+      '/manager-product-settings', 'Product settings'),
+    basicSettings: legacyBridge<import('../host/basic-settings-protocol.mjs').BasicSettingsRequest, BasicSettingsResult>(
+      '/manager-basic-settings', 'Basic settings'),
+    memoryForget: legacyBridge<import('../host/memory-forget-protocol.mjs').ForgetRequest, ForgetResult>(
+      '/manager-memory-forget', 'Memory forget', 65536),
+    inspectMemory: legacyBridge<import('../host/memory-inspection.mjs').MemoryInspectionRequest, MemoryInspectionResult>(
+      '/manager-memory-inspection', 'Memory inspection', 270336),
+    inspectSavedConfiguration: legacyBridge<import('../host/saved-configuration.mjs').SavedConfigurationRequest, SavedConfigurationResult>(
+      '/manager-saved-configuration', 'Saved configuration', 32768),
+    inspectSavedMode: legacyBridge<import('../host/saved-mode.mjs').SavedModeRequest, SavedModeResult>(
+      '/manager-saved-mode', 'Saved mode', 16384),
+    memoryQuery: legacyBridge<import('../host/memory-query.mjs').MemoryRequest, MemoryResult>(
+      '/manager-memory-query', 'Memory query', 139264),
     personalization: async (request: PersonalizationRequest) => {
-      if (location.hostname !== '127.0.0.1' || location.protocol !== 'http:') throw new Error('Personalization helper unavailable');
-      const response = await fetch('/manager-personalization', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: AbortSignal.timeout(14000) });
+      if (!isLoopbackHelper()) throw new Error('Personalization helper unavailable');
+      const response = await postHelper('/manager-personalization', request);
       if (!response.ok) throw new Error('Personalization unavailable');
       return await response.json() as PersonalizationResult;
     },
