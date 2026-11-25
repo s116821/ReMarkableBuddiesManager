@@ -53,10 +53,13 @@ unavailable and does not fall back to insecure credentials.
 
 ## User actions and observed state
 
-Start the normal Electron app or `npm run wired:browser`. Sign in explicitly.
-Electron opens the host-minted Google consent URL in the system browser; browser
-users click the displayed Continue link. No credentials are entered in the
-Manager. A successful callback must match its one-time state/current flow, then
+Start the normal Electron app, launch the packaged Manager with
+`--browser-helper`, or run `npm run wired:browser` from a source checkout.
+Use the same protected host configuration in each mode. Stop the browser helper
+with Ctrl+C in its launch terminal. Sign in explicitly.
+The desktop window opens the host-minted Google consent URL in the system
+browser. Browser users click the displayed Continue link. No credentials are
+entered in the Manager. A successful callback must match its one-time state/current flow, then
 actual token-info audience/scopes/expiry and Drive
 [about.user identity](https://developers.google.com/workspace/drive/api/reference/rest/v3/about/get)
 are checked before persistence. Only drive.appdata is requested. Provider refusal,
@@ -66,6 +69,8 @@ grant intact. Account labels are displayed as text, never HTML/prompt content.
 A restart displays **saved/cached** account details, not a fresh provider check.
 Check connection explicitly validates scope/client/account, refreshes expired
 credentials with the maintained library and persists only verified results.
+If Google rejects the saved grant, Manager asks you to sign in again. A failed
+check keeps the last successful check time.
 Saved host schema uses token expiry milliseconds; it is not a ready Rust/tablet
 credential file and intentionally contains no fabricated collection/group ID.
 

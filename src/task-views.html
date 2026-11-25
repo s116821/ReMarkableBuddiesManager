@@ -65,7 +65,7 @@
     <h2 id="model-settings-title">Model connection</h2>
     <p class="text-sm text-muted">Choose a model and, if needed, a custom endpoint. Existing values stay private. Saving does not restart Buddy or test the provider connection.</p>
     <div class="flex flex-wrap gap-2 my-3">
-      <button class="ui-button ui-button-secondary" type="button" (click)="app.beginModel()" [disabled]="!app.host.modelSettings || !app.profile().savedConfigurationProbe || app.model().busy">Edit model</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="app.beginModel()" [disabled]="!app.canBeginModel()">Edit model</button>
       <button class="ui-button ui-button-primary" type="button" (click)="app.saveModel()" [disabled]="!app.modelCanSave()">Save model</button>
       @if (app.model().busy || app.model().view?.state === 'ready') {
 <button class="ui-button ui-button-secondary" type="button" (click)="app.stopModel()" [disabled]="!app.model().busy && app.model().view?.state !== 'ready'">{{ app.model().busy ? 'Stop model wait' : 'Cancel model edit' }}</button>
@@ -241,6 +241,7 @@
 }
   </div>
   <p role="status" data-testid="portable-status">{{ app.portable().status }}</p>
+@if (app.portable().backupPreview) { <p>Source is the selected cloud backup.</p> }
   @if (app.portable().view?.state === 'ready') {
     <ul data-testid="portable-preview">@for (row of app.portableRows(); track row.key) {<li>{{ row.label }}: {{ row.before }} → {{ row.after }}</li>}</ul>
     <p>Only preferences listed here will change. If saved settings change before confirmation, review the file again.</p>
@@ -459,7 +460,7 @@
 </section>
 }
 @if (app.isView('data', 'storage')) {
-<div class="workflow-choice"><label for="storage-task">Storage task</label><select id="storage-task" class="ui-field" [value]="app.storageTask()" (change)="app.storageTask.set($any($event.target).value)"><option value="overview">Inspect storage</option><option value="cache">Inspect and clean derived cache</option><option value="setup">Prepare storage</option><option value="legacy">Earlier storage inventory</option></select></div>@if (app.storageTask() === 'overview') {
+<div class="workflow-choice"><label for="storage-task">Storage task</label><select id="storage-task" class="ui-field" [value]="app.storageTask()" (change)="app.storageTask.set($any($event.target).value)"><option value="overview">Inspect storage</option><option value="cache">Inspect and clean derived cache</option><option value="legacy">Earlier storage inventory</option></select></div>@if (app.storageTask() === 'overview') {
 <section class="ui-panel my-6" aria-labelledby="owned-v3-title">
     <h2 id="owned-v3-title">Storage overview</h2>
     <p class="text-sm text-muted">Inspect Buddy-owned file accounting. Original documents and credentials are excluded. Apparent file lengths do not establish allocated or reclaimable space, runtime health or restore compatibility.</p>
@@ -525,24 +526,6 @@
         @if (!record.status_available) { <p>Original check unavailable. Never retry confirmation from this record.</p> }
         <button class="ui-button ui-button-secondary mt-2" type="button" (click)="app.checkCleanup(record)" [disabled]="!app.canCheckCleanup(record)">Check original cache cleanup</button></div>
     }
-  </section>
-}@if (app.storageTask() === 'setup') {
-<section class="ui-panel my-6" aria-labelledby="storage-initialization-title">
-    <h2 id="storage-initialization-title">Prepare Buddy storage</h2>
-    <p class="text-sm text-muted">Create or recover Buddy-owned storage at configured locations. Recovery may clean owned staging. This does not install Buddy, set paths, choose a mode, stop services or restore archives.</p>
-    <button class="ui-button ui-button-primary mt-3" type="button" (click)="app.beginStorageInitialization()" [disabled]="!app.canBeginStorageInitialization()">Review storage setup</button>
-    @if (app.storageInitialization().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.stopStorageInitialization()">Stop setup wait</button> }
-    <p role="status" class="mt-3" data-testid="storage-initialization-status">{{ app.storageInitialization().status }}</p>
-    @if (app.storageInitialization().view?.state === 'ready') {
-      <div class="mt-3" data-testid="storage-initialization-review"><p>Setup can change owned storage. Valid paths and disabled legacy sync are required. Review does not check for empty storage, freeze configuration, reserve changes or predict repairs.</p><p>Saved mode is kept. Runtime, cloud, native pages and replacement restore are not checked or enabled.</p>
-      <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.confirmStorageInitialization()" [disabled]="!app.canConfirmStorageInitialization()">Prepare storage</button></div>
-    }
-    @if (app.storageInitialization().view?.current; as current) { <p class="mt-3" data-testid="storage-initialization-current">Current saved mode: {{ app.storageModeKindLabels[current.kind] }}. This does not confirm earlier setup.</p> }
-    @for (row of app.storageInitialization().retained; track row.reference) {
-      <div class="mt-3" data-testid="storage-initialization-original"><p>{{ row.outcome === 'prepared' ? 'Earlier setup completed' : 'Storage setup not confirmed' }}. Later checks do not change this result.</p>
-      <button class="ui-button ui-button-secondary" type="button" (click)="app.checkStorageInitialization(row)" [disabled]="!app.canCheckStorageInitialization(row)">Check current storage</button></div>
-    }
-    <p class="text-sm text-muted mt-3">Restart does not confirm setup. No automatic retries. Read saved mode and Save Local-only are separate actions requiring valid storage.</p>
   </section>
 }@if (app.storageTask() === 'legacy') {
 <section class="ui-panel my-6" aria-labelledby="owned-title">
@@ -614,6 +597,9 @@
     @if (app.drive().account; as account) { <p class="break-words" data-testid="drive-account">{{ account.label }}</p> }
     @if (app.drive().checkedAt) { <p class="text-xs text-muted">Last checked: {{ app.drive().checkedAt }}</p> }
     @if (app.drive().status === 'cached') { <p class="ui-warning">These account details were saved earlier. Check the connection before relying on them.</p> }
+    @if (app.drive().status === 'authorization-failed' && app.drive().account && app.drive().error === 'authorization-required') {
+      <p class="ui-warning">Google requires a new sign-in. Choose Sign in to Google Drive to reconnect.</p>
+    }
     @if (app.drive().status === 'unconfigured' || app.drive().status === 'unavailable') { <p class="text-sm text-muted">Check the Google Drive setup in the project guide. Sign-in details stay on this computer.</p> }
     <div class="mt-4 flex flex-wrap gap-3">
       <button class="ui-button ui-button-primary" type="button" (click)="app.signInDrive()" [disabled]="['unconfigured', 'unavailable', 'connecting', 'checking', 'revoking'].includes(app.drive().status)">Sign in to Google Drive</button>
@@ -623,7 +609,34 @@
       <button class="ui-button ui-button-secondary" type="button" (click)="app.revokeDrive()" [disabled]="!app.drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(app.drive().status)">Remove Google access…</button>
     </div>
     @if (app.driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }
-    <p class="mt-4 text-sm text-muted">Cloud backup browsing and replacement-device restore are not available yet. Signing in does not change tablet settings or back up data.</p>
+    <p class="mt-4 text-sm text-muted">Signing in does not change tablet settings or back up data. Use Cloud backups to inspect supported existing backups; replacement-device restore is not supported.</p>
+    @if (app.host.tabletDriveSetup) {
+      <div class="mt-6 border-t pt-5" data-testid="tablet-drive-setup">
+        <h3>Tablet connection</h3>
+        <p class="text-sm text-muted">Save a separate Google connection on your wired tablet. Buddy can then use it while this Manager is closed.</p>
+        <p class="my-3" role="status" data-testid="tablet-drive-status">{{ app.tabletDrive().status }}</p>
+        @if (app.drive().account) {
+          <div class="flex flex-wrap gap-3">
+            <button class="ui-button ui-button-primary" type="button" (click)="app.setupTabletDrive('connect')" [disabled]="!app.canSetupTabletDrive() || app.tabletDrive().view?.state === 'authorizing' || app.tabletDrive().view?.state === 'ready'">Connect this tablet…</button>
+            @if (app.tabletDrive().view) { <button class="ui-button ui-button-secondary" type="button" (click)="app.cancelTabletDrive()">Cancel tablet setup</button> }
+          </div>
+        }
+        @if (app.tabletDrive().view; as setup) {
+          @if (app.host.kind === 'browser' && setup.authorizationUrl) { <a class="ui-button ui-button-primary mt-3 inline-block" [href]="setup.authorizationUrl" target="_blank" rel="noopener noreferrer">Continue tablet sign-in with Google</a> }
+          @if (setup.state === 'ready') {
+            <div class="my-4 rounded border p-4">
+              <p>{{ setup.intent === 'remove' ? 'Remove the Google connection from the connected tablet. Existing backups will remain in Drive.' : 'Save this Google connection on the connected tablet.' }}</p>
+              @if (setup.account) { <p class="font-semibold break-words">{{ setup.account.label }}</p> }
+              <p class="text-sm text-muted">This does not change your backup mode or the Manager’s Google connection.</p>
+              <button class="ui-button ui-button-primary mt-3" type="button" (click)="app.confirmTabletDrive()" [disabled]="!app.canSetupTabletDrive()">{{ setup.intent === 'remove' ? 'Remove tablet connection' : 'Save tablet connection' }}</button>
+            </div>
+          }
+        }
+        @if (app.tabletDrive().uncertain) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.refreshTabletDrive()" [disabled]="app.tabletDrive().busy">Refresh pending changes</button> }
+        @for (record of app.tabletDrive().retained; track record.reference) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.checkTabletDrive(record)" [disabled]="!app.canSetupTabletDrive() || !record.status_available">Check original tablet change</button> }
+        <details class="mt-4 text-sm"><summary>Remove the tablet’s Google connection</summary><p>This removes only the tablet’s saved credentials. It does not delete backups or revoke Google access.</p><button class="ui-button ui-button-secondary mt-2" type="button" (click)="app.setupTabletDrive('remove')" [disabled]="!app.canSetupTabletDrive()">Review removal…</button></details>
+      </div>
+    }
   </section>
 }
 @if (app.isView('backup', 'mode')) {
@@ -631,7 +644,7 @@
     <h2 id="saved-mode-title">Saved storage mode</h2>
     <p class="text-sm text-muted">Read the choice saved in Buddy-owned data. This does not change it or verify sync, service or cloud readiness.</p>
     <div class="flex flex-wrap gap-2 my-3">
-      <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSavedMode()" [disabled]="!app.profile().savedModeProbe || !app.host.inspectSavedMode || app.savedMode().busy">Read saved storage mode</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSavedMode()" [disabled]="!app.profile().savedModeProbe || !app.host.inspectSavedMode || app.savedMode().busy || app.isolatedRoot().busy">Read saved storage mode</button>
       @if (app.savedMode().busy) {
 <button class="ui-button ui-button-secondary" type="button" (click)="app.cancelSavedMode()" [disabled]="!app.savedMode().busy">Cancel mode inspection</button>
 }
@@ -689,7 +702,7 @@
   </section></details>
 }
 @if (app.isView('backup', 'archives')) {
-<div class="workflow-choice"><div><label for="archive-task">What would you like to do?</label><select id="archive-task" class="ui-field" [value]="app.archiveTask()" (change)="app.chooseArchive('task', $any($event.target).value)"><option value="export">Export data</option><option value="check">Check an archive</option><option value="restore">Restore an archive</option></select></div><div><label for="archive-family">Data format</label><select id="archive-family" class="ui-field" [value]="app.archiveFamily()" (change)="app.chooseArchive('family', $any($event.target).value)"><option value="notebook">Notebook data</option><option value="history">Selected history</option><option value="legacy">Earlier local data</option></select></div></div><p class="workflow-help">Archives stay on the tablet. This host cannot list or download cloud backups. Choose the format used by your data; unsupported combinations remain unavailable.</p>@if (app.archiveTask() !== 'restore' && app.archiveFamily() === 'notebook') {
+<div class="workflow-choice"><div><label for="archive-task">What would you like to do?</label><select id="archive-task" class="ui-field" [value]="app.archiveTask()" (change)="app.chooseArchive('task', $any($event.target).value)"><option value="export">Export data</option><option value="check">Check an archive</option><option value="restore">Restore an archive</option></select></div><div><label for="archive-family">Data format</label><select id="archive-family" class="ui-field" [value]="app.archiveFamily()" (change)="app.chooseArchive('family', $any($event.target).value)"><option value="notebook">Notebook data</option><option value="history">Selected history</option><option value="legacy">Earlier local data</option></select></div></div><p class="workflow-help">Archives stay on the tablet. Use Cloud backups to find and download supported backups, or enter a tablet path here. Choose the format used by your data; unsupported combinations remain unavailable.</p>@if (app.archiveTask() !== 'restore' && app.archiveFamily() === 'notebook') {
 <section class="ui-panel mt-6" aria-labelledby="notebook-archive-title">
     <h2 id="notebook-archive-title" class="ui-heading">Check or export Buddy notebook data</h2>
     <p class="mt-2">Check a notebook archive, or copy complete Buddy notebook data to a new folder on this tablet. Current records are kept. The archive stays on this tablet; copy it off-device separately for protection against tablet loss.</p>
@@ -793,7 +806,7 @@
     <h2 [id]="restorePrefix+'-title'" class="ui-heading">{{ family==='notebook' ? 'Restore a notebook archive on this tablet' : 'Restore an archive already on this tablet' }}</h2>
     @if (family==='notebook') {
       <p class="mt-2">Add archived Buddy notebook data to the same existing local notebook store, keeping current records. The archive must already be on this tablet and belong to this store's actor. This cannot download an archive, set up an empty or replacement tablet, or restore native pages.</p>
-    } @else { <p class="mt-2">Add archived Buddy data to the data already on this tablet, keeping current records. The archive must already be on this tablet. This cannot download an archive, set up an empty or replacement tablet, or restore native pages.</p> }
+    } @else { <p class="mt-2">Add archived Buddy data without replacing current records. Enter a tablet path, or choose a verified revision in Cloud backups. This cannot set up an empty or replacement tablet or restore native pages.</p> }
     <label class="block mt-3" [for]="restorePrefix+'-source'">Archive path on this tablet</label>
     <textarea [id]="restorePrefix+'-source'" class="ui-field block w-full sm:w-full max-w-full" rows="2" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" [value]="app.restoreSourceText(family)" (beforeinput)="app.beforeRestoreSource($event,family)" (input)="app.updateRestoreSource($event,family)" (paste)="app.pasteRestoreSource($event,family)" [disabled]="restore.busy || app.restorePeerBusy(family)" [attr.aria-describedby]="restorePrefix+'-input-help'"></textarea>
     <p [id]="restorePrefix+'-input-help'" class="mt-2">Enter the archive's full path on the tablet. It clears when submitted and is not saved or shown in the preview.</p>
@@ -828,7 +841,7 @@
     <details class="mt-3" [attr.data-testid]="restorePrefix+'-technical'">
       <summary>Technical details</summary>
       @if (family==='notebook') { <p>Supports ordinary format4 archives, the same actor and an existing local notebook store. Selected, shared and cross-actor restores are not supported here.</p> }
-      @else { <p>Supports ordinary format1 archives and existing local-only Buddy storage. Selected, shared, isolated and generation4 restores are not supported here.</p> }
+      @else { <p>Supports ordinary format1 archives on existing local-only Buddy storage. Selected, shared, isolated and generation4 target stores are unsupported.</p> }
       @if (restore.view?.preview; as preview) {
         <div [attr.data-testid]="restorePrefix+'-counts'"><p>Archive: {{ preview.source.manifests }} manifests, {{ preview.source.objects }} objects.</p><p>Combined data: {{ preview.target.manifests }} manifests, {{ preview.target.objects }} objects; {{ preview.additional_manifests }} additional manifests.</p></div>
       }
@@ -921,5 +934,211 @@
     @if (app.runtimeIdentity().report?.binary_version; as value) { <p class="font-mono break-all" data-testid="runtime-binary-version">{{ value }}</p> }
     <p class="text-sm text-muted">This is the version reported by the known Buddy program. The running process, package source and compatibility remain unverified. It does not make a release eligible for installation.</p>
     @if (!app.host.inspectRuntime) { <p class="ui-warning">This Manager host does not support binary version inspection.</p> }
+  </section>
+}
+
+@if (app.isView('settings','shared')) {
+<section class="ui-panel my-5 min-w-0" aria-labelledby="shared-preferences-title">
+  <h2 id="shared-preferences-title">Shared group preferences</h2>
+  <p>Review the saved settings for this group and tablet. A running Buddy request may still use earlier settings.</p>
+  <div class="my-3 flex flex-wrap gap-3">
+    <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSharedPreferences(false)" [disabled]="!app.canInspectSharedPreferences()">Inspect shared preferences</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="app.inspectSharedPreferences(true)" [disabled]="!app.canInspectSharedPreferences()">Inspect and reveal private prompt</button>
+    <button class="ui-button ui-button-secondary" type="button" (click)="app.refreshSharedPreferenceOriginals()" [disabled]="app.sharedPreferences().busy || !app.host.sharedPreferences">Refresh original edits</button>
+    @if (app.sharedPreferences().busy || app.sharedPreferences().view) { <button class="ui-button ui-button-secondary" type="button" (click)="app.stopSharedPreference()" [disabled]="!app.sharedPreferences().busy && !app.sharedPreferences().view">Clear shared view or stop waiting</button> }
+  </div>
+  <p role="status" data-testid="shared-preference-status">{{ app.sharedPreferences().busy ? 'Waiting for Buddy…' : app.sharedLabels[app.sharedPreferences().state] }}</p>
+  @if (app.sharedPreferences().view; as view) {
+    <h3 class="mt-4 font-semibold">Saved preferences</h3>
+    <ul>
+      <li>Reader {{ view.effective.reader_enabled ? 'enabled' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.reader_enabled] }})</li>
+      <li>Writer {{ view.effective.writer_enabled ? 'enabled' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.writer_enabled] }})</li>
+      <li>Export {{ view.effective.export_destination === 'mem' ? 'to Mem' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.export_destination] }})</li>
+      <li>Research {{ view.effective.research_policy }} ({{ app.sharedOriginLabels[view.effective.origins.research_policy] }})</li>
+      <li>Personalization {{ view.effective.personalization_enabled ? 'enabled' : 'disabled' }} ({{ app.sharedOriginLabels[view.effective.origins.personalization_enabled] }})</li>
+      <li>Prompt {{ view.effective.personalization_text_present ? 'saved' : 'not set' }} ({{ app.sharedOriginLabels[view.effective.origins.personalization_text] }})</li>
+    </ul>
+    <details class="my-3 text-sm"><summary>Group details</summary><dl class="mt-2"><dt>Group ID</dt><dd class="break-all">{{ view.group }}</dd><dt>Shared selection state</dt><dd>{{ view.disposition }}</dd></dl></details>
+    @if (view.effective.personalization_text !== null) {
+      <pre class="whitespace-pre-wrap wrap-anywhere" data-shared-prompt-revealed>{{ view.effective.personalization_text }}</pre>
+    }
+    <form class="my-3 grid gap-3" (submit)="app.editSharedPreferences($event)">
+      <p>Choose the settings you want to change.</p>
+      <label>Reader <select class="ui-field" name="reader"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label>Writer <select class="ui-field" name="writer"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label>Export <select class="ui-field" name="export"><option value="">Leave unchanged</option><option value="mem">Mem</option><option value="disabled">Disable</option></select></label>
+      <label><input type="checkbox" name="product-null"> Use defaults for Reader, Writer and export (overrides the three choices above)</label>
+      <label>Research <select class="ui-field" name="research"><option value="">Leave unchanged</option><option value="required">Required</option><option value="disabled">Disable</option><option value="null">Use default</option></select></label>
+      <label>Personalization <select class="ui-field" name="personalization"><option value="">Leave unchanged</option><option value="on">Enable</option><option value="off">Disable</option></select></label>
+      <label><input type="checkbox" name="replace-text" [checked]="app.sharedPromptReplacement()" (change)="app.toggleSharedPrompt($any($event.target).checked)"> Replace the shared prompt</label>
+      @if (app.sharedPromptReplacement()) {
+        <label>New prompt <textarea class="ui-field block w-full" name="text" rows="4" data-shared-prompt-draft autocomplete="off" spellcheck="false" aria-describedby="shared-prompt-help"></textarea></label>
+        <p id="shared-prompt-help" class="text-sm text-muted">An empty replacement clears the shared prompt.</p>
+      }
+      <label><input type="checkbox" name="confirm" required> Apply these changes to this shared group</label>
+      <button class="ui-button ui-button-primary" type="submit" [disabled]="!app.canInspectSharedPreferences()">Save shared preferences</button>
+    </form>
+  }
+  @for (record of app.sharedPreferences().retained; track record.reference; let i = $index) {
+    <p><button class="ui-button ui-button-secondary" type="button" (click)="app.checkSharedPreference(record.reference)" [disabled]="!app.canCheckSharedPreference(record)">Check original shared edit {{ i + 1 }}</button></p>
+  } @empty {
+    @if (app.sharedPreferences().state === 'unknown' && app.sharedPreferences().reference; as reference) {
+      <p><button class="ui-button ui-button-secondary" type="button" (click)="app.checkSharedPreference(reference)" [disabled]="!app.canInspectSharedPreferences()">Check original shared edit</button></p>
+    }
+  }
+</section>
+}
+@if (app.isView('backup','setup')) {
+<section aria-labelledby="isolated-root-title" class="ui-panel my-6">
+      <h2 id="isolated-root-title">Prepare backup storage</h2>
+@if (!app.host.isolatedRoot) { <p>This Manager host cannot prepare cloud backup storage.</p> }
+      <p>Prepare cloud storage for a backup already selected on the tablet.</p>
+      <div class="flex flex-wrap gap-2 my-3">
+        <button class="ui-button ui-button-secondary" type="button" (click)="app.beginIsolatedRoot()" [disabled]="!app.canBeginIsolatedRoot()">Review saved backup</button>
+        <button class="ui-button ui-button-secondary" type="button" (click)="app.refreshIsolatedRootOriginals()" [disabled]="app.isolatedRoot().busy || app.isolatedRoot().view?.state === 'ready'">Refresh preparation history</button>
+        @if (app.isolatedRoot().busy || app.isolatedRoot().view?.state === 'ready') {
+          <button class="ui-button ui-button-secondary" type="button" (click)="app.stopIsolatedRoot()">{{ app.isolatedRoot().busy ? 'Stop waiting for preparation' : 'Cancel backup review' }}</button>
+        }
+      </div>
+      <p role="status" data-testid="isolated-root-status">{{ app.isolatedRoot().status }}</p>
+      @if (app.isolatedRoot().view?.preview; as preview) {
+        <div class="my-3 wrap-anywhere" data-testid="isolated-root-preview">
+          <h3 class="font-semibold">Saved mode</h3>
+          <p>{{ app.localModeLabels[preview.kind] }}</p>
+          <p>Backup {{ preview.backup }}</p>
+          <p>Device {{ preview.device }}</p>
+          <p class="text-sm text-muted my-3">This review expires after two minutes.</p>
+          <button class="ui-button ui-button-primary" type="button" (click)="app.prepareIsolatedRoot()" [disabled]="!app.canPrepareIsolatedRoot()">Prepare cloud storage</button>
+        </div>
+      }
+      @if (app.isolatedRoot().view?.report; as report) {
+        <div class="my-3" data-testid="isolated-root-report">
+          <h3 class="font-semibold">Buddy’s preparation report</h3>
+          @if (report.result?.outcome !== 'root-verified') {
+            <p>{{ app.isolatedRootReportLabel(report) }}</p>
+          }
+          @if (report.current; as current) {
+            <p>Saved mode reported by Buddy · {{ app.localModeLabels[current.kind] }}</p>
+          }
+          @if (report.result?.outcome === 'root-verified') {
+            <p class="text-sm text-muted">Backup packages, Buddy runtime, and native pages need separate verification.</p>
+          }
+        </div>
+      }
+      @if (app.isolatedRoot().retained.length) {
+        <h3 class="font-semibold mt-3">Retained preparations</h3>
+        <ul class="space-y-3" data-testid="isolated-root-retained">
+          @for (record of app.isolatedRoot().retained; track record.reference) {
+            <li class="wrap-anywhere">
+              <p>Backup {{ record.backup }}</p>
+              <p>Device {{ record.device }} · Saved setting {{ record.epoch }}</p>
+              <p>{{ record.state === 'unknown' ? 'Preparation outcome is unknown.' : 'Verified cloud storage evidence retained.' }}</p>
+              @if (record.state === 'unknown') {
+                <button class="ui-button ui-button-secondary" type="button" (click)="app.retryIsolatedRoot(record)" [disabled]="!app.canRetryIsolatedRoot(record)">Retry original preparation</button>
+              }
+            </li>
+          }
+        </ul>
+        <p class="text-sm text-muted mt-3">Retry requires the original tablet connection and boot session.</p>
+      }
+    </section>
+}
+
+@if (app.isView('backup','cloud')) {
+<section class="ui-panel" aria-labelledby="cloud-backups-title">
+  <h2 id="cloud-backups-title">Cloud backups</h2>
+  <p>Choose a backup revision from Google Drive to download and verify.</p>
+  @if (app.host.isolatedBackup) {
+      <div class="mt-5">
+
+        <div class="my-3 flex flex-wrap gap-3">
+          @if (app.drive().status === 'connected') {
+            <button class="ui-button ui-button-secondary" type="button" (click)="app.scanCloudBackups()" [disabled]="!app.canBrowseCloudBackups()">Scan for cloud backups</button>
+          } @else {
+            <button class="ui-button ui-button-secondary" type="button" (click)="app.navigate('backup', 'account')">Open Google account</button>
+          }
+          @if (app.cloudBackup().busy || app.cloudBackup().backups.length) {
+            <button class="ui-button ui-button-secondary" type="button" (click)="app.clearCloudBackups()">{{ app.cloudBackup().previewing ? 'Cancel backup preview' : app.cloudBackup().downloading ? 'Cancel download' : app.cloudBackup().busy ? 'Cancel backup check' : 'Clear backup results' }}</button>
+          }
+        </div>
+        <p role="status" data-testid="cloud-backup-status">{{ app.cloudBackup().message }}</p>
+        @if (app.cloudBackup().cleanupPending) {
+          <p role="alert" class="ui-warning">Manager could not confirm removal of the temporary backup files.</p>
+        }
+        @if (app.cloudBackup().backups.length) {
+          <ul class="my-3 space-y-4" data-testid="cloud-backup-list">
+            @for (backup of app.cloudBackup().backups; track backup.backup) {
+              <li class="wrap-anywhere">
+                <p class="font-semibold">Backup {{ backup.backup }}</p>
+                <p class="text-sm text-muted">Device {{ backup.device }}</p>
+                @if (backup.revisions.length) {
+                  <ul class="mt-2 space-y-2">
+                    @for (revision of backup.revisions; track revision.reference) {
+                      <li class="flex flex-wrap items-center gap-2">
+                        <code>{{ revision.sha256.slice(0, 12) }}</code>
+                        @if (revision.newestObserved) { <span>Newest in this scan</span> }
+                        <button class="ui-button ui-button-secondary" type="button" (click)="app.selectCloudBackup(revision.reference)" [disabled]="!app.canBrowseCloudBackups() || app.cloudBackup().selectedChoice === revision.reference">
+                          {{ app.cloudBackup().selectedChoice === revision.reference ? 'Selected revision' : 'Select revision' }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p>No revisions found for this backup.</p>
+                }
+              </li>
+            }
+          </ul>
+        }
+        @if (app.cloudBackup().selected; as selected) {
+          <p class="my-3 wrap-anywhere" data-testid="cloud-backup-selection">Verified revision marker <code>{{ selected.sha256 }}</code>.</p>
+          @if (!app.cloudBackup().downloadAttempted) {
+            <button class="ui-button ui-button-primary" type="button" (click)="app.downloadCloudBackup()" [disabled]="!app.canBrowseCloudBackups()">Download and verify</button>
+          }
+          @if (app.cloudBackup().inspection; as inspection) {
+            <p class="mt-3" data-testid="cloud-backup-verification">{{ inspection.manifests }} archive manifests and {{ inspection.objects }} stored objects verified.</p>
+            @if (app.cloudBackup().previewAvailable) {
+              @if (!app.connection().observation) {
+                <p>Connect your tablet by USB to restore data or apply saved preferences.</p>
+                <button class="ui-button ui-button-secondary" type="button" (click)="app.connectTablet()" [disabled]="app.connection().status === 'checking' || app.firstConfiguration().busy || app.capacitiesLocked()">Read tablet state</button>
+                @if (app.connection().status !== 'unconfigured') {
+                  <span role="status">{{ app.connectionLabels[app.connection().status] }}</span>
+                }
+              }
+              <button class="ui-button ui-button-secondary" type="button" (click)="app.reviewCloudBackup()" [disabled]="!app.canReviewCloudBackup()">Review backup preferences</button>
+              <button class="ui-button ui-button-secondary" type="button" (click)="app.reviewCloudBackup(true)" [disabled]="!app.canReviewCloudBackup(true)">Preview backup data restore</button>
+            }
+          }
+        }
+      </div>
+    } @else {
+      <p class="mt-4 text-sm text-muted">This Manager host does not support cloud backup browsing.</p>
+    }
+  </section>
+}
+
+@if (app.isView('tablet','setup')) {
+  @if (app.host.firstConfiguration) {
+    <section class="ui-panel" aria-labelledby="first-configuration-title">
+      <h2 id="first-configuration-title">First configuration</h2>
+      <app-first-configuration [app]="app" />
+    </section>
+  }
+<section class="ui-panel my-6" aria-labelledby="storage-initialization-title">
+    <h2 id="storage-initialization-title">Prepare Buddy storage</h2>
+    <p class="text-sm text-muted">Prepare Buddy’s storage at its configured locations. Recovery can clean up Buddy’s temporary staging files.</p>
+    <button class="ui-button ui-button-primary mt-3" type="button" (click)="app.beginStorageInitialization()" [disabled]="!app.canBeginStorageInitialization()">Review storage setup</button>
+    @if (app.storageInitialization().busy) { <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.stopStorageInitialization()">Stop setup wait</button> }
+    <p role="status" class="mt-3" data-testid="storage-initialization-status">{{ app.storageInitialization().status }}</p>
+    @if (app.storageInitialization().view?.state === 'ready') {
+      <div class="mt-3" data-testid="storage-initialization-review"><p>Setup can change Buddy-owned storage. Valid paths and disabled legacy sync are required. Your saved data mode is kept.</p>
+      <button class="ui-button ui-button-secondary mt-3" type="button" (click)="app.confirmStorageInitialization()" [disabled]="!app.canConfirmStorageInitialization()">Prepare storage</button></div>
+    }
+    @if (app.storageInitialization().view?.current; as current) { <p class="mt-3" data-testid="storage-initialization-current">Current saved mode: {{ app.storageModeKindLabels[current.kind] }}. This does not confirm earlier setup.</p> }
+    @for (row of app.storageInitialization().retained; track row.reference) {
+      <div class="mt-3" data-testid="storage-initialization-original"><p>{{ row.outcome === 'prepared' ? 'Earlier setup completed' : 'Storage setup not confirmed' }}. Later checks do not change this result.</p>
+      <button class="ui-button ui-button-secondary" type="button" (click)="app.checkStorageInitialization(row)" [disabled]="!app.canCheckStorageInitialization(row)">Check current storage</button></div>
+    }
+    <details class="text-sm text-muted mt-3"><summary>Setup limits</summary><p>Review does not reserve storage or predict repairs. Setup uses the configuration in effect when confirmed. It does not install Buddy, change paths or data mode, stop services, restore archives, or enable cloud sync. No automatic retries are made; earlier unconfirmed results remain unconfirmed after a restart or later check.</p></details>
   </section>
 }

@@ -31,7 +31,7 @@ try {
   await expect(page.getByText('Coming in a later release',{exact:true})).toHaveCount(0);
   await page.screenshot({path:'test-results/navigation-tablet.png',fullPage:true});
   const before=fixture.calls.length;
-  for(const panel of ['product','model','research','personalization','memory-settings','portable','conversations','memory','handwriting','storage','drive','mode','notebook','configuration','basic','runtime']) {
+  for(const panel of ['setup','product','model','research','personalization','memory-settings','shared','portable','conversations','memory','handwriting','storage','drive','mode','backup-setup','cloud','notebook','configuration','basic','runtime']) {
     await showPanel(page,panel);
     await expect(page.locator('.workspace h1')).toBeVisible();
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,panel);
@@ -71,7 +71,7 @@ try {
   await page.getByRole('button',{name:'Model connection · Review results',exact:true}).click();
   await expect(page.getByTestId('model-settings-retained')).toHaveCount(1);
   assert.equal(fixture.calls.length,pendingCalls,'returning to unknown results does not retry');
-  for(const [panel,name] of [['model','settings'],['memory','data'],['notebook','archives'],['drive','account']]) {
+  for(const [panel,name] of [['model','settings'],['memory','data'],['notebook','archives'],['drive','account'],['setup','setup'],['shared','shared'],['backup-setup','backup-setup'],['cloud','cloud']]) {
     await showPanel(page,panel);
     await page.screenshot({path:`test-results/navigation-${name}.png`,fullPage:true});
     await page.setViewportSize({width:390,height:844});

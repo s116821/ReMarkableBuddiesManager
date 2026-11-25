@@ -1,0 +1,152 @@
+{
+  "cases": {
+    "complete": {
+      "directory": "complete",
+      "expected_report": {
+        "activation_performed": false,
+        "data": {
+          "isolated_package": {
+            "data": {
+              "complete_media": true,
+              "configuration_included": false,
+              "format": 1,
+              "manifests": 1,
+              "objects": 2,
+              "selected_scopes": 0,
+              "selection_receipts": 0
+            },
+            "data_backup": {
+              "bytes": 785,
+              "sha256": "a02c944050a650bf20276847a9499ed4f50456f6a9f3abb72baf505b582d6cc6"
+            },
+            "declared_settings": 1,
+            "marker_sha256": "636903dfb8c62ec0e7883de98527a1749721bf6dbe9bcab562a566b18e8a2ee8",
+            "portable_configuration": {
+              "bytes": 115,
+              "sha256": "7b184d21a20280377c8b9d7be89ed5b12eec7730480647fe33e81a47b290f161"
+            }
+          }
+        },
+        "incomplete": false,
+        "operation": "inspect-isolated",
+        "report_version": 1,
+        "status": "ok"
+      },
+      "files": {
+        "data/backup.json": {
+          "bytes": 785,
+          "sha256": "a02c944050a650bf20276847a9499ed4f50456f6a9f3abb72baf505b582d6cc6"
+        },
+        "data/objects/44d088869fcf926920c0f9b67e1d4fd2a2fcb339b436b912407b0688f56b820e": {
+          "bytes": 511,
+          "sha256": "44d088869fcf926920c0f9b67e1d4fd2a2fcb339b436b912407b0688f56b820e"
+        },
+        "data/objects/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "isolated-backup.json": {
+          "bytes": 248,
+          "sha256": "636903dfb8c62ec0e7883de98527a1749721bf6dbe9bcab562a566b18e8a2ee8"
+        },
+        "portable-configuration.json": {
+          "bytes": 115,
+          "sha256": "7b184d21a20280377c8b9d7be89ed5b12eec7730480647fe33e81a47b290f161"
+        }
+      },
+      "marker_sha256": "636903dfb8c62ec0e7883de98527a1749721bf6dbe9bcab562a566b18e8a2ee8"
+    },
+    "media-omitted": {
+      "directory": "media-omitted",
+      "expected_report": {
+        "activation_performed": false,
+        "data": {
+          "isolated_package": {
+            "data": {
+              "complete_media": false,
+              "configuration_included": false,
+              "format": 1,
+              "manifests": 1,
+              "objects": 1,
+              "selected_scopes": 0,
+              "selection_receipts": 0
+            },
+            "data_backup": {
+              "bytes": 635,
+              "sha256": "cf9152cd01b673b03beb2583fc0430ae49aa648043bb1887dbbc86641c3b7d39"
+            },
+            "declared_settings": 1,
+            "marker_sha256": "086b47f95e48b76369d4c37c9e804f2a27a4540ddade31c14b6c6f11bd801ff8",
+            "portable_configuration": {
+              "bytes": 115,
+              "sha256": "7b184d21a20280377c8b9d7be89ed5b12eec7730480647fe33e81a47b290f161"
+            }
+          }
+        },
+        "incomplete": true,
+        "operation": "inspect-isolated",
+        "report_version": 1,
+        "status": "ok"
+      },
+      "files": {
+        "data/backup.json": {
+          "bytes": 635,
+          "sha256": "cf9152cd01b673b03beb2583fc0430ae49aa648043bb1887dbbc86641c3b7d39"
+        },
+        "data/objects/6741767a430838eb1253bbdbcf399bf72ffdad1b3187ddd8c27f1a15f384a027": {
+          "bytes": 512,
+          "sha256": "6741767a430838eb1253bbdbcf399bf72ffdad1b3187ddd8c27f1a15f384a027"
+        },
+        "isolated-backup.json": {
+          "bytes": 248,
+          "sha256": "086b47f95e48b76369d4c37c9e804f2a27a4540ddade31c14b6c6f11bd801ff8"
+        },
+        "portable-configuration.json": {
+          "bytes": 115,
+          "sha256": "7b184d21a20280377c8b9d7be89ed5b12eec7730480647fe33e81a47b290f161"
+        }
+      },
+      "marker_sha256": "086b47f95e48b76369d4c37c9e804f2a27a4540ddade31c14b6c6f11bd801ff8"
+    }
+  },
+  "fixture_receipt_version": 1,
+  "producer": "Store::export_isolated_package with the original sync-mode lease via isolated_package(false/true)",
+  "reproduction": {
+    "cargo_args": [
+      "test",
+      "--locked",
+      "--offline",
+      "--lib",
+      "archive_maintenance::tests::emit_isolated_producer_fixtures",
+      "--",
+      "--ignored",
+      "--exact",
+      "--nocapture"
+    ],
+    "crate_features": "default",
+    "debug_assertions": true,
+    "environment": {
+      "CARGO_BUILD_JOBS": "4",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_PROFILE_TEST_DEBUG": "0",
+      "RUSTUP_TOOLCHAIN": "1.98.1"
+    },
+    "evidence_limits": "actual synthetic isolated-producer package and in-process archive handler only; test-only SDK features may unify; no retained normal release, native platform, provider publication or restore proof",
+    "output_policy": "absent canonical-temp child reader-buddy-isolated-fixtures-<UUID>; never reuse/delete",
+    "profile": "test",
+    "required_output_env": "READER_BUDDY_ISOLATED_FIXTURE_OUTPUT",
+    "runtime_rustc_verbose": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+    "uuid_reproduction": "fresh synthetic UUIDs; semantics reproducible, bytes differ"
+  },
+  "source": {
+    "cargo_lock_sha256": "dd6ddeeb756da0a93c8e3d7020d2f7e92ba68026a1492d2312da1ad94b2472d1",
+    "clean": true,
+    "commit": "efb05505bec17e086f940148442216f5bcf96f6c",
+    "compiled_commit": "efb05505bec17e086f940148442216f5bcf96f6c",
+    "git_derived_identity": "dev.v0.77.1-148-gefb05505",
+    "sdk_source": "git+https://github.com/s116821/ReMarkableOpenSDK?tag=v0.2.0#a0c6480be6785480c2e0da76a3c06697a18efae4",
+    "tree": "a4903c9787d7134fdd6d67c897f4e3cb8a1a21e5"
+  },
+  "synthetic_test_content_only": true
+}

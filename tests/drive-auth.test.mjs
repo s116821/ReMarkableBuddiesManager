@@ -32,10 +32,15 @@ async function fixture(t, options = {}) {
         assert.equal(fields.get('client_id'), CLIENT); assert.equal(fields.get('code'), 'synthetic-code');
         assert.equal(createHash('sha256').update(fields.get('code_verifier')).digest('base64url'), state.challenge);
       } else state.refreshRequests.push(fields.get('refresh_token'));
+      if (!signingIn && state.refreshFailure) {
+        res.writeHead(state.refreshFailure.status);
+        return res.end(JSON.stringify({error: state.refreshFailure.code, error_description: 'private provider detail'}));
+      }
       if (state.gate) await state.gate.promise;
       if (state.oversize) return res.end('x'.repeat(65537));
       if (state.redirect) { res.writeHead(302, { Location: '/forbidden' }).end(); return; }
-      const refreshToken = signingIn ? secret : state.refreshToken;
+      const signInRefreshToken = Object.hasOwn(state, 'signInRefreshToken') ? state.signInRefreshToken : secret;
+      const refreshToken = signingIn ? signInRefreshToken : state.refreshToken;
       res.end(JSON.stringify({ access_token: 'synthetic-access-token', refresh_token: refreshToken,
         expires_in: 3600, token_type: 'Bearer', scope: state.scope }));
     } else if (u.pathname === '/tokeninfo') res.end(JSON.stringify({ aud: state.audience ?? CLIENT, scope: state.scope, expires_in: 3600 }));
@@ -59,19 +64,139 @@ async function fixture(t, options = {}) {
   } else store = new DriveStore({ root, python });
   const auth = new DriveAuth({ store, endpoints: Object.fromEntries(['authorization', 'token', 'tokenInfo', 'revoke', 'about'].map((key, i) => [key, origin + ['/authorize', '/token', '/tokeninfo', '/revoke', '/about'][i]])), ...options });
   t.after(async () => { auth.dispose(); state.gate?.resolve(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); if (process.platform !== 'win32') await rm(root, { recursive: true, force: true }); });
-  async function begin() {
-    const result = await auth.begin(); assert.equal(result.state.status, 'connecting');
+  async function begin(purpose = 'host') {
+    const result = await (purpose === 'tablet' ? auth.beginTabletAuthorization() : auth.begin()); assert.equal(result.state.status, 'connecting');
     const url = new URL(result.authorizationUrl); state.challenge = url.searchParams.get('code_challenge');
     assert.equal(url.searchParams.get('scope'), DRIVE_SCOPE); assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
     const callback = new URL(url.searchParams.get('redirect_uri')); callback.searchParams.set('state', url.searchParams.get('state'));
     return { result, callback };
   }
-  async function signIn() { const { callback } = await begin(); callback.searchParams.set('code', 'synthetic-code'); assert.equal((await fetch(callback)).status, 200); await settled(auth); }
+  async function signIn(purpose = 'host') { const { callback } = await begin(purpose); callback.searchParams.set('code', 'synthetic-code'); assert.equal((await fetch(callback)).status, 200); await settled(auth); }
   return { auth, root, store, state, begin, signIn };
 }
 async function settled(auth) { for (let i = 0; i < 200 && ['connecting', 'checking', 'revoking'].includes(auth.state.status); i++) await new Promise(r => setTimeout(r, 10)); assert.ok(!['connecting', 'checking', 'revoking'].includes(auth.state.status)); }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
+const tabletRefresh = 'synthetic-independent-tablet-refresh';
+const collection = 'f52f35a1-1ccd-4544-9e22-5c1e87b6ca44';
+
+test('separate tablet consent preserves the host grant and supplies one private V1 credential', async t => {
+  const f = await fixture(t); await f.signIn();
+  const original = structuredClone(f.store.grant());
+  f.state.signInRefreshToken = tabletRefresh;
+  await f.signIn('tablet');
+  assert.deepEqual(f.store.grant(), original);
+  assert.equal(f.auth.status().status, 'cached');
+  const ready = f.auth.tabletAuthorizationStatus();
+  assert.equal(ready.status, 'ready'); assert.match(ready.reference, /^[a-f0-9]{64}$/);
+  assert.deepEqual(ready.account, { label: 'fixture@example.invalid' });
+  assert.equal(JSON.stringify(ready).includes(tabletRefresh), false);
+  assert.equal(f.auth.takeTabletAuthorization('0'.repeat(64), collection), null);
+  assert.throws(() => f.auth.takeTabletAuthorization(ready.reference, '00000000-0000-0000-0000-000000000000'));
+  const credential = f.auth.takeTabletAuthorization(ready.reference, collection);
+  const { expires_at, ...fields } = credential;
+  assert.deepEqual(fields, { credential_version: 1, client_id: CLIENT, client_secret: null,
+    access_token: 'synthetic-access-token', refresh_token: tabletRefresh, scopes: [DRIVE_SCOPE],
+    account_permission_id: 'fixture-account', collection });
+  assert.ok(Number.isSafeInteger(expires_at) && expires_at > Date.now() / 1000 && expires_at < Date.now() / 1000 + 3700);
+  assert.equal(f.auth.takeTabletAuthorization(ready.reference, collection), null);
+  assert.deepEqual(f.auth.tabletAuthorizationStatus(), { status: 'consumed', reference: null, account: null });
+  assert.deepEqual(f.store.grant(), original);
+});
+
+test('tablet authorization requires an existing host grant before opening consent', async t => {
+  const f = await fixture(t);
+  const result = await f.auth.beginTabletAuthorization();
+  assert.equal(result.authorizationUrl, null);
+  assert.equal(f.auth.tabletAuthorizationStatus().status, 'unavailable');
+  assert.deepEqual(f.state.requests, []);
+});
+
+test('tablet exchange refuses duplicate or absent refresh grants and mismatched account, audience or scope', async t => {
+  for (const mismatch of ['duplicate', 'missing', 'account', 'audience', 'scope', 'extra-scope']) {
+    const f = await fixture(t); await f.signIn(); const original = structuredClone(f.store.grant());
+    f.state.signInRefreshToken = mismatch === 'duplicate' ? secret : mismatch === 'missing' ? null : tabletRefresh;
+    if (mismatch === 'account') f.state.account = 'other-user';
+    if (mismatch === 'audience') f.state.audience = 'other-client';
+    if (mismatch === 'scope') f.state.scope = 'openid';
+    if (mismatch === 'extra-scope') f.state.scope = `${DRIVE_SCOPE} openid`;
+    await f.signIn('tablet');
+    assert.equal(f.auth.tabletAuthorizationStatus().status, 'unavailable', mismatch);
+    assert.equal(f.auth.takeTabletAuthorization('0'.repeat(64), collection), null);
+    assert.deepEqual(f.store.grant(), original);
+  }
+});
+
+test('changed protected host records fence tablet exchange and later private take', async t => {
+  for (const when of ['exchange', 'take']) {
+    for (const record of ['client', 'grant']) {
+      const f = await fixture(t); await f.signIn(); f.state.signInRefreshToken = tabletRefresh;
+      const change = () => {
+        if (record === 'client') {
+          const original = f.store.client();
+          f.store.client = () => ({ value: { ...original.value, clientSecret: 'synthetic-new-registration' }, digest: 'changed-client' });
+        } else {
+          const original = f.store.grant(); const changed = structuredClone(original.value);
+          changed.checkedAt++;
+          f.store.save(changed, f.store.client().digest, original.digest);
+        }
+      };
+      if (when === 'exchange') f.state.beforeAbout = change;
+      await f.signIn('tablet');
+      const reference = f.auth.tabletAuthorizationStatus().reference;
+      if (when === 'take') { assert.ok(reference); change(); }
+      assert.equal(f.auth.takeTabletAuthorization(reference, collection), null);
+      assert.equal(f.auth.tabletAuthorizationStatus().status, 'unavailable');
+      assert.equal(f.store.grant().value.tokens.refresh_token, secret);
+    }
+  }
+});
+
+test('authentication ownership changes retire a ready tablet grant', async t => {
+  for (const action of ['cancel', 'check', 'begin', 'disconnect', 'revoke', 'dispose']) {
+    const f = await fixture(t); await f.signIn(); f.state.signInRefreshToken = tabletRefresh;
+    await f.signIn('tablet'); const ready = f.auth.tabletAuthorizationStatus();
+    assert.equal(ready.status, 'ready');
+    await f.auth[action](f.auth.status().authorizationId);
+    assert.equal(f.auth.takeTabletAuthorization(ready.reference, collection), null, action);
+    assert.equal(f.auth.tabletAuthorizationStatus().reference, null);
+  }
+});
+
+test('cancelled tablet exchange cannot restore pending credentials after a late response', async t => {
+  const f = await fixture(t); await f.signIn(); const original = structuredClone(f.store.grant());
+  f.state.signInRefreshToken = tabletRefresh; f.state.gate = deferred();
+  const { callback } = await f.begin('tablet'); callback.searchParams.set('code', 'synthetic-code'); await fetch(callback);
+  for (let i = 0; i < 100 && f.state.tokens < 2; i++) await new Promise(r => setTimeout(r, 5));
+  assert.equal(f.state.tokens, 2); f.auth.cancel(); f.state.gate.resolve();
+  await new Promise(r => setTimeout(r, 30));
+  assert.deepEqual(f.auth.tabletAuthorizationStatus(), { status: 'cancelled', reference: null, account: null });
+  assert.deepEqual(f.store.grant(), original);
+});
+
+test('ready tablet grant expires without changing the saved host credentials', async t => {
+  const f = await fixture(t); await f.signIn(); const original = structuredClone(f.store.grant());
+  f.state.signInRefreshToken = tabletRefresh; f.auth.ttlMs = 200;
+  await f.signIn('tablet'); const ready = f.auth.tabletAuthorizationStatus(); assert.equal(ready.status, 'ready');
+  await new Promise(r => setTimeout(r, 250));
+  assert.equal(f.auth.tabletAuthorizationStatus().status, 'expired');
+  assert.equal(f.auth.takeTabletAuthorization(ready.reference, collection), null);
+  assert.deepEqual(f.store.grant(), original);
+});
+
+test('expiry during synchronous protected reads refuses the private handoff', async t => {
+  const f = await fixture(t); await f.signIn();
+  let now = Date.now(); const started = now;
+  t.mock.method(Date, 'now', () => now);
+  f.auth.ttlMs = 1000; f.state.signInRefreshToken = tabletRefresh;
+  await f.signIn('tablet'); const ready = f.auth.tabletAuthorizationStatus();
+  assert.equal(ready.status, 'ready');
+  const client = f.store.client.bind(f.store);
+  f.store.client = () => { now += 2; return client(); };
+  now = started + 999;
+  assert.equal(f.auth.takeTabletAuthorization(ready.reference, collection), null);
+  assert.deepEqual(f.auth.tabletAuthorizationStatus(), { status: 'expired', reference: null, account: null });
+});
 function expireGrant(store) {
   const original = store.grant();
   const expired = structuredClone(original.value);
@@ -136,6 +261,24 @@ test('actual provider rotation is saved and the next refresh uses it even when t
   assert.equal((await f.auth.check()).status, 'connected');
   assert.deepEqual(f.state.refreshRequests, [secret, replacement]);
   assert.equal(f.store.grant().value.tokens.refresh_token, replacement);
+});
+test('only a rejected refresh grant asks for a new sign-in and preserves the saved account', async t => {
+  const f = await fixture(t);
+  await f.signIn();
+  const original = expireGrant(f.store);
+  for (const [status, code, detail] of [
+    [400, 'invalid_grant', 'authorization-required'],
+    [503, 'temporarily_unavailable', 'authorization-failed'],
+    [400, 'invalid_client', 'authorization-failed'],
+  ]) {
+    f.state.refreshFailure = {status, code};
+    const result = await f.auth.check();
+    assert.equal(result.status, 'authorization-failed');
+    assert.equal(result.error, detail);
+    assert.equal(result.checkedAt, new Date(original.value.checkedAt).toISOString());
+    assert.equal(f.store.grant().digest, original.digest);
+    assert.equal(JSON.stringify(result).includes('private provider detail'), false);
+  }
 });
 test('a malformed refresh token or a changed account preserves the original grant', async t => {
   for (const [replacement, account] of [[null, 'fixture-account'], ['synthetic-rotation', 'different-account']]) {

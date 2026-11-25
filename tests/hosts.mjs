@@ -176,6 +176,10 @@ async function verifyStyles(page, host) {
     await page.keyboard.press('Tab');
     await verifyFocus(page.locator('.activity-tray > summary'));
   }
+  for (const item of ['overview','setup']) {
+    await page.keyboard.press('Tab');
+    await verifyFocus(page.getByTestId('nav-tablet-' + item));
+  }
   await page.keyboard.press('Tab'); // read tablet state
   await verifyFocus(page.getByRole('button', { name: 'Read tablet state' }));
   assert.equal(await page.getByRole('button', { name: 'Disconnect', exact: true }).isDisabled(), true);

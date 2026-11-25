@@ -5,6 +5,7 @@ import {chromium,_electron as electron,expect} from '@playwright/test';
 import {mkdtemp,mkdir,rm,readFile,writeFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {startHelper} from '../host/browser-helper.mjs';
 import {initializationFixture,tablet,identity} from './fixtures/storage-initialization.mjs';
+import {firstConfigurationFixture} from './fixtures/first-configuration.mjs';
 import {lanes as sixteen} from './fixtures/maintenance-sixteen-lanes.mjs';
 const lanes={...sixteen,localModeChoice:{key:'local_mode_choice',begin:()=>({action:'begin',...identity})},inspectOwnedV3:{key:'owned_data_v3',begin:()=>({...identity})}};
 const routes={storageInitialization:'storage-initialization',localModeChoice:'local-mode-choice',inspectOwnedV3:'owned-data-v3',productSettings:'product-settings',handwritingRecords:'handwriting-records',selectedArchive:'selected-archive',ordinaryRestore:'ordinary-restore',conversationManagement:'conversation-management',sourceCacheCleanup:'source-cache-cleanup',inspectSourceCache:'source-cache-inventory',inspectConversations:'conversation-inventory',modelSettings:'model-settings',basicSettings:'basic-settings',memoryForget:'memory-forget',ordinaryExport:'ordinary-export',researchSettings:'research-settings',memorySettings:'memory-settings',credentialReference:'credential-reference',modelCredential:'model-credential'};
@@ -55,7 +56,41 @@ async function quiescence(page,control){
   assert.deepEqual(await control.snapshot(),before);await poll.release();if(mode==='late-reply'){await expect(page.getByRole('button',{name:'Prepare storage',exact:true})).toBeEnabled();await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));}else {await page.waitForTimeout(80);await expect(page.getByRole('button',{name:'Prepare storage',exact:true})).toHaveCount(0);assert.deepEqual(await control.snapshot(),before);}await poll.cleanup();console.log('Actual storage setup observation quiescence '+mode);
  }
 }
-const f=initializationFixture(),helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer:f.observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){}}}),browser=await chromium.launch();
+async function firstConfigurationUI(page, first) {
+  await readFreshTabletState(page);
+  await page.getByRole('heading', {name: 'Prepare Buddy storage', exact: true}).scrollIntoViewIfNeeded();
+  const review = page.getByRole('button', {name: 'Review first configuration', exact: true});
+  const create = page.getByRole('button', {name: 'Save default configuration', exact: true});
+  const status = page.getByTestId('first-configuration-status');
+  await expect(review).toBeEnabled();
+  await review.click();
+  if (packaged) {
+    await expect(status).toContainText('requires a qualified Buddy installation');
+    await expect(create).toHaveCount(0);
+    assert.deepEqual(await first.selectors(), []);
+    return;
+  }
+  await expect(create).toBeEnabled();
+  assert.deepEqual(await first.selectors(), ['check-initial']);
+  await first.loseOutput();
+  await create.click();
+  await expect(status).toContainText('creation was not confirmed');
+  await showPanel(page,'drive');
+  await expect(page.locator('.activity-tray')).toContainText('First configuration');
+  await showPanel(page,'setup');
+  await expect(status).toContainText('creation was not confirmed');
+  await expect(review).toBeDisabled();
+  await expect(page.getByTestId('first-configuration-original')).toHaveCount(1);
+  await first.restoreOutput();
+  await page.getByRole('button', {name: 'Check current configuration', exact: true}).click();
+  await expect(page.getByTestId('first-configuration-current')).toContainText('A valid saved configuration is present');
+  await expect(page.getByTestId('first-configuration-original')).toHaveCount(1);
+  assert.deepEqual(await first.selectors(), ['check-initial', 'create-initial', 'check-initial']);
+}
+
+const f=initializationFixture(), first=firstConfigurationFixture(f.observer);
+if (packaged) delete f.observer.firstConfigurationAdmission;
+const helper=await startHelper({root:path.resolve(packaged?'dist/manager/browser':'test-results/development/browser'),observer:f.observer,driveAuth:{dispose(){},status:async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false})},downloads:{dispose(){}}}),browser=await chromium.launch();
 try{
  const context=await browser.newContext();await isolate(context,helper.origin);const page=await context.newPage();if(!packaged)await page.clock.install();await page.goto(helper.origin+'/preview/');
  const request=async(name,q)=>{const r=await context.request.post(helper.origin+'/manager-'+routes[name],{headers:{Origin:helper.origin,'Content-Type':'application/json'},data:q});assert.equal(r.status(),200,name);return r.json();};
@@ -69,15 +104,31 @@ try{
  await verifyStorageInitializationReadRace(page,control);
  await ui(page,control,width=>page.locator('section[aria-labelledby="storage-initialization-title"]').screenshot({path:`test-results/storage-initialization-browser-${packaged?'production':'development'}-${width}.png`}));
  await preserveBothUnknowns(request);
- console.log('Actual browser policy/confirm, guarded routes, current inspect, lifecycle, uncertainty and responsive keyboard UI pass; synthetic transport');
+ const rawFirst = (origin, data) => context.request.post(helper.origin+'/manager-first-configuration',
+   {headers: {Origin: origin, 'Content-Type': 'application/json'}, data});
+ assert.equal((await rawFirst('https://invalid.example', {action: 'retained'})).status(), 403);
+ assert.equal((await rawFirst(helper.origin, {action: 'retained', path: '/foreign'})).status(), 400);
+ await firstConfigurationUI(page, {
+   selectors: () => first.state.calls.map(call => call.request.selector),
+   loseOutput: () => { first.state.lost = true; },
+   restoreOutput: () => { first.state.lost = false; },
+ });
+ console.log('Actual browser policy/confirm, guarded routes, first configuration, current inspect, lifecycle, uncertainty and responsive keyboard UI pass; synthetic transport');
 }finally{f.initialization.gate?.resolve();await browser.close();await helper.close();}
 const folder=await mkdtemp(path.join(os.tmpdir(),'manager-storage-initialization-')),env={...process.env};for(const name of Object.keys(env))if(name.startsWith('MANAGER_'))delete env[name];Object.assign(env,{MANAGER_TEST:'1',MANAGER_TEST_DEFER_LOAD:'1',MANAGER_TEST_PROFILE:folder});
 const app=await electron.launch({executablePath:packaged?path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform==='win32'?'ReMarkableBuddiesManager.exe':'ReMarkableBuddiesManager'}`):undefined,args:[...(packaged?[]:['.']),...(process.platform==='linux'?['--disable-gpu']:[])],env});
 try{
  const page=await app.firstWindow();await page.waitForLoadState('domcontentloaded');await isolate(app.context());
- await app.evaluate(async({app},fixture)=>{const require=process.mainModule.require.bind(process.mainModule),path=require('node:path'),root=app.isPackaged?path.join(process.resourcesPath,'host'):path.join(app.getAppPath(),'host'),{WiredObserver}=require(path.join(root,'observer.mjs')),{DriveAuth}=require(path.join(root,'drive-auth.mjs')),{initializationFixture}=require(path.join(fixture.root,'tests/fixtures/storage-initialization.mjs'));globalThis.storageHarness=initializationFixture();DriveAuth.prototype.status=async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false});WiredObserver.prototype.observe=async function(){globalThis.storageObserver=this;this.lastObservation=structuredClone(fixture.tablet);return {contract_version:1,status:'observed',observation:this.lastObservation};};WiredObserver.prototype.run=async function(...args){return globalThis.storageHarness.observer.run.apply(this,args);};},{root:path.resolve('.'),tablet});
+ await app.evaluate(async({app},fixture)=>{const require=process.mainModule.require.bind(process.mainModule),path=require('node:path'),root=app.isPackaged?path.join(process.resourcesPath,'host'):path.join(app.getAppPath(),'host'),{WiredObserver}=require(path.join(root,'observer.mjs')),{DriveAuth}=require(path.join(root,'drive-auth.mjs')),{initializationFixture}=require(path.join(fixture.root,'tests/fixtures/storage-initialization.mjs'));globalThis.storageHarness=initializationFixture();
+    const {firstConfigurationFixture}=require(path.join(fixture.root,'tests/fixtures/first-configuration.mjs'));
+    const first=globalThis.firstConfigurationHarness=firstConfigurationFixture();
+    WiredObserver.prototype.runFirstConfiguration=first.observer.runFirstConfiguration;
+    if (fixture.injectFirst) WiredObserver.prototype.firstConfigurationAdmission=first.observer.firstConfigurationAdmission;
+    DriveAuth.prototype.status=async()=>({contract_version:1,status:'unconfigured',account:null,checkedAt:null,error:null,authorizationId:null,backupReady:false});WiredObserver.prototype.observe=async function(){globalThis.storageObserver=this;this.lastObservation=structuredClone(fixture.tablet);return {contract_version:1,status:'observed',observation:this.lastObservation};};WiredObserver.prototype.run=async function(...args){return globalThis.storageHarness.observer.run.apply(this,args);};},{root:path.resolve('.'),tablet,injectFirst:!packaged});
  await app.evaluate(async({app,BrowserWindow})=>{await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`);BrowserWindow.getAllWindows()[0].show();});
- for(const code of ['window.managerHost.storageInitialization()','window.managerHost.storageInitialization({}, {})','window.managerHost.storageInitialization({path:"PRIVATE"})'])assert.equal(await page.evaluate(code+'.then(()=>false,()=>true)'),true);
+ for(const code of ['window.managerHost.firstConfiguration()', 'window.managerHost.firstConfiguration({}, {})',
+  'window.managerHost.firstConfiguration({action:"retained",path:"PRIVATE"})', 'window.managerHost.storageInitialization()',
+  'window.managerHost.storageInitialization({}, {})','window.managerHost.storageInitialization({path:"PRIVATE"})'])assert.equal(await page.evaluate(code+'.then(()=>false,()=>true)'),true);
  assert.equal(await app.evaluate(async({ipcMain,BrowserWindow})=>{const h=ipcMain._invokeHandlers.get('manager:storageInitialization'),c=BrowserWindow.getAllWindows()[0].webContents;let refused=0;for(const e of [{},{sender:c,senderFrame:{url:c.getURL()}}])try{await h(e,{});}catch{refused++;}return refused;}),2);
  await readTabletFor(page,'tablet');await disconnectFor(page,'setup');const request=(name,q)=>page.evaluate(({name,q})=>window.managerHost[name](q),{name,q});
  const control={hold:()=>app.evaluate(()=>{let resolve;const promise=new Promise(r=>{resolve=r;});globalThis.storageHarness.initialization.gate={resolve,promise,entered:false};}),entered:()=>expect.poll(()=>app.evaluate(()=>globalThis.storageHarness.initialization.gate?.entered)).toBe(true),snapshot:()=>app.evaluate(()=>({all:globalThis.storageHarness.initialization.all,calls:globalThis.storageHarness.initialization.calls.length,cancels:globalThis.storageObserver.generation})),release:()=>app.evaluate(()=>{const s=globalThis.storageHarness.initialization,g=s.gate;s.gate=null;g.resolve();}),retained:()=>request('storageInitialization',{action:'retained'}),inspectPeer:()=>request('inspectOwnedV3',identity)};
@@ -92,5 +143,17 @@ try{
  });
  await preserveBothUnknowns(request);
  if(packaged){const resources=await app.evaluate(()=>process.resourcesPath);for(const name of ['storage-initialization.mjs','storage-initialization-private.mjs','storage-initialization-protocol.mjs','storage_initialization_transport.py'])assert.deepEqual(await readFile(path.join(resources,'host',name)),await readFile(path.join('host',name)));}
- console.log('Actual Electron one-argument guarded IPC, policy/confirm, uncertainty, current inspect and native responsive UI pass; synthetic transport');
+ await firstConfigurationUI(page, {
+   selectors: () => app.evaluate(() => globalThis.firstConfigurationHarness.state.calls.map(call => call.request.selector)),
+   loseOutput: () => app.evaluate(() => { globalThis.firstConfigurationHarness.state.lost = true; }),
+   restoreOutput: () => app.evaluate(() => { globalThis.firstConfigurationHarness.state.lost = false; }),
+ });
+ assert.equal(await app.evaluate(async({ipcMain,BrowserWindow}) => {
+   const handler = ipcMain._invokeHandlers.get('manager:firstConfiguration');
+   const contents = BrowserWindow.getAllWindows()[0].webContents;
+   try { await handler({sender: contents, senderFrame: {url: contents.getURL()}}, {action: 'retained'}); }
+   catch { return true; }
+   return false;
+ }), true);
+ console.log('Actual Electron one-argument guarded IPC, policy/confirm, first configuration, uncertainty, current inspect and native responsive UI pass; synthetic transport');
 }finally{await app.evaluate(()=>globalThis.storageHarness.initialization.gate?.resolve()).catch(()=>{});await app.close();await rm(folder,{recursive:true,force:true});}
