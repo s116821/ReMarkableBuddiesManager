@@ -11,25 +11,30 @@ import { parseRuntimeIdentity } from './runtime-identity.mjs';
 import { parseOwnedReport } from './owned-report.mjs';
 import { parsePersonalizationRequest, parsePersonalizationResult } from './personalization.mjs';
 import { fileURLToPath } from 'node:url';
+import { performance } from 'node:perf_hooks';
 
 import { result, validateResult } from './observation-protocol.mjs';
 export { statuses, result, validateResult } from './observation-protocol.mjs';
+const CAPACITIES_READY = Buffer.from('capacities-oauth-ready-v1\n');
 
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
+  #stage = null;
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
-    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs = 13000, firstConfigurationRegistry } = {}) {
+    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform,
+    timeoutMs = 13000, provisioningTimeoutMs = 45000, firstConfigurationRegistry } = {}) {
     this.config = config; this.python = python; this.script = script; this.platform = platform;
-    this.firstConfigurationRegistry = firstConfigurationRegistry;
-    this.firstConfigurationChild = null;
     this.active = null; this.generation = 0; this.timeoutMs = timeoutMs;
+    this.provisioningTimeoutMs = provisioningTimeoutMs;
+    this.firstConfigurationRegistry = firstConfigurationRegistry;
   }
   cancel() {
     this.generation++;
-    if (this.firstConfigurationChild) this.firstConfigurationChild.stop();
+    if (this.#stage) this.#stage.stop();
     else this.active?.kill('SIGKILL');
     return result('cancelled');
   }
+
   firstConfigurationAdmission(sample) {
     return this.firstConfigurationRegistry?.(sample) ?? null;
   }
@@ -57,7 +62,12 @@ export class WiredObserver {
     finally { raw.fill(0); }
   }
 
-  async #runJoinedChild(script, request, {signal, current, remainingMs}) {
+  runIsolatedStage(request, ownership, writeBody) {
+    return this.#runJoinedChild('isolated_stage_transport.py', request, ownership, writeBody);
+  }
+
+  // A joined operation keeps the observer slot until the captured child closes.
+  async #runJoinedChild(script, request, {signal, current, remainingMs}, writeBody) {
     const refusal = dispatch => ({dispatch, stdout: null, wrote: false});
     const allowance = Math.min(this.timeoutMs, 12000, remainingMs());
     if (this.active || !current() || signal.aborted || allowance < 1 ||
@@ -67,7 +77,7 @@ export class WiredObserver {
     const generation = ++this.generation;
     const remaining = () => Math.floor(Math.min(remainingMs(), deadline - performance.now()));
     const writer = new AbortController();
-    const ready = Promise.withResolvers();
+    const ready = Promise.withResolvers(), joined = Promise.withResolvers();
     const readiness = Buffer.from('READY\n');
     const chunks = [];
     let child, launched = false, stopped = false, wrote = false, size = 0;
@@ -86,7 +96,9 @@ export class WiredObserver {
       child.kill('SIGKILL');
     };
     this.active = child;
-    const active = this.firstConfigurationChild = {stop};
+    const stage = this.#stage = {script, stop, joined: joined.promise};
+    const firstSave = script === 'first_configuration_transport.py';
+    const stdoutLimit = firstSave ? 8192 : 24576;
     const timer = setTimeout(stop, allowance);
     const closed = new Promise(resolve => child.once('close', resolve));
     child.once('spawn', () => { launched = true; });
@@ -97,7 +109,7 @@ export class WiredObserver {
     let prefix = Buffer.alloc(0), diagnostics = 0;
     child.stdout.on('data', chunk => {
       size += chunk.length;
-      if (stopped || size > 8192 + readiness.length) { chunk.fill(0); stop(); return; }
+      if (stopped || size > stdoutLimit + readiness.length) { chunk.fill(0); stop(); return; }
       chunks.push(chunk);
       if (prefix.length === readiness.length) return;
       prefix = Buffer.concat([prefix, chunk.subarray(0, readiness.length - prefix.length)]);
@@ -111,13 +123,13 @@ export class WiredObserver {
     });
     const requireLive = () => {
       writer.signal.throwIfAborted();
-      if (generation !== this.generation || !current() || remaining() < 1) throw Error('First configuration expired');
+      if (generation !== this.generation || !current() || remaining() < 1) throw Error('Isolated stage expired');
     };
     const write = chunk => {
       requireLive();
       // Hold the only outstanding write until Node hands it to the OS pipe.
       return new Promise((resolve, reject) => {
-        const aborted = () => finish(Error('First configuration writer stopped'));
+        const aborted = () => finish(Error('Isolated stage writer stopped'));
         const finish = error => {
           writer.signal.removeEventListener('abort', aborted);
           if (error) reject(error);
@@ -132,8 +144,9 @@ export class WiredObserver {
       try {
         requireLive();
         const control = Buffer.from(JSON.stringify({...request, budget_ms: remaining()}) + '\n');
-        if (control.length > 512) throw Error('First configuration control exceeds bound');
+        if (control.length > 24576) throw Error('Isolated stage control exceeds bound');
         await write(control);
+        if (writeBody) await writeBody(write, writer.signal, remaining);
         requireLive();
         child.stdin.end();
         wrote = true;
@@ -158,11 +171,12 @@ export class WiredObserver {
       signal.removeEventListener('abort', stop);
       for (const chunk of chunks) chunk.fill(0);
       if (this.active === child) this.active = null;
-      if (this.firstConfigurationChild === active) this.firstConfigurationChild = null;
+      if (this.#stage === stage) this.#stage = null;
+      joined.resolve();
     }
   }
   async observe() {
-    if (this.firstConfigurationChild) return result('observation-unavailable');
+    if (this.#stage?.script === 'first_configuration_transport.py') return result('observation-unavailable');
     const value = await this.run('observe');
     this.lastObservation = value.status === 'observed' ? value.observation : null;
     return value;
@@ -232,10 +246,134 @@ export class WiredObserver {
     if (!expected || expected.connection_id !== request.connection_id || expected.boot_id !== request.boot_id) return { ...result('observation-unavailable'), saved_mode: { status: 'unavailable', view: null } };
     return this.run('saved-mode', request);
   }
+  async runCapacities(request, { signal, deadline } = {}) {
+    const disconnect = request?.selector === 'disconnect';
+    const mutation = disconnect || request?.selector === 'exchange';
+    const dispositionField = disconnect ? 'operation_disposition' : 'secret_disposition';
+    const refusal = (status, unstarted = false) => ({...result(status), capacities_oauth: null, executable_sha256: null,
+      [dispositionField]: mutation ? (unstarted ? 'not-sent' : 'possibly-sent') : null});
+    const ceiling = mutation ? 60000 : 12000;
+    if (signal?.aborted) return refusal('cancelled', true);
+    if (this.#stage) return refusal('observation-unavailable', true);
+    if (!['capture', 'capture-connection', 'exchange', 'status', 'grant-status', 'disconnect'].includes(request?.selector) ||
+        !Number.isSafeInteger(request.budget_ms) || request.budget_ms < 1 ||
+        request.budget_ms > ceiling) return refusal('observation-unavailable', true);
+    if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host', true);
+    if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured', true);
+    const stop = Math.min(deadline - (mutation ? 1000 : 0), performance.now() + request.budget_ms + 1000);
+    if (!Number.isFinite(stop) || stop <= performance.now()) return refusal('timeout', true);
+    this.cancel();
+    const generation = this.generation;
+    const script = path.join(path.dirname(this.script), 'capacities_oauth_transport.py');
+    let child;
+    try {
+      child = spawn(this.python, [script], { stdio: ['pipe', 'pipe', 'ignore'],
+        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
+    } catch {
+      return refusal('observation-unavailable', true);
+    }
+    this.active = child;
+    return new Promise(resolve => {
+      const chunks = [];
+      let size = 0;
+      let expired = false;
+      let oversized = false;
+      let readySize = 0;
+      let ready = false;
+      let body;
+      const abort = () => {
+        if (this.active === child && this.generation === generation) this.cancel();
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      const timer = setTimeout(() => {
+        expired = true;
+        if (this.active === child && this.generation === generation) child.kill('SIGKILL');
+      }, Math.max(1, stop - performance.now()));
+      child.stdout.on('data', chunk => {
+        if (!ready) {
+          if (readySize + chunk.length > CAPACITIES_READY.length ||
+              !chunk.equals(CAPACITIES_READY.subarray(readySize, readySize + chunk.length))) {
+            child.kill('SIGKILL');
+            return;
+          }
+          readySize += chunk.length;
+          if (readySize !== CAPACITIES_READY.length) return;
+          if (signal?.aborted || this.generation !== generation) {
+            abort();
+            return;
+          }
+          const budget_ms = Math.min(request.budget_ms, Math.floor(stop - performance.now()) - 1000);
+          if (budget_ms < (mutation ? 34000 : 1)) {
+            expired = true;
+            child.kill('SIGKILL');
+            return;
+          }
+          body = Buffer.from(JSON.stringify({...request, budget_ms}), 'utf8');
+          if (body.length > 32768) {
+            oversized = true;
+            child.kill('SIGKILL');
+            return;
+          }
+          ready = true;
+          child.stdin.end(body, () => body.fill(0));
+          return;
+        }
+        size += chunk.length;
+        if (size > 8192) {
+          oversized = true;
+          chunk.fill(0);
+          child.kill('SIGKILL');
+        } else {
+          chunks.push(chunk);
+        }
+      });
+      child.stdin.on('error', () => {});
+      child.on('error', () => {});
+      child.once('close', code => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+        if (this.active === child) this.active = null;
+        let raw;
+        try {
+          if (generation !== this.generation || signal?.aborted) return resolve(refusal('cancelled'));
+          if (expired) return resolve(refusal('timeout'));
+          if (code !== 0 || oversized || !ready) return resolve(refusal('observation-unavailable'));
+          raw = Buffer.concat(chunks);
+          if (raw[raw.length - 1] !== 10 || raw.indexOf(10) !== raw.length - 1) throw Error('Private response refused');
+          const value = strictJson(raw);
+          if (Object.keys(value).sort().join() !== `capacities_oauth,contract_version,executable_sha256,observation,${dispositionField},status`) throw Error('Private response refused');
+          validateResult({contract_version: value.contract_version, status: value.status, observation: value.observation});
+          const disposition = value[dispositionField];
+          if (mutation ? disposition !== 'possibly-sent' && (disposition !== 'not-sent' || value.status === 'observed')
+              : disposition !== null) throw Error('Private dispatch identity refused');
+          const captured = ['capture', 'capture-connection'].includes(request.selector) && value.capacities_oauth?.status === 'captured';
+          if (captured ? typeof value.executable_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.executable_sha256)
+              : value.executable_sha256 !== null) throw Error('Private executable identity refused');
+          if (value.status === 'observed') {
+            if (value.observation.connection_id !== request.binding.connection_id ||
+                value.observation.boot_id !== request.binding.boot_id || !value.capacities_oauth) throw Error('Private identity refused');
+          } else if (value.capacities_oauth !== null) throw Error('Private response refused');
+          return resolve(value);
+        } catch {
+          return resolve(refusal('observation-unavailable'));
+        } finally {
+          raw?.fill(0);
+          for (const chunk of chunks) chunk.fill(0);
+          body?.fill(0);
+        }
+      });
+      if (signal?.aborted) {
+        abort();
+      }
+    });
+  }
   async run(action, request) {
-    const firstConfigurationBusy = this.firstConfigurationChild !== null;
+    const stage = this.#stage;
+    const firstConfigurationBusy = stage?.script === 'first_configuration_transport.py';
     if (!firstConfigurationBusy) this.cancel();
-    const portable=action==='portable-configuration';
+    const generation = this.generation;
+    const sharedPreferences=action==='shared-preferences';
+    const portable=action==='portable-configuration'||sharedPreferences;
     const research=action==='research-settings';
     const management=action==='conversation-management';
     const restore=action==='ordinary-restore';
@@ -253,6 +391,7 @@ export class WiredObserver {
     const archive=action==='ordinary-export';
     const model = action === 'model-settings';
     const localMode = action === 'local-mode-choice';
+    const provisioning = localMode && request?.selector === 'provision-isolated-backup';
     const product = action === 'product-settings';
     const basic = action === 'basic-settings';
     const configuration = action === 'saved-configuration';
@@ -260,19 +399,24 @@ export class WiredObserver {
     let launched = false;
     const refusal = status => cachePrivate ? {...result(status),[portable?'portable_configuration_raw':storageInitialization?'storage_initialization_raw':ownedV3?'owned_data_v3_raw':handwriting?'handwriting_raw':(selected||notebook)?'archive_raw':restore?'ordinary_restore_raw':management?'conversation_management_raw':conversation?'conversation_inventory_raw':cacheCleanup?'source_cache_cleanup_raw':'source_cache_inventory_raw']:{status:'unavailable',stdout_base64:null}} : modelCredential ? {...result(status),model_credential_raw:{status:'unavailable',stdout_base64:null}} : credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : localMode ? {...result(status),local_mode_raw:{status:'unavailable',stdout_base64:null}} : product ? {...result(status),product_settings_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
     if (firstConfigurationBusy) return refusal('observation-unavailable');
-    if((localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>12000))return refusal('observation-unavailable');
+    const budgeted = localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate;
+    const maxBudget = provisioning ? 45000 : 12000;
+    if(budgeted&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>maxBudget))return refusal('observation-unavailable');
+    const observerTimeout = provisioning ? this.provisioningTimeoutMs : this.timeoutMs;
+    const waitMs = budgeted ? Math.min(observerTimeout, request.budget_ms) : observerTimeout;
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
-    const generation = this.generation;
+    if (stage) await stage.joined;
+    if (generation !== this.generation) return refusal('cancelled');
     return new Promise(resolve => {
-      const script = cachePrivate ? path.join(path.dirname(this.script),portable?'portable_configuration_transport.py':storageInitialization?'storage_initialization_transport.py':ownedV3?'owned_data_v3_transport.py':handwriting?'handwriting_records_transport.py':notebook?'notebook_archive_transport.py':selected?'selected_archive_transport.py':restore?'ordinary_restore_transport.py':management?'conversation_management_transport.py':conversation?'conversation_inventory_transport.py':cacheCleanup?'source_cache_cleanup_transport.py':'source_cache_inventory_transport.py') : modelCredential ? path.join(path.dirname(this.script),'model_credential_transport.py') : credential ? path.join(path.dirname(this.script),'credential_reference_transport.py') : memorySettings ? path.join(path.dirname(this.script),'memory_settings_transport.py') : research ? path.join(path.dirname(this.script),'research_settings_transport.py') : archive ? path.join(path.dirname(this.script), 'ordinary_export_transport.py') : model ? path.join(path.dirname(this.script), 'model_settings_transport.py') : localMode ? path.join(path.dirname(this.script), 'local_mode_choice_transport.py') : product ? path.join(path.dirname(this.script), 'product_settings_transport.py') : basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
+      const script = cachePrivate ? path.join(path.dirname(this.script),portable?(sharedPreferences?'shared_preferences_transport.py':'portable_configuration_transport.py'):storageInitialization?'storage_initialization_transport.py':ownedV3?'owned_data_v3_transport.py':handwriting?'handwriting_records_transport.py':notebook?'notebook_archive_transport.py':selected?'selected_archive_transport.py':restore?'ordinary_restore_transport.py':management?'conversation_management_transport.py':conversation?'conversation_inventory_transport.py':cacheCleanup?'source_cache_cleanup_transport.py':'source_cache_inventory_transport.py') : modelCredential ? path.join(path.dirname(this.script),'model_credential_transport.py') : credential ? path.join(path.dirname(this.script),'credential_reference_transport.py') : memorySettings ? path.join(path.dirname(this.script),'memory_settings_transport.py') : research ? path.join(path.dirname(this.script),'research_settings_transport.py') : archive ? path.join(path.dirname(this.script), 'ordinary_export_transport.py') : model ? path.join(path.dirname(this.script), 'model_settings_transport.py') : localMode ? path.join(path.dirname(this.script), 'local_mode_choice_transport.py') : product ? path.join(path.dirname(this.script), 'product_settings_transport.py') : basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
       const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
       this.active = child;
       child.once('spawn', () => { launched = true; });
       if (personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
-      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
+      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, waitMs);
       child.stdout.on('data', data => {
         if((modelCredential||cachePrivate||localMode)&&(oversized||expired||generation!==this.generation||outputBytes+data.length>(portable?196608:storageInitialization?24576:ownedV3?49152:handwriting?360448:management?49152:(restore||selected||notebook)?24576:cachePrivate&&!cacheCleanup?16384:24576))){data.fill(0);oversized=true;child.kill('SIGKILL');return;}
         chunks.push(data); outputBytes += data.length;
@@ -296,6 +440,15 @@ export class WiredObserver {
             if(Object.keys(value).sort().join()!==wanted)throw Error('Private response refused');
             validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});
             const q=value[rawKey];if(!q||Object.keys(q).sort().join()!=='status,stdout_base64'||!['reported','unsupported','unavailable'].includes(q.status)||(q.status==='reported'?value.status!=='observed'||typeof q.stdout_base64!=='string':q.stdout_base64!==null))throw Error('Private response refused');
+            if (provisioning && q.status === 'reported') {
+              const encoded = q.stdout_base64;
+              if (encoded.length > Math.ceil(16384 / 3) * 4) throw Error('Private response refused');
+              const report = Buffer.from(encoded, 'base64');
+              try {
+                if (!report.length || report.length > 16384 || report.toString('base64') !== encoded ||
+                    report.at(-1) !== 10 || report.indexOf(10) !== report.length - 1) throw Error('Private response refused');
+              } finally { report.fill(0); }
+            }
             if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Private identity refused');
             return resolve(value);
           }

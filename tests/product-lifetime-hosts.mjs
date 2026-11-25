@@ -12,7 +12,7 @@ const packaged=process.argv.includes('--packaged');await mkdir('test-results',{r
 async function isolate(context,origin){await context.route('**/*',route=>{const u=route.request().url();if(u.startsWith('https://api.github.com/repos/s116821/'))return route.fulfill({status:404,headers:{'Access-Control-Allow-Origin':'*'},body:'{}'});if(u.startsWith('file:')||(origin&&new URL(u).origin===origin))return route.continue();return route.abort();});}
 async function verify(page){
  await showPanel(page,'product');
- const panel=page.locator('section[aria-labelledby="product-settings-title"]'),begin=panel.getByRole('button',{name:'Edit Reader & Writer',exact:true}),status=panel.getByRole('status');
+ const panel=page.locator('section[aria-labelledby="product-settings-title"]'),begin=panel.getByRole('button',{name:'Edit Reader & Writer',exact:true}),status=panel.getByTestId('product-settings-status');
  const prepare=async()=>{await readTabletFor(page,'product');await begin.click();await expect(status).toContainText('ready to edit');await page.locator('#product-reader_enabled').selectOption('false');};
  await prepare();await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));await expect(panel.locator('select')).toHaveCount(0);await expect(panel.getByRole('button',{name:'Save Reader & Writer',exact:true})).toBeDisabled();
  await prepare();await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));delete document.visibilityState;});await expect(panel.locator('select')).toHaveCount(0);

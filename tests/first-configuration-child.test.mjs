@@ -50,6 +50,12 @@ test('first configuration consumes only closed joined child frames and stops the
   const original = observer.active;
   assert.ok(original);
   await once(original, 'spawn');
+  const overlapping = await observer.runCapacities({
+    selector: 'exchange', budget_ms: 60000, binding: target(),
+  }, {deadline: performance.now() + 60000});
+  assert.equal(overlapping.secret_disposition, 'not-sent');
+  assert.equal(observer.active, original);
+  assert.equal(original.killed, false);
   cancel.abort();
   assert.equal((await running).report, null);
   assert.equal(observer.active, null);

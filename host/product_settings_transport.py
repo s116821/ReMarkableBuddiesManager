@@ -7,10 +7,10 @@ import sys
 import threading
 import time
 import wired_observer as shared
+from personalization_transport import COMMAND_PREFIX, select_executable
 
 MAX_REQUEST = 24576
 MAX_RESPONSE = 16384
-PREFIX = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json /opt/bin/reader-buddy --product-settings-operation '
 SELECTORS = {'inspect', 'prepare', 'apply', 'status'}
 
 
@@ -43,7 +43,7 @@ def uuid(value):
 
 
 def field_value(name, value):
-    return isinstance(value, str) and value in ('mem', 'disabled') if name == 'export_destination' else isinstance(value, bool)
+    return isinstance(value, str) and value in ('mem', 'capacities', 'disabled') if name == 'export_destination' else isinstance(value, bool)
 
 
 def changes(value):
@@ -147,12 +147,16 @@ def execute(transport, v, deadline=None):
     remaining()
     if before['boot_id'] != v['boot_id']:
         raise shared.Refusal('cable-lost')
+    executable = select_executable(transport, before['service']['LoadState'], deadline=deadline)
     channel = transport.open_session(timeout=min(2, remaining()))
     try:
         channel.settimeout(min(2, remaining()))
         remaining()
-        channel.exec_command(PREFIX + v['selector'] + ('' if v['selector'] == 'inspect' else ' --product-settings-input -'))
-        if v['selector'] != 'inspect':
+        selector = v['selector']
+        input_option = '' if selector == 'inspect' else ' --product-settings-input -'
+        channel.exec_command(f'{COMMAND_PREFIX} {executable} --product-settings-operation {selector}{input_option}')
+        if selector != 'inspect':
+            channel.settimeout(min(2, remaining()))
             channel.sendall(base64.b64decode(v['input_base64'], validate=True))
         try:
             channel.shutdown_write()

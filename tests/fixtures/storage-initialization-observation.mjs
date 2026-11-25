@@ -12,7 +12,7 @@ export async function readFreshTabletState(page){
  const task=await page.locator('#archive-task').count()?await page.locator('#archive-task').inputValue():null;
  const family=await page.locator('#archive-family').count()?await page.locator('#archive-family').inputValue():null;
  await showPanel(page,'tablet');const previous=await stamp(page).allTextContents();await read(page).click();await waitForFreshObservation(page,previous);await page.getByTestId('tablet-model').waitFor();
- if(location?.destination && location.destination!=='tablet'){await page.getByTestId('nav-'+location.destination).click();if(location.item)await page.getByTestId('nav-'+location.destination+'-'+location.item).click();}
+ if(location?.destination){if(location.destination!=='tablet')await page.getByTestId('nav-'+location.destination).click();if(location.item)await page.getByTestId('nav-'+location.destination+'-'+location.item).click();}
  if(storage)await page.locator('#storage-task').selectOption(storage);if(task)await page.locator('#archive-task').selectOption(task);if(family)await page.locator('#archive-family').selectOption(family);
 }
 export async function verifyStorageInitializationReadRace(page,control){

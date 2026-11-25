@@ -16,8 +16,8 @@ rmSync('out/host', { recursive: true, force: true });
 cpSync('host', 'out/host', { recursive: true, filter: file => !file.includes('__pycache__') && !file.endsWith('.pyc') });
 // Bundle the pinned maintained OAuth client into the Node host runtime, never the renderer.
 // Built-in imports stay external; matching dependency LICENSE/NOTICE files accompany it.
-const bundled = await build({ entryPoints: ['host/drive-auth.mjs'], bundle: true, platform: 'node', format: 'esm', target: 'node22',
-  outfile: 'out/host/drive-auth.mjs', legalComments: 'eof', metafile: true,
+const bundled = await build({ entryPoints: ['host/drive-auth.mjs', 'host/capacities-consent.mjs'], bundle: true, platform: 'node', format: 'esm', target: 'node22',
+  outdir: 'out/host', outExtension: {'.js': '.mjs'}, legalComments: 'eof', metafile: true,
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" } });
 const modules = new Map();
 for (const file of Object.keys(bundled.metafile.inputs)) {

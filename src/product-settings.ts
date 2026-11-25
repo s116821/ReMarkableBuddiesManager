@@ -70,6 +70,6 @@ export function productRows(fields:ProductFields|null,draft:Record<ProductKey,st
  return [
   {key:'reader_enabled' as const,label:'Reader enabled',options:[['','Default (enabled)'],['false','Disabled'],['true','Enabled']]},
   {key:'writer_enabled' as const,label:'Writer enabled',options:[['','Default (enabled)'],['false','Disabled'],['true','Enabled']]},
-  {key:'export_destination' as const,label:'Export backend',options:[['','Default (Mem)'],['mem','Mem'],['disabled','Disabled']]},
+  {key:'export_destination' as const,label:'Export backend',options:[['','Default (Mem)'],['mem','Mem'],['capacities','Capacities'],['disabled','Disabled']]},
  ].map(row=>({...row,origin:fields[row.key].origin,originLabel:fields[row.key].origin==='default'?'Default':'Saved value',value:draft[row.key]}));
 }

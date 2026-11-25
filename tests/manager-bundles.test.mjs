@@ -14,28 +14,30 @@ import { MANAGER_PACKAGE_NAMES, quarantineManagerRelease } from '../host/quarant
 const REPO = 's116821/ReMarkableBuddiesManager'; const API = `https://api.github.com/repos/${REPO}`;
 const TAG = 'v0.3.1'; const SHA = 'c'.repeat(40); const ANNOTATION = 'd'.repeat(40);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-const probe = spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-I', '-S', '-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' });
+const interpreter = process.env.MANAGER_DOWNLOAD_PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
+const probe = spawnSync(interpreter, ['-I', '-S', '-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' });
 assert.equal(probe.status, 0, 'qualified fixture Python is available');
 const PYTHON = probe.stdout.trim();
 const FIXTURE = fileURLToPath(new URL('./fixtures/manager-bundle-input.py', import.meta.url));
+const VERIFIER = fileURLToPath(new URL('../scripts/verify-manager-bundle.py', import.meta.url));
 
-async function setup(t, mode = 'valid', mutate = () => {}) {
+async function setup(t, mode = 'valid', mutate = () => {}, tag = TAG) {
   const parent = await realpath(await mkdtemp(join(tmpdir(), 'manager-bundles-')));
   t.after(() => rm(parent, { recursive: true, force: true }));
   const generated = join(parent, 'input'); const directory = join(parent, 'quarantine');
-  const built = spawnSync(PYTHON, ['-I', '-S', '-B', FIXTURE, generated, TAG, SHA, mode], { encoding: 'utf8' });
+  const built = spawnSync(PYTHON, ['-I', '-S', '-B', FIXTURE, generated, tag, SHA, mode], { encoding: 'utf8' });
   assert.equal(built.status, 0, built.stderr);
   const data = Object.fromEntries(await Promise.all([...MANAGER_PACKAGE_NAMES, 'provenance.json'].map(async name => [name, await readFile(join(generated, name))])));
   const manifest = JSON.parse(data['provenance.json']); const record = { ...manifest, provenance_sha256: hash(data['provenance.json']) };
-  const assets = Object.entries(data).map(([name, bytes], i) => ({ id: i + 1, name, size: bytes.length, state: 'uploaded', digest: 'sha256:' + hash(bytes), url: `${API}/releases/assets/${i + 1}`, browser_download_url: `https://github.com/${REPO}/releases/download/${TAG}/${name}` }));
-  const release = { id: 456, tag_name: TAG, draft: false, prerelease: false, published_at: '2026-10-13T00:00:00Z', html_url: `https://github.com/${REPO}/releases/tag/${TAG}`, assets, body: `<!-- manager-complete:${JSON.stringify(record)} -->` };
+  const assets = Object.entries(data).map(([name, bytes], i) => ({ id: i + 1, name, size: bytes.length, state: 'uploaded', digest: 'sha256:' + hash(bytes), url: `${API}/releases/assets/${i + 1}`, browser_download_url: `https://github.com/${REPO}/releases/download/${tag}/${name}` }));
+  const release = { id: 456, tag_name: tag, draft: false, prerelease: false, published_at: '2026-10-13T00:00:00Z', html_url: `https://github.com/${REPO}/releases/tag/${tag}`, assets, body: `<!-- manager-complete:${JSON.stringify(record)} -->` };
   const state = { data, release, assets, record, directory, parent, generated, requests: [] };
   mutate(state);
   const server = createServer((req, res) => {
     state.requests.push(req.url);
-    if (req.url === `/git/ref/tags/${TAG}`) res.end(JSON.stringify({ ref: `refs/tags/${TAG}`, object: { type: 'tag', sha: ANNOTATION } }));
-    else if (req.url === `/git/tags/${ANNOTATION}`) res.end(JSON.stringify({ sha: ANNOTATION, tag: TAG, object: { type: 'commit', sha: SHA } }));
-    else if (req.url === `/releases/tags/${TAG}`) res.end(JSON.stringify(release));
+    if (req.url === `/git/ref/tags/${tag}`) res.end(JSON.stringify({ ref: `refs/tags/${tag}`, object: { type: 'tag', sha: ANNOTATION } }));
+    else if (req.url === `/git/tags/${ANNOTATION}`) res.end(JSON.stringify({ sha: ANNOTATION, tag, object: { type: 'commit', sha: SHA } }));
+    else if (req.url === `/releases/tags/${tag}`) res.end(JSON.stringify(release));
     else {
       const asset = assets.find(a => req.url === `/releases/assets/${a.id}`);
       if (!asset) { res.writeHead(404); res.end(); } else res.end(data[asset.name]);
@@ -47,7 +49,7 @@ async function setup(t, mode = 'valid', mutate = () => {}) {
     assert.ok(url.startsWith(API + '/')); assert.equal(options.credentials, 'omit'); assert.equal(options.redirect, 'manual');
     return fetch(`http://127.0.0.1:${server.address().port}` + url.slice(API.length), options);
   };
-  return { ...state, run: extra => quarantineManagerRelease({ tag: TAG, directory, python: PYTHON, fetcher, ...extra }) };
+  return { ...state, run: extra => quarantineManagerRelease({ tag, directory, python: PYTHON, fetcher, ...extra }) };
 }
 
 test('actual Manager ZIP bytes and embedded identity verify without extraction or update eligibility', async t => {
@@ -77,6 +79,73 @@ for (const mode of ['wrong-version', 'wrong-source', 'official-number', 'unknown
     assert.ok(!JSON.stringify(result).includes(h.parent));
   });
 }
+
+test('oracle readback keeps legacy bundles and accepts an internally consistent future Buddy pin', async t => {
+  for (const [tag, mode] of [
+    ['v0.99.10', 'legacy-with-pin'], ['v0.99.10', 'oracle-valid'], ['v1.0.0', 'oracle-valid'], ['v1.10.0', 'oracle-valid'],
+  ]) {
+    const h = await setup(t, mode, undefined, tag);
+    const result = await h.run();
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.receipt.updateEligible, false);
+    assert.equal(result.receipt.archivesExtracted, false);
+    assert.deepEqual((await readdir(h.directory)).sort(), [...Object.keys(h.data), 'quarantine-receipt.json'].sort());
+  }
+  const missing = await setup(t, 'legacy-with-pin', undefined, 'v1.0.0');
+  assert.equal((await missing.run()).code, 'verifier-refused');
+});
+
+for (const mode of [
+  'oracle-browser', 'oracle-one-platform', 'oracle-partial', 'oracle-missing-pin',
+  'oracle-extra', 'oracle-alias', 'oracle-ancestor', 'oracle-short-alias', 'oracle-pin-alias',
+  'oracle-mode', 'oracle-wrong-name', 'oracle-platform-pin', 'oracle-local-pin', 'oracle-target',
+  'oracle-duplicate-json', 'oracle-oversized-json', 'oracle-version', 'oracle-boolean-size',
+  'oracle-size', 'oracle-digest', 'oracle-crc',
+]) {
+  test('bounded readback refuses ' + mode + ' with valid outer digests', async t => {
+    const h = await setup(t, mode);
+    const result = await h.run();
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'verifier-refused');
+    await assert.rejects(readFile(join(h.directory, 'quarantine-receipt.json')), { code: 'ENOENT' });
+  });
+}
+
+test('strict candidate readback requires its exact pin and original retained provenance', async t => {
+  const candidate = await setup(t, 'oracle-valid');
+  const legacy = await setup(t, 'valid');
+  for (const h of [candidate, legacy]) {
+    await mkdir(h.directory);
+    for (const [name, bytes] of Object.entries(h.data)) await writeFile(join(h.directory, name), bytes);
+  }
+  const program = [
+    'import hashlib, json, pathlib, runpy, sys, zipfile',
+    'inspect = runpy.run_path(sys.argv[1])["inspect_bundle"]',
+    'directory, tag, sha, mode = sys.argv[2:]',
+    'names = ("manager-win32-x64.zip", "manager-linux-x64.zip")',
+    'pin_path = "resources/host/buddy-oracle-source.json"',
+    'metadata_path = "resources/host/buddy-oracle/provenance.json"',
+    'with zipfile.ZipFile(pathlib.Path(directory, names[0])) as archive:',
+    '    pin = json.loads(archive.read(pin_path)) if mode != "absent" else None',
+    'digests = {}',
+    'for name in names:',
+    '    with zipfile.ZipFile(pathlib.Path(directory, name)) as archive:',
+    '        digests[name] = hashlib.sha256(archive.read(metadata_path)).hexdigest() if mode != "absent" else "a" * 64',
+    'if mode == "different-pin": pin["sourceSha"] = "9" * 40',
+    'if mode == "different-retained": digests[names[0]] = "a" * 64',
+    'try: result = inspect(directory, tag, sha, expected_source=pin, retained_provenance_sha256=digests)',
+    'except ValueError as error:',
+    '    if str(error) != "bundle-refused": raise',
+    '    sys.exit(1)',
+    'assert result["sha"] == sha',
+  ].join('\n');
+  for (const [dir, mode, status] of [[candidate.directory, 'exact', 0], [candidate.directory, 'different-pin', 1],
+    [candidate.directory, 'different-retained', 1], [legacy.directory, 'absent', 1]]) {
+    const result = spawnSync(PYTHON, ['-I', '-S', '-B', '-c', program, VERIFIER, dir, TAG, SHA, mode], { encoding: 'utf8' });
+    assert.equal(result.status, status, mode + ': ' + result.stderr);
+    assert.equal(result.stderr, '');
+  }
+});
 
 test('Manager cannot consume Buddy release repository or completion marker', async t => {
   for (const change of [s => { s.release.html_url = `https://github.com/s116821/ReMarkableBuddies/releases/tag/${TAG}`; }, s => { s.release.body = s.release.body.replace('manager-complete', 'reader-buddy-complete'); }]) {

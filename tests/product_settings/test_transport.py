@@ -19,6 +19,7 @@ root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / 'host'))
 sys.path.insert(0, str(root / 'tests/wired'))
 import product_settings_transport as q
+import personalization_transport as launcher
 import wired_observer as o
 
 
@@ -36,11 +37,13 @@ for selector, case in CASES.items():
     body = None if selector == 'inspect' else {'product_settings_version': 1, 'operation': ref['operation'], 'base_sha256': ref['base_sha256'], 'config_path_sha256': ref['config_path_sha256'], 'changes': ref['intent']['changes']} if selector == 'prepare' else {'intent': ref['intent']}
     case['stdin_base64'] = None if body is None else base64.b64encode(json.dumps(body).encode()).decode()
 REPORT = CASES['inspect']['stdout_utf8'].encode()
+OBSERVATION = {'boot_id': BOOT, 'service': {'LoadState': 'loaded'}}
 REQUEST = {'connection_id': IDENTITY, 'boot_id': BOOT, 'selector': 'inspect', 'input_base64': None, 'budget_ms': 12000}
 
 
-def command(selector):
-    return q.PREFIX + selector + ('' if selector == 'inspect' else ' --product-settings-input -')
+def command(selector, executable=launcher.STANDALONE):
+    option = '' if selector == 'inspect' else ' --product-settings-input -'
+    return f'{q.COMMAND_PREFIX} {executable} --product-settings-operation {selector}{option}'
 
 
 def request_for(selector):
@@ -57,6 +60,21 @@ class Notice:
 
 
 class Transport(unittest.TestCase):
+    def setUp(self):
+        self.launcher = patch.object(q, 'select_executable', return_value=launcher.STANDALONE)
+        self.launcher.start()
+        self.addCleanup(self.launcher.stop)
+    def test_explicit_capacities_prepare_keeps_private_config_out_of_packet(self):
+        value = request_for('prepare')
+        body = json.loads(base64.b64decode(value['input_base64']))
+        body['changes'] = {'export_destination': {'action': 'set', 'value': 'capacities'}}
+        value['input_base64'] = base64.b64encode(json.dumps(body).encode()).decode()
+        self.assertEqual(q.request(json.dumps(value).encode()), value)
+        body['changes']['export_destination']['grant_id'] = BOOT
+        value['input_base64'] = base64.b64encode(json.dumps(body).encode()).decode()
+        with self.assertRaises(ValueError):
+            q.request(json.dumps(value).encode())
+
     def channel(self, raw, code=0):
         channel = Mock()
         channel.recv_ready.side_effect = [True, False, False]
@@ -102,11 +120,50 @@ class Transport(unittest.TestCase):
             o.observe({}, snapshot=lambda _: BASELINE, dial=dial, expected_connection='a'*64)
         dial.assert_not_called()
 
+    def test_uses_fixed_service_selected_executable_for_the_settings_input(self):
+        self.launcher.stop()
+        for executable, load_state in [(launcher.RESIDENT, 'loaded'), (launcher.STANDALONE, 'not-found')]:
+            with self.subTest(executable=executable):
+                raw = CASES['apply']['stdout_utf8'].encode()
+                transport, channel = self.channel(raw)
+                query = Mock()
+                transport.open_session.side_effect = [query, channel]
+                observation = dict(OBSERVATION, service={'LoadState': load_state})
+                record = (f'{{ path={executable} ; argv[]={executable} ; ignore_errors=no }}'.encode()
+                          if load_state == 'loaded' else b'')
+                with patch.object(q.shared, 'inspect', return_value=observation), \
+                        patch.object(launcher, 'reply', return_value=(0, record)):
+                    self.assertEqual(q.execute(transport, request_for('apply'))['_product_settings_raw']['status'], 'reported')
+                query.exec_command.assert_called_once_with(launcher.LAUNCHER_QUERY)
+                query.sendall.assert_not_called()
+                channel.exec_command.assert_called_once_with(command('apply', executable))
+                channel.sendall.assert_called_once_with(base64.b64decode(CASES['apply']['stdin_base64']))
+
+        transport, channel = self.channel(REPORT)
+        foreign = b'{ path=/tmp/reader-buddy ; argv[]=/tmp/reader-buddy ; ignore_errors=no }'
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)), \
+                patch.object(launcher, 'reply', return_value=(0, foreign)), self.assertRaises(o.Refusal):
+            q.execute(transport, request_for('apply'))
+        channel.exec_command.assert_called_once_with(launcher.LAUNCHER_QUERY)
+        channel.sendall.assert_not_called()
+
+    def test_expired_launcher_selection_cannot_send_settings_input(self):
+        clock = [0]
+        transport = Mock()
+        def late(*_, **__):
+            clock[0] = 2
+            return launcher.RESIDENT
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)), \
+                patch.object(q, 'select_executable', side_effect=late), \
+                patch.object(q.time, 'monotonic', side_effect=lambda: clock[0]), self.assertRaises(o.Refusal):
+            q.execute(transport, dict(request_for('apply'), budget_ms=1000))
+        transport.open_session.assert_not_called()
+
     def test_raw_output_bounds_duplicates_partial_utf8_and_nonzero_exit(self):
         padded = REPORT[:-1]+b' '*(q.MAX_RESPONSE-len(REPORT))+b'\n'
         self.assertEqual(len(padded), q.MAX_RESPONSE)
         transport, channel = self.channel(padded)
-        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)):
             self.assertEqual(q.execute(transport, REQUEST)['_product_settings_raw']['stdout_base64'], base64.b64encode(padded).decode())
         channel.shutdown_write.assert_called_once_with()
         channel.sendall.assert_not_called()
@@ -116,7 +173,7 @@ class Transport(unittest.TestCase):
                           (b'{}', 0), (b'{}\n{}\n', 0), (b'PRIVATE_OUTPUT_CANARY\n', 1)]:
             with self.subTest(code=code, size=len(raw)):
                 transport, channel = self.channel(raw, code)
-                with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+                with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)):
                     try:
                         value = q.execute(transport, REQUEST)
                         self.assertIsNone(value['_product_settings_raw']['stdout_base64'])
@@ -133,32 +190,32 @@ class Transport(unittest.TestCase):
         clock=[0]
         def advance(_):
             clock[0]=13
-        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}), patch.object(q.time, 'monotonic', side_effect=lambda:clock[0]), patch.object(q.time, 'sleep', side_effect=advance):
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)), patch.object(q.time, 'monotonic', side_effect=lambda:clock[0]), patch.object(q.time, 'sleep', side_effect=advance):
             with self.assertRaises(o.Refusal):
                 q.execute(transport, REQUEST)
         channel.close.assert_called_once()
         transport, channel = self.channel(REPORT)
         channel.recv_stderr_ready.side_effect = [True, False, False]
         channel.recv_stderr.return_value = b'x'*8192
-        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)):
             self.assertEqual(q.execute(transport, REQUEST)['_product_settings_raw']['stdout_base64'], base64.b64encode(REPORT).decode())
         channel.close.assert_called_once()
         transport, channel = self.channel(REPORT)
         channel.recv_stderr_ready.return_value = True
         channel.recv_stderr.return_value = b'x'*8193
-        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)):
             with self.assertRaises(ValueError):
                 q.execute(transport, REQUEST)
         channel.close.assert_called_once()
         transport, channel = self.channel(REPORT)
-        with patch.object(q.shared, 'inspect', side_effect=[{'boot_id': BOOT}, {'boot_id': 'changed'}]):
+        with patch.object(q.shared, 'inspect', side_effect=[dict(OBSERVATION), dict(OBSERVATION, boot_id='changed')]):
             with self.assertRaises(o.Refusal):
                 q.execute(transport, REQUEST)
         channel.close.assert_called_once()
 
     def test_inherited_remaining_budget_caps_channel_and_prevents_late_command(self):
         transport, channel = self.channel(REPORT)
-        with patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}), patch.object(q.time, 'monotonic', return_value=0):
+        with patch.object(q.shared, 'inspect', return_value=dict(OBSERVATION)), patch.object(q.time, 'monotonic', return_value=0):
             q.execute(transport, dict(REQUEST, budget_ms=1500))
         transport.open_session.assert_called_once_with(timeout=1.5)
         channel.settimeout.assert_called_once_with(1.5)
@@ -166,7 +223,7 @@ class Transport(unittest.TestCase):
         clock=[0]
         def late_identity(_):
             clock[0]=2
-            return {'boot_id': BOOT}
+            return dict(OBSERVATION)
         with patch.object(q.shared, 'inspect', side_effect=late_identity), patch.object(q.time, 'monotonic', side_effect=lambda:clock[0]):
             with self.assertRaises(o.Refusal):
                 q.execute(transport, dict(REQUEST, budget_ms=1000))

@@ -72,7 +72,13 @@ For Electron, run `npm run desktop`, or launch the portable desktop executable
 from the configured host environment. The sandboxed renderer only requests
 observation, cancellation or [owned-data inspection](owned-data-inspection.md); it cannot submit a target, file, key or command.
 
-For a browser, explicitly start the companion helper from a source checkout:
+For a browser, launch the packaged Manager executable with `--browser-helper`
+from the same configured host environment. This opens the locally served
+packaged UI in your default browser without a Manager desktop window. An
+attached terminal also prints the preview URL. Linux still needs the supported
+Electron desktop environment.
+
+For development from a source checkout:
 
 ```sh
 npm run build
@@ -80,10 +86,12 @@ npm run wired:browser
 ```
 
 Open the exact `http://127.0.0.1:<port>/preview/` URL printed by that process.
-The helper serves the same production Angular build. It uses one loopback origin,
-exact Host/Origin checks and a per-launch HttpOnly SameSite=Strict session cookie.
-A deployed web page or ordinary `npm start` UI has no wired transport. It does not
-probe other localhost ports. Stop the helper with Ctrl+C when finished.
+Both helper modes serve the production Angular build on one loopback origin
+with exact Host/Origin checks and a per-launch HttpOnly SameSite=Strict session
+cookie. Stop the helper process with Ctrl+C in its launch terminal. Closing the
+browser tab leaves the helper running. The source helper supports development
+without installed backup verification. A deployed web page or ordinary
+`npm start` UI has no wired transport and does not probe other localhost ports.
 
 Choose **Read tablet state**. Successful observations refresh after four seconds,
 with each operation limited to 12 seconds and bounded fixed reads. Automatic reads

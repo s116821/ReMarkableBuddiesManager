@@ -142,3 +142,7 @@ for explicit profile selection, retained history and unknown-operation checks.
 For deliberate creation/recovery of configured Buddy storage, see
 [Prepare Buddy storage](docs/storage-initialization.md). Review is command-free;
 confirmation is separate, and later inspections preserve earlier uncertainty.
+
+The [preferences guide](docs/portable-configuration.md) covers manual file
+export/import and the development backup-preview consumer. The backup flow is
+not enabled in packaged Manager builds yet.

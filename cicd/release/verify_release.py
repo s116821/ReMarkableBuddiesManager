@@ -90,8 +90,8 @@ def merged_source(data, sha):
         and pr.get("mergeCommit", {}).get("oid") == sha for pr in prs):
         raise ValueError("Release requires exact merged main PR, including squash merges")
 
-def retained(directory, candidate, observation, repository, token, missing, require_complete=False, downloader=download_asset):
-    manifest = verify_packages(directory, candidate)
+def retained(directory, candidate, observation, repository, token, missing, require_complete=False, downloader=download_asset, *, oracle_root=None):
+    manifest = verify_packages(directory, candidate, oracle_root=oracle_root)
     expected = dict(manifest["packages"], **{"provenance.json": sha256(directory / "provenance.json")})
     release = observe_assets(observation, candidate.tag)
     present = set()
@@ -129,6 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("--missing", type=Path, default=Path("missing-packages"))
     parser.add_argument("--complete", action="store_true")
     parser.add_argument("--release-id", type=int)
+    parser.add_argument("--oracle-root", type=Path, help="Original Build inputs for strict shipping readback")
     args = parser.parse_args()
     candidate = Release(args.tag, args.sha)
     data = json.loads(os.environ["RELEASE_OBSERVATION"])
@@ -145,4 +146,4 @@ if __name__ == "__main__":
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
             raise ValueError("Malformed repository")
         retained(args.packages, candidate, data, repository, os.environ["GITHUB_TOKEN"],
-                 args.missing, args.complete)
+                 args.missing, args.complete, oracle_root=args.oracle_root)

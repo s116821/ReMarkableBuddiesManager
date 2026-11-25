@@ -97,6 +97,20 @@ class Completion(unittest.TestCase):
         self.assertGreaterEqual(elapsed, .03)
 
 class Transport(unittest.TestCase):
+    def test_capacities_preferences_never_import_enrollment(self):
+        settings = dict(product_settings=dict(schema_version=1, export_destination='capacities'))
+        candidate = dict(portable_configuration_version=1, settings=settings)
+        body = dict(portable_import_version=1,operation=BOOT,base_sha256='b'*64,config_path_sha256=q.PATH_HASH,artifact=candidate)
+        value = request('prepare', body)
+        self.assertEqual(q.request(json.dumps(value).encode()), value)
+        for injected in [
+            {**settings, 'capacities_export': dict(grant_id=BOOT)},
+            dict(product_settings={**settings['product_settings'], 'grant_id':BOOT}),
+            dict(product_settings={**settings['product_settings'], 'access_token':'SYNTHETIC_PRIVATE_TOKEN'}),
+        ]:
+            with self.assertRaises(ValueError):
+                q.request(json.dumps(request('prepare', {**body, 'artifact':{**candidate, 'settings':injected}})).encode())
+
     def test_exact_private_packets_limits_numeric_alias_and_no_unsafe_selector(self):
         prepare=dict(portable_import_version=1,operation=BOOT,base_sha256='b'*64,config_path_sha256=q.PATH_HASH,artifact=ARTIFACT)
         for selector,body in [('export',None),('inspect',None),('prepare',prepare),('apply',dict(intent=INTENT,artifact=ARTIFACT)),('status',dict(intent=INTENT))]:
@@ -137,4 +151,45 @@ class Transport(unittest.TestCase):
     def test_early_invalid_stdin_never_echoes_private_data_or_reads_config(self):
         result=subprocess.run([sys.executable,str(ROOT/'host/portable_configuration_transport.py')],input=b'PRIVATE_CANARY',capture_output=True,timeout=3)
         self.assertEqual(result.returncode,0);self.assertEqual(result.stderr,b'');self.assertNotIn(b'PRIVATE_CANARY',result.stdout);self.assertIsNone(json.loads(result.stdout)['portable_configuration_raw']['stdout_base64'])
+
+class SharedPreferences(unittest.TestCase):
+    def test_fixed_selector_and_exact_original_status_stdin(self):
+        import shared_preferences_transport as shared_preferences
+
+        guard = dict(group=BOOT, mode_epoch=BOOT, store_generation=BOOT,
+                     local_config_sha256='a'*64, binding_sha256='b'*64,
+                     selection={'kind': 'absent'})
+        body = dict(shared_preferences_version=1, operation=BOOT, guard=guard,
+                    patch_sha256='c'*64)
+        wire = request('status', body)
+        self.assertEqual(shared_preferences.request(json.dumps(wire).encode()), wire)
+        with self.assertRaises(ValueError):
+            shared_preferences.request(json.dumps(request('status', dict(body, patch=ARTIFACT))).encode())
+        with self.assertRaises(ValueError):
+            shared_preferences.request(json.dumps(dict(wire, selector='status; id')).encode())
+
+        raw = (json.dumps(dict(report_version=1, operation='status', status='ok',
+                               disposition='local-committed', runtime_activation='unverified',
+                               original_operation=BOOT, guard=guard, patch_sha256=body['patch_sha256'])) + '\n').encode()
+        with self.assertRaises(ValueError):
+            shared_preferences.report_shape(dict(report_version=1, operation='status', status='unknown',
+                                                 runtime_activation='unverified', data=None), 'status')
+        clock = [0.0]
+        channel = ScheduledChannel(clock, [(0, raw)])
+        channel.exec_command = Mock()
+        channel.sendall = Mock()
+        channel.shutdown_write = Mock()
+        transport = Mock()
+        transport.open_session.return_value = channel
+        with patch.object(q.time, 'monotonic', side_effect=lambda: clock[0]), \
+                patch.object(q.time, 'sleep', side_effect=lambda value: clock.__setitem__(0, clock[0] + value)), \
+                patch.object(q.shared, 'inspect', return_value={'boot_id': BOOT}):
+            observed = shared_preferences.invoke(transport, wire, deadline=.08)
+        channel.exec_command.assert_called_once_with(
+            shared_preferences.PREFIX + 'status --shared-preferences-input -')
+        channel.sendall.assert_called_once_with(base64.b64decode(wire['input_base64']))
+        channel.shutdown_write.assert_called_once()
+        self.assertTrue(channel.closed)
+        self.assertEqual(base64.b64decode(observed['_portable_raw']['stdout_base64']), raw)
+
 if __name__=='__main__':unittest.main()

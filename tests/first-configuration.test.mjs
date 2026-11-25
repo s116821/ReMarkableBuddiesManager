@@ -164,7 +164,7 @@ test('actual controller discards a queued confirmation and retains uncertainty a
   assert.equal(controller.state.retained[0].outcome, 'unknown');
 });
 
-test('the browser setup bridge preserves bounds, parsers and stream custody', async t => {
+test('the shared browser maintenance bridge preserves bounds, parsers and stream custody', async t => {
   const environment = {window: {}, location: {hostname: 'elsewhere', protocol: 'http:'}};
   for (const [key, value] of Object.entries(environment)) {
     const original = Object.getOwnPropertyDescriptor(globalThis, key);
@@ -193,12 +193,12 @@ test('the browser setup bridge preserves bounds, parsers and stream custody', as
   assert.equal(fetchMock.mock.callCount(), 0);
   environment.location.protocol = 'http:';
 
-  const payload = {version: 1, state: 'none', invocation: null, reference: null, current: null, retained: []};
   const frame = size => {
-    const json = JSON.stringify(payload);
-    chunks = [encoder.encode(json), encoder.encode(' '.repeat(size - json.length))];
+    chunks = [encoder.encode('{"value":1}'), encoder.encode(' '.repeat(size - 11))];
   };
-  frame(8192);
+  const payload = {version: 1, state: 'none', invocation: null, reference: null, current: null, retained: []};
+  const body = JSON.stringify(payload);
+  chunks = [encoder.encode(body), encoder.encode(' '.repeat(8192 - body.length))];
   assert.deepEqual(await host.firstConfiguration(first), payload);
   assert.deepEqual(fetchMock.mock.calls[0].arguments, ['/manager-first-configuration', {
     method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json'},
@@ -206,14 +206,63 @@ test('the browser setup bridge preserves bounds, parsers and stream custody', as
   }]);
   assert.deepEqual(timeout.mock.calls[0].arguments, [14000]);
   assert.deepEqual([cancelled, released], [0, 1]);
+
   frame(8193);
-  await assert.rejects(host.firstConfiguration(first), /response refused/i);
+  await assert.rejects(host.researchSettings({}), {message: 'Research response refused'});
   assert.deepEqual([cancelled, released], [1, 2]);
-  chunks = [encoder.encode(JSON.stringify(payload).replace('"version":1', '"version":1,"version":1'))];
-  await assert.rejects(host.firstConfiguration(first));
-  assert.deepEqual([cancelled, released], [1, 3]);
+  frame(16384);
+  assert.deepEqual(await host.inspectOwnedV3({}), {value: 1});
+  frame(16385);
+  await assert.rejects(host.inspectOwnedV3({}), {message: 'Stored data inspection response refused'});
+  assert.deepEqual([cancelled, released], [2, 4]);
+  frame(270336);
+  assert.deepEqual(await host.handwritingRecords({}), {value: 1});
+  frame(270337);
+  await assert.rejects(host.handwritingRecords({}), {message: 'Archive operation response refused'});
+
+  const duplicate = '{"value":1,"value":2}';
+  chunks = [encoder.encode(duplicate)];
+  await assert.rejects(host.firstConfiguration(first), {message: 'Ordinary restore refused'});
+  chunks = [encoder.encode(duplicate)];
+  assert.deepEqual(await host.storageInitialization(first), {value: 2});
+  chunks = [encoder.encode('\ufeff{}')];
+  await assert.rejects(host.storageInitialization(first), SyntaxError);
+  chunks = [Uint8Array.of(0xff)];
+  await assert.rejects(host.storageInitialization(first), TypeError);
+  assert.deepEqual([cancelled, released], [3, 10]);
+
   ok = false;
+  await assert.rejects(host.storageInitialization(first), {message: 'Storage preparation unavailable'});
+  assert.deepEqual([cancelled, released], [3, 10]);
+
+  ok = true;
+  chunks = [encoder.encode('\ufeff{}')];
+  assert.deepEqual(await host.localModeChoice({}), {});
+  assert.deepEqual([cancelled, released], [4, 10]);
+  chunks = [encoder.encode('\ufeff{}')];
+  assert.deepEqual(await host.isolatedRoot({}), {});
+  assert.deepEqual(timeout.mock.calls.at(-1).arguments, [46000]);
+  assert.deepEqual([cancelled, released], [5, 11]);
+
+  chunks = [encoder.encode('\ufeff{}')];
+  await assert.rejects(host.ordinaryExport({}), SyntaxError);
+  assert.deepEqual([cancelled, released], [6, 11]);
+  frame(2048);
+  assert.deepEqual(await host.downloads.request({action: 'status'}), {value: 1});
+  assert.deepEqual(timeout.mock.calls.at(-1).arguments, [10000]);
+  frame(2049);
+  await assert.rejects(host.downloads.request({action: 'status'}), {message: 'Download response refused'});
+  assert.deepEqual([cancelled, released], [8, 11]);
+  ok = false;
+  await assert.rejects(host.isolatedRoot({}), {message: 'Isolated backup helper unavailable'});
+  await assert.rejects(host.localModeChoice({}), {message: 'Local-only helper unavailable'});
+  await assert.rejects(host.downloads.request({action: 'status'}), {message: 'Download host unavailable'});
+  assert.deepEqual([cancelled, released], [8, 11]);
   await assert.rejects(host.firstConfiguration(first), /unavailable/i);
+  ok = true;
+  chunks = [encoder.encode(body), encoder.encode(' '.repeat(8193 - body.length))];
+  await assert.rejects(host.firstConfiguration(first), /response refused/i);
+  assert.deepEqual([cancelled, released], [9, 12]);
 });
 
 test('existing configuration requires the observed resident executable through confirmation and never falls back', async () => {

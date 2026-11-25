@@ -4,6 +4,16 @@ import {parsePortableReport,portableHash} from '../host/portable-configuration-p
 import {validateResult} from '../host/observation-protocol.mjs';
 import {portableFixture,prepare,confirm,selected,artifact,identity,defer,report} from './fixtures/portable-configuration.mjs';
 const view=v=>v.portable_configuration;
+test('portable Capacities preference cannot carry an account enrollment or credentials',()=>{
+ const settings={product_settings:{schema_version:1,export_destination:'capacities'}};
+ const candidate={portable_configuration_version:1,settings};
+ assert.deepEqual(portableArtifactBytes(Buffer.from(JSON.stringify(candidate))),candidate);
+ for(const injected of [
+  {...settings,capacities_export:{schema_version:1,grant_id:'11111111-1111-4111-8111-111111111111'}},
+  {product_settings:{...settings.product_settings,grant_id:'11111111-1111-4111-8111-111111111111'}},
+  {product_settings:{...settings.product_settings,access_token:'SYNTHETIC_PRIVATE_TOKEN'}},
+ ])assert.throws(()=>portableArtifactBytes(Buffer.from(JSON.stringify({...candidate,settings:injected}))));
+});
 const privateFree=v=>{const s=JSON.stringify(v);for(const x of ['SYNTHETIC_PRIVATE_PORTABLE','artifact_sha256','base_sha256','config_path_sha256','target_sha256','intent','artifact_base64'])assert.equal(s.includes(x),false,x);};
 test('explicit export alone carries exact private artifact; ready/verified projections retain only names/origins',async()=>{
  const f=portableFixture();const exported=await f.portable.request({action:'export',...identity});assert.equal(view(exported).state,'exported');assert.deepEqual(JSON.parse(Buffer.from(view(exported).export_file.bytes_base64,'base64')),artifact);assert.equal(f.calls[0].body,null);

@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {verifyCapacitiesBrowser} from './fixtures/capacities-browser.mjs';
 
 const packaged = process.argv.includes('--packaged');
 const development = process.argv.includes('--development');
@@ -175,6 +176,10 @@ async function verifyStyles(page, host) {
     await page.keyboard.press('Tab');
     await verifyFocus(page.locator('.activity-tray > summary'));
   }
+  for (const item of ['overview','setup']) {
+    await page.keyboard.press('Tab');
+    await verifyFocus(page.getByTestId('nav-tablet-' + item));
+  }
   await page.keyboard.press('Tab'); // read tablet state
   await verifyFocus(page.getByRole('button', { name: 'Read tablet state' }));
   assert.equal(await page.getByRole('button', { name: 'Disconnect', exact: true }).isDisabled(), true);
@@ -223,6 +228,8 @@ if (development) {
   console.log('Verified development browser generated Tailwind styles and states');
   process.exit(0);
 }
+
+if (!packaged) await verifyCapacitiesBrowser(root);
 
 const executablePath = packaged
   ? path.resolve(`out/packages/ReMarkableBuddiesManager-${process.platform}-x64/${process.platform === 'win32' ? 'ReMarkableBuddiesManager.exe' : 'ReMarkableBuddiesManager'}`)

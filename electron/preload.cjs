@@ -1,10 +1,19 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version: 1, kind: 'desktop', transport: 'wired-maintenance',
+  capacitiesAuth: Object.freeze({
+    ...Object.fromEntries(['status', 'begin', 'cancel', 'reconcile', 'inspect-connection'].map(action =>
+      [action === 'inspect-connection' ? 'inspectConnection' : action,
+        (...args) => args.length ? Promise.reject(new Error('Capacities arity refused')) : ipcRenderer.invoke(`manager:capacities:${action}`)])),
+    disconnect: (...args) => args.length === 1 && typeof args[0] === 'string' && args[0].length === 32 && /^[a-f0-9]{32}$/.test(args[0])
+      ? ipcRenderer.invoke('manager:capacities:disconnect', args[0]) : Promise.reject(new Error('Capacities connection refused')),
+  }),
   driveAuth: Object.freeze({ status: () => ipcRenderer.invoke('manager:drive:status'), begin: () => ipcRenderer.invoke('manager:drive:begin'),
     cancel: () => ipcRenderer.invoke('manager:drive:cancel'), check: () => ipcRenderer.invoke('manager:drive:check'),
     disconnect: () => ipcRenderer.invoke('manager:drive:disconnect'), revoke: id => ipcRenderer.invoke('manager:drive:revoke', id) }),
   downloads: Object.freeze({ request: (...args) => args.length !== 1 ? Promise.reject(new Error('Download input refused')) : ipcRenderer.invoke('manager:download', args[0]) }),
+  tabletDriveSetup: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:tabletDriveSetup', args[0]) : Promise.reject(Error('Tablet Drive arity refused')),
   memoryQuery: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory query input refused')) : ipcRenderer.invoke('manager:memoryQuery', args[0]),
+  sharedPreferences: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:sharedPreferences', args[0]) : Promise.reject(Error('Shared preferences arity refused')),
   portableConfiguration: (...args) => args.length===1?ipcRenderer.invoke('manager:portableConfiguration',args[0]):Promise.reject(new Error('Portable preferences arity refused')),
   ordinaryExport: (...args) => args.length===1?ipcRenderer.invoke('manager:ordinaryExport',args[0]):Promise.reject(new Error('Ordinary export arity refused')),
   researchSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:researchSettings',args[0]):Promise.reject(new Error('Research settings arity refused')),
@@ -20,13 +29,13 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   sourceCacheCleanup: (...args) => args.length===1?ipcRenderer.invoke('manager:sourceCacheCleanup',args[0]):Promise.reject(new Error('Cache cleanup arity refused')),
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
   inspectOwnedV3: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectOwnedV3',args[0]):Promise.reject(new Error('Stored data inspection arity refused')),
-  firstConfiguration: (...args) => args.length === 1
-    ? ipcRenderer.invoke('manager:firstConfiguration', args[0])
-    : Promise.reject(new Error('First configuration arity refused')),
+  firstConfiguration: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:firstConfiguration', args[0]) : Promise.reject(Error('Configuration arity refused')),
   storageInitialization: (...args) => args.length===1?ipcRenderer.invoke('manager:storageInitialization',args[0]):Promise.reject(new Error('Storage preparation arity refused')),
   inspectConversations: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectConversations',args[0]):Promise.reject(new Error('Conversation inventory arity refused')),
   modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
   localModeChoice: (...args) => args.length===1?ipcRenderer.invoke('manager:localModeChoice',args[0]):Promise.reject(new Error('Local-only choice arity refused')),
+  isolatedRoot: (...args) => args.length===1?ipcRenderer.invoke('manager:isolatedRoot',args[0]):Promise.reject(new Error('Isolated backup arity refused')),
+  isolatedBackup: (...args) => args.length === 1 ? ipcRenderer.invoke('manager:isolated-backup', args[0]) : Promise.reject(new Error('Backup inspection arity refused')),
   productSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:productSettings',args[0]):Promise.reject(new Error('Product settings arity refused')),
   basicSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:basicSettings',args[0]):Promise.reject(new Error('Basic settings arity refused')),
   memoryForget: (...args) => args.length !== 1 ? Promise.reject(new Error('Memory forget input refused')) : ipcRenderer.invoke('manager:memoryForget', args[0]),
