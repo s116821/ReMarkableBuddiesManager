@@ -7,9 +7,14 @@ import sys
 import threading
 import time
 import wired_observer as shared
+from personalization_transport import RESIDENT, STANDALONE, select_executable
 
-BINARY = '/opt/bin/reader-buddy'
-COMMAND = '/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin /opt/bin/reader-buddy --version'
+BINARY = STANDALONE
+EXECUTABLE_PARENTS = {
+    STANDALONE: ('/opt', '/opt/bin'),
+    RESIDENT: ('/home', '/home/root', '/home/root/.local', '/home/root/.local/lib',
+               '/home/root/.local/lib/remarkable-buddies'),
+}
 LINE = re.compile(rb'(?:reader-buddy|remarkable-reader-buddy) ((?:v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?(?:\+[0-9A-Za-z][0-9A-Za-z.-]*)?|dev\.(?:unknown|v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9]+-g[0-9a-f]{7,40})?(?:-dirty)?|[0-9a-f]{7,40}(?:-dirty)?)))\r?\n')
 
 
@@ -18,14 +23,16 @@ def report(status, version=None):
             'package_owner':'unknown','provenance':'unknown','installation_eligible':False}
 
 
-def metadata(sftp):
+def metadata(sftp, executable=BINARY):
+    if executable not in EXECUTABLE_PARENTS:
+        raise ValueError('unsupported executable')
     parents=[]
-    for path in ['/opt','/opt/bin']:
+    for path in EXECUTABLE_PARENTS[executable]:
         parent=sftp.lstat(path)
         if not stat.S_ISDIR(parent.st_mode) or parent.st_uid!=0 or parent.st_mode&0o022: raise ValueError('unsafe executable parent')
         parents.append(tuple(getattr(parent,k,None) for k in ['st_mode','st_uid','st_gid','st_size','st_mtime']))
     try:
-        info = sftp.lstat(BINARY)
+        info = sftp.lstat(executable)
     except FileNotFoundError:
         return None
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or not info.st_mode & stat.S_IXUSR or info.st_mode & 0o022 or not isinstance(info.st_size,int) or info.st_size <= 0:
@@ -38,17 +45,20 @@ def inspect_runtime(transport, boot):
     before = shared.inspect(transport)
     if before['boot_id'] != boot:
         raise shared.Refusal('cable-lost')
+    executable = select_executable(transport, before['service']['LoadState'])
     sftp = paramiko.SFTPClient.from_transport(transport); sftp.get_channel().settimeout(2)
     channel = None
     try:
         try:
-            original = metadata(sftp)
+            original = metadata(sftp, executable)
         except ValueError:
             original, value = None, report('unsafe')
         else:
             value = report('missing') if original is None else None
         if original is not None:
-            channel = transport.open_session(timeout=2); channel.settimeout(2); channel.exec_command(COMMAND)
+            channel = transport.open_session(timeout=2)
+            channel.settimeout(2)
+            channel.exec_command(f'/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin {executable} --version')
             raw, discarded = bytearray(), 0; deadline = time.monotonic()+4
             while True:
                 if time.monotonic()>deadline: raise shared.Refusal('timeout')
@@ -62,8 +72,11 @@ def inspect_runtime(transport, boot):
                 time.sleep(.01)
             code=channel.recv_exit_status(); match=LINE.fullmatch(raw) if code==0 else None
             value=report('reported',match[1].decode('ascii')) if match and len(match[1])<=96 else report('unsupported')
-            if metadata(sftp)!=original: raise shared.Refusal('observation-unavailable')
-        if shared.inspect(transport)!=before: raise shared.Refusal('observation-unavailable')
+            if metadata(sftp, executable) != original:
+                raise shared.Refusal('observation-unavailable')
+        after = shared.inspect(transport)
+        if after != before or select_executable(transport, after['service']['LoadState']) != executable:
+            raise shared.Refusal('observation-unavailable')
         before['_runtime_identity']=value
         return before
     finally:
