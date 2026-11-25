@@ -1070,6 +1070,10 @@
             @if (app.cloudBackup().previewAvailable) {
               @if (!app.connection().observation) {
                 <p>Connect your tablet by USB to restore data or apply saved preferences.</p>
+                <button class="ui-button ui-button-secondary" type="button" (click)="app.connectTablet()" [disabled]="app.connection().status === 'checking' || app.firstConfiguration().busy">Read tablet state</button>
+                @if (app.connection().status !== 'unconfigured') {
+                  <span role="status">{{ app.connectionLabels[app.connection().status] }}</span>
+                }
               }
               <button class="ui-button ui-button-secondary" type="button" (click)="app.reviewCloudBackup()" [disabled]="!app.canReviewCloudBackup()">Review backup preferences</button>
               <button class="ui-button ui-button-secondary" type="button" (click)="app.reviewCloudBackup(true)" [disabled]="!app.canReviewCloudBackup(true)">Preview backup data restore</button>
