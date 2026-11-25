@@ -273,14 +273,29 @@ async function verifyPreferences(page, control) {
   const confirm = button('Confirm preferences import');
   const review = button('Review backup preferences');
   await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
-  async function selectDownloaded() {
-    await readTabletFor(page,'cloud');
+  async function downloadRevision() {
     await button('Scan for cloud backups').click();
     await expect(review).toHaveCount(0);
     await button('Select revision').click();
     await expect(review).toHaveCount(0);
     await button('Download and verify').click();
     await expect(page.getByTestId('cloud-backup-verification')).toBeVisible();
+  }
+  await showPanel(page,'cloud');
+  await downloadRevision();
+  await expect(page.getByTestId('cloud-backup-status')).toContainText('Some media was omitted');
+  await expect(page.getByText('Connect your tablet by USB to restore data or apply saved preferences.')).toBeVisible();
+  await expect(review).toBeDisabled();
+  await expect(button('Preview backup data restore')).toBeDisabled();
+  const offline = await control.snapshot();
+  assert.deepEqual(offline.selectors, []);
+  assert.deepEqual(offline.staged, []);
+  await button('Clear backup results').click();
+  await expect.poll(async () => (await control.snapshot()).releases).toBe(1);
+
+  async function selectDownloaded() {
+    await readTabletFor(page,'cloud');
+    await downloadRevision();
     await expect(review).toBeEnabled();
     await review.click();
   }
@@ -289,7 +304,7 @@ async function verifyPreferences(page, control) {
   await expect(page.getByTestId('portable-preview')).toBeVisible();
   await expect(page.getByText('Source is the selected cloud backup.', {exact: true})).toBeVisible();
   assert.deepEqual((await control.snapshot()).selectors, ['inspect', 'prepare']);
-  assert.equal((await control.snapshot()).releases, 1);
+  assert.equal((await control.snapshot()).releases, 2);
   await confirm.click();
   await expect(page.getByTestId('portable-status')).toContainText('Saved file verified');
   const applied = await control.snapshot();
@@ -302,7 +317,7 @@ async function verifyPreferences(page, control) {
   await expect(confirm).toHaveCount(0);
   await expect(review).toHaveCount(0);
   assert.deepEqual((await control.snapshot()).selectors, ['inspect', 'prepare', 'apply', 'inspect', 'prepare']);
-  assert.equal((await control.snapshot()).releases, 2);
+  assert.equal((await control.snapshot()).releases, 3);
 }
 
 async function verifyRestore(page, snapshot, setup) {

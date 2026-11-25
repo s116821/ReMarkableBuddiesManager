@@ -23,6 +23,10 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
  await showPanel(page,'drive');
   const status = page.getByTestId('drive-status');
   await status.filter({ hasText: 'Not signed in' }).waitFor();
+  await showPanel(page, 'cloud');
+  await expect(page.getByRole('button', {name: /Open Tablet/})).toHaveCount(0);
+  await page.getByRole('button', {name: 'Open Google account'}).click();
+  await expect(status).toContainText('Not signed in');
   const sign = page.getByRole('button', { name: 'Sign in to Google Drive', exact: true });
   await sign.click(); await status.filter({ hasText: 'Waiting for Google' }).waitFor();
   const consent = page.getByRole('link', { name: 'Continue sign-in with Google' });
@@ -32,6 +36,7 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   assert.equal(await page.getByTestId('drive-account').textContent(), 'fixture@example.invalid');
   await showPanel(page,'cloud');
   await page.getByTestId('cloud-backup-status').filter({hasText: 'Scan for isolated Buddy backups.'}).waitFor();
+  await expect(page.getByRole('button', {name: /Open Tablet/})).toHaveCount(0);
   assert.equal(await page.getByRole('button', {name: 'Scan for cloud backups', exact: true}).isEnabled(), true);
   for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
   await showPanel(page,'drive');

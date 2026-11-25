@@ -37,7 +37,7 @@ const labels: Record<IsolatedBackupStatus, string> = {
 };
 const downloadLabels: Record<IsolatedBackupDownloadResult['status'], string> = {
   downloading: 'Downloading and verifying the selected revision…',
-  verified: 'Backup verified.',
+  verified: 'Backup verified. All expected Buddy media is present.',
   unavailable: 'Backup download is unavailable on this Manager host.',
   invalid: 'The downloaded backup did not match the selected revision.',
   incomplete: 'Backup download was incomplete. Run a new scan to try again.',
