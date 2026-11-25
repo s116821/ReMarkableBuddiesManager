@@ -1015,11 +1015,18 @@
 }
 
 @if (app.isView('backup','cloud')) {
-<section class="ui-panel" aria-labelledby="cloud-backups-title"><h2 id="cloud-backups-title">Cloud backups</h2><p>Find a backup in the connected Google account, then select a revision to download and verify. Signing in alone does not enable tablet backups.</p>    @if (app.host.isolatedBackup) {
+<section class="ui-panel" aria-labelledby="cloud-backups-title">
+  <h2 id="cloud-backups-title">Cloud backups</h2>
+  <p>Choose a backup revision from Google Drive to download and verify.</p>
+  @if (app.host.isolatedBackup) {
       <div class="mt-5">
 
         <div class="my-3 flex flex-wrap gap-3">
-          <button class="ui-button ui-button-secondary" type="button" (click)="app.scanCloudBackups()" [disabled]="!app.canBrowseCloudBackups()">Scan for cloud backups</button>
+          @if (app.drive().status === 'connected') {
+            <button class="ui-button ui-button-secondary" type="button" (click)="app.scanCloudBackups()" [disabled]="!app.canBrowseCloudBackups()">Scan for cloud backups</button>
+          } @else {
+            <button class="ui-button ui-button-secondary" type="button" (click)="app.navigate('backup', 'account')">Open Google account</button>
+          }
           @if (app.cloudBackup().busy || app.cloudBackup().backups.length) {
             <button class="ui-button ui-button-secondary" type="button" (click)="app.clearCloudBackups()">{{ app.cloudBackup().previewing ? 'Cancel backup preview' : app.cloudBackup().downloading ? 'Cancel download' : app.cloudBackup().busy ? 'Cancel backup check' : 'Clear backup results' }}</button>
           }
@@ -1061,6 +1068,13 @@
           @if (app.cloudBackup().inspection; as inspection) {
             <p class="mt-3" data-testid="cloud-backup-verification">{{ inspection.manifests }} archive manifests and {{ inspection.objects }} stored objects verified.</p>
             @if (app.cloudBackup().previewAvailable) {
+              @if (!app.connection().observation) {
+                <p>Connect your tablet by USB to restore data or apply saved preferences.</p>
+                <button class="ui-button ui-button-secondary" type="button" (click)="app.connectTablet()" [disabled]="app.connection().status === 'checking' || app.firstConfiguration().busy">Read tablet state</button>
+                @if (app.connection().status !== 'unconfigured') {
+                  <span role="status">{{ app.connectionLabels[app.connection().status] }}</span>
+                }
+              }
               <button class="ui-button ui-button-secondary" type="button" (click)="app.reviewCloudBackup()" [disabled]="!app.canReviewCloudBackup()">Review backup preferences</button>
               <button class="ui-button ui-button-secondary" type="button" (click)="app.reviewCloudBackup(true)" [disabled]="!app.canReviewCloudBackup(true)">Preview backup data restore</button>
             }

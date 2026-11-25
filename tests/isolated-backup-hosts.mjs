@@ -273,19 +273,37 @@ async function verifyPreferences(page, control) {
   const confirm = button('Confirm preferences import');
   const review = button('Review backup preferences');
   await expect(page.getByTestId('drive-status')).toContainText('Google Drive connected');
-  async function selectDownloaded() {
-    await readTabletFor(page,'cloud');
+  async function downloadRevision() {
     await button('Scan for cloud backups').click();
     await expect(review).toHaveCount(0);
     await button('Select revision').click();
     await expect(review).toHaveCount(0);
     await button('Download and verify').click();
     await expect(page.getByTestId('cloud-backup-verification')).toBeVisible();
+  }
+  await showPanel(page,'cloud');
+  await downloadRevision();
+  await expect(page.getByTestId('cloud-backup-status')).toContainText('Some media was omitted');
+  await expect(page.getByText('Connect your tablet by USB to restore data or apply saved preferences.')).toBeVisible();
+  await expect(review).toBeDisabled();
+  await expect(button('Preview backup data restore')).toBeDisabled();
+  const offline = await control.snapshot();
+  assert.deepEqual(offline.selectors, []);
+  assert.deepEqual(offline.staged, []);
+  const selection = page.getByTestId('cloud-backup-selection');
+  const marker = await selection.innerText();
+  await button('Read tablet state').click();
+  await expect(review).toBeEnabled();
+  await expect(selection).toHaveText(marker);
+  await review.click();
+
+  async function selectDownloaded() {
+    await readTabletFor(page,'cloud');
+    await downloadRevision();
     await expect(review).toBeEnabled();
     await review.click();
   }
 
-  await selectDownloaded();
   await expect(page.getByTestId('portable-preview')).toBeVisible();
   await expect(page.getByText('Source is the selected cloud backup.', {exact: true})).toBeVisible();
   assert.deepEqual((await control.snapshot()).selectors, ['inspect', 'prepare']);

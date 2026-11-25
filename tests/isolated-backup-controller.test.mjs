@@ -125,8 +125,8 @@ test('lost or superseded preview replies clear only the original controller atte
   assert.equal(c.state, successor);
 });
 
-test('download preserves the revision and distinguishes verified omitted media from interrupted work', async t => {
-  for (const outcome of ['omitted', 'incomplete', 'forged']) {
+test('download preserves the revision and distinguishes complete or omitted media from interrupted work', async t => {
+  for (const outcome of ['complete', 'omitted', 'incomplete', 'forged']) {
     const entered = deferred(), finished = deferred();
     t.after(() => finished.resolve({status: 'incomplete', inspection: null, cleanupPending: false}));
     const {host} = syntheticHost(t, {downloadSelection() { entered.resolve(); return finished.promise; }});
@@ -140,11 +140,14 @@ test('download preserves the revision and distinguishes verified omitted media f
     if (outcome !== 'incomplete') {
       finished.resolve({status: 'verified', cleanupPending: false, inspection: {
         markerSha256: outcome === 'forged' ? reference(10) : digest,
-        manifests: 1, objects: 0, declaredSettings: 0, completeMedia: false,
+        manifests: 1, objects: 0, declaredSettings: 0, completeMedia: outcome === 'complete',
       }});
     } else finished.resolve({status: 'incomplete', inspection: null, cleanupPending: true});
     await waitFor(() => !c.state.busy);
-    if (outcome === 'omitted') {
+    if (outcome === 'complete') {
+      assert.equal(c.state.inspection.completeMedia, true);
+      assert.match(c.state.message, /all expected Buddy media is present/i);
+    } else if (outcome === 'omitted') {
       assert.equal(c.state.inspection.completeMedia, false);
       assert.match(c.state.message, /verified.*omitted/i);
     } else {
