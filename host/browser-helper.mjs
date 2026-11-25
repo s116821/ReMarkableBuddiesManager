@@ -1,3 +1,5 @@
+import {FirstConfigurationHost} from './first-configuration.mjs';
+import {FIRST_CONFIG_REQUEST_BYTES, parseFirstConfigRequest} from './first-configuration-protocol.mjs';
 import {ResidentPackageHost} from './resident-package.mjs';
 import {parseResidentPackageRequest,parseResidentPackageResult} from './resident-package-protocol.mjs';
 import {PortableConfigurationHost} from './portable-configuration.mjs';
@@ -65,8 +67,8 @@ import {ConversationManagementHost} from './conversation-management.mjs';
 import {parseManagementRequest,parseManagementResult} from './conversation-management-protocol.mjs';
 // The host starts this helper explicitly; it serves the built UI on one loopback origin.
 export async function startHelper({ root, observer = new WiredObserver(), driveAuth = new DriveAuth(), downloads = new ManagerDownloads() }) {
-  const io=new MaintenanceIO();let residentPackage,portable,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
-  const invalidatePeers=owner=>{for(const peer of [residentPackage,portable,notebookRestore,notebook,serviceStop,storageInitialization,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
+  const io=new MaintenanceIO();let residentPackage,portable,notebook,serviceStop,storageInitialization,firstConfiguration,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,notebookRestore,selected,handwriting;
+  const invalidatePeers=owner=>{for(const peer of [residentPackage,portable,notebookRestore,notebook,serviceStop,storageInitialization,firstConfiguration,ownedV3,localMode,product,basic,model,archive,research,memorySettings,credential,modelCredential,sourceCache,cacheCleanup,conversations,management,restore,selected,handwriting,forget])if(peer&&peer!==owner)peer.invalidate();};
   const forget = new MemoryForgetHost({ observer,io,beforeIO:()=>invalidatePeers(forget) });
   portable=new PortableConfigurationHost({observer,io,beforeIO:()=>invalidatePeers(portable)});
   basic=new BasicSettingsHost({observer,io,beforeIO:()=>invalidatePeers(basic)});
@@ -91,9 +93,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   notebook=new NotebookArchiveHost({observer:observer,io,beforeIO:()=>invalidatePeers(notebook)});
   handwriting=new HandwritingRecordsHost({observer:observer,io,beforeIO:()=>invalidatePeers(handwriting)});
   localMode=new LocalModeChoiceHost({observer:observer,io,beforeIO:()=>invalidatePeers(localMode)});
+  firstConfiguration = new FirstConfigurationHost({observer, io, beforeIO: () => invalidatePeers(firstConfiguration)});
   observer = forget.wrap();
   const token = randomBytes(32).toString('hex');
   let origin;
+  let configurationDocument = Symbol('browser setup document');
+  let closing = false;
   const server = createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -109,7 +114,12 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       try { const output = await downloads.request(q); res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(output)); } catch { refuse(409); }
       return;
     }
-    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) observer.cancel();
+    if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' && req.headers['sec-fetch-mode'] === 'navigate' && ['/', '/preview/', '/preview/index.html'].includes(url.pathname)) {
+      const original = configurationDocument;
+      configurationDocument = Symbol('browser setup document');
+      void firstConfiguration.invalidate(original);
+      observer.cancel();
+    }
     if(url.pathname==='/manager-portable-configuration'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
       const chunks=[];let length=0,q;
@@ -176,6 +186,37 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
       const chunks=[];let bytes=0,request;
       try{for await(const chunk of req){bytes+=chunk.length;if(bytes>256){chunk.fill(0);return refuse(413);}chunks.push(chunk);}const input=Buffer.concat(chunks);let raw;try{raw=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);}finally{input.fill(0);}request=JSON.parse(raw);if(raw!==JSON.stringify(request))throw Error('Input');parseConversationRequest(request);}catch{return refuse(400);}finally{for(const chunk of chunks)chunk.fill(0);chunks.length=0;}
       try{const context=request,pending=conversations.request(request);request=null;const value=parseConversationResult(await pending,context,validateResult);conversations.assertCurrent(value);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(value));}catch{refuse(503);}finally{request=null;}return;
+    }
+    if (url.pathname === '/manager-first-configuration') {
+      if (url.search || req.method !== 'POST' || req.headers.origin !== origin ||
+          req.headers['content-type'] !== 'application/json' || req.headers.cookie !== `manager_session=${token}`) return refuse(403);
+      const document = configurationDocument;
+      const chunks = [];
+      let bytes = 0;
+      let request;
+      try {
+        for await (const chunk of req) {
+          bytes += chunk.length;
+          if (bytes > FIRST_CONFIG_REQUEST_BYTES) return refuse(413);
+          chunks.push(chunk);
+        }
+        request = parseFirstConfigRequest(strictJson(Buffer.concat(chunks)));
+      } catch { return refuse(400); }
+      const callerCurrent = () => !closing && document === configurationDocument;
+      if (!callerCurrent() || res.destroyed) return refuse(409);
+      const onAbandon = cancel => {
+        const abandoned = () => { if (!res.writableFinished) cancel(); };
+        res.once('close', abandoned);
+        res.once('finish', () => res.removeListener('close', abandoned));
+      };
+      try {
+        const value = await firstConfiguration.request(request, {document, callerCurrent, onAbandon});
+        if (res.destroyed) return;
+        const delivered = firstConfiguration.deliver(value, request, callerCurrent);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(delivered));
+      } catch { refuse(503); }
+      return;
     }
     if(url.pathname==='/manager-storage-initialization'){
       if(url.search||req.method!=='POST'||req.headers.origin!==origin||req.headers['content-type']!=='application/json'||req.headers.cookie!==`manager_session=${token}`)return refuse(403);
@@ -366,5 +407,5 @@ export async function startHelper({ root, observer = new WiredObserver(), driveA
   server.headersTimeout = 5000;
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  return { origin, server, close: async () => { portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
+  return { origin, server, close: async () => { closing = true; const configurationClosed = firstConfiguration.dispose(); portable.dispose(); observer.cancel(); restore.dispose(); notebookRestore.dispose(); localMode.dispose(); driveAuth.dispose(); downloads.dispose(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await configurationClosed; } };
 }

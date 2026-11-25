@@ -17,7 +17,7 @@ export class ServiceStopController{
  private async bounded<T>(p:Promise<T>,deadline:number){let timer:ReturnType<typeof setTimeout>|undefined;try{return await Promise.race([p,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(Error('Buddy stop wait expired')),Math.max(1,deadline-performance.now()));})]);}finally{clearTimeout(timer);}}
  private merge(rows:ServiceStopRetained[]){const next=[...rows];for(const r of this.state.retained)if(!next.some(x=>x.reference===r.reference))next.push(r);return next.slice(0,8);}
  private async perform(adapter:ServiceStopAdapter,q:ServiceStopRequest,pause:()=>Promise<boolean>,status:string,until?:number){
-  if(this.state.busy)return;clearTimeout(this.timer);this.adapter=adapter;const g=++this.generation,deadline=Math.min(until===undefined?Infinity:Number.isFinite(until)?until:0,performance.now()+14000);this.publish({busy:true,view:null,status});
+  if(this.state.busy)return;clearTimeout(this.timer);this.adapter=adapter;const g=++this.generation,deadline=Math.min(until===undefined?Infinity:Number.isFinite(until)?until:0,performance.now()+32000);this.publish({busy:true,view:null,status});
   try{
    if(!await this.bounded(pause(),deadline)||g!==this.generation)return;
    if(performance.now()>=deadline)throw Error('Buddy stop wait expired');

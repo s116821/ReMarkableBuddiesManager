@@ -6,13 +6,13 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from test_sampler import Files, s, t
+from test_sampler import Files, logical_commands, s, t
 
 
 def method(command):
     if 'DBUS_SYSTEM_BUS_ADDRESS=' not in command:
         return None
-    args = shlex.split(shlex.split(command)[-1])
+    args = shlex.split(shlex.split(logical_commands(command)[0])[-1])
     return args[args.index('call') + 4]
 
 
@@ -25,7 +25,8 @@ class TypedHooks(unittest.TestCase):
             f = Files(profile)
             sampler = f.sampler()
             raw, _ = sampler.bracket(profile, f.vector['observation'], t.empty_raw)
-            typed = [c for c in f.commands if method(c) or 'CAPCLIENT1' in c]
+            typed = [step for c in f.commands for step in logical_commands(c)
+                     if method(step) or 'CAPCLIENT1' in step]
             self.assertEqual(len(typed), maximum)
             self.assertIsNone(sampler._hooks)
             for unit, count in counts.items():
@@ -81,28 +82,24 @@ class TypedHooks(unittest.TestCase):
                       (0, wrapper([]), b'PRIVATE_ERROR_CANARY'), (0, b'{}', b''),
                       (0, b'x' * 32769, b''), (0, wrapper([]), b'x' * 8193)):
             f = Files()
-            original = f.run
-            calls = []
-            def run(*args):
-                calls.append(args[1])
-                return reply if method(args[1]) == 'Get' else original(*args)
-            sampler = s.Sampler(Mock(), time.monotonic()+12, run=run)
+            original = f.reply
+            f.reply = lambda command: reply if method(command) == 'Get' else original(command)
+            sampler = f.sampler()
             with self.assertRaises(s.TypedHookRefusal) as error:
                 sampler.service(s.BUDDY)
             self.assertNotIn('PRIVATE', str(error.exception))
-            self.assertEqual(method(calls[-1]), 'Get')
+            self.assertEqual(method(f.commands[-1]), 'Get')
             self.assertIsNone(sampler._hooks)
 
     def test_closing_context_and_client_drift_refuse(self):
         for target in ('GetId', 'GetNameOwner', 'GetConnectionUnixProcessID', 'GetUnit', 'client'):
             f = Files()
-            original = f.run
+            original = f.reply
             counts = {}
-            def run(*args):
-                command = args[1]
+            def respond(command):
                 key = 'client' if 'CAPCLIENT1' in command else method(command)
                 counts[key] = counts.get(key, 0)+1
-                reply = original(*args)
+                reply = original(command)
                 if key == target and counts[key] == 2:
                     if target == 'client':
                         return reply[0], reply[1].replace(b'71172 1 1 1', b'71172 1 2 1'), reply[2]
@@ -110,9 +107,34 @@ class TypedHooks(unittest.TestCase):
                              'GetConnectionUnixProcessID': ('u', 2), 'GetUnit': ('o', '/wrong')}[target]
                     return 0, json.dumps({'type': value[0], 'data': [value[1]]}).encode(), b''
                 return reply
-            sampler = s.Sampler(Mock(), time.monotonic()+12, run=run)
+            f.reply = respond
+            sampler = f.sampler()
             with self.assertRaises(s.TypedHookRefusal):
                 sampler.service(s.BUDDY)
+            self.assertIsNone(sampler._hooks)
+
+    def test_second_hook_reply_has_its_own_cap_status_and_stderr_check(self):
+        for fault in ('cap', 'status', 'stderr', 'frame'):
+            f = Files()
+            original = f.reply
+            def respond(command):
+                code, out, err = original(command)
+                if method(command) == 'Get' and command.endswith("ExecStopPost'"):
+                    if fault == 'cap':
+                        out = out.ljust(32769, b' ')
+                    elif fault == 'status':
+                        code = 1
+                    elif fault == 'stderr':
+                        err = b'PRIVATE_DIAGNOSTIC'
+                    else:
+                        out += b'\0'
+                return code, out, err
+            f.reply = respond
+            sampler = f.sampler()
+            with self.subTest(fault=fault), self.assertRaisesRegex(s.TypedHookRefusal, '^typed hook observation refused$'):
+                sampler.service(s.BUDDY)
+            self.assertEqual(len(logical_commands(f.commands[-1])), 2)
+            self.assertEqual(method(f.commands[-1]), 'Get')
             self.assertIsNone(sampler._hooks)
 
     def test_deadline_expiry_does_not_issue_another_query(self):
@@ -176,21 +198,20 @@ class TypedHooks(unittest.TestCase):
 
     def test_unsafe_owner_and_unknown_unit_never_enter_hook_argv(self):
         f = Files()
-        original = f.run
-        commands = []
-        def run(*args):
-            commands.append(args[1])
-            if method(args[1]) == 'GetNameOwner':
+        original = f.reply
+        def respond(command):
+            if method(command) == 'GetNameOwner':
                 return 0, b'{"type":"s","data":[":1.0;PRIVATE_INJECTION"]}', b''
-            return original(*args)
-        sampler = s.Sampler(Mock(), time.monotonic()+12, run=run)
+            return original(command)
+        f.reply = respond
+        sampler = f.sampler()
         with self.assertRaises(s.TypedHookRefusal):
             sampler.service(s.BUDDY)
-        self.assertFalse(any(method(c) == 'GetUnit' for c in commands))
-        before = len(commands)
+        self.assertFalse(any(method(c) == 'GetUnit' for c in f.commands))
+        before = len(f.commands)
         with self.assertRaises(ValueError):
             sampler.service('foreign.service')
-        self.assertEqual(len(commands), before)
+        self.assertEqual(len(f.commands), before)
 
 
 if __name__ == '__main__':

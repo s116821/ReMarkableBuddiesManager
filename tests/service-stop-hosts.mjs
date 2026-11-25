@@ -59,9 +59,9 @@ async function loadingDeadline(page,control){
  await page.clock.install();let enter,release,finished;const entered=new Promise(r=>{enter=r;}),gate=new Promise(r=>{release=r;}),done=new Promise(r=>{finished=r;});
  const handler=async route=>{const response=await route.fetch();enter();await gate;await route.fulfill({response});finished();};
  await page.route('**/*.js',handler);await page.getByRole('button',{name:'Open Buddy stop controls',exact:true}).click();const before=await control.snapshot();
- try{await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await entered;await page.clock.runFor(14001);await expect(page.getByTestId('service-stop-status')).toContainText('unavailable');assert.deepEqual(await control.snapshot(),before);release();await done;await page.waitForLoadState('networkidle');assert.deepEqual(await control.snapshot(),before);}
+ try{await page.getByRole('button',{name:'Review stopping Buddy',exact:true}).click();await entered;await page.clock.runFor(32001);await expect(page.getByTestId('service-stop-status')).toContainText('unavailable');assert.deepEqual(await control.snapshot(),before);release();await done;await page.waitForLoadState('networkidle');assert.deepEqual(await control.snapshot(),before);}
  finally{release();await page.unroute('**/*.js',handler);await page.clock.resume();}
- console.log('Actual lazy controller loading shares14-second UI deadline; late module cannot dispatch');
+ console.log('Actual lazy controller loading shares32-second UI deadline; late module cannot dispatch');
 }
 async function stopOutgoing(page){
  await showStop(page);

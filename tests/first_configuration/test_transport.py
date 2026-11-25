@@ -1,0 +1,193 @@
+"""Fixed command and readback tests with synthetic wired observations."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from unittest.mock import Mock, patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'host'))
+import first_configuration_transport as config
+import personalization_transport as personalization
+import wired_observer as wired
+
+
+BOOT = '11111111-1111-1111-1111-111111111111'
+CONNECTION = 'a' * 64
+EXECUTABLE = 'b' * 64
+OTHER = 'c' * 64
+SERVICE = {'LoadState': 'loaded', 'ActiveState': 'inactive', 'SubState': 'dead'}
+OBSERVATION = {'boot_id': BOOT, 'service': SERVICE}
+RESIDENT = '/home/root/.local/lib/remarkable-buddies/reader-buddy'
+STANDALONE = '/opt/bin/reader-buddy'
+ENV = ('/usr/bin/env -i HOME=/home/root PATH=/opt/bin:/usr/bin:/bin '
+       'REMARKABLE_BUDDIES_CONFIG=/home/root/.config/remarkable-buddies/config.json')
+
+
+def frame(selector, expected=None, service=SERVICE):
+    return {'selector': selector, 'connection_id': CONNECTION, 'boot_id': BOOT, 'budget_ms': 12000,
+            'service': service, 'expected_executable_sha256': expected}
+
+
+class FirstConfigurationTransport(unittest.TestCase):
+    def test_child_stdout_uses_lf_bytes_even_with_windows_text_translation(self):
+        script = Path(config.__file__).resolve()
+        translated = (
+            'import runpy, sys; sys.stdout.reconfigure(newline="\\r\\n"); '
+            'sys.path.insert(0, sys.argv[1]); runpy.run_path(sys.argv[2], run_name="__main__")'
+        )
+        for args in ([str(script)], ['-c', translated, str(script.parent), str(script)]):
+            with self.subTest(args=args):
+                # Invalid input exercises the real readiness and response paths before any connection.
+                child = subprocess.run([sys.executable, '-B', *args], input=b'{}',
+                                       capture_output=True, timeout=10, check=True)
+                self.assertEqual(child.stderr, b'')
+                self.assertNotIn(b'\r', child.stdout)
+                ready, frame_bytes, tail = child.stdout.split(b'\n')
+                self.assertEqual((ready, tail), (b'READY', b''))
+                self.assertEqual(json.loads(frame_bytes), {
+                    'dispatch': 'not-dispatched', 'observation': None, 'report': None,
+                    'executable_sha256': None,
+                })
+
+    def test_request_only_accepts_closed_fixed_selectors(self):
+        for request in [frame('check-initial'), frame('create-initial'), frame('check-existing-default'),
+                        frame('create-existing-default', EXECUTABLE)]:
+            self.assertEqual(config.request(json.dumps(request).encode()), request)
+        for request in [frame('inspect'), frame('create-existing-default'), frame('create-initial', EXECUTABLE),
+                        frame('check-existing-default', service=dict(SERVICE, LoadState='not-found')),
+                        frame('check-existing-default', service=dict(SERVICE, ActiveState='active')),
+                        dict(frame('check-existing-default'), path='/foreign')]:
+            with self.subTest(request=request), self.assertRaises(ValueError):
+                config.request(json.dumps(request).encode())
+
+    def test_recognizes_fixed_resident_launcher_without_arguments(self):
+        for path, args in [(STANDALONE, ''), (RESIDENT, ' --config /foreign'), ('/tmp/reader-buddy', '')]:
+            transport = Mock()
+            record = f'{{ path={path} ; argv[]={path}{args} ; ignore_errors=no }}'.encode()
+            with patch.object(personalization, 'reply', return_value=(0, record)), self.assertRaises(wired.Refusal):
+                config.resident_identity(transport, SERVICE, time.monotonic() + 1)
+            transport.open_session.return_value.exec_command.assert_called_once_with(personalization.LAUNCHER_QUERY)
+
+    def test_unqualified_service_config_source_refuses_before_hash_or_selector(self):
+        transport = Mock()
+        with (patch.object(config, 'select_executable', return_value=RESIDENT),
+              patch.object(config.transport_common, 'exchange_no_input', return_value=2) as exchange,
+              self.assertRaises(wired.Refusal)):
+            config.resident_identity(transport, SERVICE, time.monotonic() + 1)
+        self.assertEqual(exchange.call_count, 1)
+        command = exchange.call_args.args[1]
+        self.assertIn('EnvironmentFiles', command)
+        self.assertIn('DropInPaths', command)
+        self.assertIn('REMARKABLE_BUDDIES_CONFIG', command)
+        self.assertNotIn('--configuration-operation', command)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'The fixed tablet profile uses a POSIX shell')
+    def test_profile_checks_actual_shell_without_exporting_environment_values(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env_file = Path(folder) / 'environment'
+            systemctl = Path(folder) / 'systemctl'
+            systemctl.write_text("""#!/bin/sh
+case "$1" in
+  show) printf '%s\\n' "$FIXTURE_PROPERTIES";;
+  show-environment) printf '%s\\n' "$FIXTURE_MANAGER_ENV";;
+  *) exit 2;;
+esac
+""")
+            systemctl.chmod(0o700)
+            profile = config.RESIDENT_CONFIG_CHECK.replace('/home/root/.config/reader-buddy/environment', str(env_file))
+            properties = (
+                'Environment=\n'
+                'DropInPaths=\n'
+                'NeedDaemonReload=no\n'
+                'PassEnvironment=\n'
+                'FragmentPath=/usr/lib/systemd/system/reader-buddy.service\n'
+                f'EnvironmentFiles={env_file} (ignore_errors=no)'
+            )
+            default_file = 'PRIVATE_TOKEN=fixture-value\n'
+            for name, unit, manager, file, accepted in [
+                ('stock', properties, '', default_file, True),
+                ('drop-in', properties.replace('DropInPaths=', 'DropInPaths=/foreign.conf'), '', default_file, False),
+                ('direct override', properties.replace('Environment=', 'Environment=REMARKABLE_BUDDIES_CONFIG=/foreign'),
+                 '', default_file, False),
+                ('second environment file', properties + '\nEnvironmentFiles=/foreign (ignore_errors=no)',
+                 '', default_file, False),
+                ('manager override', properties, 'REMARKABLE_BUDDIES_CONFIG=/foreign', default_file, False),
+                ('file override', properties, '', default_file + 'REMARKABLE_BUDDIES_CONFIG=/foreign\n', False),
+            ]:
+                with self.subTest(name=name):
+                    env_file.write_text(file)
+                    result = subprocess.run(['/bin/sh', '-c', profile], env={
+                        'PATH': folder + os.pathsep + os.defpath, 'LC_ALL': 'C',
+                        'FIXTURE_PROPERTIES': unit, 'FIXTURE_MANAGER_ENV': manager,
+                    }, capture_output=True, timeout=2, check=False)
+                    self.assertEqual(result.returncode == 0, accepted)
+                    self.assertEqual(result.stdout + result.stderr, b'')
+
+    def exercise(self, selector, *, hashes=(EXECUTABLE, EXECUTABLE), expected=None, report=None, reply_error=False):
+        transport, submitted = Mock(), Mock()
+        selectors = []
+        identity = iter(hashes)
+        observation = dict(OBSERVATION)
+
+        def exchange(peer, command, _, output, limit, on_submit=None, *, require_eof):
+            self.assertIs(peer, transport)
+            self.assertTrue(require_eof)
+            if command == config.RESIDENT_CONFIG_PROFILE:
+                self.assertIsNone(on_submit)
+                return 0
+            if '--configuration-operation' not in command:
+                self.assertEqual(command, f'/usr/bin/env -i PATH=/usr/bin:/bin sha256sum {RESIDENT}')
+                output.extend(f'{next(identity)}  {RESIDENT}'.encode() + b'\n')
+                return 0
+            self.assertEqual(limit, 4096)
+            executable = RESIDENT if selector.endswith('existing-default') else STANDALONE
+            self.assertEqual(command, f'{ENV} {executable} --configuration-operation {selector}')
+            selectors.append(selector)
+            on_submit()
+            output.extend(report if report is not None else
+                          (json.dumps({'report_version': 1, 'operation': selector,
+                                       'state': 'created' if selector.startswith('create-') else 'missing'}) + '\n').encode())
+            return 0
+
+        value = frame(selector, expected)
+        with (patch.object(config.shared, 'inspect', side_effect=lambda _: dict(observation)),
+              patch.object(config, 'select_executable', return_value=RESIDENT),
+              patch.object(config.transport_common, 'exchange_no_input', side_effect=exchange)):
+            if reply_error:
+                with self.assertRaises((wired.Refusal, ValueError)):
+                    config.execute(transport, value, time.monotonic() + 3, submitted)
+                return selectors, submitted.call_count
+            result = config.execute(transport, value, time.monotonic() + 3, submitted)
+            return result['_first_config'], submitted.call_count
+
+    def test_fixed_route_and_exactly_one_submit(self):
+        for selector, expected, digest, state in [
+            ('check-existing-default', None, EXECUTABLE, 'missing'),
+            ('create-existing-default', EXECUTABLE, EXECUTABLE, 'created'),
+            ('check-initial', None, None, 'missing'),
+            ('create-initial', None, None, 'created'),
+        ]:
+            with self.subTest(selector=selector):
+                self.assertEqual(self.exercise(selector, expected=expected),
+                                 (({'report_version': 1, 'operation': selector, 'state': state}, digest), 1))
+
+    def test_changed_binary_refuses_before_dispatch_or_leaves_possible_after_dispatch(self):
+        selector = 'create-existing-default'
+        self.assertEqual(self.exercise(selector, hashes=(OTHER,), expected=EXECUTABLE, reply_error=True), ([], 0))
+        self.assertEqual(self.exercise(selector, hashes=(EXECUTABLE, OTHER), expected=EXECUTABLE, reply_error=True),
+                         ([selector], 1))
+
+    def test_malformed_and_mismatched_reports_cannot_confirm_the_original(self):
+        for report in [
+            b'{"report_version":1,"operation":"create-initial","state":"created"}\n',
+            b'{"report_version":1,"operation":"create-existing-default","state":"missing"}\n',
+            b'{"report_version":1,"report_version":1,"operation":"create-existing-default","state":"created"}\n',
+            b'{"report_version":1,"operation":"create-existing-default","state":"created"}\n{}\n',
+        ]:
+            with self.subTest(report=report):
+                self.assertEqual(self.exercise('create-existing-default', expected=EXECUTABLE,
+                                               report=report, reply_error=True), (['create-existing-default'], 1))

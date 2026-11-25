@@ -9,7 +9,7 @@ const same=(a,b)=>a&&b&&a.connection_id===b.connection_id&&a.boot_id===b.boot_id
 const keys=v=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().join():'';
 export class ServiceStopHost{
  #editor=null;#records=new Map();#active=null;#epoch=0;#issued=new WeakMap();
- constructor({observer,io=new MaintenanceIO(),beforeIO=()=>{},now=()=>performance.now(),reference=()=>randomBytes(32).toString('hex'),budgetMs=13000,admitProfile=admitServiceStopProfile}={}){if(!Number.isSafeInteger(budgetMs)||budgetMs<1||budgetMs>13000)throw Error('Service stop budget refused');Object.assign(this,{observer,io,beforeIO,now,reference,budgetMs,admitProfile});}
+ constructor({observer,io=new MaintenanceIO(),beforeIO=()=>{},now=()=>performance.now(),reference=()=>randomBytes(32).toString('hex'),budgetMs=31000,admitProfile=admitServiceStopProfile}={}){if(!Number.isSafeInteger(budgetMs)||budgetMs<1||budgetMs>31000)throw Error('Service stop budget refused');Object.assign(this,{observer,io,beforeIO,now,reference,budgetMs,admitProfile});}
  #expire(){if(this.#editor&&this.now()>=this.#editor.deadline){this.#editor=null;this.#epoch++;}}
  invalidate(reason='session-changed'){
   this.#epoch++;this.#editor=null;const a=this.#active;
@@ -54,7 +54,7 @@ export class ServiceStopHost{
  }
  #current(a){return this.#active===a&&a.epoch===this.#epoch&&this.io.owns(a.token)&&this.now()<a.deadline&&same(a.s.sample,this.observer.lastObservation);}
  async #raw(a){
-  const budget_ms=Math.min(12000,Math.floor(a.deadline-this.now()));if(budget_ms<1||!this.#current(a))throw Error('Service stop expired');
+  const budget_ms=Math.min(30000,Math.floor(a.deadline-this.now()));if(budget_ms<1||!this.#current(a))throw Error('Service stop expired');
   const selector=a.operation==='begin'?'review':a.operation==='confirm'?'stop':'inspect';
   const expected=selector==='stop'?(TYPED_PUBLIC_STOP&&a.s.expected.profile==='ordinary-manual'?
     {...a.s.expected,invocation:a.invocation}:a.s.expected):null;

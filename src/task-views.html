@@ -148,6 +148,9 @@
     <p class="text-sm text-muted">Change the response preference saved on your tablet. Saving confirms the file only; use by Reader and Writer still needs verification.</p>
     <button class="ui-button ui-button-secondary" type="button" (click)="app.personalize('inspect')" [disabled]="!app.profile().personalizationProbe || !app.host.personalization || app.personalization().busy">Read personalization</button>
     <p role="status" data-testid="personalization-status">{{ app.personalization().status }}</p>
+    @if (app.host.firstConfiguration && !app.personalization().report) {
+      <p class="text-sm text-muted">If Buddy has never saved a configuration, open Tablet → Setup to save its defaults first.</p>
+    }
     @if (app.personalization().report) {
       <label class="block mt-4" for="personalization-text">Response preference</label>
       <textarea id="personalization-text" class="ui-field block w-full sm:w-full" rows="6" [value]="app.personalizationText()" (input)="app.editPersonalization($event)" (paste)="app.pastePersonalization($event)" aria-describedby="personalization-help"></textarea>

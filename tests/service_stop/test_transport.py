@@ -12,7 +12,9 @@ BASE=dict(connection_id='a'*64,boot_id='11111111-1111-4111-8111-111111111111',se
 class Cases(unittest.TestCase):
  def test_closed_private_requests(self):
   self.assertEqual(q.request(json.dumps(BASE).encode()),BASE)
-  for change in [dict(extra=True),dict(selector='restart'),dict(budget_ms=True),dict(budget_ms=12001),dict(expected={}),dict(connection_id='A'*64)]:
+  maximum=dict(BASE,budget_ms=30000)
+  self.assertEqual(q.request(json.dumps(maximum).encode()),maximum)
+  for change in [dict(extra=True),dict(selector='restart'),dict(budget_ms=True),dict(budget_ms=30001),dict(expected={}),dict(connection_id='A'*64)]:
    with self.assertRaises(ValueError):q.request(json.dumps(dict(BASE,**change)).encode())
   with self.assertRaises(ValueError):q.request(json.dumps(BASE).replace('"budget_ms": 12000','"budget_ms": 1e3').encode())
   with self.assertRaises(ValueError):q.request(json.dumps(BASE).replace('"selector": "review"','"selector":"review","selector":"inspect"').encode())

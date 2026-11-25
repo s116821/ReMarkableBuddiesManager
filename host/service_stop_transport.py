@@ -58,7 +58,7 @@ def request(raw):
     v = parse(raw, MAX_REQUEST)
     exact(v, 'connection_id boot_id selector budget_ms expected')
     if (v['selector'] not in ('review', 'stop', 'inspect') or not digest(v['connection_id']) or not uuid(v['boot_id'])
-            or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 12000):
+            or type(v['budget_ms']) is not int or not 1 <= v['budget_ms'] <= 30000):
         raise ValueError('input refused')
     if v['selector'] == 'stop':
         typed = TYPED_PUBLIC_STOP_OWNER is not None and v['expected'].get('profile') == 'ordinary-manual' if isinstance(v['expected'], dict) else False
@@ -127,13 +127,15 @@ def typed_public_stop(sampler, v, facts, deadline, owner):
     return command, acknowledged
 
 
-def execute(transport, v, deadline=None, on_submission=lambda:None):
+def execute(transport, v, deadline=None, on_submission=lambda:None, *, diagnostic=None):
     if v['selector'] == 'stop' and v['expected']['profile'] not in QUALIFIED_PROFILES:
         raise shared.Refusal('observation-unavailable')
     if deadline is None:
         deadline = time.monotonic() + v['budget_ms'] / 1000
     if time.monotonic() >= deadline:
         raise shared.Refusal('timeout')
+    if diagnostic is not None:
+        diagnostic[:] = ('initial-inspection', 'error')
     before = shared.inspect(transport)
     if time.monotonic() >= deadline:
         raise shared.Refusal('timeout')
@@ -143,6 +145,8 @@ def execute(transport, v, deadline=None, on_submission=lambda:None):
     # Current OS inspection stays independent of lifecycle admission and must
     # remain useful after Buddy is inactive or an earlier stop is unknown.
     if QUALIFIED_PROFILES and v['selector']!='inspect':
+        if diagnostic is not None:
+            diagnostic[:] = ('sample', 'error')
         sampler=Sampler(transport,deadline)
         observed=dict(before,connection_id=v['connection_id'])
         profiles=[v['expected']['profile']] if v['selector']=='stop' else QUALIFIED_PROFILES
@@ -164,6 +168,8 @@ def execute(transport, v, deadline=None, on_submission=lambda:None):
             if time.monotonic()>=deadline:raise shared.Refusal('timeout')
             typed = TYPED_PUBLIC_STOP_OWNER is not None and profile == 'ordinary-manual'
             if typed:
+                if diagnostic is not None:
+                    diagnostic[:] = ('owner-preparation', 'error')
                 command, acknowledged = typed_public_stop(sampler, v, facts, deadline, TYPED_PUBLIC_STOP_OWNER)
             else:
                 command = STOP_COMMAND
@@ -172,12 +178,28 @@ def execute(transport, v, deadline=None, on_submission=lambda:None):
             if time.monotonic()>=deadline:raise shared.Refusal('timeout')
             on_submission()  # Original uncertainty starts before the fixed send.
             raw['command']='unknown';raw['reason']='unavailable'
-            code,out,err=run_fixed(transport,command,deadline,512 if typed else 1024)
+            if typed and diagnostic is not None:
+                code,out,err=run_fixed(transport,command,deadline,512,diagnostic=diagnostic)
+                diagnostic[:] = ('ack', 'error')
+            else:
+                code,out,err=run_fixed(transport,command,deadline,512 if typed else 1024)
             if acknowledged(code,out,err):
                 raw['command']='request-accepted';raw['reason']=None
+            if typed and diagnostic is not None:
+                cause = ('accepted' if raw['command']=='request-accepted' else
+                         'missing-status' if code == -1 else 'nonzero-exit' if code else
+                         'stderr' if err else
+                         'empty-reply' if not out else 'incomplete-reply' if not out.endswith(b'\n') else
+                         'receipt-refused')
+                diagnostic[:] = ('ack', cause)
+        prior = tuple(diagnostic) if diagnostic is not None else None
+        if diagnostic is not None:
+            diagnostic[:] = ('final-inspection', 'error')
         after=shared.inspect(transport)
         if after['boot_id']!=before['boot_id'] or time.monotonic()>=deadline:
             raise shared.Refusal('cable-lost')
+        if diagnostic is not None:
+            diagnostic[:] = prior
         before=after
     before['_service_stop_raw'] = raw
     return before
@@ -187,6 +209,7 @@ def main():
     timer = None
     selector = 'inspect'
     possible = False
+    diagnostic = None
     lock, responded = threading.Lock(), False
     def failure(status):
         raw=empty_raw(selector)
@@ -199,9 +222,19 @@ def main():
             if not responded:
                 responded = True
                 print(json.dumps(value), flush=True)
+                if diagnostic is not None:
+                    stage, cause = diagnostic
+                    try:
+                        fd = sys.stderr.fileno()
+                        os.set_blocking(fd, False)
+                        os.write(fd, f'STOP1 {stage} {cause}\n'.encode('ascii'))
+                    except Exception:
+                        pass  # A missing diagnostic cannot delay or alter the public response.
     try:
         v = request(sys.stdin.buffer.read(MAX_REQUEST + 1))
         selector = v['selector']
+        if selector == 'stop' and TYPED_PUBLIC_STOP_OWNER is not None and v['expected']['profile'] == 'ordinary-manual':
+            diagnostic = ['setup', 'error']
         if selector == 'stop' and v['expected']['profile'] not in QUALIFIED_PROFILES:
             respond(failure('unconfigured'))
             return
@@ -222,13 +255,15 @@ def main():
         def submitted():
             nonlocal possible
             possible=True
+        def inspect(transport):
+            return execute(transport, v, deadline, submitted, diagnostic=diagnostic)
         if sys.platform == 'win32':
             import windows_wired
             config = windows_wired.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = windows_wired.observe(config, shared, inspection=lambda t: execute(t, v, deadline, submitted), expected_connection=v['connection_id'])
+            observation = windows_wired.observe(config, shared, inspection=inspect, expected_connection=v['connection_id'])
         else:
             config = shared.load_config(os.environ['MANAGER_WIRED_CONFIG'])
-            observation = shared.observe(config, inspection=lambda t: execute(t, v, deadline, submitted), expected_connection=v['connection_id'])
+            observation = shared.observe(config, inspection=inspect, expected_connection=v['connection_id'])
         mode = observation.pop('_service_stop_raw')
         respond({'contract_version': 1, 'status': 'observed', 'observation': observation, 'service_stop_raw': mode})
     except shared.Refusal as error:

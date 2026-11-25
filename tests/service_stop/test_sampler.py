@@ -21,6 +21,15 @@ import service_stop_transport as t
 VECTORS=json.loads((Path(__file__).resolve().parents[1]/'fixtures/service-stop-profile-vectors.json').read_text())
 
 
+def logical_commands(command):
+ prefix=next((p for p in (s.PREFIX,s.hooks.BUS_PREFIX) if command.startswith(p)),None)
+ if prefix is None:return [command]
+ script=shlex.split(command)[-1]
+ if not script.endswith(s.FRAME_END):return [command]
+ scripts=script[:-len(s.FRAME_END)].split(s.FRAME_END+' && ')
+ return [prefix+shlex.quote(('exec ' if prefix==s.hooks.BUS_PREFIX else '')+part) for part in scripts]
+
+
 class Files:
  def __init__(self,profile='ordinary-manual'):
   self.vector=copy.deepcopy(next(v for v in VECTORS if v['tuple']['profile']==profile));self.raw=self.vector['raw'];self.profile=profile;self.commands=[];self.change=None;self.permission=False;self.extra_argv=False;self.bad_parent=False;self.namespace_drift=False;self.slotpaths=dict(s.SLOTS,buddy_executable=s.APPS[profile]);self.by_path={v:k for k,v in self.slotpaths.items()};self.contents={}
@@ -49,6 +58,16 @@ class Files:
   return f'{device} {inode} {uid} 0 {mode:x} {length} {1 if slot or record else 2}\n2026-01-01 00:00:00.000000001 +0000\n2026-01-01 00:00:00.000000001 +0000\n'.encode()
  def run(self,transport,command,deadline,cap):
   self.commands.append(command)
+  commands=logical_commands(command)
+  if commands==[command]:return self.reply(command)
+  stdout,stderr=b'',b''
+  for step in commands:
+   code,out,err=self.reply(step)
+   stdout+=out;stderr+=err
+   if code:return code,stdout,stderr
+   stdout+=b'\0'
+  return 0,stdout,stderr
+ def reply(self,command):
   if command.startswith('/bin/systemctl '):
    unit=command.rsplit(' ',1)[1];name={s.BUDDY:'buddy',s.HELPER:'helper',s.STOCK:'stock',s.COMPANION:'companion'}[unit]
    if '--property=UMask' in command:return 0,''.join(k+'='+v+'\n' for k,v in self.raw['vendor_policy'][name].items()).encode(),b''
@@ -73,11 +92,21 @@ class Files:
   if parts[0]=='stat' and '-f' in parts:return 0,b'63677270\n',b''
   if parts.count('stat')>1:
    chunks=[]
-   for i in range(0,len(parts),11):
-    pair=parts[i:i+10];path=pair[3]
-    assert pair==['test','!','-L',path,'&&','stat','-c',s.STAT_FORMAT,'--',path]
-    if i+10<len(parts):assert parts[i+10]=='&&'
+   i=0
+   while i<len(parts):
+    if parts[i]=='test':
+     path=parts[i+3]
+     assert parts[i:i+5]==['test','!','-L',path,'&&']
+     i+=5
+    else:
+     path=parts[i+4]
+     assert i==0 and path==getattr(self,'app',None)
+    assert parts[i:i+5]==['stat','-c',s.STAT_FORMAT,'--',path]
     chunks.append(self.meta(path))
+    i+=5
+    if i<len(parts):
+     assert parts[i]=='&&'
+     i+=1
    return 0,b''.join(chunks),b''
   if 'stat' in parts:
    legacy='/home/root/.local/lib/reader-buddy'
@@ -135,15 +164,13 @@ class AliasFiles(Files):
   if path=='/proc/20/exe' and self.proc_inode_drift:raw=raw.replace(b'1 2 0 0 ',b'1 3 0 0 ',1)
   return raw
 
- def run(self,transport,command,deadline,cap):
+ def reply(self,command):
   parts=shlex.split(shlex.split(command)[-1]) if command.startswith(s.PREFIX) else []
   if parts and parts[0]=='readlink':
-   self.commands.append(command)
    return 0,((self.literal if parts[-1]==self.app else self.proc_path)+'\n').encode(),b''
   if self.nested_target and parts and parts[-1]==self.target and 'stat' in parts:
-   self.commands.append(command)
    return 1,b'',b''
-  return super().run(transport,command,deadline,cap)
+  return super().reply(command)
 
 
 class Channel:
@@ -161,6 +188,103 @@ class Channel:
 
 
 class SamplerTests(unittest.TestCase):
+ @unittest.skipUnless(shutil.which('sh'),'local POSIX shell frame producer')
+ def test_shell_frames_preserve_bytes_and_stop_after_failed_read(self):
+  commands=("printf 'one\n\n'", "printf 'two'")
+  shell=shutil.which('sh')
+  def run(*scripts):
+   result=subprocess.run([shell,'-c',s._framed_script(*scripts)],capture_output=True,timeout=3)
+   return result.returncode,result.stdout,result.stderr
+  deadline=time.monotonic()+5
+  self.assertEqual(s._frames(run(*commands),(5,3),deadline),[b'one\n\n',b'two'])
+  failed=run(commands[0],"printf 'err' >&2 && false",commands[1])
+  self.assertEqual(failed,(1,b'one\n\n\0',b'err'))
+  with self.assertRaises(ValueError):s._frames(failed,(5,0,3),deadline)
+ def test_frames_require_every_separator_and_individual_bound(self):
+  for out in (b'one\0two',b'one\0two\0tail',b'one\0two\0\0',b'one\0',b'four\0o\0'):
+   with self.subTest(out=out), self.assertRaises(ValueError):
+    s._frames((0,out,b''),(3,3),time.monotonic()+5)
+ def test_ordinary_process_opening_accepts_raw_argv_with_distinct_frame_delimiter(self):
+  f=AliasFiles()
+  pid,start,opening=f.sampler()._process_identity(f.raw['buddy'],f.target,f.app,ordinary=True)
+  self.assertEqual((pid,start,opening),('20','40',s.metadata(f.meta(f.target))))
+  self.assertEqual(len(f.commands),2)
+  reads=[shlex.split(shlex.split(command)[-1]) for command in logical_commands(f.commands[0])]
+  self.assertEqual(reads,[
+   ['dd','bs=1','count=4097','if=/proc/20/stat','2>/dev/null'],
+   ['dd','bs=1',f'count={len(f.app.encode())+2}','if=/proc/20/cmdline','2>/dev/null'],
+   ['readlink','--','/proc/20/exe'],
+  ])
+  self.assertNotIn('stat -L',f.commands[0])
+  self.assertIn('stat -L',f.commands[1])
+ def test_invalid_ordinary_process_frames_refuse_before_followed_metadata(self):
+  f=AliasFiles()
+  initial=('20 (reader-buddy) S '+' '.join(['0']*18+['40'])).encode()+b'\0'
+  argv=f.app.encode()+b'\0\0'
+  literal=f.target.encode()+b'\n\0'
+  valid=initial+argv+literal
+  for label,reply in (
+   ('missing argv NUL',(0,initial+argv[:-1]+literal,b'')),
+   ('extra argv NUL',(0,initial+argv+b'\0'+literal,b'')),
+   ('wrong argv',(0,initial+b'/wrong\0\0'+literal,b'')),
+   ('extra argv',(0,initial+f.app.encode()+b'\0arg\0\0'+literal,b'')),
+   ('wrong link',(0,initial+argv+b'/wrong\n\0',b'')),
+   ('stat overflow',(0,b'x'*4097+b'\0'+argv+literal,b'')),
+   ('link overflow',(0,initial+argv+b'x'*4097+b'\0',b'')),
+   ('total overflow',(0,valid+b'x'*9000,b'')),
+   ('missing first delimiter',(0,initial[:-1]+argv+literal,b'')),
+   ('missing end delimiter',(0,valid[:-1],b'')),
+   ('missing link',(0,initial+argv,b'')),
+   ('extra frame',(0,valid+b'extra\0',b'')),
+   ('nonzero',(1,valid,b'')),
+   ('stderr',(0,valid,b'refused')),
+  ):
+   with self.subTest(label=label):
+    run=Mock(return_value=reply)
+    sampler=s.Sampler(Mock(),time.monotonic()+12,run=run)
+    with self.assertRaises(ValueError):
+     sampler._process_identity(f.raw['buddy'],f.target,f.app,ordinary=True)
+    run.assert_called_once()
+    self.assertNotIn('stat -L',run.call_args.args[1])
+ def test_process_opening_facts_refuse_before_hash(self):
+  for path,bad in (
+   ('/status',b'Uid:\t1\t1\t1\t1\nGid:\t0\t0\t0\t0\n'),
+   ('/status',b'x'*16385),
+   ('/cgroup',b'0::/other.slice\n'),
+   ('/exe',None),
+  ):
+   f=Files();original=f.reply
+   artifact=dict(s.metadata(f.meta(s.APPS[f.profile]))[0],sha256=f.raw['artifacts']['buddy_executable']['sha256'])
+   def respond(command):
+    code,out,err=original(command)
+    parts=shlex.split(shlex.split(command)[-1])
+    if parts[-1]=='/proc/20'+path or 'if=/proc/20'+path in parts:
+     out=bad if bad is not None else out.replace(b'1 2 0 0 ',b'1 90 0 0 ',1)
+    return code,out,err
+   f.reply=respond
+   with self.subTest(path=path,oversize=bool(bad and len(bad)>4096)), self.assertRaises(ValueError):
+    f.sampler().process(f.raw['buddy'],s.APPS[f.profile],artifact)
+   self.assertEqual(len(f.commands),4)
+   self.assertFalse(any('sha256sum' in command for command in f.commands))
+ def test_process_post_hash_identity_and_start_tick_still_gate_acceptance(self):
+  for path in ('/exe','/stat'):
+   f=Files();original=f.reply;reads=0
+   artifact=dict(s.metadata(f.meta(s.APPS[f.profile]))[0],sha256=f.raw['artifacts']['buddy_executable']['sha256'])
+   def respond(command):
+    nonlocal reads
+    code,out,err=original(command)
+    parts=shlex.split(shlex.split(command)[-1])
+    if ((path=='/exe' and parts[:2]==['stat','-L']) or
+        (path=='/stat' and parts[0]=='dd' and 'if=/proc/20/stat' in parts)):
+     reads+=1
+     if reads==2:
+      out=out.replace(b'1 2 0 0 ',b'1 90 0 0 ',1) if path=='/exe' else out[:-2]+b'41'
+    return code,out,err
+   f.reply=respond
+   with self.subTest(path=path), self.assertRaises(ValueError):
+    f.sampler().process(f.raw['buddy'],s.APPS[f.profile],artifact)
+   self.assertEqual(reads,2)
+   self.assertEqual(len(f.commands),5)
  def test_parent_chain_is_one_ordered_command_with_original_metadata(self):
   f=Files();original=f.meta
   def meta(path,follow=False):
@@ -209,8 +333,40 @@ class SamplerTests(unittest.TestCase):
   f.meta=meta
   with self.assertRaises(ValueError):f.sampler().file('/opt/bin/reader-buddy')
   self.assertEqual(reads,2)
-  chains=[c for c in f.commands if shlex.split(shlex.split(c)[-1]).count('stat')==3]
-  self.assertEqual(len(chains),2);self.assertEqual(chains[0],chains[1])
+  self.assertEqual(len(f.commands),3)
+  before,leaf,read,after=[shlex.split(step)[-1] for c in f.commands for step in logical_commands(c)]
+  self.assertEqual(read,'sha256sum -- /opt/bin/reader-buddy')
+  self.assertEqual(after,leaf+' && '+before)
+ def test_hash_and_tail_refuse_invalid_framing_individual_caps_status_and_stderr(self):
+  for name,mutate in [
+   ('short',lambda out:(0,out[:-1],b'')),
+   ('extra',lambda out:(0,out+b'\n',b'')),
+   ('hash-cap',lambda out:(0,b'x'*4097+b'\0'+out.split(b'\0',1)[1],b'')),
+   ('metadata-cap',lambda out:(0,out.split(b'\0',1)[0]+b'\0'+b'x'*4097+b'\0',b'')),
+   ('hash-path',lambda out:(0,out.replace(b'  /opt/bin/reader-buddy\n',b'  /other\n',1),b'')),
+   ('exit',lambda out:(1,out,b'')),
+   ('stderr',lambda out:(0,out,b'warning')),
+  ]:
+   f=Files();instance=f.sampler()
+   def run(transport,command,deadline,cap):
+    code,out,err=f.run(transport,command,deadline,cap)
+    if len(f.commands)==3:
+     self.assertEqual(cap,8194)
+     return mutate(out)
+    return code,out,err
+   instance.run=run
+   with self.subTest(name=name), self.assertRaises(ValueError):
+    instance.file('/opt/bin/reader-buddy')
+   self.assertEqual(len(f.commands),3)
+ def test_private_contents_keep_their_separate_bounded_read_and_tail(self):
+  f=Files('resident-installed')
+  expected=f.contents[s.LEASE]
+  evidence,data=f.sampler().file(s.LEASE,contents=True,private=True)
+  self.assertEqual(data,expected)
+  self.assertEqual(evidence['sha256'],s.hashlib.sha256(expected).hexdigest())
+  self.assertEqual(len(f.commands),4)
+  self.assertTrue(shlex.split(f.commands[2])[-1].startswith('dd bs=1 count=32769 '))
+  self.assertTrue(all(logical_commands(command)==[command] for command in f.commands))
  @unittest.skipUnless(sys.platform=='linux','local GNU parent chain')
  def test_actual_gnu_parent_batch_producer_and_unsafe_missing_symlink(self):
   self.exercise_parent_batch()
@@ -302,12 +458,14 @@ class SamplerTests(unittest.TestCase):
  def test_collected_private_dto_and_candidate_semantics_cross_the_actual_node_boundary(self):
   root=Path(__file__).resolve().parents[2]
   imports=json.dumps((root/'host/service-stop-profiles.mjs').as_uri());private=json.dumps((root/'host/service-stop-private.mjs').as_uri())
-  script="import {matchesCandidateStopProfile} from "+imports+";import {parseServiceStopRaw,serviceStopSampleDigest,admitServiceStopProfile} from "+private+";let s='';for await(const c of process.stdin)s+=c;const v=JSON.parse(s);parseServiceStopRaw(v.raw,'review');if(!matchesCandidateStopProfile(v.observation,v.raw,v.tuple)||serviceStopSampleDigest(v.observation,v.tuple.profile,v.raw)!==v.digest||admitServiceStopProfile(v.observation,v.raw)!==null)process.exit(1);"
-  for f in (Files(),Files('resident-installed'),AliasFiles()):
+  script="import {matchesCandidateStopProfile} from "+imports+";import {parseServiceStopRaw,serviceStopSampleDigest,admitServiceStopProfile} from "+private+";let s='';for await(const c of process.stdin)s+=c;const v=JSON.parse(s);parseServiceStopRaw(v.raw,'review');if(matchesCandidateStopProfile(v.observation,v.raw,v.tuple)!==v.expectedMatch||serviceStopSampleDigest(v.observation,v.tuple.profile,v.raw)!==v.digest||admitServiceStopProfile(v.observation,v.raw)!==null)process.exit(1);"
+  unexpected=Files()
+  unexpected.raw['artifacts']['buddy_executable']['sha256']='f'*64
+  for f in (Files(),Files('resident-installed'),AliasFiles(),unexpected):
    profile=f.profile
    if isinstance(f,AliasFiles):f.vector['tuple']['ordinary_alias_target']=f.target
    raw,digest=f.sampler().bracket(profile,f.vector['observation'],t.empty_raw)
-   body=dict(raw=raw,digest=digest,observation=f.vector['observation'],tuple=f.vector['tuple'])
+   body=dict(raw=raw,digest=digest,observation=f.vector['observation'],tuple=f.vector['tuple'],expectedMatch=f is not unexpected)
    r=subprocess.run(['node','--input-type=module','-e',script],input=json.dumps(body),capture_output=True,text=True,timeout=10)
    self.assertEqual(r.returncode,0,r.stderr)
  def test_alias_sampler_binds_literal_target_process_and_both_parent_brackets(self):
@@ -317,12 +475,196 @@ class SamplerTests(unittest.TestCase):
   self.assertEqual(raw['process']['argv'],[f.app])
   self.assertEqual(raw['artifacts']['buddy_executable']['sha256'],raw['process']['sha256'])
   self.assertEqual(len(digest),64)
+  self.assertEqual(len(f.commands),52)
+  self.assertLess(sum(len(logical_commands(c)) for c in f.commands),108)
   for change,value in [('literal','/home/root/foreign'),('proc_path',f.app),('extra_argv',True),
                        ('drift',True),('target_inode_drift',True),('foreign_target_parent',True),
                        ('target_parent_drift',True),('nested_target',True),('proc_inode_drift',True)]:
    f=AliasFiles();setattr(f,change,value)
    with self.subTest(change=change), self.assertRaises(ValueError):
     f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+ def test_ordinary_sibling_openings_keep_both_parent_checks_before_both_leaves(self):
+  unit='/etc/systemd/system/'+s.BUDDY;executable=s.APPS['ordinary-manual']
+  for fault in ('unit ancestry','executable ancestry','missing frame','oversize','status','stderr',None):
+   with self.subTest(fault=fault):
+    f=Files();sampler=f.sampler()
+    def run(transport,command,deadline,cap):
+     code,out,err=f.run(transport,command,deadline,cap)
+     if len(f.commands)!=1:return code,out,err
+     self.assertEqual(cap,8194)
+     scripts=[shlex.split(step)[-1] for step in logical_commands(command)]
+     self.assertEqual(len(scripts),2)
+     self.assertIn('/etc/systemd/system',scripts[0]);self.assertIn('/opt/bin',scripts[1])
+     self.assertNotIn(unit,command);self.assertNotIn(executable,command)
+     frames=out.split(b'\0')
+     if fault in ('unit ancestry','executable ancestry'):
+      i=int(fault=='executable ancestry')
+      frames[i]=frames[i].replace(b'0 0 41ed',b'0 0 41ff',1)
+     elif fault=='missing frame':frames.pop(1)
+     elif fault=='oversize':frames[1]=b'x'*4097
+     elif fault=='status':code=1
+     elif fault=='stderr':err=b'unexpected'
+     return code,b'\0'.join(frames),err
+    sampler.run=run
+    if fault:
+     with self.assertRaises(ValueError):sampler._ordinary_openings(unit,executable)
+     self.assertEqual(len(f.commands),1)
+    else:
+     sampler._ordinary_openings(unit,executable)
+     self.assertEqual(len(f.commands),2)
+     leaves=[shlex.split(shlex.split(step)[-1]) for step in logical_commands(f.commands[1])]
+     self.assertEqual([leaf[-1] for leaf in leaves],[unit,executable])
+     self.assertTrue(all(leaf[:5]==['test','!','-L',leaf[-1],'&&'] for leaf in leaves))
+ def test_ordinary_lease_parent_frame_is_fresh_independent_and_required(self):
+  for fault,expected_absence_stats in (('opening',0),('closing',1),(None,2)):
+   with self.subTest(fault=fault):
+    f=Files();original=f.meta;seen=0;sampler=f.sampler()
+    def metadata(path,follow=False):
+     nonlocal seen
+     value=original(path,follow)
+     if path=='/run':
+      seen+=1
+      if (fault,seen) in (('opening',1),('closing',2)):
+       value=value.replace(b'0 0 41ed',b'0 0 41ff',1)
+     return value
+    f.meta=metadata
+    if fault:
+     with self.assertRaises(ValueError):sampler.capture(f.profile,t.empty_raw)
+    else:
+     self.assertEqual(sampler.capture(f.profile,t.empty_raw)['lease_observation'],'absent-final-component')
+    [platform]=[c for c in f.commands if 'if=/etc/os-release' in c]
+    scripts=[shlex.split(step)[-1] for step in logical_commands(platform)]
+    self.assertEqual(len(scripts),3)
+    self.assertTrue(scripts[2].endswith(' -- /run'))
+    self.assertNotIn(s.LEASE_DIRECTORY,platform)
+    self.assertEqual(sum(s.LEASE_DIRECTORY in c for c in f.commands),expected_absence_stats)
+    self.assertEqual(seen,1 if fault=='opening' else 2)
+ def test_ordinary_closing_getunit_group_keeps_all_checks_and_independent_client(self):
+  for fault in ('unit','pid','owner','bus','frame','oversize','status','stderr',None):
+   with self.subTest(fault=fault):
+    f=Files();sampler=f.sampler();closing=[]
+    def run(transport,command,deadline,cap):
+     code,out,err=f.run(transport,command,deadline,cap)
+     steps=logical_commands(command)
+     if len(steps)!=4 or not command.startswith(s.hooks.BUS_PREFIX):return code,out,err
+     closing.append(command)
+     self.assertEqual(cap,4*4097)
+     for step,method in zip(steps,('GetUnit','GetConnectionUnixProcessID','GetNameOwner','GetId'),strict=True):
+      self.assertIn(method,step)
+     frames=out.split(b'\0')
+     altered={'unit':(0,'o','/wrong'),'pid':(1,'u',2),'owner':(2,'s',':1.1'),'bus':(3,'s','b'*32)}
+     if fault in altered:
+      index,kind,value=altered[fault];frames[index]=json.dumps(dict(type=kind,data=[value])).encode()
+     elif fault=='frame':frames.insert(3,b'extra')
+     elif fault=='oversize':frames[1]=b'x'*4097
+     elif fault=='status':code=1
+     elif fault=='stderr':err=b'unexpected'
+     return code,b'\0'.join(frames),err
+    sampler.run=run
+    if fault:
+     with self.assertRaises(s.TypedHookRefusal):sampler.bracket(f.profile,f.vector['observation'],t.empty_raw)
+     self.assertEqual(closing,[f.commands[-1]])
+    else:
+     sampler.bracket(f.profile,f.vector['observation'],t.empty_raw)
+     self.assertEqual(closing,[f.commands[-2]])
+     self.assertIn('CAPCLIENT1',f.commands[-1])
+    self.assertIsNone(sampler._hooks)
+ def test_alias_batch_refuses_mismatched_literal_or_framing_without_target_leaf_read(self):
+  for label in ('literal','missing frame','extra frame','oversize','nonzero','stderr'):
+   with self.subTest(label=label):
+    f=AliasFiles();sampler=f.sampler()
+    def run(transport,command,deadline,cap):
+     code,out,err=f.run(transport,command,deadline,cap)
+     if 'readlink -- '+f.app not in command:
+      return code,out,err
+     if label=='literal':out=b'/incorrect\n\0'+out.split(b'\0',1)[1]
+     if label=='missing frame':out=out.split(b'\0',1)[0]+b'\0'
+     if label=='extra frame':out+=b'extra\0'
+     if label=='oversize':out=b'x'*257+b'\0'+out.split(b'\0',1)[1]
+     if label=='nonzero':code=1
+     if label=='stderr':err=b'refused'
+     return code,out,err
+    sampler.run=run
+    with self.assertRaises(ValueError):
+     sampler.ordinary_alias(f.app)
+    self.assertEqual(len(f.commands),3)
+    self.assertEqual(f.target_reads,0)
+    self.assertNotIn('sha256sum',f.commands[-1])
+ def test_ordinary_bracket_hashes_the_running_executable_once_per_capture(self):
+  for f in (Files(),AliasFiles()):
+   f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+   hashes=[shlex.split(shlex.split(step)[-1])
+           for c in f.commands for step in logical_commands(c) if 'sha256sum -- ' in step]
+   self.assertEqual(hashes.count(['sha256sum','--','/proc/20/exe']),2)
+   self.assertFalse(any(args[-1] in (s.APPS[f.profile],s.ORDINARY_ALIAS_TARGET) for args in hashes))
+ def test_ordinary_join_refuses_opening_and_closing_proc_stat_drift(self):
+  for proc_read in (1,2,3,4):
+   for field in ('inode','nlink','mtime','ctime'):
+    f=Files()
+    original=f.meta
+    seen=0
+    def drift(path,follow=False):
+     nonlocal seen
+     raw=original(path,follow)
+     if path!='/proc/20/exe':return raw
+     seen+=1
+     if seen!=proc_read:return raw
+     lines=raw.splitlines()
+     if field in ('mtime','ctime'):
+      index=1 if field=='mtime' else 2
+      lines[index]=lines[index].replace(b'000000001',b'000000002')
+     else:
+      fields=lines[0].split()
+      fields[1 if field=='inode' else 6]=b'99'
+      lines[0]=b' '.join(fields)
+     return b'\n'.join(lines)+b'\n'
+    f.meta=drift
+    with self.subTest(proc_read=proc_read,field=field), self.assertRaises(ValueError):
+     f.sampler().capture(f.profile,t.empty_raw)
+    self.assertEqual(seen,proc_read)
+ def test_ordinary_join_refuses_pid_reuse_and_fresh_digest_drift(self):
+  for changed in ('pid-start','digest'):
+   f=AliasFiles()
+   original=f.reply
+   reads=0
+   def drift(command):
+    nonlocal reads
+    code,out,err=original(command)
+    if changed=='pid-start' and 'if=/proc/20/stat' in command:
+     reads+=1
+     if reads>=3:out=out[:-2]+b'41'
+    if changed=='digest' and 'sha256sum -- /proc/20/exe' in command:
+     reads+=1
+     if reads==2:out=b'f'*64+out[64:]
+    return code,out,err
+   f.reply=drift
+   with self.subTest(changed=changed), self.assertRaises(ValueError):
+    f.sampler().bracket(f.profile,f.vector['observation'],t.empty_raw)
+ def test_closing_target_and_parents_must_validate_before_alias_leaf(self):
+  for frame,before,after in (
+   (0,b'1 2 0 0 ',b'1 99 0 0 '),
+   (0,b'0 0 81ed',b'0 0 81a4'),
+   (1,b'0 0 41ed',b'0 0 41ff'),
+  ):
+   f=AliasFiles();instance=f.sampler()
+   target=s.PREFIX+shlex.quote(instance._stat_script(f.target))
+   closing_commands=[]
+   def run(transport,command,deadline,cap):
+    code,out,err=f.run(transport,command,deadline,cap)
+    steps=logical_commands(command)
+    if len(steps)==2 and steps[0]==target:
+     closing_commands.append(command)
+     self.assertEqual(cap,8194)
+     parts=out.split(b'\0')
+     self.assertIn(before,parts[frame])
+     parts[frame]=parts[frame].replace(before,after,1)
+     out=b'\0'.join(parts)
+    return code,out,err
+   instance.run=run
+   with self.subTest(frame=frame,before=before,after=after), self.assertRaises(ValueError):
+    instance.capture(f.profile,t.empty_raw)
+   self.assertEqual(closing_commands,[f.commands[-1]])
+   self.assertEqual(f.alias_reads,2)
  def test_actual_cli_disabled_stop_never_uses_host_config_or_ssh(self):
   v=VECTORS[0];q=dict(connection_id=v['observation']['connection_id'],boot_id=v['observation']['boot_id'],selector='stop',budget_ms=12000,expected=dict(profile='ordinary-manual',sample_sha256=v['sample_sha256']))
   r=subprocess.run([sys.executable,t.__file__],input=json.dumps(q),capture_output=True,text=True,timeout=3,env=dict(os.environ,MANAGER_WIRED_CONFIG='THIS_MUST_NOT_BE_READ'))
@@ -335,6 +677,13 @@ class SamplerTests(unittest.TestCase):
    self.assertEqual(raw['process']['argv'],[s.APPS[profile]]);self.assertEqual(raw['configuration'],dict(read='not-read',effective_mode='unverified'));self.assertEqual(len(digest),64)
    self.assertEqual(raw['lease_observation'],'occupied' if profile=='resident-installed' else 'absent-final-component')
    self.assertFalse(any('/environment' in c or '/config.json' in c or t.STOP_COMMAND in c for c in f.commands))
+   if profile=='resident-installed':
+    cmdlines=[i for i,command in enumerate(f.commands) if 'if=/proc/20/cmdline' in command]
+    self.assertTrue(cmdlines)
+    for i in cmdlines:
+     self.assertEqual(logical_commands(f.commands[i]),[f.commands[i]])
+     self.assertIn('if=/proc/20/stat',f.commands[i-1])
+     self.assertIn('readlink -- /proc/20/exe',f.commands[i+1])
  def test_permission_error_is_never_absence_and_unsafe_parent_refuses(self):
   f=Files();f.permission=True
   with self.assertRaises(ValueError):f.sampler().lease()

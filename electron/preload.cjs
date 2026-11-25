@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
   sourceCacheCleanup: (...args) => args.length===1?ipcRenderer.invoke('manager:sourceCacheCleanup',args[0]):Promise.reject(new Error('Cache cleanup arity refused')),
   inspectSourceCache: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectSourceCache',args[0]):Promise.reject(new Error('Source cache inventory arity refused')),
   inspectOwnedV3: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectOwnedV3',args[0]):Promise.reject(new Error('Stored data inspection arity refused')),
+  firstConfiguration: (...args) => args.length === 1
+    ? ipcRenderer.invoke('manager:firstConfiguration', args[0])
+    : Promise.reject(new Error('First configuration arity refused')),
   storageInitialization: (...args) => args.length===1?ipcRenderer.invoke('manager:storageInitialization',args[0]):Promise.reject(new Error('Storage preparation arity refused')),
   serviceStop: (...args) => args.length===1?ipcRenderer.invoke('manager:serviceStop',args[0]):Promise.reject(new Error('Service stop arity refused')),
   residentPackage: (...args) => args.length===1?ipcRenderer.invoke('manager:residentPackage',args[0]):Promise.reject(new Error('Service stop arity refused')),

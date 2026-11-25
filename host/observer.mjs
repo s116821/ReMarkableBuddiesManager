@@ -1,6 +1,7 @@
 import {parseResidentPackageRaw} from './resident-package.mjs';
 import {emptyServiceStopRaw,parseServiceStopRaw} from './service-stop-private.mjs';
 import {portableJson} from './portable-configuration-protocol.mjs';
+import {digest, parseFirstConfigProducerReport, sameTarget} from './first-configuration-protocol.mjs';
 import {strictJson} from './strict-json.mjs';
 import { parseSavedConfigurationRequest, reduceSavedConfigurationResult } from './saved-configuration.mjs';
 import { parseMemoryInspectionRequest, reduceMemoryInspectionResult } from './memory-inspection.mjs';
@@ -16,15 +17,170 @@ import { fileURLToPath } from 'node:url';
 import { result, validateResult } from './observation-protocol.mjs';
 export { statuses, result, validateResult } from './observation-protocol.mjs';
 
+const STOP_DIAGNOSTIC_MAX = 128;
+const STOP_DIAGNOSTIC = /^STOP1 ([a-z-]+) ([a-z-]+)\r?\n$/;
+const STOP_CAUSES = new Map([
+  ['setup', ['error']], ['initial-inspection', ['error']], ['sample', ['error']],
+  ['owner-preparation', ['error']], ['channel-open', ['error', 'phase-timeout']],
+  ['channel-exec', ['error']], ['channel-shutdown', ['error']],
+  ['reply-drain', ['error', 'phase-timeout', 'command-timeout', 'stdout-limit', 'stderr-limit']],
+  ['exit-status', ['error', 'phase-timeout', 'command-timeout']], ['channel-close', ['error']],
+  ['ack', ['error', 'accepted', 'missing-status', 'nonzero-exit', 'stderr', 'empty-reply', 'incomplete-reply', 'receipt-refused']],
+  ['final-inspection', ['error']],
+]);
+
 // One host-controlled config/runtime; renderer calls never carry paths or commands.
 export class WiredObserver {
+  #stopDiagnosticRun;
   constructor({ config = process.env.MANAGER_WIRED_CONFIG, python = process.env.MANAGER_WIRED_PYTHON,
-    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs = 13000 } = {}) {
+    script = fileURLToPath(new URL('./wired_observer.py', import.meta.url)), platform = process.platform, timeoutMs, firstConfigurationRegistry } = {}) {
     this.config = config; this.python = python; this.script = script; this.platform = platform;
-    this.active = null; this.generation = 0; this.timeoutMs = timeoutMs;
+    this.firstConfigurationRegistry = firstConfigurationRegistry;
+    this.firstConfigurationChild = null;
+    this.active = null; this.generation = 0; this.timeoutMs = timeoutMs ?? 13000;
+    // Stop performs fresh custody checks and retains its own finite supervision cap.
+    // Explicit shorter harness limits still apply; sibling operation budgets do not change.
+    this.serviceStopTimeoutMs = Math.min(timeoutMs ?? 31000, 31000);
   }
-  cancel() { this.generation++; this.active?.kill('SIGKILL'); return result('cancelled'); }
+  cancel() {
+    this.generation++;
+    if (this.firstConfigurationChild) this.firstConfigurationChild.stop();
+    else this.active?.kill('SIGKILL');
+    return result('cancelled');
+  }
+  firstConfigurationAdmission(sample) {
+    return this.firstConfigurationRegistry?.(sample) ?? null;
+  }
+
+  async runFirstConfiguration(request, ownership) {
+    const child = await this.#runJoinedChild('first_configuration_transport.py', request, ownership);
+    const refusal = {dispatch: child.dispatch, observation: null, report: null, executable_sha256: null};
+    const raw = child.stdout;
+    if (raw === null) return refusal;
+    try {
+      if (!raw.length || raw.length > 8192 || raw[0] !== 123 ||
+          raw.at(-1) !== 10 || raw.indexOf(10) !== raw.length - 1 || raw.includes(13)) return refusal;
+      const value = strictJson(raw);
+      if (Object.keys(value ?? {}).sort().join() !== 'dispatch,executable_sha256,observation,report') return refusal;
+      if (value.dispatch === 'not-dispatched' && value.observation === null &&
+          value.report === null && value.executable_sha256 === null) return value;
+      if (value.dispatch !== 'possible' || !value.observation || !value.report ||
+          !sameTarget(value.observation, request) ||
+          (request.selector.endsWith('existing-default') ? !digest(value.executable_sha256) : value.executable_sha256 !== null) ||
+          (request.expected_executable_sha256 && value.executable_sha256 !== request.expected_executable_sha256)) return refusal;
+      validateResult(result('observed', value.observation));
+      parseFirstConfigProducerReport(value.report, request.selector);
+      return value;
+    } catch { return refusal; }
+    finally { raw.fill(0); }
+  }
+
+  async #runJoinedChild(script, request, {signal, current, remainingMs}) {
+    const refusal = dispatch => ({dispatch, stdout: null, wrote: false});
+    const allowance = Math.min(this.timeoutMs, 12000, remainingMs());
+    if (this.active || !current() || signal.aborted || allowance < 1 ||
+        !['linux', 'win32'].includes(this.platform) || !this.config || !this.python ||
+        !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('not-dispatched');
+    const deadline = performance.now() + allowance;
+    const generation = ++this.generation;
+    const remaining = () => Math.floor(Math.min(remainingMs(), deadline - performance.now()));
+    const writer = new AbortController();
+    const ready = Promise.withResolvers();
+    const readiness = Buffer.from('READY\n');
+    const chunks = [];
+    let child, launched = false, stopped = false, wrote = false, size = 0;
+    try {
+      child = spawn(this.python, [path.join(path.dirname(this.script), script)], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config},
+      });
+    } catch { return refusal('not-dispatched'); }
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      writer.abort();
+      ready.resolve(false);
+      child.stdin.destroy();
+      child.kill('SIGKILL');
+    };
+    this.active = child;
+    const active = this.firstConfigurationChild = {stop};
+    const timer = setTimeout(stop, allowance);
+    const closed = new Promise(resolve => child.once('close', resolve));
+    child.once('spawn', () => { launched = true; });
+    child.on('error', stop);
+    child.stdin.on('error', () => {});
+    signal.addEventListener('abort', stop, {once: true});
+    if (signal.aborted) stop();
+    let prefix = Buffer.alloc(0), diagnostics = 0;
+    child.stdout.on('data', chunk => {
+      size += chunk.length;
+      if (stopped || size > 8192 + readiness.length) { chunk.fill(0); stop(); return; }
+      chunks.push(chunk);
+      if (prefix.length === readiness.length) return;
+      prefix = Buffer.concat([prefix, chunk.subarray(0, readiness.length - prefix.length)]);
+      if (!prefix.equals(readiness.subarray(0, prefix.length))) { stop(); return; }
+      if (prefix.length === readiness.length) ready.resolve(true);
+    });
+    child.stderr.on('data', chunk => {
+      diagnostics += chunk.length;
+      chunk.fill(0);
+      if (diagnostics > 8192) stop();
+    });
+    const requireLive = () => {
+      writer.signal.throwIfAborted();
+      if (generation !== this.generation || !current() || remaining() < 1) throw Error('First configuration expired');
+    };
+    const write = chunk => {
+      requireLive();
+      // Hold the only outstanding write until Node hands it to the OS pipe.
+      return new Promise((resolve, reject) => {
+        const aborted = () => finish(Error('First configuration writer stopped'));
+        const finish = error => {
+          writer.signal.removeEventListener('abort', aborted);
+          if (error) reject(error);
+          else resolve();
+        };
+        writer.signal.addEventListener('abort', aborted, {once: true});
+        child.stdin.write(chunk, finish);
+      });
+    };
+    const pump = (async () => {
+      if (!await ready.promise) return;
+      try {
+        requireLive();
+        const control = Buffer.from(JSON.stringify({...request, budget_ms: remaining()}) + '\n');
+        if (control.length > 512) throw Error('First configuration control exceeds bound');
+        await write(control);
+        requireLive();
+        child.stdin.end();
+        wrote = true;
+      } catch {
+        // Closing the local pipe lets an authenticated early refusal finish.
+        // An independent cancellation or deadline still kills the captured child.
+        child.stdin.destroy();
+      }
+    })();
+    try {
+      const code = await closed;
+      ready.resolve(false);
+      writer.abort();
+      await pump;
+      if (!launched) return refusal('not-dispatched');
+      if (stopped || generation !== this.generation || !current() || remaining() < 1 ||
+          code !== 0 || prefix.length !== readiness.length) return refusal('possible');
+      const buffer = Buffer.concat(chunks);
+      return {dispatch: 'possible', stdout: buffer.subarray(readiness.length), wrote};
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', stop);
+      for (const chunk of chunks) chunk.fill(0);
+      if (this.active === child) this.active = null;
+      if (this.firstConfigurationChild === active) this.firstConfigurationChild = null;
+    }
+  }
   async observe() {
+    if (this.firstConfigurationChild) return result('observation-unavailable');
     const value = await this.run('observe');
     this.lastObservation = value.status === 'observed' ? value.observation : null;
     return value;
@@ -95,7 +251,8 @@ export class WiredObserver {
     return this.run('saved-mode', request);
   }
   async run(action, request) {
-    this.cancel();
+    const firstConfigurationBusy = this.firstConfigurationChild !== null;
+    if (!firstConfigurationBusy) this.cancel();
     const portable=action==='portable-configuration';
     const research=action==='research-settings';
     const management=action==='conversation-management';
@@ -107,6 +264,13 @@ export class WiredObserver {
     const conversation=action==='conversation-inventory';
     const residentPackage=action==='resident-package';
     const serviceStop=action==='service-stop';
+    const typedStop = serviceStop && request?.selector === 'stop' &&
+      request.expected?.profile === 'ordinary-manual' && typeof request.expected.invocation === 'string';
+    const stopRun = typedStop ? Symbol('typed stop diagnostic') : null;
+    if (typedStop) {
+      this.#stopDiagnosticRun = stopRun;
+      this.serviceStopDiagnostic = null;
+    }
     const storageInitialization=action==='storage-initialization';
     const ownedV3=action==='owned-data-v3';
     const cachePrivate=residentPackage||serviceStop||portable||storageInitialization||ownedV3||cacheCleanup||action==='source-cache-inventory'||conversation||management||restore||selected||notebook||handwriting;
@@ -122,36 +286,72 @@ export class WiredObserver {
     const forget = action === 'memory-forget', detail = action === 'memory-inspection', saved = action === 'saved-mode', memory = action === 'memory-query', personal = action === 'personalization', runtime = action === 'runtime-identity';
     let launched = false;
     const refusal = status => residentPackage ? {...result(status),resident_package_raw:{state:'unknown',current:null,context:null,retained:[]}} : serviceStop ? {...result(status),service_stop_raw:emptyServiceStopRaw(request.selector)} : cachePrivate ? {...result(status),[portable?'portable_configuration_raw':storageInitialization?'storage_initialization_raw':ownedV3?'owned_data_v3_raw':handwriting?'handwriting_raw':(selected||notebook)?'archive_raw':restore?'ordinary_restore_raw':management?'conversation_management_raw':conversation?'conversation_inventory_raw':cacheCleanup?'source_cache_cleanup_raw':'source_cache_inventory_raw']:{status:'unavailable',stdout_base64:null}} : modelCredential ? {...result(status),model_credential_raw:{status:'unavailable',stdout_base64:null}} : credential ? {...result(status),credential_reference_raw:{status:'unavailable',stdout_base64:null}} : memorySettings ? {...result(status),memory_settings_raw:{status:'unavailable',stdout_base64:null}} : research ? {...result(status),research_settings_raw:{status:'unavailable',stdout_base64:null}} : archive ? {...result(status),export_raw:{status:'unavailable',stdout_base64:null}} : model ? {...result(status),model_raw:{status:'unavailable',stdout_base64:null}} : localMode ? {...result(status),local_mode_raw:{status:'unavailable',stdout_base64:null}} : product ? {...result(status),product_settings_raw:{status:'unavailable',stdout_base64:null}} : basic ? {...result(status),basic_raw:{status:'unavailable',stdout_base64:null}} : configuration ? {...result(status),saved_configuration:{status:'unavailable',view:null}} : forget ? { ...result(status), forget_raw: { status:'unavailable', stdout_base64:null } } : detail ? { ...result(status), memory_inspection: { status: 'unavailable', view: null } } : saved ? { ...result(status), saved_mode: { status: 'unavailable', view: null } } : memory ? { ...result(status), memory_query: { status: 'unavailable', report: null } } : runtime ? { ...result(status), runtime_identity: null } : personal ? { ...result(status), personalization: { status: 'unavailable', report: null, outcome: request.operation === 'inspect' ? 'read-only' : launched ? 'unknown' : 'not-dispatched' } } : action === 'observe' ? result(status) : { ...result(status), inspection: null };
-    if((localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>12000))return refusal('observation-unavailable');
+    if (firstConfigurationBusy) return refusal('observation-unavailable');
+    if((localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)&&(!Number.isSafeInteger(request?.budget_ms)||request.budget_ms<1||request.budget_ms>(serviceStop?30000:12000)))return refusal('observation-unavailable');
     if(residentPackage&&Buffer.byteLength(JSON.stringify(request))>4096)return refusal('observation-unavailable');
     if (!['linux', 'win32'].includes(this.platform)) return refusal('unsupported-host');
     if (!this.config || !this.python || !path.isAbsolute(this.config) || !path.isAbsolute(this.python)) return refusal('unconfigured');
     const generation = this.generation;
     return new Promise(resolve => {
       const script = residentPackage ? path.join(path.dirname(this.script),'resident_package_transport.py') : serviceStop ? path.join(path.dirname(this.script),'service_stop_transport.py') : cachePrivate ? path.join(path.dirname(this.script),portable?'portable_configuration_transport.py':storageInitialization?'storage_initialization_transport.py':ownedV3?'owned_data_v3_transport.py':handwriting?'handwriting_records_transport.py':notebook?'notebook_archive_transport.py':selected?'selected_archive_transport.py':restore?'ordinary_restore_transport.py':management?'conversation_management_transport.py':conversation?'conversation_inventory_transport.py':cacheCleanup?'source_cache_cleanup_transport.py':'source_cache_inventory_transport.py') : modelCredential ? path.join(path.dirname(this.script),'model_credential_transport.py') : credential ? path.join(path.dirname(this.script),'credential_reference_transport.py') : memorySettings ? path.join(path.dirname(this.script),'memory_settings_transport.py') : research ? path.join(path.dirname(this.script),'research_settings_transport.py') : archive ? path.join(path.dirname(this.script), 'ordinary_export_transport.py') : model ? path.join(path.dirname(this.script), 'model_settings_transport.py') : localMode ? path.join(path.dirname(this.script), 'local_mode_choice_transport.py') : product ? path.join(path.dirname(this.script), 'product_settings_transport.py') : basic ? path.join(path.dirname(this.script), 'basic_settings_transport.py') : configuration ? path.join(path.dirname(this.script), 'saved_configuration_transport.py') : forget ? path.join(path.dirname(this.script), 'memory_forget_transport.py') : detail ? path.join(path.dirname(this.script), 'memory_inspection_transport.py') : saved ? path.join(path.dirname(this.script), 'saved_mode_transport.py') : memory ? path.join(path.dirname(this.script), 'memory_query_transport.py') : runtime ? path.join(path.dirname(this.script), 'runtime_identity_transport.py') : personal ? path.join(path.dirname(this.script), 'personalization_transport.py') : this.script;
-      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 'pipe' : 'ignore', 'pipe', 'ignore'],
-        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config } });
+      const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, LANG: 'C.UTF-8', MANAGER_WIRED_CONFIG: this.config };
+      // Windows COM adapter inventory needs the host user's temp directory.
+      if (this.platform === 'win32' && process.env.TEMP) env.TEMP = process.env.TEMP;
+      const child = spawn(this.python, [script, ...(personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate || action === 'observe' ? [] : [action])], { stdio: [personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 'pipe' : 'ignore', 'pipe', typedStop ? 'pipe' : 'ignore'], env });
       this.active = child;
       child.once('spawn', () => { launched = true; });
       if (personal || runtime || memory || saved || detail || forget || configuration || localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate) { child.stdin.on('error', () => {}); child.stdin.end(JSON.stringify(request)); }
+      const stopBytes = typedStop ? Buffer.alloc(STOP_DIAGNOSTIC_MAX) : null;
+      let stopLength = 0, discardStopMarker = false, childError = false;
+      if (typedStop) {
+        const discard = () => { discardStopMarker = true; stopBytes.fill(0); };
+        child.stderr.on('error', discard);
+        child.stderr.on('data', data => {
+          try {
+            if (discardStopMarker || stopLength + data.length > stopBytes.length) discard();
+            else {
+              data.copy(stopBytes, stopLength);
+              stopLength += data.length;
+            }
+          } finally { data.fill(0); }
+        });
+      }
       const chunks = []; let outputBytes = 0, expired = false, oversized = false;
-      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, (localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
+      const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, serviceStop?Math.min(this.serviceStopTimeoutMs,request.budget_ms+1000):(localMode||product||basic||model||archive||research||memorySettings||credential||modelCredential||cachePrivate)?Math.min(this.timeoutMs,request.budget_ms):this.timeoutMs);
       child.stdout.on('data', data => {
         if((modelCredential||cachePrivate||localMode)&&(oversized||expired||generation!==this.generation||outputBytes+data.length>((residentPackage||serviceStop)?262144:portable?196608:storageInitialization?24576:ownedV3?49152:handwriting?360448:management?49152:(restore||selected||notebook)?24576:cachePrivate&&!cacheCleanup?16384:24576))){data.fill(0);oversized=true;child.kill('SIGKILL');return;}
         chunks.push(data); outputBytes += data.length;
         if (outputBytes > ((residentPackage||serviceStop) ? 262144 : portable ? 196608 : storageInitialization ? 24576 : ownedV3 ? 49152 : handwriting ? 360448 : management ? 49152 : (restore||selected||notebook) ? 24576 : cachePrivate&&!cacheCleanup ? 16384 : localMode || product || basic || model || archive || research || memorySettings || credential || modelCredential || cachePrivate ? 24576 : configuration ? 139264 : forget ? 360448 : detail ? 278528 : saved ? 32768 : personal || memory ? 139264 : runtime || action === 'observe' ? 8192 : 49152)) { oversized = true; child.kill('SIGKILL'); }
       });
-      const finish = async code => {
+      const finish = async (code, closed = false) => {
         clearTimeout(timer);
         if (this.active === child) this.active = null;
+        const recordStop = (boundary, childStatus = null) => {
+          if (!typedStop || !closed) return;
+          try {
+            if (this.#stopDiagnosticRun !== stopRun) return;
+            const bytes = stopBytes.subarray(0, stopLength);
+            const marker = !discardStopMarker && bytes.every(byte => byte <= 0x7f)
+              ? STOP_DIAGNOSTIC.exec(bytes.toString('ascii')) : null;
+            const valid = marker?.[0].length === stopLength && STOP_CAUSES.get(marker[1])?.includes(marker[2]);
+            this.serviceStopDiagnostic = Object.freeze({
+              boundary, childStatus, stage: valid ? marker[1] : null, cause: valid ? marker[2] : null,
+            });
+          } catch {
+            // Private evidence cannot change the child's validated result.
+          } finally { stopBytes.fill(0); }
+        };
         try {
-        if (generation !== this.generation) return resolve(refusal('cancelled'));
-        if (expired) return resolve(refusal('timeout'));
-        if (code !== 0 || oversized) return resolve(refusal('observation-unavailable'));
+        if (generation !== this.generation) { recordStop('cancelled'); return resolve(refusal('cancelled')); }
+        if (expired) { recordStop('timeout'); return resolve(refusal('timeout')); }
+        if (code !== 0 || oversized || childError) {
+          recordStop(oversized ? 'stdout-limit' : childError ? 'child-error' : 'child-exit');
+          return resolve(refusal('observation-unavailable'));
+        }
           const input=Buffer.concat(chunks);let value;try{if(portable)portableJson(input,196608);if(storageInitialization||ownedV3||product||localMode){const text=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);if(text.charCodeAt(0)===0xfeff)throw Error('Private response refused');strictJson(input);}if(modelCredential||cachePrivate||localMode)strictJson(input);value=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(input));}finally{if(modelCredential||cachePrivate||localMode)input.fill(0);}
           if (action === 'observe') return resolve(validateResult(value));
           if(residentPackage){if(Object.keys(value).sort().join()!=='contract_version,observation,resident_package_raw,status')throw Error('Package envelope refused');validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});parseResidentPackageRaw(value.resident_package_raw);if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Package identity refused');return resolve(value);}
-          if(serviceStop){if(Object.keys(value).sort().join()!=='contract_version,observation,service_stop_raw,status')throw Error('Service stop envelope refused');validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});parseServiceStopRaw(value.service_stop_raw,request.selector);if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Service stop identity refused');return resolve(value);}
+          if(serviceStop){if(Object.keys(value).sort().join()!=='contract_version,observation,service_stop_raw,status')throw Error('Service stop envelope refused');validateResult({contract_version:value.contract_version,status:value.status,observation:value.observation});parseServiceStopRaw(value.service_stop_raw,request.selector);if(value.status==='observed'&&(value.observation.connection_id!==request.connection_id||value.observation.boot_id!==request.boot_id))throw Error('Service stop identity refused');recordStop('reported', value.status);return resolve(value);}
           if (configuration) {
             const reduced=reduceSavedConfigurationResult(value,request,validateResult);
             return resolve(generation===this.generation?reduced:refusal('cancelled'));
@@ -208,10 +408,10 @@ export class WiredObserver {
             } else if (i.report !== null) throw new Error('Invalid inspection');
           }
           resolve(value);
-        } catch { resolve(refusal('observation-unavailable')); }finally{if(modelCredential||cachePrivate||localMode){for(const chunk of chunks)chunk.fill(0);chunks.length=0;}}
+        } catch { recordStop('parse-refused'); resolve(refusal('observation-unavailable')); }finally{if(modelCredential||cachePrivate||localMode){for(const chunk of chunks)chunk.fill(0);chunks.length=0;}}
       };
-      child.once('error', () => finish(-1));
-      child.once('close', finish);
+      child.once('error', () => { childError = true; finish(-1); });
+      child.once('close', code => finish(code, true));
     });
   }
 }

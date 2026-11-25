@@ -93,7 +93,7 @@ class ScheduledChannel:
 
 
 class ReceiveCompletion(unittest.TestCase):
-    def run_channel(self, stdout, stderr, cap=32768, status_at=0.0):
+    def run_channel(self, stdout, stderr, cap=32768, status_at=0.0, *, deadline=100.05, diagnostic=None):
         clock = Clock()
         channel = ScheduledChannel(clock, stdout, stderr, status_at)
         connection = Mock()
@@ -101,7 +101,7 @@ class ReceiveCompletion(unittest.TestCase):
         with patch.object(sampler.time, 'monotonic', clock.monotonic), \
                 patch.object(sampler.time, 'sleep', clock.sleep):
             try:
-                result = sampler.run_fixed(connection, 'fixed-read-only-fixture', 100.05, cap)
+                result = sampler.run_fixed(connection, 'fixed-read-only-fixture', deadline, cap, diagnostic=diagnostic)
                 return result, channel
             finally:
                 self.assertTrue(channel.closed)
@@ -136,12 +136,34 @@ class ReceiveCompletion(unittest.TestCase):
                     self.run_channel(stdout, stderr)
                 self.assertEqual(raised.exception.status, 'timeout')
 
+    def test_typed_diagnostic_distinguishes_eight_second_drain_and_exit_status(self):
+        for stdout, stage in ([(0, b'partial')], 'reply-drain'), ([(0, None)], 'exit-status'):
+            diagnostic = []
+            with self.subTest(stage=stage), self.assertRaises(shared.Refusal):
+                self.run_channel(stdout, [(0, None)], status_at=9, deadline=130, diagnostic=diagnostic)
+            self.assertEqual(diagnostic, [stage, 'command-timeout'])
+
     def test_complete_both_eofs_wait_for_status(self):
         result, channel = self.run_channel(
             [(0, b'body'), (.01, None)], [(0, b'diagnostic'), (.02, None)], status_at=.03)
         self.assertEqual(result, (0, b'body', b'diagnostic'))
         self.assertTrue(all(channel.eof.values()))
         self.assertIn(0.0, channel.timeouts)
+
+    def test_complete_batch_frames_wait_for_stderr_eof_and_refuse_late_diagnostic(self):
+        for stderr in ([], [(.02, b'late diagnostic'), (.03, None)]):
+            clock = Clock()
+            channel = ScheduledChannel(clock, [(0, b'left\0right\0'), (0, None)], stderr)
+            connection = Mock()
+            connection.open_session.return_value = channel
+            with patch.object(sampler.time, 'monotonic', clock.monotonic), \
+                    patch.object(sampler.time, 'sleep', clock.sleep):
+                instance = sampler.Sampler(connection, 100.05)
+                with self.assertRaises(ValueError if stderr else shared.Refusal):
+                    instance._read_frames(('left-fixed-read', 4), ('right-fixed-read', 5))
+            self.assertEqual(channel.eof, {'stdout': True, 'stderr': bool(stderr)})
+            self.assertTrue(channel.closed)
+            connection.open_session.assert_called_once()
 
     def test_stdout_backlog_does_not_starve_stderr_bound(self):
         with self.assertRaises(ValueError):
