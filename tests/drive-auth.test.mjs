@@ -32,6 +32,10 @@ async function fixture(t, options = {}) {
         assert.equal(fields.get('client_id'), CLIENT); assert.equal(fields.get('code'), 'synthetic-code');
         assert.equal(createHash('sha256').update(fields.get('code_verifier')).digest('base64url'), state.challenge);
       } else state.refreshRequests.push(fields.get('refresh_token'));
+      if (!signingIn && state.refreshFailure) {
+        res.writeHead(state.refreshFailure.status);
+        return res.end(JSON.stringify({error: state.refreshFailure.code, error_description: 'private provider detail'}));
+      }
       if (state.gate) await state.gate.promise;
       if (state.oversize) return res.end('x'.repeat(65537));
       if (state.redirect) { res.writeHead(302, { Location: '/forbidden' }).end(); return; }
@@ -136,6 +140,24 @@ test('actual provider rotation is saved and the next refresh uses it even when t
   assert.equal((await f.auth.check()).status, 'connected');
   assert.deepEqual(f.state.refreshRequests, [secret, replacement]);
   assert.equal(f.store.grant().value.tokens.refresh_token, replacement);
+});
+test('only a rejected refresh grant asks for a new sign-in and preserves the saved account', async t => {
+  const f = await fixture(t);
+  await f.signIn();
+  const original = expireGrant(f.store);
+  for (const [status, code, detail] of [
+    [400, 'invalid_grant', 'authorization-required'],
+    [503, 'temporarily_unavailable', 'authorization-failed'],
+    [400, 'invalid_client', 'authorization-failed'],
+  ]) {
+    f.state.refreshFailure = {status, code};
+    const result = await f.auth.check();
+    assert.equal(result.status, 'authorization-failed');
+    assert.equal(result.error, detail);
+    assert.equal(result.checkedAt, new Date(original.value.checkedAt).toISOString());
+    assert.equal(f.store.grant().digest, original.digest);
+    assert.equal(JSON.stringify(result).includes('private provider detail'), false);
+  }
 });
 test('a malformed refresh token or a changed account preserves the original grant', async t => {
   for (const [replacement, account] of [[null, 'fixture-account'], ['synthetic-rotation', 'different-account']]) {
