@@ -66,6 +66,8 @@ grant intact. Account labels are displayed as text, never HTML/prompt content.
 A restart displays **saved/cached** account details, not a fresh provider check.
 Check connection explicitly validates scope/client/account, refreshes expired
 credentials with the maintained library and persists only verified results.
+If Google rejects the saved grant, Manager asks you to sign in again. A failed
+check keeps the last successful check time.
 Saved host schema uses token expiry milliseconds; it is not a ready Rust/tablet
 credential file and intentionally contains no fabricated collection/group ID.
 
