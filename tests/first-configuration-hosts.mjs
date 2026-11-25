@@ -71,7 +71,7 @@ async function exerciseUncertainSaves(page, configure, transport) {
     if (mode === 'stopped') {
       await showPanel(page, 'product');
       await expect(page.getByTestId('capacities-inspect')).toBeEnabled();
-      await showPanel(page, 'tablet');
+      await showPanel(page, 'setup');
     }
     await review.click();
     await expect(current).toHaveText('No saved configuration is present.');
@@ -86,7 +86,7 @@ async function exerciseUncertainSaves(page, configure, transport) {
       await showPanel(page, 'product');
       await expect(page.getByTestId('capacities-inspect')).toBeDisabled();
       await expect(page.getByRole('button', {name: 'Edit Reader & Writer'})).toBeDisabled();
-      await showPanel(page, 'tablet');
+      await showPanel(page, 'setup');
       await stop.click();
     }
     await expect(page.getByTestId('first-configuration-status')).toContainText('Configuration creation was not confirmed.');
