@@ -11,6 +11,7 @@ import sys
 import uuid
 
 MAXIMUM = 49152
+PUBLIC_CLIENT = Path(__file__).with_name('google-drive-client-id')
 NAMES = {'client': 'client.json', 'grant': 'grant.json',
          'isolated-root-operations': 'isolated-root-operations.json',
          'tablet-drive-operations': 'tablet-drive-operations.json'}
@@ -162,6 +163,46 @@ def windows_private_writer(path, disposition, access):
     import win32file
     return win32file.CreateFile(str(path), access, 0, windows_private_attributes(), disposition,
                                 win32file.FILE_FLAG_OPEN_REPARSE_POINT, None)
+
+
+def credential_read(root, kind):
+    raw = private_read(root, kind)
+    if kind != 'client' or raw is not None:
+        return raw
+    try:
+        info = PUBLIC_CLIENT.lstat()
+    except FileNotFoundError:
+        return None
+    require(stat.S_ISREG(info.st_mode) and not PUBLIC_CLIENT.is_junction() and 0 < info.st_size <= 256)
+    with PUBLIC_CLIENT.open('rb') as stream:
+        value = stream.read(257)
+    match = re.fullmatch(rb'([A-Za-z0-9_-]{10,180}\.apps\.googleusercontent\.com)(?:\r?\n)?', value)
+    require(match is not None)
+    return compact({'schema': 1, 'type': 'google-desktop',
+                    'clientId': match[1].decode('ascii'), 'clientSecret': None})
+
+
+def create_private_root(root):
+    missing = []
+    for directory in (root, *root.parents):
+        if directory.exists():
+            break
+        missing.append(directory)
+    for directory in reversed(missing):
+        require(directory.parent.resolve(strict=True) == directory.parent)
+        try:
+            if sys.platform == 'win32':
+                import win32file
+                win32file.CreateDirectory(str(directory), windows_private_attributes())
+            elif sys.platform == 'linux':
+                directory.mkdir(mode=0o700)
+            else:
+                raise ValueError('unsupported-host')
+        except OSError as error:
+            if not isinstance(error, FileExistsError) and getattr(error, 'winerror', None) != 183:
+                raise
+        require(checked_root(directory) is not None)
+    return checked_root(root)
 
 
 def identity(raw):
@@ -386,18 +427,22 @@ def operate(root, request):
     require(operation in {'read-client', 'read-grant', 'save', 'disconnect'})
     if operation.startswith('read-'):
         require(set(request) == {'operation'})
-        raw = private_read(root, operation[5:])
+        raw = credential_read(root, operation[5:])
         return {'value': parse(raw) if raw is not None else None, 'digest': identity(raw)}
     require(set(request) == ({'operation', 'client_digest', 'grant_digest', 'value'} if operation == 'save'
                             else {'operation', 'client_digest', 'grant_digest'}))
     root_identity = checked_root(root)
+    if root_identity is None and operation == 'save':
+        require(request['grant_digest'] is None and digest(request['client_digest'])
+                and identity(credential_read(root, 'client')) == request['client_digest'])
+        root_identity = create_private_root(root)
     require(root_identity is not None)
     # Cooperative cross-instance CAS is scoped to this fixed private directory.
     lock_path = root / '.credential-operation.lock'
     stage = root / ('.grant-' + uuid.uuid4().hex)
     lock = exclusive(lock_path)
     try:
-        require(identity(private_read(root, 'client')) == request['client_digest'] and
+        require(identity(credential_read(root, 'client')) == request['client_digest'] and
                 identity(private_read(root, 'grant')) == request['grant_digest'])
         if operation == 'disconnect':
             require(checked_root(root) == root_identity)
@@ -411,7 +456,7 @@ def operate(root, request):
             stream.flush()
             os.fsync(stream.fileno())
         require(checked_root(root) == root_identity and
-                identity(private_read(root, 'client')) == request['client_digest'] and
+                identity(credential_read(root, 'client')) == request['client_digest'] and
                 identity(private_read(root, 'grant')) == request['grant_digest'])
         # Synchronous non-interleavable host save begins after the final generation guard.
         os.replace(stage, root / NAMES['grant'])

@@ -1,6 +1,7 @@
 import {readTabletFor, showPanel} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
@@ -212,9 +213,11 @@ const app = await electron.launch({ executablePath, args: [...(packaged ? [] : [
 try {
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
-  await showPanel(page,'drive');await page.getByTestId('drive-status').filter({ hasText: 'Google Drive setup required' }).waitFor();
+  const hasDistributedClient = existsSync(new URL('../host/google-drive-client-id', import.meta.url));
+  await showPanel(page, 'drive');
+  await expect(page.getByTestId('drive-status')).toContainText(hasDistributedClient ? 'Not signed in' : 'Google Drive setup required');
   assert.equal(await page.evaluate(() => window.managerHost.driveAuth.revoke('wrong').then(() => 'accepted', () => 'refused')), 'refused');
-  // Actual packaged module/custody missing-config refusal above; response substitution below
+  // The real host checked first-run registration above; response substitution below
   // is an explicit renderer/preload/IPC fixture, not OAuth or Windows filesystem evidence.
   await app.evaluate(({ ipcMain }) => {
     globalThis.driveFixture = { contract_version: 1, status: 'disconnected', account: null, authorizationId: null, checkedAt: null, error: null, backupReady: false };
