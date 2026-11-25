@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('managerHost', Object.freeze({ contract_version:
     ? ipcRenderer.invoke('manager:firstConfiguration', args[0])
     : Promise.reject(new Error('First configuration arity refused')),
   storageInitialization: (...args) => args.length===1?ipcRenderer.invoke('manager:storageInitialization',args[0]):Promise.reject(new Error('Storage preparation arity refused')),
+  serviceStop: (...args) => args.length===1?ipcRenderer.invoke('manager:serviceStop',args[0]):Promise.reject(new Error('Service stop arity refused')),
   inspectConversations: (...args) => args.length===1?ipcRenderer.invoke('manager:inspectConversations',args[0]):Promise.reject(new Error('Conversation inventory arity refused')),
   modelSettings: (...args) => args.length===1?ipcRenderer.invoke('manager:modelSettings',args[0]):Promise.reject(new Error('Model settings arity refused')),
   localModeChoice: (...args) => args.length===1?ipcRenderer.invoke('manager:localModeChoice',args[0]):Promise.reject(new Error('Local-only choice arity refused')),

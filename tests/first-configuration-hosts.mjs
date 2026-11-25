@@ -56,6 +56,7 @@ async function exerciseUncertainSaves(page, configure, transport) {
   const check = page.getByRole('button', {name: 'Check current configuration', exact: true});
   const save = page.getByRole('button', {name: 'Save default configuration', exact: true});
   const stop = page.getByRole('button', {name: 'Stop configuration wait', exact: true});
+  const reviewServiceStop = page.getByRole('button', {name: 'Review stopping Buddy', exact: true});
   const current = page.getByTestId('first-configuration-current');
   const original = page.getByTestId('first-configuration-original');
   for (const mode of ['lost', 'stopped']) {
@@ -66,6 +67,10 @@ async function exerciseUncertainSaves(page, configure, transport) {
       lost: false, holdCreateUntilStop: mode === 'stopped',
     });
     await readTabletFor(page);
+    if (mode === 'stopped') {
+      await page.getByRole('button', {name: 'Open Buddy stop controls', exact: true}).click();
+      await expect(reviewServiceStop).toBeEnabled();
+    }
     const before = (await transport()).calls.length;
     await review.click();
     await expect(current).toHaveText('No saved configuration is present.');
@@ -75,6 +80,7 @@ async function exerciseUncertainSaves(page, configure, transport) {
     if (mode === 'stopped') {
       await expect.poll(async () => (await transport()).exists).toBe(true);
       await expect(current).toHaveCount(0);
+      await expect(reviewServiceStop).toBeDisabled();
       await stop.click();
     }
     await expect(page.getByTestId('first-configuration-status')).toContainText('Configuration creation was not confirmed.');

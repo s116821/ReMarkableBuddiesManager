@@ -9,6 +9,7 @@ import re
 import socket
 import struct
 import subprocess
+import sys
 import threading
 import uuid
 
@@ -143,27 +144,89 @@ def load_config(path):
     return config
 
 
-# Fixed query only; configuration becomes data via environment, never PowerShell source.
+# Fixed local query; configuration is environment data, never query/program text.
+# Keep a fresh, killable process per snapshot: COM connection/enumeration itself
+# has no equivalent three-second timeout. Raw dispatch avoids gen_py cache writes.
 INVENTORY = r'''
-$ErrorActionPreference='Stop'
-[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
-$a=@(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter | Where-Object { $_.InterfaceGuid.ToString().Trim('{}') -eq $env:MANAGER_INTERFACE_GUID })
-if ($a.Count -ne 1) { throw 'adapter' }
-$a | Select-Object InterfaceGuid,InterfaceIndex,NetLuid,PnPDeviceID,Virtual,HardwareInterface,InterfaceOperationalStatus,MediaConnectState,PermanentAddress | ConvertTo-Json -Compress
+import json, os, re, sys
+import pythoncom
+
+FIELDS = ('InterfaceGuid', 'InterfaceIndex', 'NetLuid', 'PnPDeviceID', 'Virtual',
+          'HardwareInterface', 'InterfaceOperationalStatus', 'MediaConnectState', 'PermanentAddress')
+
+def call(obj, name, *args):
+    return obj.Invoke(obj.GetIDsOfNames(name), 0, pythoncom.DISPATCH_METHOD, True, *args)
+
+def get(obj, name):
+    return obj.Invoke(obj.GetIDsOfNames(name), 0, pythoncom.DISPATCH_PROPERTYGET, True)
+
+def field(properties, name):
+    value = get(call(properties, 'Item', name, 0), 'Value')
+    if value is None:
+        return None
+    if name == 'NetLuid':
+        # WMI Automation represents CIM uint64 as decimal text. Convert without
+        # a floating point intermediate to match PowerShell's JSON integer.
+        if type(value) is not str or re.fullmatch(r'0|[1-9][0-9]{0,19}', value) is None:
+            raise ValueError()
+        value = int(value)
+        if value >= 2**64:
+            raise ValueError()
+    elif name in ('Virtual', 'HardwareInterface'):
+        if type(value) is not bool:
+            raise ValueError()
+    elif name in ('InterfaceIndex', 'InterfaceOperationalStatus', 'MediaConnectState'):
+        if type(value) is not int or not 0 <= value < 2**32:
+            raise ValueError()
+    elif type(value) is not str or len(value) > 65536:
+        raise ValueError()
+    return value
+
+def query(selected):
+    if re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', selected) is None:
+        raise ValueError()
+    locator = pythoncom.CoCreateInstance('WbemScripting.SWbemLocator', None,
+        pythoncom.CLSCTX_INPROC_SERVER, pythoncom.IID_IDispatch)
+    services = call(locator, 'ConnectServer', '.', r'root\StandardCimv2', '', '', '', '', 128)
+    objects = call(services, 'ExecQuery', 'SELECT ' + ','.join(FIELDS) + ' FROM MSFT_NetAdapter', 'WQL', 48)
+    iterator = get(objects, '_NewEnum').QueryInterface(pythoncom.IID_IEnumVARIANT)
+    selected_row = None
+    while True:
+        batch = iterator.Next(1)
+        if not batch:
+            break
+        properties = get(batch[0], 'Properties_')
+        guid = field(properties, 'InterfaceGuid')
+        if guid is None:
+            raise ValueError()
+        if guid.strip('{}').lower() == selected:
+            if selected_row is not None:
+                raise ValueError()
+            selected_row = {name: field(properties, name) for name in FIELDS}
+    if selected_row is None:
+        raise ValueError()
+    raw = json.dumps(selected_row, ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    if len(raw) > 65536:
+        raise ValueError()
+    return raw
+
+if __name__ == '__main__':
+    try:
+        sys.stdout.buffer.write(query(os.environ['MANAGER_INTERFACE_GUID']))
+    except Exception:
+        sys.exit(1)
 '''
 
 
 def inventory(config):
-    root = os.environ.get('SystemRoot')
-    if not root or not Path(root).is_absolute():
+    if not sys.executable or not Path(sys.executable).is_absolute():
         raise Refusal('unsupported-host')
-    command = Path(root) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
-    done = subprocess.run([str(command), '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', INVENTORY],
+    done = subprocess.run([sys.executable, '-I', '-B', '-c', INVENTORY],
         env={**os.environ, 'MANAGER_INTERFACE_GUID': config['interface_guid']}, capture_output=True,
         timeout=3, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-    if len(done.stdout) > LIMIT:
+    if done.stderr or len(done.stdout) > LIMIT:
         raise Refusal('disconnected')
-    return json.loads(done.stdout.decode('utf-8-sig'))
+    return json.loads(done.stdout.decode('ascii'))
 
 
 class Windows:
@@ -241,6 +304,12 @@ def bound_socket(config, snapshot):
         except OSError:
             raise Refusal('unsupported-host') from None
         sock.bind((config['source_address'], 0))
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            if sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY) != 1:
+                raise Refusal('disconnected')
+        except OSError:
+            raise Refusal('unsupported-host') from None
         sock.connect((PEER, 22))
         if sock.getsockname()[0] != config['source_address'] or sock.getpeername() != (PEER, 22):
             raise Refusal('disconnected')
