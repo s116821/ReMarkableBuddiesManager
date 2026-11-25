@@ -5,7 +5,7 @@ export function parseDriveState(v) {
   if (!v || Object.keys(v).sort().join() !== 'account,authorizationId,backupReady,checkedAt,contract_version,error,status' || v.contract_version !== 1 ||
     !DRIVE_STATUSES.includes(v.status) || v.backupReady !== false ||
     (v.authorizationId !== null && (typeof v.authorizationId !== 'string' || !/^[a-f0-9]{64}$/.test(v.authorizationId))) ||
-    (v.error !== null && !['storage-unavailable', 'configuration-unavailable', 'cancelled', 'authorization-failed', 'authorization-required', 'revocation-unconfirmed'].includes(v.error)) ||
+    (v.error !== null && !['storage-unavailable', 'configuration-unavailable', 'cancelled', 'authorization-failed', 'authorization-required', 'registration-changed', 'revocation-unconfirmed'].includes(v.error)) ||
     (v.checkedAt !== null && (typeof v.checkedAt !== 'string' || !Number.isFinite(Date.parse(v.checkedAt)))) ||
     (v.account !== null && (!v.account || Object.keys(v.account).join() !== 'label' || typeof v.account.label !== 'string' || !v.account.label.length || v.account.label.length > 320 || /[\x00-\x1f\x7f]/.test(v.account.label)))) throw new Error('Invalid Drive state');
   if (['cached', 'connected'].includes(v.status) && (!v.account || !v.checkedAt || !v.authorizationId)) throw new Error('Invalid Drive state');

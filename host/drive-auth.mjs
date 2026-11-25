@@ -39,6 +39,8 @@ function tokens(v, fresh = true) {
 }
 const publicState = (status, account = null, checkedAt = null, error = null) => Object.freeze({ contract_version: 1, status,
   account: account ? { label: account.label } : null, checkedAt, error, authorizationId: null, backupReady: false });
+const registrationError = (snapshot, fallback = null) =>
+  snapshot && !snapshot.saved && snapshot.grantRecord.value ? 'registration-changed' : fallback;
 
 export class DriveAuth {
   #readFactory;
@@ -70,7 +72,7 @@ export class DriveAuth {
     try {
       const snapshot = this.snapshot(); const { config, saved, grantRecord } = snapshot;
       if (!config) return this.state = publicState('unconfigured');
-      if (!saved) return this.state = publicState('disconnected', null, null, grantRecord.value ? 'authorization-required' : null);
+      if (!saved) return this.state = publicState('disconnected', null, null, registrationError(snapshot));
       if (this.freshDigest === grantRecord.digest && this.state.status === 'connected' && saved.tokens.expiry_date > Date.now()) return this.state;
       return this.publish('cached', saved.account, saved.checkedAt, snapshot);
     } catch { return this.state = publicState('unavailable', null, null, 'storage-unavailable'); }
@@ -236,8 +238,9 @@ export class DriveAuth {
   cancel() {
     const tablet = Boolean(this.#tabletGrant || this.flow?.purpose === 'tablet');
     const pending = Boolean(this.flow || this.work || tablet);
+    const error = registrationError(this.flow);
     this.stop(); if (tablet) this.#tabletPhase = 'cancelled';
-    if (pending) this.state = publicState('cancelled'); return this.state;
+    if (pending) this.state = publicState('cancelled', null, null, error); return this.state;
   }
   ownsAuthorizationUrl(url) { return Boolean(this.flow && this.flow.url === url); }
   oauth(config, redirectUri, signal) {
@@ -275,7 +278,7 @@ export class DriveAuth {
       flow.url = flow.oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent select_account', scope: DRIVE_SCOPE,
         state: flow.state, code_challenge: pkce.codeChallenge, code_challenge_method: 'S256' });
       require(flow.url.length <= 4096);
-      flow.timer = setTimeout(() => { if (this.flow === flow) { this.stop(); if (purpose === 'tablet') this.#tabletPhase = 'expired'; this.state = publicState('expired'); } }, this.ttlMs);
+      flow.timer = setTimeout(() => { if (this.flow === flow) { this.stop(); if (purpose === 'tablet') this.#tabletPhase = 'expired'; this.state = publicState('expired', null, null, registrationError(flow)); } }, this.ttlMs);
       flow.timer.unref(); this.flow = flow; this.state = publicState('connecting');
       return { state: this.state, authorizationUrl: flow.url };
     } catch (error) { if (generation === this.generation) { if (purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('unavailable', null, null, ['configuration-unavailable', 'cancelled'].includes(error.message) ? error.message : 'storage-unavailable'); }
@@ -296,7 +299,7 @@ export class DriveAuth {
       require(!u.searchParams.has('iss') || u.searchParams.get('iss') === 'https://accounts.google.com');
       require(u.searchParams.has('error') !== u.searchParams.has('code'));
       if (u.searchParams.has('error')) {
-        flow.consumed = true; finish(200); this.stop(); if (flow.purpose === 'tablet') this.#tabletPhase = 'denied'; this.state = publicState('denied'); return;
+        flow.consumed = true; finish(200); this.stop(); if (flow.purpose === 'tablet') this.#tabletPhase = 'denied'; this.state = publicState('denied', null, null, registrationError(flow)); return;
       }
       const code = u.searchParams.get('code'); require(text(code, 4096));
       flow.consumed = true; finish(200); flow.server.close();
@@ -335,7 +338,7 @@ export class DriveAuth {
         flow.purpose === 'tablet' ? flow.saved.account : null);
       if (flow.purpose === 'tablet') this.#saveTablet(flow, observed);
       else this.save(flow, observed);
-    } catch { if (this.current(flow)) { if (flow.purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('authorization-failed', flow.saved?.account ?? null, flow.saved ? new Date(flow.saved.checkedAt).toISOString() : null, 'authorization-failed'); } }
+    } catch { if (this.current(flow)) { if (flow.purpose === 'tablet') this.#tabletPhase = 'unavailable'; this.state = publicState('authorization-failed', flow.saved?.account ?? null, flow.saved ? new Date(flow.saved.checkedAt).toISOString() : null, registrationError(flow, 'authorization-failed')); } }
     finally { if (this.flow === flow) { clearTimeout(flow.timer); this.flow = null; } flow.server.close(); }
   }
   #clearTablet(phase = 'none') {

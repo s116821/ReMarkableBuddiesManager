@@ -123,12 +123,13 @@ test('a distributed desktop client signs in two fresh profiles to their own Driv
     assert.deepEqual(first.grant(), firstGrant);
   } finally { await guard.close(); }
   assert.equal(a.auth.status().status, 'disconnected');
-  assert.equal(a.auth.status().error, 'authorization-required');
+  assert.equal(a.auth.status().error, 'registration-changed');
   const originalRequests = a.state.requests.length;
   assert.equal((await a.auth.check()).error, 'authorization-required');
   assert.equal((await a.auth.beginTabletAuthorization()).authorizationUrl, null);
   await a.begin();
-  a.auth.cancel();
+  assert.equal(a.auth.cancel().error, 'registration-changed');
+  assert.equal(a.auth.status().status, 'cancelled');
   assert.deepEqual(first.grant(), firstGrant);
   assert.equal(a.state.requests.length, originalRequests);
   a.state.clientId = replacement;

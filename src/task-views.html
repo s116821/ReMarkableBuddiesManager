@@ -563,7 +563,7 @@
 }
 }
 @if (app.isView('backup', 'account')) {
-@let previousClient = app.drive().status === 'disconnected' && app.drive().error === 'authorization-required';
+@let previousClient = app.drive().error === 'registration-changed';
 <section class="ui-panel my-6" aria-labelledby="drive-title">
     <h2 id="drive-title">Google Drive</h2>
     <p class="text-sm text-muted">Sign in on this computer, even without a tablet connected.</p>

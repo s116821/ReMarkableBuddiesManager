@@ -44,13 +44,20 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   await reconnect.waitFor();
   await page.getByText(`Last checked: ${saved.checkedAt}`, { exact: true }).waitFor();
   assert.equal(await sign.isEnabled(), true);
-  await publish({ ...state('disconnected'), error: 'authorization-required' });
+  await publish({ ...state('disconnected'), error: 'registration-changed' });
   await check.click();
   await expect(page.getByText('Manager’s Google registration changed.', {exact: false})).toBeVisible();
   await expect(sign).toBeEnabled();
   await expect(check).toBeDisabled();
   await expect(page.getByRole('button', {name: 'Remove Google access…', exact: true})).toBeDisabled();
-  await expect(page.getByRole('button', {name: 'Disconnect this Manager', exact: true})).toBeEnabled();
+  const disconnect = page.getByRole('button', {name: 'Disconnect this Manager', exact: true});
+  await expect(disconnect).toBeEnabled();
+  await sign.click();
+  await page.getByRole('button', {name: 'Cancel', exact: true}).click();
+  await expect(status).toContainText('cancelled');
+  await expect(check).toBeDisabled();
+  await disconnect.click();
+  await expect(disconnect).toBeDisabled();
   await publish({ ...failedCheck, error: 'authorization-failed' });
   await sign.click();
   await reconnect.waitFor({ state: 'hidden' });
@@ -190,11 +197,24 @@ function captureTabletDriveReplies(server) {
 }
 
 let value = state('disconnected');
+let previousClientError = null;
 const browserTablet = tabletDriveHostFixture();
 const cancelTablet = browserTablet.auth.cancel;
 const fixtureAuth = Object.assign(browserTablet.auth, {
-  status: async () => value, begin: async () => { const start = ['disconnected', 'cancelled'].includes(value.status); if (start) value = state('connecting'); return { state: value, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null }; },
-  cancel: () => { cancelTablet(); if (value.status === 'connecting') value = state('cancelled'); return value; },
+  status: async () => value,
+  begin: async () => {
+    const start = ['disconnected', 'cancelled'].includes(value.status);
+    if (start) {
+      previousClientError = value.error;
+      value = state('connecting');
+    }
+    return { state: value, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null };
+  },
+  cancel: () => {
+    cancelTablet();
+    if (value.status === 'connecting') value = { ...state('cancelled'), error: previousClientError };
+    return value;
+  },
   check: async () => value, disconnect: async () => value = state('disconnected'),
   revoke: async id => { assert.equal(id, '1'.repeat(64)); return value = { ...connected(), status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; }
 });
@@ -230,8 +250,21 @@ try {
     globalThis.driveFixture = { contract_version: 1, status: 'disconnected', account: null, authorizationId: null, checkedAt: null, error: null, backupReady: false };
     for (const action of ['status', 'begin', 'cancel', 'check', 'disconnect', 'revoke']) ipcMain.removeHandler(`manager:drive:${action}`);
     ipcMain.handle('manager:drive:status', () => globalThis.driveFixture);
-    ipcMain.handle('manager:drive:begin', () => { const start = ['disconnected', 'cancelled'].includes(globalThis.driveFixture.status); if (start) globalThis.driveFixture = { ...globalThis.driveFixture, status: 'connecting' }; return { state: globalThis.driveFixture, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null }; });
-    for (const action of ['cancel', 'disconnect']) ipcMain.handle(`manager:drive:${action}`, () => globalThis.driveFixture = { contract_version: 1, status: action === 'cancel' ? 'cancelled' : 'disconnected', account: null, authorizationId: null, checkedAt: null, error: null, backupReady: false });
+    ipcMain.handle('manager:drive:begin', () => {
+      const start = ['disconnected', 'cancelled'].includes(globalThis.driveFixture.status);
+      if (start) {
+        globalThis.previousClientError = globalThis.driveFixture.error;
+        globalThis.driveFixture = { ...globalThis.driveFixture, status: 'connecting', error: null };
+      }
+      return { state: globalThis.driveFixture, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null };
+    });
+    for (const action of ['cancel', 'disconnect']) {
+      ipcMain.handle(`manager:drive:${action}`, () => globalThis.driveFixture = {
+        contract_version: 1, status: action === 'cancel' ? 'cancelled' : 'disconnected',
+        account: null, authorizationId: null, checkedAt: null, backupReady: false,
+        error: action === 'cancel' ? globalThis.previousClientError ?? null : null,
+      });
+    }
     ipcMain.handle('manager:drive:revoke', (_event, id) => { if (id !== '1'.repeat(64)) throw new Error('fixture confirmation refused'); return globalThis.driveFixture = { ...globalThis.driveFixture, status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; });
     ipcMain.handle('manager:drive:check', () => globalThis.driveFixture);
   });
