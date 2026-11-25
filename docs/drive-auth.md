@@ -16,22 +16,40 @@ Custody uses protected files, not a promise of whole-disk encryption. On Windows
 current-user ownership and a protected DACL must exclude broad users/groups;
 SYSTEM/Administrators retain the existing host-security allowance.
 
-## Configure a desktop registration
+## Sign in to your own Drive
 
-A deployment operator must configure a real Google **Desktop app** OAuth client
-from the [Google installed-app guide](https://developers.google.com/identity/protocols/oauth2/native-app),
-with Drive API enabled and applicable consent/test-user settings. No live client
-is provisioned or embedded by this repository. The native app uses the system
-browser and dynamic127.0.0.1 loopback redirect, S256 PKCE and fresh state. Do not
-configure a web/mobile client, embedded login, arbitrary endpoint or custom scope.
-Main must coordinate the same intended Google app/account binding for future
-appDataFolder backup access; a client ID alone is not authority over an unrelated
-backup namespace.
+In a distribution configured for Google Drive, open **Backup & sync** in Manager,
+select **Sign in to Google Drive**, and choose your own account in Google's
+consent screen. The app registration identifies Manager to Google. Your
+consent grants access to your account's app data. The first successful sign-in
+creates the private grant directory on this computer. Opening Manager or
+canceling consent leaves a fresh profile empty.
 
-Set absolute `MANAGER_DRIVE_AUTH_ROOT` and `MANAGER_DRIVE_PYTHON` before starting
-the helper or Electron. `MANAGER_WIRED_PYTHON` is an interpreter fallback only;
-SSH credentials remain separate. Default root is `ReMarkableBuddiesManager/drive-auth`
-beneath Linux XDG config/home `.config`, or Windows LOCALAPPDATA.
+## Configure a distribution
+
+The maintainer registers one Google **Desktop app** with the Drive API and
+configures its consent audience. Supply its approved public client ID as a
+single line in `host/google-drive-client-id` before packaging. The same host
+resource serves Electron and the browser helper. Only the public ID belongs
+there. A release without the resource shows **Google Drive setup required**
+unless a protected private registration is available. The project still needs
+an approved production registration and a live sign-in with the released app.
+[Google's desktop app guide](https://developers.google.com/identity/protocols/oauth2/native-app)
+
+If an update changes that client ID, Manager offers a new sign-in. Only a
+grant issued for the current registration can access Drive. Manager keeps the
+previous grant until the user completes consent or explicitly disconnects.
+
+The existing helper runtime requires an absolute Python interpreter path in
+`MANAGER_DRIVE_PYTHON` or `MANAGER_WIRED_PYTHON`. By default, grants live in
+`ReMarkableBuddiesManager/drive-auth` under Windows LOCALAPPDATA or Linux's
+XDG config directory. An operator can set `MANAGER_DRIVE_AUTH_ROOT` to an
+absolute path for a separate profile.
+
+## Override the registration for development
+
+An existing protected `client.json` takes precedence over the distributed ID.
+Use this override for qualification or a registration that requires a secret.
 
 Create a **new private** root directory (Linux0700/current owner; Windows current
 owner/protected DACL). Do not take ownership or change permissions of a shared
@@ -45,7 +63,7 @@ file) with the following exact fields; replace the placeholder locally:
 Use the downloaded desktop client secret when Google provides one. Preserve its
 exact value; accidental whitespace/control characters refuse instead of being
 silently trimmed. A trailing newline outside the JSON object is harmless.
-Do not commit the registration/secret/grant or paste them into issue comments.
+Keep the private registration, secret and grant out of source control and issue comments.
 Public configuration and manual helper/Electron startup need no private plugin.
 The existing Windows fixture demonstrates owner/security-descriptor stamping at
 creation, without takeover/elevation. Unsupported or unprotected setup reports
@@ -124,8 +142,9 @@ npm audit --audit-level=high
 
 Headless Linux uses the documented xvfb wrapper. The protocol suite uses actual
 maintained OAuth client calls against owned loopback HTTP fixtures; Linux custody
-uses real private files. Windows protocol tests explicitly use memory custody;
-separate Python tests exercise real NTFS owner/ACL/atomic behavior. Shared actual
+uses real private files. The fresh-profile sign-in test exercises the protected
+store on both platforms with two independent accounts. Other Windows protocol
+tests use memory custody. Python tests exercise NTFS owner/ACL/atomic behavior. Shared actual
 browser/Electron/package renderer checks use explicitly synthetic status/IPC
 responses, not live Google consent or filesystem proof. Packaged missing-config
 refusal loads the actual bundled host client and fixed Python helper first.

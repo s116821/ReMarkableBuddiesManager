@@ -1,6 +1,7 @@
 import {readTabletFor, showPanel} from './fixtures/navigation.mjs';
 import { chromium, _electron as electron, expect } from '@playwright/test';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
@@ -43,8 +44,22 @@ async function verify(page, publish, host, capture = () => page.screenshot({ pat
   await reconnect.waitFor();
   await page.getByText(`Last checked: ${saved.checkedAt}`, { exact: true }).waitFor();
   assert.equal(await sign.isEnabled(), true);
-  await publish({ ...failedCheck, error: 'authorization-failed' });
+  await publish({ ...state('disconnected'), error: 'registration-changed' });
   await check.click();
+  await expect(page.getByText('Manager’s Google registration changed.', {exact: false})).toBeVisible();
+  await expect(sign).toBeEnabled();
+  await expect(check).toBeDisabled();
+  await expect(page.getByRole('button', {name: 'Remove Google access…', exact: true})).toBeDisabled();
+  const disconnect = page.getByRole('button', {name: 'Disconnect this Manager', exact: true});
+  await expect(disconnect).toBeEnabled();
+  await sign.click();
+  await page.getByRole('button', {name: 'Cancel', exact: true}).click();
+  await expect(status).toContainText('cancelled');
+  await expect(check).toBeDisabled();
+  await disconnect.click();
+  await expect(disconnect).toBeDisabled();
+  await publish({ ...failedCheck, error: 'authorization-failed' });
+  await sign.click();
   await reconnect.waitFor({ state: 'hidden' });
   await status.filter({ hasText: 'Sign-in or account check failed' }).waitFor();
   await publish(saved);
@@ -182,11 +197,24 @@ function captureTabletDriveReplies(server) {
 }
 
 let value = state('disconnected');
+let previousClientError = null;
 const browserTablet = tabletDriveHostFixture();
 const cancelTablet = browserTablet.auth.cancel;
 const fixtureAuth = Object.assign(browserTablet.auth, {
-  status: async () => value, begin: async () => { const start = ['disconnected', 'cancelled'].includes(value.status); if (start) value = state('connecting'); return { state: value, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null }; },
-  cancel: () => { cancelTablet(); if (value.status === 'connecting') value = state('cancelled'); return value; },
+  status: async () => value,
+  begin: async () => {
+    const start = ['disconnected', 'cancelled'].includes(value.status);
+    if (start) {
+      previousClientError = value.error;
+      value = state('connecting');
+    }
+    return { state: value, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null };
+  },
+  cancel: () => {
+    cancelTablet();
+    if (value.status === 'connecting') value = { ...state('cancelled'), error: previousClientError };
+    return value;
+  },
   check: async () => value, disconnect: async () => value = state('disconnected'),
   revoke: async id => { assert.equal(id, '1'.repeat(64)); return value = { ...connected(), status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; }
 });
@@ -212,16 +240,31 @@ const app = await electron.launch({ executablePath, args: [...(packaged ? [] : [
 try {
   const page = await app.firstWindow(); await page.waitForLoadState('domcontentloaded'); await isolate(app.context());
   await app.evaluate(async ({ app, BrowserWindow }) => { await BrowserWindow.getAllWindows()[0].loadFile(`${app.getAppPath()}/dist/manager/browser/index.html`); });
-  await showPanel(page,'drive');await page.getByTestId('drive-status').filter({ hasText: 'Google Drive setup required' }).waitFor();
+  const hasDistributedClient = existsSync(new URL('../host/google-drive-client-id', import.meta.url));
+  await showPanel(page, 'drive');
+  await expect(page.getByTestId('drive-status')).toContainText(hasDistributedClient ? 'Not signed in' : 'Google Drive setup required');
   assert.equal(await page.evaluate(() => window.managerHost.driveAuth.revoke('wrong').then(() => 'accepted', () => 'refused')), 'refused');
-  // Actual packaged module/custody missing-config refusal above; response substitution below
+  // The real host checked first-run registration above; response substitution below
   // is an explicit renderer/preload/IPC fixture, not OAuth or Windows filesystem evidence.
   await app.evaluate(({ ipcMain }) => {
     globalThis.driveFixture = { contract_version: 1, status: 'disconnected', account: null, authorizationId: null, checkedAt: null, error: null, backupReady: false };
     for (const action of ['status', 'begin', 'cancel', 'check', 'disconnect', 'revoke']) ipcMain.removeHandler(`manager:drive:${action}`);
     ipcMain.handle('manager:drive:status', () => globalThis.driveFixture);
-    ipcMain.handle('manager:drive:begin', () => { const start = ['disconnected', 'cancelled'].includes(globalThis.driveFixture.status); if (start) globalThis.driveFixture = { ...globalThis.driveFixture, status: 'connecting' }; return { state: globalThis.driveFixture, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null }; });
-    for (const action of ['cancel', 'disconnect']) ipcMain.handle(`manager:drive:${action}`, () => globalThis.driveFixture = { contract_version: 1, status: action === 'cancel' ? 'cancelled' : 'disconnected', account: null, authorizationId: null, checkedAt: null, error: null, backupReady: false });
+    ipcMain.handle('manager:drive:begin', () => {
+      const start = ['disconnected', 'cancelled'].includes(globalThis.driveFixture.status);
+      if (start) {
+        globalThis.previousClientError = globalThis.driveFixture.error;
+        globalThis.driveFixture = { ...globalThis.driveFixture, status: 'connecting', error: null };
+      }
+      return { state: globalThis.driveFixture, authorizationUrl: start ? 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic' : null };
+    });
+    for (const action of ['cancel', 'disconnect']) {
+      ipcMain.handle(`manager:drive:${action}`, () => globalThis.driveFixture = {
+        contract_version: 1, status: action === 'cancel' ? 'cancelled' : 'disconnected',
+        account: null, authorizationId: null, checkedAt: null, backupReady: false,
+        error: action === 'cancel' ? globalThis.previousClientError ?? null : null,
+      });
+    }
     ipcMain.handle('manager:drive:revoke', (_event, id) => { if (id !== '1'.repeat(64)) throw new Error('fixture confirmation refused'); return globalThis.driveFixture = { ...globalThis.driveFixture, status: 'revocation-unconfirmed', authorizationId: null, error: 'revocation-unconfirmed' }; });
     ipcMain.handle('manager:drive:check', () => globalThis.driveFixture);
   });

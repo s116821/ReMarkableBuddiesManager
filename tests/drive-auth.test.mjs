@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtemp, writeFile, readFile, rm, chmod, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, chmod, symlink, mkdir, copyFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -12,14 +12,14 @@ import { DriveStore } from '../host/drive-store.mjs';
 const CLIENT = '123456789012-fixture.apps.googleusercontent.com';
 const config = { schema: 1, type: 'google-desktop', clientId: CLIENT, clientSecret: null };
 const secret = 'synthetic-refresh-credential-only';
-const python = process.env.MANAGER_DRIVE_PYTHON ?? (process.platform === 'linux' ? '/usr/bin/python3' : null);
+const python = process.env.MANAGER_DRIVE_PYTHON ?? process.env.MANAGER_WIRED_PYTHON ?? (process.platform === 'linux' ? '/usr/bin/python3' : null);
 async function fixture(t, options = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), 'manager-drive-auth-'));
-  if (process.platform === 'win32') {
+  const root = options.store?.root ?? await mkdtemp(path.join(tmpdir(), 'manager-drive-auth-'));
+  if (!options.store && process.platform === 'win32') {
     // Native custody has its own real NTFS fixtures; protocol tests use a plain in-memory store below.
     await rm(root, { recursive: true });
-  } else { await chmod(root, 0o700); await writeFile(path.join(root, 'client.json'), JSON.stringify(config), { mode: 0o600 }); }
-  const state = { requests: [], refreshRequests: [], scope: DRIVE_SCOPE, account: 'fixture-account',
+  } else if (!options.store) { await chmod(root, 0o700); await writeFile(path.join(root, 'client.json'), JSON.stringify(config), { mode: 0o600 }); }
+  const state = { requests: [], refreshRequests: [], scope: DRIVE_SCOPE, clientId: CLIENT, account: 'fixture-account',
     label: 'fixture@example.invalid', tokens: 0, gate: null };
   const server = createServer(async (req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1'); let body = ''; for await (const chunk of req) body += chunk;
@@ -29,7 +29,7 @@ async function fixture(t, options = {}) {
       const fields = new URLSearchParams(body); state.tokens++;
       const signingIn = fields.get('grant_type') === 'authorization_code';
       if (signingIn) {
-        assert.equal(fields.get('client_id'), CLIENT); assert.equal(fields.get('code'), 'synthetic-code');
+        assert.equal(fields.get('client_id'), state.clientId); assert.equal(fields.get('code'), 'synthetic-code');
         assert.equal(createHash('sha256').update(fields.get('code_verifier')).digest('base64url'), state.challenge);
       } else state.refreshRequests.push(fields.get('refresh_token'));
       if (!signingIn && state.refreshFailure) {
@@ -43,7 +43,7 @@ async function fixture(t, options = {}) {
       const refreshToken = signingIn ? signInRefreshToken : state.refreshToken;
       res.end(JSON.stringify({ access_token: 'synthetic-access-token', refresh_token: refreshToken,
         expires_in: 3600, token_type: 'Bearer', scope: state.scope }));
-    } else if (u.pathname === '/tokeninfo') res.end(JSON.stringify({ aud: state.audience ?? CLIENT, scope: state.scope, expires_in: 3600 }));
+    } else if (u.pathname === '/tokeninfo') res.end(JSON.stringify({ aud: state.audience ?? state.clientId, scope: state.scope, expires_in: 3600 }));
     else if (u.pathname === '/about') {
       await state.beforeAbout?.();
       res.end(JSON.stringify({ user: { permissionId: state.account, emailAddress: state.label } }));
@@ -55,15 +55,15 @@ async function fixture(t, options = {}) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  let store;
-  if (process.platform === 'win32') {
+  let store = options.store;
+  if (!store && process.platform === 'win32') {
     let saved = null, digest = null;
     store = { client: () => ({ value: config, digest: 'fixture-client' }), grant: () => ({ value: saved, digest }),
       save: (value, clientDigest, previous) => { assert.equal(clientDigest, 'fixture-client'); assert.equal(previous, digest); saved = value; digest = createHash('sha256').update(JSON.stringify(value)).digest('hex'); return { committed: true, digest }; },
       disconnect: (_, expected) => { assert.equal(expected, digest); saved = null; digest = null; return { committed: true, digest }; } };
-  } else store = new DriveStore({ root, python });
+  } else if (!store) store = new DriveStore({ root, python });
   const auth = new DriveAuth({ store, endpoints: Object.fromEntries(['authorization', 'token', 'tokenInfo', 'revoke', 'about'].map((key, i) => [key, origin + ['/authorize', '/token', '/tokeninfo', '/revoke', '/about'][i]])), ...options });
-  t.after(async () => { auth.dispose(); state.gate?.resolve(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); if (process.platform !== 'win32') await rm(root, { recursive: true, force: true }); });
+  t.after(async () => { auth.dispose(); state.gate?.resolve(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); if (!options.store && process.platform !== 'win32') await rm(root, { recursive: true, force: true }); });
   async function begin(purpose = 'host') {
     const result = await (purpose === 'tablet' ? auth.beginTabletAuthorization() : auth.begin()); assert.equal(result.state.status, 'connecting');
     const url = new URL(result.authorizationUrl); state.challenge = url.searchParams.get('code_challenge');
@@ -79,6 +79,71 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 
 const tabletRefresh = 'synthetic-independent-tablet-refresh';
 const collection = 'f52f35a1-1ccd-4544-9e22-5c1e87b6ca44';
+
+test('a distributed desktop client signs in two fresh profiles to their own Drive accounts', {skip: !python}, async t => {
+  const temp = await mkdtemp(path.join(tmpdir(), 'manager-public-desktop-'));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const host = path.join(temp, 'host');
+  await mkdir(host);
+  for (const file of ['drive-store.mjs', 'drive_store.py', 'drive-read-guard.mjs', 'drive-read-guard.py', 'windows_wired.py', 'wired_observer.py']) {
+    await copyFile(new URL('../host/' + file, import.meta.url), path.join(host, file));
+  }
+  const registrationFile = path.join(host, 'google-drive-client-id');
+  await writeFile(registrationFile, CLIENT + '\n');
+  const {DriveStore: InstalledStore} = await import(pathToFileURL(path.join(host, 'drive-store.mjs')).href);
+  const profile = name => new InstalledStore({root: path.join(temp, name, 'drive-auth'), python});
+  const first = profile('first'), second = profile('second');
+  const a = await fixture(t, {store: first}), b = await fixture(t, {store: second});
+  assert.equal(a.auth.status().status, 'disconnected');
+  await a.begin();
+  a.auth.cancel();
+  await assert.rejects(readdir(path.dirname(first.root)), {code: 'ENOENT'});
+  await a.signIn();
+  assert.equal(a.auth.status().account.label, a.state.label);
+  assert.deepEqual(await readdir(first.root), ['grant.json']);
+  const firstGrant = first.grant();
+  assert.equal(firstGrant.value.clientId, CLIENT);
+  assert.equal(b.auth.status().status, 'disconnected');
+  await assert.rejects(readdir(path.dirname(second.root)), {code: 'ENOENT'});
+  b.state.account = 'second-account';
+  b.state.label = 'second@example.invalid';
+  b.state.signInRefreshToken = 'second-synthetic-refresh';
+  await b.signIn();
+  assert.equal(b.auth.status().account.label, b.state.label);
+  assert.deepEqual(first.grant(), firstGrant);
+  assert.notEqual(second.grant().digest, firstGrant.digest);
+  assert.deepEqual(await readdir(second.root), ['grant.json']);
+  const signal = new AbortController().signal;
+  const guard = await first.openReadGuard({clientDigest: first.client().digest, grantDigest: firstGrant.digest, signal});
+  const replacement = '1234567890-replacement.apps.googleusercontent.com';
+  try {
+    await guard.check({signal, timeoutMs: 5000});
+    await writeFile(registrationFile, replacement + '\n');
+    await assert.rejects(guard.check({signal, timeoutMs: 5000}));
+    assert.deepEqual(first.grant(), firstGrant);
+  } finally { await guard.close(); }
+  assert.equal(a.auth.status().status, 'disconnected');
+  assert.equal(a.auth.status().error, 'registration-changed');
+  const originalRequests = a.state.requests.length;
+  assert.equal((await a.auth.check()).error, 'authorization-required');
+  assert.equal((await a.auth.beginTabletAuthorization()).authorizationUrl, null);
+  await a.begin();
+  assert.equal(a.auth.cancel().error, 'registration-changed');
+  assert.equal(a.auth.status().status, 'cancelled');
+  assert.deepEqual(first.grant(), firstGrant);
+  assert.equal(a.state.requests.length, originalRequests);
+  a.state.clientId = replacement;
+  a.state.signInRefreshToken = 'synthetic-new-client-refresh';
+  await a.signIn();
+  assert.equal(first.grant().value.clientId, replacement);
+  assert.equal(a.auth.status().account.label, a.state.label);
+  assert.equal(second.grant().value.clientId, CLIENT);
+  const otherRequests = b.state.requests.length;
+  assert.equal(b.auth.disconnect().status, 'disconnected');
+  assert.equal(second.grant().value, null);
+  assert.equal(b.state.requests.length, otherRequests);
+  assert.equal(first.grant().value.clientId, replacement);
+});
 
 test('separate tablet consent preserves the host grant and supplies one private V1 credential', async t => {
   const f = await fixture(t); await f.signIn();

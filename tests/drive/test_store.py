@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 script = Path(__file__).resolve().parents[2] / 'host/drive_store.py'
 sys.path.insert(0, str(script.parent))
@@ -85,6 +86,34 @@ class Custody(unittest.TestCase):
 
     def save(self, value, previous=None):
         return store.operate(self.root, {'operation': 'save', 'client_digest': self.client, 'grant_digest': previous, 'value': value})
+
+    def test_distributed_client_preserves_private_precedence_and_rejects_drift(self):
+        resource = self.parent / 'google-drive-client-id'
+        fresh = self.parent / 'fresh' / 'drive-auth'
+        first_id = b'1234567890-synthetic.apps.googleusercontent.com'
+        with patch.object(store, 'PUBLIC_CLIENT', resource):
+            self.assertIsNone(store.credential_read(fresh, 'client'))
+            resource.write_bytes(first_id + b'\r\n')
+            record = store.operate(fresh, {'operation': 'read-client'})
+            self.assertEqual(record['value']['clientId'], first_id.decode())
+            self.assertIsNone(record['value']['clientSecret'])
+            request = {'operation': 'save', 'client_digest': record['digest'],
+                       'grant_digest': None, 'value': {'token': 'synthetic'}}
+            resource.write_bytes(b'1234567890-replacement.apps.googleusercontent.com')
+            with self.assertRaises(ValueError):
+                store.operate(fresh, request)
+            self.assertFalse(fresh.parent.exists())
+            for invalid in (b'', first_id + b'\n\n', b'{"client_secret":"synthetic"}', b'x' * 257):
+                resource.write_bytes(invalid)
+                with self.assertRaises(ValueError):
+                    store.credential_read(fresh, 'client')
+                self.assertEqual(store.operate(self.root, {'operation': 'read-client'})['digest'], self.client)
+            resource.write_bytes(first_id)
+            with store.exclusive(self.root / 'invalid-client') as stream:
+                stream.write(b'invalid private registration')
+            (self.root / 'invalid-client').replace(self.root / 'client.json')
+            with self.assertRaises(ValueError):
+                store.credential_read(self.root, 'client')
 
     def retained(self):
         return store.operate(self.root, {'operation': 'read-isolated-root-operations'})

@@ -563,6 +563,7 @@
 }
 }
 @if (app.isView('backup', 'account')) {
+@let previousClient = app.drive().error === 'registration-changed';
 <section class="ui-panel my-6" aria-labelledby="drive-title">
     <h2 id="drive-title">Google Drive</h2>
     <p class="text-sm text-muted">Sign in on this computer, even without a tablet connected.</p>
@@ -570,6 +571,7 @@
     @if (app.drive().account; as account) { <p class="break-words" data-testid="drive-account">{{ account.label }}</p> }
     @if (app.drive().checkedAt) { <p class="text-xs text-muted">Last checked: {{ app.drive().checkedAt }}</p> }
     @if (app.drive().status === 'cached') { <p class="ui-warning">These account details were saved earlier. Check the connection before relying on them.</p> }
+    @if (previousClient) { <p class="ui-warning">Manager’s Google registration changed. Sign in again or disconnect the saved account from this computer.</p> }
     @if (app.drive().status === 'authorization-failed' && app.drive().account && app.drive().error === 'authorization-required') {
       <p class="ui-warning">Google requires a new sign-in. Choose Sign in to Google Drive to reconnect.</p>
     }
@@ -578,7 +580,7 @@
       <button class="ui-button ui-button-primary" type="button" (click)="app.signInDrive()" [disabled]="['unconfigured', 'unavailable', 'connecting', 'checking', 'revoking'].includes(app.drive().status)">Sign in to Google Drive</button>
       <button class="ui-button ui-button-secondary" type="button" (click)="app.checkDrive()" [disabled]="!app.drive().account || ['connecting', 'checking', 'revoking'].includes(app.drive().status)">Check connection</button>
       @if (['connecting', 'checking'].includes(app.drive().status)) { <button class="ui-button ui-button-secondary" type="button" (click)="app.cancelDrive()">Cancel</button> }
-      <button class="ui-button ui-button-secondary" type="button" (click)="app.disconnectDrive()" [disabled]="!app.drive().account || ['connecting', 'checking', 'revoking'].includes(app.drive().status)">Disconnect this Manager</button>
+      <button class="ui-button ui-button-secondary" type="button" (click)="app.disconnectDrive()" [disabled]="(!app.drive().account && !previousClient) || ['connecting', 'checking', 'revoking'].includes(app.drive().status)">Disconnect this Manager</button>
       <button class="ui-button ui-button-secondary" type="button" (click)="app.revokeDrive()" [disabled]="!app.drive().authorizationId || ['connecting', 'checking', 'revoking'].includes(app.drive().status)">Remove Google access…</button>
     </div>
     @if (app.driveConsent(); as url) { <a class="ui-button ui-button-primary mt-4 inline-block" [href]="url" target="_blank" rel="noopener noreferrer">Continue sign-in with Google</a> }

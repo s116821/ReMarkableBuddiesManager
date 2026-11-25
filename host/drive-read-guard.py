@@ -4,13 +4,13 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent))
-from drive_store import checked_root, digest, identity, private_read, require
+from drive_store import checked_root, credential_read, digest, identity, require
 
 
 def check(root, root_identity, expected):
     require(checked_root(root) == root_identity)
     for kind, original in expected:
-        require(identity(private_read(root, kind)) == original)
+        require(identity(credential_read(root, kind)) == original)
     require(checked_root(root) == root_identity)
 
 

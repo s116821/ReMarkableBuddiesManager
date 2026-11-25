@@ -1,7 +1,7 @@
 import { packager } from '@electron/packager';
 import { build } from 'esbuild';
 import path from 'node:path';
-import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, lstatSync } from 'node:fs';
 
 const info = JSON.parse(readFileSync('electron/build-info.json', 'utf8'));
 const platform = process.env.MANAGER_PACKAGE_PLATFORM ?? process.platform;
@@ -12,6 +12,13 @@ cpSync('dist', 'out/staging/dist', { recursive: true });
 cpSync('electron', 'out/staging/electron', { recursive: true });
 writeFileSync('out/staging/package.json', JSON.stringify({ name: 'remarkable-buddies-manager', version: info.version, main: 'electron/main.cjs', author: 'ReMarkableBuddies contributors', license: 'GPL-3.0-only' }, null, 2));
 cpSync('LICENSE', 'out/staging/LICENSE');
+// Only a public desktop ID may ship in this optional distribution resource.
+const publicClient = 'host/google-drive-client-id';
+const clientInfo = lstatSync(publicClient, { throwIfNoEntry: false });
+if (clientInfo && (!clientInfo.isFile() || clientInfo.size > 256 ||
+    !/^[A-Za-z0-9_-]{10,180}\.apps\.googleusercontent\.com(?:\r?\n)?$/.test(readFileSync(publicClient, 'latin1')))) {
+  throw new Error('Expected a single public Google desktop client ID in host/google-drive-client-id');
+}
 rmSync('out/host', { recursive: true, force: true });
 cpSync('host', 'out/host', { recursive: true, filter: file => !file.includes('__pycache__') && !file.endsWith('.pyc') });
 // Bundle the pinned maintained OAuth client into the Node host runtime, never the renderer.
